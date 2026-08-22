@@ -68,11 +68,13 @@ jobs:
 
       # The content store is `public` and `alpha_test`. The other schemas are Supabase's own
       # (auth, storage, realtime) and the backup role cannot read them, nor should a copy of
-      # the content carry them.
+      # the content carry them. `--enable-row-security` because the backup role reads RLS tables
+      # through a SELECT policy of its own; without the flag pg_dump refuses rather than filter.
       - name: Dump
         run: |
           /usr/lib/postgresql/17/bin/pg_dump "$PGURL" --format=custom --no-owner --no-privileges \
             --schema=public --schema=alpha_test \
+            --enable-row-security \
             -f "backup-$(date -u +%Y%m%dT%H%M%SZ).dump"
 
       # A backup nobody reads is a belief. This one is opened and its contents listed, so a dump
