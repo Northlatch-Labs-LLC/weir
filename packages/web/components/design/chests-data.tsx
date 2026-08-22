@@ -177,7 +177,7 @@ export async function ChestsData({
     note:
       profile.vaultId === null
         ? 'This creator has not opened a vault, so there is nowhere for a chest to settle yet.'
-        : 'It buys nothing and expires never.',
+        : 'It buys no access. Any perks are the creator\u2019s own promise, kept by them.',
     noteColor: profile.vaultId === null ? SAND : DIM,
     giveLabel: signedIn ? `Give to @${profile.handle}` : 'Sign in to give',
     href: signedIn ? `/c/${profile.handle}` : `/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`,

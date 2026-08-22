@@ -93,7 +93,7 @@ export function DesignChests({
   const chestWeightPct =
     feeBps === null ? 'fee not read' : `after the ${(feeBps / 100).toFixed(2).replace(/\.?0+$/, '')}% taken at settlement`;
   /* The honest answer to "what do I get back", and the reason this screen exists. */
-  const chestWithdrawable = 'nothing — a tip is a gift';
+  const chestWithdrawable = 'never the money — the creator\u2019s perks, if they offer any';
   /*
     The fee as a phrase, for the prose that has to name it.
 
@@ -136,7 +136,7 @@ export function DesignChests({
               kicker="Chests"
               title="Give a creator something"
               accent="outright."
-              lede="A chest is a creator's donation box. You send any amount, once. It settles on chain through the same contract that handles a subscription, and the platform takes the same fee; the rest is the creator's, in the vault only they can open. It buys nothing and it expires never — it is simply theirs. This is the one place on Weir where money leaves you for good. Everywhere else — a pool, the treasury — your principal stays yours. Here you are choosing to give it away, and we would rather say so than dress a donation up as an investment."
+              lede="A chest is a creator's donation box. You send any amount, once. It settles on chain through the same contract that handles a subscription, and the platform takes the same fee; the rest is the creator's, in the vault only they can open. It buys no access and it expires never — it is simply theirs. A creator may offer perks to the people who give; those are the creator\u2019s own promise, kept by them. This is the one place on Weir where money leaves you for good. Everywhere else — a pool, the treasury — your principal stays yours. Here you are choosing to give it away, and we would rather say so than dress a donation up as an investment."
             />
 
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,19rem),1fr))' }}>
@@ -189,7 +189,7 @@ export function DesignChests({
                   </thead>
                   <tbody>
                     {[
-                      ['You get back', 'Nothing', 'All of it, any time', 'Access while it runs'],
+                      ['You get back', 'Creator perks, if offered — never the money', 'All of it, any time', 'Access while it runs'],
                       ['They receive', `The amount, less ${feeLabel}`, 'The staking yield', `The price, less ${feeLabel}`],
                       ['It expires', 'Never', 'Never', 'At the end of the term'],
                       ['What you hold after', 'A record on chain', 'A pool deposit you own', 'An object in your wallet'],

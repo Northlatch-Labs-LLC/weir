@@ -120,7 +120,7 @@ const PATHS: readonly DesignPath[] = [
     kicker: 'Chests',
     icon: <Icon name="chest" size={15} />,
     title: 'They give outright',
-    body: "A donation, settled on chain like any other payment here and charged the same platform fee. It buys nothing and expires never — the one place on Weir where money leaves the giver for good, said plainly.",
+    body: "A donation, settled on chain like any other payment here and charged the same platform fee. It buys no access and expires never — the one place on Weir where money leaves the giver for good, said plainly. Creators may offer perks for it.",
     cta: 'See the chests',
     href: '/chests',
   },
@@ -220,7 +220,7 @@ export async function LandingData({
       title: 'Tip',
       bg: POOL,
       topRule: `1px solid ${LINE}`,
-      body: `Settled on chain into the creator's vault, like every other payment here. ${feeSentence} It buys nothing and expires never.`,
+      body: `Settled on chain into the creator's vault, like every other payment here. ${feeSentence} It buys no access and expires never; a creator may offer perks for it.`,
     },
     {
       idx: '—',

@@ -173,7 +173,7 @@ export function DesignCreator({
                   </ul>
                   <div style={{ marginTop: '1.5rem', border: '1px solid var(--line,#1c3d47)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1rem 1.5rem', maxWidth: '62ch' }}>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>Tip</p>
-                    <p style={{ margin: '0.25rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Send any amount, once. It settles on chain and the platform takes its usual fee; the rest lands in their vault. It buys nothing and expires never.</p>
+                    <p style={{ margin: '0.25rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Send any amount, once. It settles on chain and the platform takes its usual fee; the rest lands in their vault. It buys no access and expires never; any perks below are the creator\u2019s own promise.</p>
                     {/*
                       The control the copy above describes.
                     */}
