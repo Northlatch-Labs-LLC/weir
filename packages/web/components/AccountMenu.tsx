@@ -49,7 +49,7 @@ const MINE = [
   /*
     Names live here rather than in the header, because a .sui name is a thing this address owns —
     the same category as what it has bought and who it referred. It replaced the standalone
-    registrar at `suins.protocolx.io`, which nobody would find from a profile.
+    registrar at `suins.protocolx.io`, now retired, which nobody would find from a profile.
   */
   { href: '/names', label: 'Register your .sui name' },
   { href: '/referrals', label: 'Referrals' },

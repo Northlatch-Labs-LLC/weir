@@ -25,14 +25,15 @@ import 'server-only';
  * says the buyer's coin "also has to cover SuiNS's own Pyth-denominated price in the same
  * transaction" — the registrar was written for this shape.
  *
- * # Where this deliberately differs from the storefront that already does it
+ * # Where this deliberately differs from the storefront it replaced
  *
- * `suins.protocolx.io` builds the same purchase, and two things in it cannot be copied:
+ * `suins.protocolx.io`, retired once this page took over, built the same purchase, and two things
+ * in it could not be copied:
  *
- *   - It reads the registrar over JSON-RPC. That transport is dead on Sui's public mainnet
+ *   - It read the registrar over JSON-RPC. That transport is dead on Sui's public mainnet
  *     fullnodes — it answers `-32601` — so the fee is read here through `readRegistrar()`, which
  *     goes over gRPC and returns a `Reading`.
- *   - It throws when a price cannot be read. Here a failed read is never a value: an unreachable
+ *   - It threw when a price cannot be read. Here a failed read is never a value: an unreachable
  *     Pyth feed produces a failure that names itself, never a stale or assumed exchange rate. This
  *     is real money and a wrong number is a wrong charge.
  */
