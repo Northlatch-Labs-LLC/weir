@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BUSL-1.1
+// Licensor: Northlatch Labs LLC. Change Date: 2029-09-01. Change License: Apache-2.0.
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 /// What a payment buys: subscriptions and one-off content unlocks.
 ///
