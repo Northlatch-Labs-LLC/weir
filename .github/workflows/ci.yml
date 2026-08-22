@@ -1,0 +1,154 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Every commit, on a machine that has never seen this project before.
+#
+# That last part is the point. Two of the most expensive failures in this repository's history were
+# invisible locally and would have been caught here on the first run:
+#
+#   - `tsc` reused an incremental cache from before a type became nullable and reported success
+#     while twelve real errors sat in the tree. A clean checkout has no cache to reuse.
+#   - A production build was run while `next dev` was serving, overwriting the chunks the dev server
+#     was mid-flight serving. The browser kept showing older code and the edits appeared to do
+#     nothing. Nothing here shares a directory with anything.
+#
+# The Move suite runs alongside the application's, because the contracts are the half that holds the
+# money and a green web suite says nothing about them.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# A second push supersedes the first. Nobody needs the results of a commit that has been replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Typecheck, tests, build
+    runs-on: ubuntu-latest
+
+    # A real database, because the build reads one.
+    #
+    # `RightRail` runs in the root layout and queries the content store, so prerendering any page
+    # touches Postgres. `lib/db.ts` refuses to invent a connection string — deliberately, since a
+    # default is how a deployment silently writes to the wrong database — so the build fails
+    # without one, and it is right to. Giving CI a real database is the honest answer; opting pages
+    # out of prerendering to dodge it would be hiding the dependency rather than meeting it.
+    #
+    # This is also the service the route-level tests will need.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: projectx_social
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      PROJECTX_DATABASE_URL: postgres://postgres:ci@localhost:5432/projectx_social
+      # Route tests truncate every table, so they are given their own database and refuse to run
+      # against the one above. The name must end in _test; the helper checks it.
+      PROJECTX_TEST_DATABASE_URL: postgres://postgres:ci@localhost:5432/projectx_social_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version` here on purpose. The root package.json pins pnpm with an integrity hash, and
+      # the action reads it from there — naming it twice makes the action refuse outright, and the
+      # copy that is not hash-pinned is the weaker of the two anyway.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `--frozen-lockfile` so a drifted lockfile fails here rather than resolving to a different
+      # dependency tree than the one anybody tested against.
+      - run: pnpm install --frozen-lockfile
+
+      # The SDK is consumed as compiled JavaScript through its `exports` map, so it must be built
+      # before anything that imports it is typechecked.
+      - run: pnpm --filter @projectx-social/sdk build
+
+      # In file-name order, which is the order they were written to run in.
+      - name: Apply migrations
+        working-directory: packages/web
+        run: |
+          createdb -h localhost -U postgres projectx_social_test
+          for db in "$PROJECTX_DATABASE_URL" "$PROJECTX_TEST_DATABASE_URL"; do
+            for f in db/*.sql; do
+              psql "$db" -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+            done
+          done
+        env:
+          PGPASSWORD: ci
+
+      - name: Typecheck (no incremental cache)
+        working-directory: packages/web
+        run: |
+          rm -f tsconfig.tsbuildinfo
+          pnpm typecheck
+
+      # Three test files read `.env.local` at module scope for the chain ids, and it is gitignored
+      # — so on a fresh checkout the read throws ENOENT while the file is being imported. That is
+      # not a failing test: it is a file that never collects, and eighteen tests that report
+      # neither pass nor fail because nothing reaches them. Every developer has a `.env.local`, so
+      # it passed locally and failed here for twenty consecutive runs.
+      #
+      # `.env.example` is committed and carries the live mainnet ids — the package, platform,
+      # registry and key-registry objects — with the secret entries deliberately blank. Copying it
+      # gives those files the configured deployment they expect, out of a source that is in the
+      # repository and reviewable.
+      - name: Configuration for tests that need a configured deployment
+        run: cp .env.example packages/web/.env.local
+
+      - name: Tests
+        working-directory: packages/web
+        run: pnpm test
+
+      # Configuration is supplied per environment and has no defaults — a build that silently
+      # substituted a plausible package id would be building against a chain nobody chose. These are
+      # public facts (object ids on mainnet), so they are repository *variables*, never secrets.
+      # A missing one fails the build loudly, which is the intended behaviour.
+      - name: Build
+        working-directory: packages/web
+        env:
+          NEXT_DIST_DIR: .next-ci
+          PROJECTX_SOCIAL_NETWORK: ${{ vars.PROJECTX_SOCIAL_NETWORK }}
+          PROJECTX_SOCIAL_PACKAGE_ID: ${{ vars.PROJECTX_SOCIAL_PACKAGE_ID }}
+          PROJECTX_SOCIAL_LATEST_PACKAGE_ID: ${{ vars.PROJECTX_SOCIAL_LATEST_PACKAGE_ID }}
+          PROJECTX_SOCIAL_PLATFORM_ID: ${{ vars.PROJECTX_SOCIAL_PLATFORM_ID }}
+          PROJECTX_SOCIAL_VAULT_COIN_TYPE: ${{ vars.PROJECTX_SOCIAL_VAULT_COIN_TYPE }}
+        run: pnpm build
+
+  contracts:
+    name: Move tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the version the contracts were published and tested with. A floating toolchain
+      # means a framework revision can change what compiles without a line of this repository
+      # changing, and the first sign of it would be a red build nobody can attribute.
+      - name: Install Sui CLI
+        env:
+          SUI_VERSION: mainnet-v1.77.2
+        run: |
+          curl -sSL -o sui.tgz \
+            "https://github.com/MystenLabs/sui/releases/download/${SUI_VERSION}/sui-${SUI_VERSION}-ubuntu-x86_64.tgz"
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf sui.tgz -C "$HOME/.local/bin" --strip-components=1 || tar -xzf sui.tgz -C "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/sui"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - run: sui --version
+
+      - name: Move tests
+        working-directory: sui-contracts
+        run: sui move test

@@ -1,0 +1,44 @@
+# systemd unit for the harvest daemon.
+#
+# Paired with the timer below: `--once` on a schedule, supervised by systemd rather than by an
+# in-process loop. systemd restarts on failure, systemd knows what "failed" means from the exit
+# code, and systemd survives the daemon crashing at 3am.
+#
+#   install -m600 projectx-harvest.env /etc/projectx/harvest.env
+#   cp projectx-harvest.{service,timer} /etc/systemd/system/
+#   systemctl enable --now projectx-harvest.timer
+#
+[Unit]
+Description=ProjectX Social harvest daemon (one tick)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/projectx-social/packages/daemon
+ExecStart=/usr/bin/node --experimental-strip-types src/main.ts --once
+
+# The secrets live in a 0600 file owned by this user, never in the unit — a unit file is readable
+# by anyone who can run `systemctl cat`.
+EnvironmentFile=/etc/projectx/harvest.env
+User=projectx
+Group=projectx
+
+# Exit 1 is misconfiguration and exit 2 is "another instance holds the lock". Neither is fixed by
+# trying again, and restarting on them produces a loop that looks like activity in the logs.
+Restart=on-failure
+RestartPreventExitStatus=1 2
+RestartSec=120
+
+# A tick that hangs must not hold the single-instance lock forever — the next scheduled run would
+# exit 2 every hour and nothing would harvest.
+TimeoutStartSec=600
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/projectx
+
+[Install]
+WantedBy=multi-user.target

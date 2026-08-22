@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd unit for the harvest daemon on macOS.
+
+  Runs `--once` on a schedule rather than keeping a long-lived loop alive, because launchd is better
+  at restarting than the process is at not dying. A crash costs one tick instead of every future one.
+
+  StartInterval is 3600 — one Sui epoch is roughly 24 hours, and the ladder stakes at most one rung
+  per epoch, so hourly is generous. It exists to catch the epoch boundary promptly, not to do work
+  twelve times over: every tick after the first in an epoch decides "already staked this epoch" and
+  spends nothing.
+
+  Install:
+    cp deploy/io.protocolx.harvest.plist ~/Library/LaunchAgents/
+    launchctl load  ~/Library/LaunchAgents/io.protocolx.harvest.plist
+    launchctl start io.protocolx.harvest
+  Remove:
+    launchctl unload ~/Library/LaunchAgents/io.protocolx.harvest.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.protocolx.harvest</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>--experimental-strip-types</string>
+    <string>REPLACE_WITH_ABSOLUTE_PATH/src/main.ts</string>
+    <string>--once</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>REPLACE_WITH_ABSOLUTE_PATH</string>
+
+  <!--
+    The environment is NOT listed here. A plist is world-readable and would put the signer's key and
+    the database password into a file every process on the machine can read. Point at a file only
+    this user can read instead, and have the wrapper source it.
+  -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+
+  <!-- Not KeepAlive. `--once` is meant to exit; restarting it immediately would tick continuously. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/projectx-harvest.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/projectx-harvest.err</string>
+
+  <!-- Exit 1 (misconfigured) and 2 (another instance) must not be retried into a loop. -->
+  <key>AbandonProcessGroup</key>
+  <false/>
+</dict>
+</plist>

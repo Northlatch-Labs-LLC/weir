@@ -1,0 +1,153 @@
+// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
+import { createClient, fold, readCreatorVault } from '@projectx-social/sdk';
+import { siteConfig } from '@/lib/chain';
+import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
+import { accountHandle } from '@/lib/accounts';
+import { verifyAction } from '@/lib/identity';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * Name a vault, so content can hang off it.
+ *
+ * # Ownership is read from chain, never taken from the request
+ *
+ * The vault's `owner` field decides who may name it. A form field claiming to be the owner buys
+ * nothing: the vault is read and the claim is checked against it. Without that, anyone could
+ * rename any creator's profile — the store has no other notion of who owns what.
+ *
+ * # And the handle is the one the registry holds
+ *
+ * Not a name typed into this form. `account::Registry` already says which handle this address
+ * owns, and letting a profile carry a different one would create a second, softer identity that
+ * looks the same in a URL and is backed by nothing.
+ */
+export async function POST(request: Request) {
+  const limited = rateLimit(request, 'write');
+  if (limited !== null) return limited;
+
+  const b = (await request.json()) as {
+    owner?: string; vaultId?: string; coinType?: string; displayName?: string; bio?: string;
+    signature?: string; timestampMs?: number;
+  };
+  if (!b.owner || !b.vaultId || !b.coinType) {
+    return NextResponse.json({ error: 'owner, vaultId and coinType are required' }, { status: 400 });
+  }
+
+  const config = siteConfig();
+  if (!config.ok) {
+    return NextResponse.json({ error: config.failure.detail }, { status: 503 });
+  }
+
+  const vault = await readCreatorVault(createClient(config.value), b.vaultId);
+  if (!vault.ok) {
+    return NextResponse.json(
+      { error: `the vault could not be read: ${vault.failure.detail}` },
+      { status: 502 },
+    );
+  }
+  /*
+    Prove the caller controls `owner`, rather than taking the body's word for it.
+
+    The check below compares the request's `owner` against the vault's owner read from chain, and
+    on its own it authorises nothing: a vault's owner is public, so anybody could read it, send it
+    and rename somebody else's vault. The name and description are bound into the statement because
+    they are the entire payload — a signature authorising "some change to this vault" would
+    authorise every later one too.
+  */
+  const proof = await verifyAction({
+    address: b.owner,
+    signature: b.signature ?? '',
+    timestampMs: b.timestampMs ?? 0,
+    action: {
+      kind: 'name-vault',
+      vaultId: b.vaultId,
+      // Bound because it decides the generic type argument every later payment against this vault
+      // is built with, not because it is part of the name.
+      coinType: b.coinType,
+      name: b.displayName ?? '',
+      bio: b.bio ?? '',
+    },
+  });
+  if (!proof.ok) {
+    return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
+  }
+
+  if (vault.value.owner.toLowerCase() !== b.owner.toLowerCase()) {
+    return NextResponse.json(
+      { error: 'that vault belongs to a different address' },
+      { status: 403 },
+    );
+  }
+
+  const handle = await accountHandle(b.owner);
+  if (!handle.ok) {
+    return NextResponse.json({ error: handle.failure.detail }, { status: 502 });
+  }
+  if (handle.value === null) {
+    return NextResponse.json(
+      { error: 'this address holds no account, so it has no handle to publish under' },
+      { status: 400 },
+    );
+  }
+
+  /*
+    A creator may own several vaults, and `profiles` is keyed by handle — so the second vault would
+    overwrite the first's row. Suffixed rather than refused: the handle stays the identity and the
+    extra vaults get a stable, derived name instead of silently replacing each other.
+  */
+  /*
+    The row that already names this vault wins, whatever handle it is filed under.
+
+    Without this the key came from the chain's handle alone, so an account whose row was filed under
+    an older name got a *second* row every time it saved: the write succeeded, returned 200, and
+    every page carried on reading the first row. The creator saw their display name and bio refuse
+    to change, and saving again made another duplicate rather than fixing it.
+
+    Asking by vault is asking the question this endpoint means — "which row names the thing I am
+    naming" — and it is now backed by a unique index, so there can only ever be one answer.
+  */
+  const claimed = await findProfileByVault(b.vaultId);
+  if (claimed !== null) {
+    await upsertProfile({
+      ...claimed,
+      owner: b.owner,
+      displayName: (b.displayName ?? claimed.handle).trim().slice(0, 60),
+      bio: (b.bio ?? '').trim().slice(0, 280),
+      coinType: b.coinType,
+    });
+    return NextResponse.json({ handle: claimed.handle });
+  }
+
+  let slug = handle.value;
+  const existing = await findProfile(slug);
+  /*
+    `existing.vaultId` may be null — a page can exist for an account with no vault yet. That is not
+    "a different vault"; it is the row this vault should claim, so it keeps the plain slug rather
+    than being pushed onto a suffixed one.
+
+    Without the null check this threw at runtime on `.toLowerCase()`, and the only reason it was not
+    caught earlier is that `tsc` was reusing an incremental cache from before `vaultId` became
+    nullable.
+  */
+  if (
+    existing !== null &&
+    existing.vaultId !== null &&
+    existing.vaultId.toLowerCase() !== b.vaultId.toLowerCase()
+  ) {
+    slug = `${handle.value}-${b.vaultId.slice(2, 6)}`;
+  }
+
+  await upsertProfile({
+    handle: slug,
+    vaultId: b.vaultId,
+    owner: b.owner,
+    displayName: (b.displayName ?? handle.value).trim().slice(0, 60),
+    bio: (b.bio ?? '').trim().slice(0, 280),
+    coinType: b.coinType,
+  });
+
+  return NextResponse.json({ handle: slug });
+}

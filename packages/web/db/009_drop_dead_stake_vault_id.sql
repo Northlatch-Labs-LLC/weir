@@ -1,0 +1,28 @@
+-- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Drop a column that has never held a value.
+--
+-- # Why it is going rather than being fixed
+--
+-- `profiles.stake_vault_id` was declared, read in three places, and written by nothing: opening a
+-- support vault goes through `stake_vault::open` and touches this database not at all. It was
+-- populated for 0 of 5 rows in production.
+--
+-- It was not merely unused. Search read it to decide whether a creator accepts free support, so the
+-- "Free support" badge never appeared for anybody on the discovery page — a real feature switched
+-- off by a column that looked load-bearing and carried nothing. `readVault` read it too, and every
+-- vault page rendered "Unnamed vault" while the chain knew perfectly well whose it was.
+--
+-- # And why not start writing it instead
+--
+-- Because the chain already answers the question. `StakeVaultOpened` names the address that opened
+-- each vault, and `profiles.owner` is that address, so the join exists without a column to keep in
+-- step. Writing it would add a second answer that can disagree with the first — and a creator may
+-- open several vaults, which one nullable id cannot represent anyway.
+--
+-- # Safety
+--
+-- No data is lost: there is none. Every reference in the application was removed in the same commit,
+-- so a deployment running the previous code against this schema would fail loudly on the column
+-- rather than silently — and the previous code only ever read `NULL` from it.
+
+ALTER TABLE profiles DROP COLUMN IF EXISTS stake_vault_id;

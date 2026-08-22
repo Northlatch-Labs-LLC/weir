@@ -1,0 +1,33 @@
+# What is NOT uploaded to Cloud Build.
+#
+# gcloud uploads the whole build context, so the first job of this file is to keep secrets out of a
+# build service and out of every layer cache behind it. `.secrets/` and `.env*` are listed before
+# anything else for that reason — the size exclusions below are an optimisation, these are not.
+#
+# Note that the presence of this file makes gcloud STOP honouring .gitignore, so everything that
+# needs excluding has to be named here even if git already ignores it.
+
+.secrets/
+.env
+.env.*
+*.key
+*.pem
+
+.git/
+.github/
+
+node_modules/
+**/node_modules/
+
+**/dist/
+**/.next/
+**/.next-*/
+**/tsconfig.tsbuildinfo
+
+# Nothing the daemon image needs. The web package is deployed by Vercel and the contracts are
+# already published; neither belongs in a container that only calls harvest.
+packages/web/
+sui-contracts/
+**/test/
+**/*.test.ts
+**/*.test.tsx

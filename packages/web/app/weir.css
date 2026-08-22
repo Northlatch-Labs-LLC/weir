@@ -1,0 +1,3043 @@
+/* Built-by: @projectx.sui /|\ · Co-authored-by: Claude */
+/* ============================================================================
+   Weir — the brand layer
+
+   What is in this file is *design* — colour, spacing, type, motion. No figure,
+   identifier or list appears anywhere in it, and none should: the data those
+   screens show is read at runtime, and where a read fails the interface says so
+   rather than printing something plausible.
+
+   # Two themes, and daylight is not an inversion
+
+   Daylight is re-derived rather than flipped. Accents *darken* on a light ground
+   — crest goes #8be3c6 → #0a6a55 — because a colour that reads as luminous on
+   near-black is invisible on near-white. An inverted palette is how a light
+   theme ends up unreadable while still passing a contrast check on whichever
+   pairs happened to get tested.
+
+   `tokens.css` is copied verbatim from projectxprotocol.dev and says so at the
+   top: it is shared across five properties and maps 1:1 to a Figma library, and
+   a local edit would make this property drift invisibly from the other four.
+
+   So nothing there is touched. Instead the *semantic* tokens are repointed
+   below, which re-dresses all 2,800 lines of `globals.css` — every card, button,
+   note and rail — without editing one of them. It also means the whole
+   application follows the theme toggle for free, because those semantics now
+   resolve through `--bg`, `--ink` and `--crest`, which the theme swaps.
+
+   # Why Tailwind is imported in pieces
+
+   `@import "tailwindcss"` would pull in preflight, Tailwind's reset, which zeroes
+   margins, border styles and heading sizes globally. Dropped on top of a working
+   component layer that was not written against it, that is not an install — it is
+   an unplanned rewrite of every surface at once. Theme and utilities come in; the
+   reset does not.
+   ========================================================================== */
+
+@layer estate, theme, weir, utilities;
+
+/*
+  `globals.css` imports `tokens.css` itself, so both land in `estate` together.
+*/
+@import './globals.css' layer(estate);
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/*
+  Unlayered on purpose.
+*/
+:root {
+  color-scheme: dark;
+
+  /* ---- night: the default ------------------------------------------------- */
+  --crest: #8be3c6;
+  --crest-hi: #a5ecd4;
+  --teal: #7fd8dd;
+  --sand: #d9c9a3;
+  --alert: #f2a29b;
+
+  --ink: #dce9e6;
+  --ink-2: #b9cdc9;
+  /*
+    Secondary text, lifted.
+
+    #8fa8a5 measured 7.31:1 against the ground and only 5.21:1 against a panel — and most of this
+    site's secondary text sits on a panel, at 0.8125–0.9375rem, which is where "I can't read that"
+    starts. #a3bcb8 measures 9.18:1 and 6.55:1 for the same pairs, and stays a clear step below
+    --ink-2 (7.92:1 on panel) so the three levels still read as three.
+
+    Raised on the token rather than per component: 187 places name this colour, about half of them
+    inline in the ported design, and a rule cannot reach an inline style.
+  */
+  --dim: #a3bcb8;
+
+  --bg: #04161d;
+  --bg-2: #061c25;
+  --panel: #0b2530;
+  --line: #1c3d47;
+  --line-2: #123039;
+  --aurora: #4a9ec4;
+
+  /*
+    RGB triples, for alpha compositing.
+
+    Every translucent surface in this design is `rgba(var(--x-rgb), a)` rather than a fixed rgba
+    literal, which is what lets one border rule work on both grounds: the channel values swap with
+    the theme and the alpha stays put. A hardcoded `rgba(139,227,198,.16)` would keep night's crest
+    on a daylight panel.
+  */
+  --crest-rgb: 139, 227, 198;
+  --teal-rgb: 127, 216, 221;
+  --sand-rgb: 217, 201, 163;
+  --alert-rgb: 242, 162, 155;
+  --hi-rgb: 220, 233, 230;
+  --line-rgb: 28, 61, 71;
+  --shade-rgb: 0, 0, 0;
+
+  /* Panel gradient stops. Six, because cards are layered gradients rather than flat fills. */
+  --pa: 20, 52, 62;
+  --pb: 9, 32, 42;
+  --pc: 26, 66, 78;
+  --pd: 11, 37, 48;
+  --pe: 4, 22, 29;
+  --pf: 13, 42, 54;
+
+  /* Ambient intensities, tuned per theme — aurora and header wash both drop on daylight. */
+  --aurora-a: 0.2;
+  --aurora-b: 0.14;
+  --wash-a: 0.09;
+  --bloom-a: 0.3;
+
+  /* ---- type --------------------------------------------------------------- */
+  --weir-sans: var(--font-geist), system-ui, sans-serif;
+  --weir-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', monospace;
+
+  /* ---- motion ------------------------------------------------------------- */
+  --ease-surface: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-fast: 180ms;
+  --motion-base: 300ms;
+  --motion-reveal: 700ms;
+
+  --weir-radius: 12px;
+  --measure: 62ch;
+  --page: 72rem;
+}
+
+/*
+  Daylight.
+
+  Attached to an explicit `data-theme="day"` and to nothing else. There is no
+  `@media (prefers-color-scheme: light)` block anywhere in this file, on purpose — see the header.
+*/
+:root[data-theme='day'] {
+  color-scheme: light;
+
+  --crest: #0a6a55;
+  --crest-hi: #075545;
+  --teal: #0f6f7b;
+  --sand: #7c6528;
+  --alert: #ad4038;
+
+  --ink: #0a1f26;
+  --ink-2: #37545a;
+  /* The same lift on light ground, which means darker: 5.19:1 → 6.18:1 on the ground,
+     5.49:1 → 6.54:1 on a panel, still a step below --ink-2. */
+  --dim: #41605d;
+
+  --bg: #eff4f2;
+  --bg-2: #e5ecea;
+  --panel: #fafcfb;
+  --line: #cfdcd8;
+  --line-2: #dfe8e5;
+  --aurora: #8fc3dc;
+
+  --crest-rgb: 10, 106, 85;
+  --teal-rgb: 15, 111, 123;
+  --sand-rgb: 124, 101, 40;
+  --alert-rgb: 173, 64, 56;
+  --hi-rgb: 255, 255, 255;
+  --line-rgb: 207, 220, 216;
+  /* A shadow on a light ground is desaturated ink, never black — black reads as dirt. */
+  --shade-rgb: 42, 74, 74;
+
+  --pa: 255, 255, 255;
+  --pb: 238, 245, 242;
+  --pc: 255, 255, 255;
+  --pd: 233, 241, 238;
+  --pe: 250, 252, 251;
+  --pf: 240, 246, 243;
+
+  --aurora-a: 0.14;
+  --aurora-b: 0.1;
+  --wash-a: 0.14;
+  --bloom-a: 0.22;
+}
+
+/*
+  Everything below is an override of a token declared in `tokens.css`. `globals.css` is written
+  entirely against these names, so changing them re-skins the whole application — feed, studio,
+  admin, rails and all — with no component edit anywhere. Because they resolve through `--bg`,
+  `--ink` and `--crest`, the whole app also follows the theme toggle without further work.
+
+  Two tokens are NOT repointed, deliberately:
+
+    --font-display  also dresses buttons and the 38px badge tiles. Repointing it would restyle every
+                    button in the product as a side effect of a heading decision.
+    --sui-*         Sui-semantic. The wallet blue means "this is the chain" and must not become a
+                    brand colour.
+  ==========================================================================
+*/
+:root {
+  /* surfaces */
+  --bg-canvas: var(--bg);
+  --bg-surface: var(--panel);
+  --bg-surface-raised: rgba(var(--pc), 0.9);
+  --bg-surface-sunken: var(--bg-2);
+  --bg-surface-glass: rgba(var(--hi-rgb), 0.04);
+  --bg-surface-hover: rgba(var(--hi-rgb), 0.07);
+  --bg-scrim: rgba(var(--pe), 0.8);
+
+  /* actions */
+  --bg-accent: var(--crest);
+  --bg-accent-hover: var(--crest-hi);
+  --bg-accent-press: var(--crest-hi);
+  --bg-accent-subtle: rgba(var(--crest-rgb), 0.12);
+  --bg-prize: var(--crest);
+  --bg-prize-subtle: rgba(var(--crest-rgb), 0.14);
+  --bg-aqua-subtle: rgba(var(--teal-rgb), 0.14);
+  --bg-warning-subtle: rgba(var(--sand-rgb), 0.14);
+  --bg-danger-subtle: rgba(var(--alert-rgb), 0.14);
+
+  /* text */
+  --text-primary: var(--ink);
+  --text-secondary: var(--dim);
+  --text-tertiary: var(--dim);
+  --text-accent: var(--crest);
+  --text-prize: var(--crest);
+  --text-aqua: var(--teal);
+  --text-warning: var(--sand);
+  --text-danger: var(--alert);
+  --text-on-accent: var(--bg);
+  --text-on-prize: var(--bg);
+  --text-inverse: var(--bg);
+
+  /* borders */
+  --border-subtle: rgba(var(--line-rgb), 0.7);
+  --border-default: var(--line);
+  --border-strong: rgba(var(--crest-rgb), 0.28);
+  --border-accent: var(--crest);
+  --border-accent-soft: rgba(var(--crest-rgb), 0.24);
+  --border-prize: rgba(var(--crest-rgb), 0.32);
+  --border-focus: var(--crest);
+}
+
+@theme inline {
+  --color-crest: var(--crest);
+  --color-teal: var(--teal);
+  --color-sand: var(--sand);
+  --color-alert: var(--alert);
+  --color-ink: var(--ink);
+  --color-dim: var(--dim);
+  --color-panel: var(--panel);
+}
+
+@layer weir {
+  /* ---- base ---------------------------------------------------------------- */
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--weir-sans);
+  }
+
+  ::selection {
+    background: var(--crest);
+    color: var(--bg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--crest);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .weir-mono {
+    font-family: var(--weir-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .weir-eyebrow {
+    font-family: var(--weir-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 0;
+  }
+
+  /* ---- the owned clause ----------------------------------------------------
+     A three-stop gradient with a bloom behind it, applied to the clause a title
+     owns and never to a whole heading. The bloom is a drop-shadow rather than a
+     text-shadow so it follows the glyph edges of the clipped gradient.
+
+     The flat fallback is declared first and overridden only inside `@supports`,
+     so a browser without background-clip renders crest-coloured words rather
+     than invisible ones. */
+  .weir-owned {
+    color: var(--crest);
+    font-style: normal;
+  }
+
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .weir-owned {
+      background: linear-gradient(96deg, var(--crest), var(--teal), var(--sand));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 0 26px rgba(var(--crest-rgb), var(--bloom-a)));
+    }
+  }
+
+  @keyframes weir-aurora-a {
+    from { transform: translate3d(-6%, -3%, 0) scale(1); }
+    to { transform: translate3d(8%, 6%, 0) scale(1.18); }
+  }
+
+  @keyframes weir-aurora-b {
+    from { transform: translate3d(5%, 8%, 0) scale(1.12); }
+    to { transform: translate3d(-8%, -5%, 0) scale(0.94); }
+  }
+
+  @keyframes weir-rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes weir-page-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes weir-sheen {
+    from { background-position: -160% 0; }
+    to { background-position: 260% 0; }
+  }
+
+  @keyframes weir-float-y {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  @keyframes weir-pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(var(--crest-rgb), 0.35); }
+    70% { box-shadow: 0 0 0 12px rgba(var(--crest-rgb), 0); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--crest-rgb), 0); }
+  }
+
+  /* Each route fades and rises 10px on mount. */
+  [data-js] .weir-page {
+    animation: weir-page-in 420ms var(--ease-reveal) both;
+  }
+
+  /* ---- reveals -------------------------------------------------------------
+     Two independent guards, and both exist because of a bug rather than a
+     principle.
+
+     `[data-js]` scopes the hidden state to "script is running", set on <html> by
+     an inline script before first paint. Without it, a reader whose JavaScript
+     failed — or a crawler that declined to run it — gets a column of blank space
+     where the content is: present in the HTML, invisible on screen.
+
+     `:not([data-revealed])` avoids a specificity trap that shipped here once. The
+     obvious pair is `[data-js] [data-reveal] { opacity: 0 }` plus
+     `[data-reveal][data-revealed] { opacity: 1 }`; the first is (0,2,0) and can
+     out-rank a weaker second rule, leaving every section invisible while the
+     JavaScript works perfectly. Written this way there is no second rule to lose
+     to — the hidden state simply stops matching. */
+  [data-js] [data-reveal]:not([data-revealed]) {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  [data-reveal] {
+    transition:
+      opacity var(--motion-reveal) var(--ease-reveal) var(--rd, 0ms),
+      transform var(--motion-reveal) var(--ease-reveal) var(--rd, 0ms);
+  }
+}
+
+/* ============================================================================
+   Components
+
+   `backdrop-filter` is deliberately absent from cards and present only on the
+   header. The design is explicit about it: per-card blur is a compositing cost
+   paid on every scrolled frame, for an effect nobody sees behind an opaque
+   panel. The header is real glass because it genuinely sits over moving content.
+   ========================================================================== */
+@layer weir {
+  /* ---- skip link ----------------------------------------------------------- */
+  .skip-link {
+    position: absolute;
+    left: -999px;
+    top: 0.5rem;
+    z-index: 99;
+    background: var(--crest);
+    color: var(--bg);
+    padding: 0.5rem 1rem;
+    border-radius: var(--weir-radius);
+    font-weight: 600;
+  }
+
+  .skip-link:focus {
+    left: 0.5rem;
+  }
+
+  /* ---- measure ------------------------------------------------------------- */
+  .weir-shell {
+    width: 100%;
+    max-width: var(--page);
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  .weir-measure {
+    max-width: var(--measure);
+  }
+
+  /* ---- header -------------------------------------------------------------- */
+  .weir-nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: linear-gradient(180deg, rgba(var(--pb), 0.9), rgba(var(--pe), 0.78));
+    backdrop-filter: blur(16px) saturate(1.3);
+    border-bottom: 1px solid rgba(var(--crest-rgb), 0.16);
+    box-shadow:
+      0 1px 0 rgba(var(--hi-rgb), 0.04),
+      0 18px 40px -36px rgba(var(--shade-rgb), 0.9);
+  }
+
+  .weir-nav__bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    min-height: 4rem;
+  }
+
+  .weir-nav__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--ink);
+    text-decoration: none;
+    transition: transform var(--motion-fast) var(--ease-surface);
+  }
+
+  .weir-nav__brand:hover {
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+
+  /* The mark sits in a lit glass tile: inset highlight above, crest glow below. */
+  .weir-nav__tile {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(var(--pc), 0.9), rgba(var(--pb), 0.95));
+    border: 1px solid rgba(var(--crest-rgb), 0.28);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.1),
+      0 0 22px -8px rgba(var(--crest-rgb), 0.75);
+    color: var(--crest);
+  }
+
+  /* The wordmark is a gradient with a bloom, tracked tight. */
+  .weir-nav__word {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.055em;
+    background: linear-gradient(96deg, var(--ink), var(--crest), var(--teal));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 18px rgba(var(--crest-rgb), var(--bloom-a)));
+  }
+
+  .weir-nav__links {
+    display: none;
+    gap: 1.5rem;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  .weir-nav__links a {
+    color: var(--dim);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    transition: color var(--motion-fast) var(--ease-surface);
+  }
+
+  .weir-nav__links a:hover {
+    color: var(--crest);
+    text-decoration: none;
+  }
+
+  @media (min-width: 760px) {
+    .weir-nav__links {
+      display: flex;
+    }
+  }
+
+  .weir-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    background: rgba(var(--pd), 0.6);
+    color: var(--dim);
+    cursor: pointer;
+    transition:
+      color var(--motion-fast) var(--ease-surface),
+      border-color var(--motion-fast) var(--ease-surface);
+  }
+
+  .weir-theme-toggle:hover {
+    color: var(--crest);
+    border-color: rgba(var(--crest-rgb), 0.4);
+  }
+
+  /* ---- ambient ------------------------------------------------------------- */
+  .weir-aurora {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .weir-aurora i {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(70px);
+    will-change: transform;
+  }
+
+  .weir-aurora i:first-child {
+    top: -16rem;
+    left: -10%;
+    width: 30rem;
+    height: 30rem;
+    opacity: var(--aurora-a);
+    background: radial-gradient(circle, var(--crest), transparent 66%);
+    animation: weir-aurora-a 22s ease-in-out infinite alternate;
+  }
+
+  .weir-aurora i:last-child {
+    top: 8rem;
+    right: -14%;
+    width: 26rem;
+    height: 26rem;
+    opacity: var(--aurora-b);
+    background: radial-gradient(circle, var(--aurora), transparent 66%);
+    animation: weir-aurora-b 30s ease-in-out infinite alternate;
+  }
+
+  /* ---- rhythm -------------------------------------------------------------- */
+  .weir-section {
+    padding-block: 4rem;
+  }
+
+  .weir-section__head {
+    max-width: 44rem;
+    margin-bottom: 2rem;
+  }
+
+  .weir-hero {
+    position: relative;
+    padding-block: 5rem 1.5rem;
+  }
+
+  .weir-hero__sub {
+    color: var(--dim);
+    font-size: 1.125rem;
+    margin-top: 1.5rem;
+    max-width: var(--measure);
+  }
+
+  .weir-hero__actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .weir-body {
+    color: var(--dim);
+    max-width: var(--measure);
+  }
+
+  .weir-lead {
+    font-size: 1.1875rem;
+    color: var(--ink);
+    max-width: var(--measure);
+  }
+
+  /* ---- the waterline -------------------------------------------------------
+     A hairline whose first 24px carry the crest: a low barrier across a river,
+     drawn in the least ink it can be made from. */
+  .waterline {
+    border: 0;
+    height: 1px;
+    margin: 0;
+    background: linear-gradient(to right, var(--crest) 0 24px, var(--line) 24px);
+  }
+
+  /* ---- cards ---------------------------------------------------------------- */
+  .weir-grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .weir-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: 100%;
+    padding: 1.5rem;
+    border-radius: var(--weir-radius);
+    background: linear-gradient(180deg, rgba(var(--pa), 0.55), rgba(var(--pb), 0.75));
+    border: 1px solid rgba(var(--crest-rgb), 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.06),
+      0 18px 40px -34px rgba(var(--shade-rgb), 0.85);
+    transition:
+      transform var(--motion-base) var(--ease-surface),
+      border-color var(--motion-base) var(--ease-surface),
+      box-shadow var(--motion-base) var(--ease-surface);
+  }
+
+  /* Lift with a crest-tinted glow, never a black shadow — the design is explicit
+     that depth here is light, not dirt. */
+  a.weir-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(var(--crest-rgb), 0.35);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.08),
+      0 22px 44px -30px rgba(var(--crest-rgb), 0.35);
+    text-decoration: none;
+  }
+
+  .weir-card--held {
+    border-top: 2px solid rgba(var(--crest-rgb), 0.55);
+    background: linear-gradient(180deg, rgba(var(--pc), 0.5), rgba(var(--pd), 0.8));
+  }
+
+  .weir-card__idx,
+  .weir-card__handle {
+    font-family: var(--weir-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    color: var(--crest);
+  }
+
+  .weir-card__title {
+    font-size: 1.1875rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .weir-card__line {
+    color: var(--dim);
+    font-size: 0.9375rem;
+    margin: 0;
+  }
+
+  /* ---- notice ---------------------------------------------------------------
+     Sand for something worth knowing, alert for something wrong — the same
+     colour vocabulary the honest-number states use, so it is learned once. */
+  .weir-notice {
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    border-left: 3px solid var(--sand);
+    border-radius: var(--weir-radius);
+    padding: 1rem 1.5rem;
+    color: var(--dim);
+    font-size: 0.9375rem;
+    max-width: var(--measure);
+  }
+
+  .weir-notice--alert {
+    border-left-color: var(--alert);
+  }
+
+  /* ---- the email form -------------------------------------------------------- */
+  .waitlist {
+    max-width: 34rem;
+  }
+
+  .waitlist__row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  @media (min-width: 560px) {
+    .waitlist__row {
+      flex-direction: row;
+    }
+  }
+
+  .waitlist__input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.7rem 1rem;
+    border-radius: var(--weir-radius);
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    background: rgba(var(--pd), 0.6);
+    color: var(--ink);
+    font-size: 0.9375rem;
+  }
+
+  .waitlist__input::placeholder {
+    color: var(--dim);
+  }
+
+  /* Off-screen rather than `display: none`, because a bot that skips hidden
+     fields is exactly the one this is meant to catch. */
+  .waitlist__trap {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  /* ---- the long form (/waitlist) -------------------------------------------- */
+  .waitlist__field {
+    margin-top: 1.25rem;
+    border: 0;
+    padding: 0;
+  }
+
+  .waitlist__label {
+    display: block;
+    font-family: var(--weir-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 0.5rem;
+    padding: 0;
+  }
+
+  .waitlist__optional {
+    color: var(--sand);
+    letter-spacing: 0.1em;
+  }
+
+  .waitlist__roles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .waitlist__roles legend {
+    float: left;
+    width: 100%;
+  }
+
+  /* The whole chip is the target, not just the dot — a 13px radio is a poor hit area on a phone. */
+  .waitlist__role {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    border-radius: var(--weir-radius);
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    background: rgba(var(--pd), 0.5);
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition:
+      border-color var(--motion-fast) var(--ease-surface),
+      color var(--motion-fast) var(--ease-surface);
+  }
+
+  .waitlist__role:hover {
+    border-color: rgba(var(--crest-rgb), 0.4);
+  }
+
+  /* `:has()` so the selected state lives on the chip rather than needing a class from React. */
+  .waitlist__role:has(input:checked) {
+    border-color: var(--crest);
+    color: var(--crest);
+  }
+
+  .waitlist__role:has(input:focus-visible) {
+    outline: 2px solid var(--crest);
+    outline-offset: 2px;
+  }
+
+  .waitlist__role input {
+    accent-color: var(--crest);
+    margin: 0;
+  }
+
+  .waitlist__note.crit {
+    color: var(--alert);
+  }
+
+  .waitlist__note.warn {
+    color: var(--sand);
+  }
+
+  .waitlist .btn {
+    margin-top: 1.25rem;
+  }
+
+  .waitlist__legal {
+    margin: 0.75rem 0 0;
+    font-family: var(--weir-mono);
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+
+  .waitlist__msg {
+    margin: 0.75rem 0 0;
+    font-size: 0.9375rem;
+  }
+
+  .waitlist__msg.warn {
+    color: var(--sand);
+  }
+
+  .waitlist__msg.crit {
+    color: var(--alert);
+  }
+
+  .waitlist--done {
+    border-radius: var(--weir-radius);
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    border-left: 3px solid var(--crest);
+    background: linear-gradient(180deg, rgba(var(--pa), 0.55), rgba(var(--pb), 0.75));
+    padding: 1rem 1.5rem;
+  }
+
+  .waitlist__headline {
+    margin: 0;
+    font-weight: 600;
+    color: var(--crest);
+  }
+
+  .waitlist__note {
+    margin: 0.375rem 0 0;
+    font-size: 0.9375rem;
+    color: var(--dim);
+  }
+
+  /* ---- footer ----------------------------------------------------------------- */
+  .weir-foot {
+    border-top: 1px solid var(--line);
+    padding-block: 3rem;
+    margin-top: 4rem;
+    color: var(--dim);
+    font-size: 0.9375rem;
+  }
+
+  .weir-foot__cols {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  }
+
+  .weir-foot__endorsement {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .weir-foot nav a {
+    display: block;
+    color: var(--dim);
+    padding-block: 0.25rem;
+  }
+
+  .weir-foot nav a:hover {
+    color: var(--crest);
+  }
+
+  .weir-foot__legal {
+    margin-top: 2rem;
+    font-family: var(--weir-mono);
+    font-size: 0.75rem;
+  }
+}
+
+/* ---- reduced motion --------------------------------------------------------
+   Reveals are forced *visible* rather than left at their start state — somebody
+   who asked for less motion asked for less motion, not for an empty page. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  [data-reveal],
+  .weir-page {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+@media (max-width: 559px) {
+  .weir-page {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+    padding-inline: 0.875rem !important;
+  }
+
+  /* Every studio tab visible, rather than the third one swiped for behind a hidden scrollbar. */
+  .ptabs {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  /* Key above value, full width, rather than two columns that cannot both fit. */
+  .weir-kv {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.2rem !important;
+  }
+
+  /* A data table becomes one labelled block per row. The header row goes; each
+     cell names itself from `data-label`, and the first cell spans the row.
+     `.weir-stack` is the generic class; `.weir-members` was the first user. */
+  .weir-stack,
+  .weir-members {
+    min-width: 0 !important;
+  }
+  .weir-stack thead,
+  .weir-members thead {
+    display: none;
+  }
+  .weir-stack tr,
+  .weir-members tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem 0.75rem;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .weir-stack td,
+  .weir-members td {
+    display: block;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-word;
+  }
+  .weir-stack td:first-child,
+  .weir-members td:first-child {
+    grid-column: 1 / -1;
+  }
+  .weir-stack td[data-label]::before,
+  .weir-members td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+}
+
+/* ============================================================================
+   Declarations are copied across unchanged. Do not hand-edit — regenerate.
+   ========================================================================== */
+@layer weir {
+.dh-0bc2a7d5:hover { transform:translateY(-1px); background:var(--crest-hi,#a5ecd4); text-decoration:none; color:var(--bg,#04161d); box-shadow:0 0 34px -4px rgba(var(--crest-rgb,139,227,198),0.8) }
+.dh-237dddac:hover { transform:translateY(-1px); border-color:var(--crest,#8be3c6); color:var(--crest,#8be3c6); text-decoration:none }
+.dh-80d654f9:hover { text-decoration:none }
+.dh-517ebcfe:hover { border-color:var(--crest,#8be3c6); transform:translateY(-3px); text-decoration:none; box-shadow:0 18px 40px -28px rgba(var(--crest-rgb,139,227,198),0.55) }
+  .dh-b46baf10:hover { transform:translateY(-1px); border-color:var(--crest,#8be3c6); color:var(--crest,#8be3c6) }
+  .dh-72917cd5:hover { transform:translateY(-1px); background:var(--crest-hi,#a5ecd4); box-shadow:0 0 38px -4px rgba(var(--crest-rgb,139,227,198),0.85) }
+  .dh-e66c8a50:hover { text-decoration:none; transform:translateY(-1px) }
+  .dh-67b0f0bb:hover { color:var(--crest,#8be3c6); border-color:var(--crest,#8be3c6); transform:translateY(-1px) }
+  .dh-fd898ea8:hover { transform:translateY(-1px); background:var(--crest-hi,#a5ecd4); text-decoration:none; color:var(--bg,#04161d) }
+  .dh-fc99dbf8:hover { text-decoration:none; color:var(--crest,#8be3c6) }
+  .dh-d62c92ad::before { content:''; position:absolute; inset:0; background:linear-gradient(100deg,transparent 22%,rgba(255,255,255,0.38) 50%,transparent 78%); background-size:220% 100%; animation:sheen 5.5s linear infinite; pointer-events:none }
+  .dh-86b75bdf:hover { transform:translateY(-1px); background:var(--crest-hi,#a5ecd4); text-decoration:none; color:var(--bg,#04161d); box-shadow:0 0 34px -4px rgba(var(--crest-rgb,139,227,198),0.8) }
+  .dh-e0956a5e:hover { text-decoration:none; color:var(--crest,#8be3c6); border-color:var(--crest,#8be3c6) }
+  .dh-fec36ccd:hover { text-decoration:none; border-color:var(--crest,#8be3c6) }
+  .dh-fedc8e2e:hover { color:var(--crest,#8be3c6); text-decoration:none; transform:translateX(2px) }
+  .dh-07d0a6d7:hover { color:var(--crest,#8be3c6) }
+  .dh-f10f4630:hover { transform:translateY(-1px); border-color:var(--crest,#8be3c6); color:var(--crest,#8be3c6) }
+  .dh-f2bac7c4:hover { transform:translateY(-1px); background:var(--crest-hi,#a5ecd4); box-shadow:0 0 34px -4px rgba(var(--crest-rgb,139,227,198),0.8) }
+  .dh-05de5f5a:hover { border-color:var(--crest,#8be3c6); transform:translateY(-1px) }
+  .dh-b3237c6c:hover { border-color:rgba(var(--crest-rgb,139,227,198),0.45); transform:translateY(-3px); box-shadow:0 22px 48px -30px rgba(var(--crest-rgb,139,227,198),0.5) }
+  .dh-ccd4b338:hover { border-color:rgba(var(--crest-rgb,139,227,198),0.4); box-shadow:0 22px 48px -30px rgba(var(--crest-rgb,139,227,198),0.45) }
+  .dh-640f211f:hover { text-decoration:none; border-color:var(--crest,#8be3c6); color:var(--crest,#8be3c6) }
+  .dh-0b27bfb9:hover { border-color:var(--crest,#8be3c6); transform:translateY(-3px); box-shadow:0 18px 40px -28px rgba(var(--crest-rgb,139,227,198),0.55) }
+  .dh-c04cdaa8:hover { background:var(--line-2,var(--line-2,#123039)) }
+  .dh-e61ac03a:hover { text-decoration:none }
+  .dh-cc3e1ebd:hover { border-color:var(--crest,#8be3c6); transform:translateY(-1px); text-decoration:none }
+  .dh-dbe4e19d:hover { transform:translateY(-1px) }
+}
+
+@layer weir {
+  .card,
+  .panel,
+  .tile,
+  .rr-card,
+  .rr-pitch,
+  .rr-promo,
+  .rr-stack,
+  .authcard,
+  .tier,
+  .channel {
+    background: linear-gradient(180deg, rgba(var(--pa), 0.55), rgba(var(--pb), 0.75));
+    border: 1px solid rgba(var(--crest-rgb), 0.12);
+    border-radius: var(--weir-radius);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.06),
+      0 18px 40px -34px rgba(var(--shade-rgb), 0.85);
+  }
+
+  /* Depth is light, never dirt: a crest-tinted lift rather than a black shadow. */
+  a.card:hover,
+  a.tile:hover,
+  a.tier:hover,
+  .card--interactive:hover {
+    border-color: rgba(var(--crest-rgb), 0.35);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.08),
+      0 22px 44px -30px rgba(var(--crest-rgb), 0.35);
+  }
+
+  /* ---- the primary action -------------------------------------------------
+     Flat crest on deep, with the glow the design gives its calls to action. It
+     is present at rest and opens on hover, so the control reads as lit rather
+     than as something that lights up only when approached. */
+  .btn {
+    border-radius: var(--weir-radius);
+    font-weight: 600;
+    box-shadow: 0 0 22px -6px rgba(var(--crest-rgb), 0.5);
+    transition:
+      transform var(--motion-fast) var(--ease-surface),
+      background-color var(--motion-fast) var(--ease-surface),
+      box-shadow var(--motion-base) var(--ease-surface);
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 0 34px -4px rgba(var(--crest-rgb), 0.8);
+  }
+
+  .btn.ghost {
+    background: rgba(var(--crest-rgb), 0.06);
+    border: 1px solid rgba(var(--crest-rgb), 0.45);
+    color: var(--ink);
+    box-shadow: none;
+  }
+
+  .btn.ghost:hover:not(:disabled) {
+    border-color: var(--crest);
+    color: var(--crest);
+    box-shadow: none;
+  }
+
+  .btn:disabled {
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* ---- fields --------------------------------------------------------------
+     Inputs sit *into* the surface rather than on it, which is what makes a form
+     read as part of the panel instead of pasted onto it. */
+  input[type='text'],
+  input[type='email'],
+  input[type='number'],
+  input[type='search'],
+  input[type='url'],
+  select,
+  textarea {
+    background: rgba(var(--pd), 0.6);
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    border-radius: var(--weir-radius);
+    color: var(--ink);
+    transition:
+      border-color var(--motion-fast) var(--ease-surface),
+      box-shadow var(--motion-fast) var(--ease-surface);
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    border-color: var(--crest);
+    box-shadow: 0 0 0 3px rgba(var(--crest-rgb), 0.18);
+    outline: none;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--dim);
+  }
+
+  /* ---- tabs ---------------------------------------------------------------- */
+  .tab {
+    border-radius: 99px;
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    color: var(--dim);
+    transition:
+      color var(--motion-fast) var(--ease-surface),
+      border-color var(--motion-fast) var(--ease-surface);
+  }
+
+  .tab:hover {
+    color: var(--ink);
+    border-color: rgba(var(--crest-rgb), 0.4);
+  }
+
+  .tab.on {
+    color: var(--crest);
+    border-color: var(--crest);
+    background: rgba(var(--crest-rgb), 0.08);
+  }
+
+  /* ---- notes ---------------------------------------------------------------
+     Sand for something worth knowing, alert for something wrong — the same
+     vocabulary the honest-number states use, so a reader learns it once. */
+  .note {
+    border-radius: var(--weir-radius);
+    border: 1px solid rgba(var(--line-rgb), 0.9);
+    border-left: 3px solid var(--sand);
+    background: linear-gradient(180deg, rgba(var(--pa), 0.4), rgba(var(--pb), 0.6));
+  }
+
+  .note.crit {
+    border-left-color: var(--alert);
+  }
+
+  .note .lbl {
+    font-family: var(--weir-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* ---- data ----------------------------------------------------------------
+     Every figure in this product is mono and tabular, so a changed amount reads
+     as a changed digit rather than as text of a different width. */
+  .stat .v,
+  .stats .v,
+  .mono,
+  .k {
+    font-family: var(--weir-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat .k,
+  .stats .k {
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* ---- identity ------------------------------------------------------------ */
+  .avatar {
+    background: linear-gradient(180deg, rgba(var(--pc), 0.9), rgba(var(--pb), 0.95));
+    border: 1px solid rgba(var(--crest-rgb), 0.28);
+    box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), 0.1);
+    color: var(--crest);
+    font-family: var(--weir-mono);
+  }
+
+  .appbar,
+  .topbar {
+    background: linear-gradient(180deg, rgba(var(--pb), 0.9), rgba(var(--pe), 0.78));
+    backdrop-filter: blur(16px) saturate(1.3);
+    border-bottom: 1px solid rgba(var(--crest-rgb), 0.16);
+  }
+
+  .nav-link {
+    border-radius: var(--weir-radius);
+    transition:
+      color var(--motion-fast) var(--ease-surface),
+      background-color var(--motion-fast) var(--ease-surface);
+  }
+
+  .nav-link:hover {
+    color: var(--crest);
+    background: rgba(var(--crest-rgb), 0.06);
+  }
+
+  .nav-link.on {
+    color: var(--crest);
+    background: rgba(var(--crest-rgb), 0.1);
+  }
+
+  /* ---- gated content --------------------------------------------------------
+     The ruled lines standing in for a body nobody bought. They are drawn, not
+     blurred: there is nothing underneath to reveal, because the payload never
+     carried it. */
+  .locked-lines span,
+  .quote-lines span {
+    background: linear-gradient(90deg, rgba(var(--crest-rgb), 0.18), rgba(var(--line-rgb), 0.6));
+  }
+}
+
+/* ============================================================================
+   One fluid root, so the whole design scales together
+
+   # The defect
+
+   So the headings grew with the window and nothing else did. At 1440px the
+   hero was 68px over 15px body copy; at 375px the same pair was 40px over
+   15px. The *ratio* between the largest and smallest type on the page changed
+   by a third depending on the window, which is why elements sit in the right
+   place and still look wrong — their positions are fluid and their sizes were
+   not.
+
+   # Why the root rather than 95 edits
+
+   Every one of those 95 is expressed in `rem`, and `rem` resolves against the
+   root. Moving the root moves all of them at once, in proportion, including
+   the ones written inline in ported markup that a stylesheet cannot otherwise
+   reach — see the header's `flex-wrap` note for what fighting inline styles
+   costs.
+
+   16px at 375px and 18px at 1440px, linear between. The floor is 16 because
+   that is the smallest comfortable body size on a phone and going under it to
+   preserve a proportion would be trading the reader for the drawing.
+   ========================================================================== */
+@layer weir {
+  html {
+    font-size: clamp(16px, 15.3px + 0.188vw, 18px);
+  }
+
+  /*
+    Floors on running text, expressed as `max()` rather than as breakpoints.
+
+    # Why not a media query
+
+    The first version of this used them, and they were wrong twice in a way worth recording.
+
+    They were wrong at the *bound*: `max-width: 767px` left the annotations at 13.6px on a tablet,
+    because the fluid root does not carry `0.8125rem` past 14px until roughly 1024px. Moving the
+    bound to 1023px then produced a visible step — measured 15.7px at 1023px and 14.0px at 1024px,
+    a tenth of the size disappearing on a one-pixel drag.
+
+    A floor has no bound to get wrong and no step to see. `max()` takes whichever is larger at every
+    width, so the size grows with the root once the root is big enough and never falls below the
+    floor. One declaration, continuous everywhere.
+
+    # Why these floors and not 16px for both
+
+    16px is the rule for body copy, and 15px is deliberate for the annotations: they are notes, mono
+    reads larger than sans at the same size, and taking them to 16 would put them level with running
+    text and flatten the hierarchy the design uses to separate the two.
+
+    The selectors match inline styles because that is where the sizes are — the same hook
+    `.sf__inner` uses below, for the same reason: the ported
+    markup carries no class names, and an inline declaration outranks every layer. Restricted to `p`
+    and `li`, so mono *labels* — uppercase kickers, pill badges, figures — keep the size they were
+    drawn at. Those are read as marks, not as sentences.
+  */
+  p[style*='0.9375rem'],
+  li[style*='0.9375rem'] {
+    font-size: max(0.9375rem, 16px) !important;
+  }
+
+  p[style*='0.8125rem'],
+  li[style*='0.8125rem'] {
+    font-size: max(0.8125rem, 15px) !important;
+  }
+
+  p[style*='0.875rem'],
+  li[style*='0.875rem'] {
+    font-size: max(0.875rem, 15px) !important;
+  }
+
+  /*
+    `.signin-note` is the worst of them and the reason this rule is not "nice to have": at 13px it
+    carries "No Sui wallet in this browser. Slush and Phantom…" — the sentence that tells somebody
+    with no wallet what to install. The single most important line on the page for a reader arriving
+    from outside crypto was the smallest text on it.
+  */
+  .signin-note,
+  .field-note,
+  .form-note,
+  .note p {
+    font-size: max(0.8125rem, 15px);
+  }
+
+  /*
+    The footer's own prose, which comes from `globals.css` rather than from inline markup and so is
+    not caught above. It holds "Verify everything" — the one sentence on the page asking the reader
+    to go and check us, and an invitation nobody can read is not an invitation.
+
+    `p` only, so the column headings and small labels keep their sizes.
+  */
+  .sf p {
+    font-size: max(0.9375rem, 16px);
+  }
+}
+
+/* ============================================================================
+   44px of finger, on the devices that have one
+
+   # Why `pointer: coarse` and not a width
+
+   # Why this can be applied broadly and safely
+
+   `min-height` has no effect on a non-replaced inline box. So every link inside
+   running prose — and there are several, `d=inline h=20` measured on the landing
+   page — is untouched by this rule automatically, which is correct: a 44px tall
+   inline link would tear a hole in the paragraph around it. Only elements that
+   are already block, flex or inline-flex respond, and those are exactly the
+   standalone controls.
+
+   # What it fixes
+
+   Measured at 375px: eighteen links at 24px in the footer's navigation columns,
+   fifteen amount buttons at 33px on `/chests`, the theme toggle at 36px, and the
+   hero buttons at 37–39px. The footer set is the worst of them — 24px links
+   stacked in a column means tapping the one you meant is close to a coin flip.
+   ========================================================================== */
+@layer weir {
+  @media (pointer: coarse) {
+    a,
+    button,
+    summary,
+    select,
+    textarea,
+    input:not([type='checkbox']):not([type='radio']):not([type='range']) {
+      min-height: 44px;
+    }
+
+    /*
+      A taller box is not a centred one.
+
+      Four of the footer links are `display: block`, so a 44px minimum leaves the
+      text sitting against the top edge with 20px of dead space under it — the
+      target grows but the label stops looking like it belongs to it. Flex with
+      centred items puts the text back in the middle of its own hit area.
+
+      Safe here because these are single-line text links; it is scoped to the
+      footer's nav rather than applied to every block link for that reason.
+    */
+    .sf nav a {
+      display: flex;
+      align-items: center;
+    }
+  }
+}
+
+/* ============================================================================
+   The background is green, not blue
+   ========================================================================== */
+@layer weir {
+  .aurora--a {
+    background: var(--aurora, #4a9ec4);
+    opacity: 0.3;
+  }
+
+  .aurora--b {
+    background: var(--teal, #7fd8dd);
+    opacity: 0.22;
+  }
+
+  /* The crest — the green that ties the field to the accent. */
+  .aurora--c {
+    background: var(--crest, #8be3c6);
+    opacity: 0.1;
+  }
+}
+
+/* ---- checkout controls inside a design card --------------------------------
+   The frame comes off here rather than out of the components, so `/vault/[id]`
+   keeps the panel it needs. The controls, their labels and their fields are
+   untouched; only the box around them is removed.
+   ========================================================================== */
+@layer weir {
+  .weir-pool-deposit > .panel,
+  .weir-tip > .panel {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .weir-pool-deposit .field,
+  .weir-tip .field {
+    background: linear-gradient(180deg, rgba(var(--pa), 0.78), rgba(var(--pb), 0.88));
+    border: 1px solid rgba(var(--crest-rgb), 0.14);
+    border-radius: var(--weir-radius);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.07),
+      0 14px 34px -26px rgba(var(--shade-rgb), 0.85);
+    color: var(--ink);
+  }
+
+  .weir-pool-deposit .field:focus-visible,
+  .weir-tip .field:focus-visible {
+    border-color: rgba(var(--crest-rgb), 0.55);
+    outline: none;
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.07),
+      0 0 0 3px rgba(var(--crest-rgb), 0.2);
+  }
+
+  /* Inside a 22rem aside the field's fixed 160px leaves the simulate button
+     orphaned on its own line. Full width, and the button follows it. */
+  .weir-pool-deposit .field {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@layer weir {
+  .weir-account .account-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem 0.4rem 0.4rem;
+    border-radius: 99px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .weir-account .account-trigger:hover,
+  .weir-account .account-trigger[aria-expanded='true'] {
+    border-color: rgba(var(--crest-rgb), 0.45);
+    color: var(--ink);
+    background: rgba(var(--crest-rgb), 0.06);
+  }
+
+  .weir-account .account-trigger .avatar {
+    background: var(--line-2);
+    color: var(--crest);
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+  }
+
+  /* The chevron is the whole affordance: without it the pill reads as a label
+     rather than as something that opens. */
+  .weir-account .account-chevron {
+    transition: transform 0.15s ease;
+  }
+
+  .weir-account .account-trigger[aria-expanded='true'] .account-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* Above the sticky header, which sits at z-index 10, and above the account
+     rail below it at 9. A menu that opens behind the bar that spawned it is the
+     same as a menu that does not open. */
+  .weir-account {
+    position: relative;
+    z-index: 20;
+  }
+
+  /* ---- the popup on a narrow screen -------------------------------------
+     Below 760px the header's nav scrolls sideways, and `overflow-x: auto`
+     establishes a clipping context: an absolutely positioned menu inside it is
+     cut off at the row's edge — the sign-out item lands outside the box and is
+     simply not drawn.
+
+     `fixed` takes it out of that context entirely and pins it under the header,
+     inset from both edges so it fits a phone rather than hanging off the right.
+     The trigger stays where the design puts it. */
+  @media (max-width: 760px) {
+    .weir-account .account-pop {
+      position: fixed;
+      top: calc(4rem + 1px + 0.5rem);
+      right: 0.75rem;
+      left: 0.75rem;
+      min-width: 0;
+      max-height: calc(100vh - 6rem);
+      overflow-y: auto;
+    }
+  }
+}
+
+/* ============================================================================
+   The dashboard — rail, content, rail
+   ========================================================================== */
+@layer weir {
+
+  .weir-appnav {
+    gap: 0.75rem;
+  }
+
+  .weir-appnav__kicker {
+    margin: 0;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--sand);
+  }
+
+  .weir-appnav__row {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .weir-appnav__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--weir-radius);
+    border: 1px solid transparent;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    white-space: nowrap;
+    text-decoration: none;
+    color: var(--dim);
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .weir-appnav__link:hover {
+    color: var(--ink);
+    background: rgba(var(--crest-rgb), 0.05);
+  }
+
+  /* The page you are on. `aria-current` carries the same fact to a screen
+     reader, so this is never the only way to know. */
+  .weir-appnav__link[aria-current='page'] {
+    color: var(--crest);
+    background: rgba(var(--crest-rgb), 0.08);
+    border-color: rgba(var(--crest-rgb), 0.35);
+  }
+}
+
+/* ---- the dashboard as the screen narrows -----------------------------------
+   The third column goes first, then the rail stops being a column and becomes
+   a scrolling strip under the header. The centre never gives up space until
+   there is nothing left to give: it is the product.
+
+   A strip rather than a hamburger, for the same reason as the header — several
+   of these destinations are reachable from nowhere else, and hiding them behind
+   a tap costs the conversion path a tap it does not need to cost.
+   ========================================================================== */
+@layer weir {
+
+  @media (max-width: 900px) {
+
+    .weir-appnav {
+      position: sticky;
+      top: calc(4rem + 1px);
+      z-index: 9;
+      max-height: none;
+      overflow: visible;
+      margin-inline: -1.5rem;
+      padding: 0.5rem 1.5rem;
+      background: linear-gradient(
+        180deg,
+        rgba(var(--pb), 0.92),
+        rgba(var(--pe), 0.78)
+      );
+      backdrop-filter: blur(14px) saturate(1.25);
+      border-bottom: 1px solid rgba(var(--crest-rgb), 0.1);
+    }
+
+    /* The kicker labels a column. As a strip the row speaks for itself, and the
+       words would cost a line of a small screen on every page. */
+    .weir-appnav__kicker {
+      display: none;
+    }
+
+    .weir-appnav__row {
+      grid-auto-flow: column;
+      grid-auto-columns: max-content;
+      gap: 0.4rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      /* Fades the right edge, so a half-visible link reads as "more this way"
+         rather than as something clipped by accident. */
+      -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+      mask-image: linear-gradient(90deg, #000 88%, transparent);
+    }
+
+    .weir-appnav__row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .weir-appnav__link {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.875rem;
+    }
+  }
+}
+
+/* ============================================================================
+   The page head, and sections within a page
+   ========================================================================== */
+@layer weir {
+  .weir-grad {
+    background: linear-gradient(100deg, var(--crest), var(--teal) 46%, var(--sand));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 26px rgba(var(--crest-rgb), 0.35));
+  }
+
+  .weir-rule {
+    height: 1px;
+    margin-block: 2rem;
+    background: linear-gradient(to right, var(--crest) 0 24px, var(--line) 24px);
+  }
+
+  .weir-pagehead__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.25rem;
+  }
+
+  .weir-pagehead__text {
+    min-width: 0;
+  }
+
+  .weir-pagehead__kicker {
+    margin: 0 0 0.6rem;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sand);
+  }
+
+  .weir-pagehead__title {
+    margin: 0;
+    font-family: var(--weir-sans, 'Geist', system-ui, sans-serif);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.032em;
+    font-size: clamp(1.75rem, 1.2rem + 1.8vw, 2.5rem);
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+
+  /*
+    Brighter than the dim metadata grey, and lit a little: the description is the sentence that
+    tells a visitor what the page is, and at --dim it read as a footnote.
+  */
+  .weir-pagehead__lede {
+    margin: 0.875rem 0 0;
+    max-width: 62ch;
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    color: var(--ink-2, #b9cdc9);
+    text-shadow: 0 0 18px rgba(var(--crest-rgb), 0.18);
+    text-wrap: pretty;
+  }
+  /* Centred, on the pages a visitor reads to be convinced. */
+  .weir-pagehead--centered .weir-pagehead__row {
+    justify-content: center;
+  }
+  .weir-pagehead--centered .weir-pagehead__text {
+    margin-inline: auto;
+    text-align: center;
+  }
+  .weir-pagehead--centered .weir-pagehead__title,
+  .weir-pagehead--centered .weir-pagehead__lede {
+    margin-inline: auto;
+  }
+  .weir-pagehead--centered .weir-pagehead__title {
+    max-width: 26ch;
+  }
+  .weir-pagehead--centered + .ptabs {
+    justify-content: center;
+  }
+
+  .weir-pagehead__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  /* ---- sections -----------------------------------------------------------
+     Generous space above, tight under the heading: the gap belongs between one
+     block and the next, not between a heading and the thing it names. */
+  .weir-section {
+    margin-top: 3rem;
+  }
+
+  .weir-section__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .weir-section__title {
+    margin: 0;
+    font-family: var(--weir-sans, 'Geist', system-ui, sans-serif);
+    font-weight: 700;
+    font-size: 1.5rem;
+    letter-spacing: -0.03em;
+  }
+
+  .weir-section__hint {
+    margin: 0.35rem 0 0;
+    max-width: 62ch;
+    font-size: 0.9375rem;
+    color: var(--dim);
+    text-wrap: pretty;
+  }
+
+  .weir-section__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+/* ---- the section switcher inside a page head -------------------------------
+   `SectionNav` labels itself "Creator studio", and so does the page kicker
+   directly above it — the same two words twice, six lines apart. The nav keeps
+   its `aria-label`, so the name is still announced; only the duplicate ink goes.
+
+   It sits below the lede rather than beside the heading, because three tiles
+   with descriptions are wider than a heading's spare margin and wrapping them
+   into a cramped column would cost the hints that make them worth having.
+   ========================================================================== */
+
+@layer weir {
+  @keyframes pageIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes floatY {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes pulseRing {
+    0% {
+      box-shadow: 0 0 0 0 rgba(var(--crest-rgb), 0.35);
+    }
+    70% {
+      box-shadow: 0 0 0 12px rgba(var(--crest-rgb), 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(var(--crest-rgb), 0);
+    }
+  }
+
+  @keyframes sheen {
+    from {
+      background-position: -160% 0;
+    }
+    to {
+      background-position: 260% 0;
+    }
+  }
+}
+
+/*
+  Somebody who asked not to be moved gets none of it.
+
+  `both` fill-mode holds an element at the first keyframe until its animation
+  runs, so simply cancelling the animation is not enough — it has to be removed,
+  or a reduced-motion reader is left looking at `opacity: 0`.
+*/
+@media (prefers-reduced-motion: reduce) {
+  @layer weir {
+    [style*='pageIn'],
+    [style*='floatY'],
+    [style*='pulseRing'],
+    [style*='sheen'] {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+}
+
+/* ==========================================================================
+   The shell — one chrome for every route
+   Header, breadcrumbs, the page grid with its optional member rail, the footer
+   and the phone's bottom bar. Class-based throughout: the ported header carried
+   its layout inline, and an inline declaration outranks every cascade layer,
+   which is how its phone fix came to be dead code and the wallet button came to
+   be clipped at 375px.
+   ========================================================================== */
+@layer weir {
+  .sh-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: linear-gradient(180deg, rgba(var(--pb), 0.9), rgba(var(--pe), 0.78));
+    backdrop-filter: blur(16px) saturate(1.3);
+    border-bottom: 1px solid rgba(var(--crest-rgb), 0.16);
+    box-shadow:
+      0 1px 0 rgba(var(--hi-rgb), 0.04),
+      0 18px 40px -36px rgba(var(--shade-rgb), 0.9);
+  }
+  .sh-header__row {
+    max-width: 80rem;
+    margin-inline: auto;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    min-height: 4rem;
+  }
+  .sh-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--ink);
+    text-decoration: none;
+    flex: 0 0 auto;
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sh-logo:hover {
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .sh-logo__tile,
+  .sf__tile {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(var(--pc), 0.9), rgba(var(--pb), 0.95));
+    border: 1px solid rgba(var(--crest-rgb), 0.28);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.1),
+      0 0 22px -8px rgba(var(--crest-rgb), 0.75);
+  }
+  .sh-mark {
+    display: block;
+    color: var(--crest);
+    filter: drop-shadow(0 0 7px rgba(var(--crest-rgb), 0.85));
+  }
+  .sh-logo__text {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1;
+  }
+  .sh-logo__word,
+  .sf__word {
+    font-family: var(--weir-sans, 'Geist', system-ui, sans-serif);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.055em;
+    background: linear-gradient(100deg, var(--ink), var(--crest) 62%, var(--teal));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 18px rgba(var(--crest-rgb), 0.4));
+  }
+  .sh-logo__sub {
+    margin-top: 0.2rem;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.5625rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* The five destinations. Hidden below 900px; the menu and the bottom bar carry them there. */
+  .sh-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0.5rem;
+    min-width: 0;
+  }
+  .sh-nav__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    text-decoration: none;
+    color: var(--dim);
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .sh-nav__link:hover {
+    color: var(--crest);
+    text-decoration: none;
+    background: rgba(var(--crest-rgb), 0.05);
+  }
+  /* "You are here", by attribute — the same fact a screen reader announces. */
+  .sh-nav__link[aria-current='page'] {
+    color: var(--crest);
+    background: rgba(var(--crest-rgb), 0.08);
+    border-color: rgba(var(--crest-rgb), 0.35);
+  }
+
+  .sh-tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+  }
+  .sh-iconbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 10px;
+    cursor: pointer;
+    background: rgba(var(--crest-rgb), 0.06);
+    border: 1px solid rgba(var(--crest-rgb), 0.28);
+    color: var(--dim);
+    text-decoration: none;
+    list-style: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      color 0.14s ease,
+      border-color 0.14s ease,
+      transform 0.14s ease;
+  }
+  .sh-iconbtn:hover,
+  .sh-iconbtn[aria-current='page'] {
+    color: var(--crest);
+    border-color: var(--crest);
+    text-decoration: none;
+  }
+  .sh-bell {
+    border-radius: 99px;
+  }
+  .sh-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    border: 1px solid rgba(var(--sand-rgb), 0.4);
+    border-radius: 99px;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--sand);
+    white-space: nowrap;
+  }
+  .sh-cta {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.7rem 1.2rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1;
+    white-space: nowrap;
+    background: var(--crest);
+    color: var(--bg);
+    text-decoration: none;
+    box-shadow: 0 0 22px -6px rgba(var(--crest-rgb), 0.5);
+  }
+  .sh-cta:hover {
+    text-decoration: none;
+    background: var(--crest-hi, #a5ecd4);
+    color: var(--bg);
+  }
+
+  /* The menu: a `<details>`, so it opens, closes and announces itself without script. */
+  .sh-menu {
+    display: none;
+    position: relative;
+  }
+  .sh-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+  .sh-menu[open] > summary {
+    color: var(--crest);
+    border-color: var(--crest);
+  }
+  .sh-menu__panel {
+    position: fixed;
+    top: calc(4rem + 1px + 0.5rem);
+    right: 0.75rem;
+    left: 0.75rem;
+    max-width: 26rem;
+    margin-left: auto;
+    z-index: 30;
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.5rem;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(var(--pa), 0.98), rgba(var(--pb), 0.99));
+    border: 1px solid rgba(var(--crest-rgb), 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(var(--hi-rgb), 0.08),
+      0 30px 60px -30px rgba(var(--shade-rgb), 0.9);
+  }
+  .sh-menu__link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink);
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    font: inherit;
+    min-height: 44px;
+  }
+  .sh-menu__link:hover,
+  .sh-menu__link[aria-current='page'] {
+    text-decoration: none;
+    background: rgba(var(--crest-rgb), 0.08);
+    border-color: rgba(var(--crest-rgb), 0.3);
+  }
+  .sh-menu__link > span {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+  .sh-menu__label {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .sh-menu__blurb {
+    font-size: 0.8125rem;
+    color: var(--dim);
+  }
+  .sh-menu__theme {
+    border-top: 1px solid rgba(var(--line-rgb), 0.8);
+    border-radius: 0 0 10px 10px;
+    margin-top: 0.25rem;
+    color: var(--dim);
+  }
+
+  /* Collapse order: nav goes behind the menu first; then the wordmark; the account control last. */
+  @media (max-width: 980px) {
+    .sh-nav {
+      display: none;
+    }
+    .sh-menu {
+      display: block;
+    }
+  }
+  @media (max-width: 760px) {
+    .sh-header__row {
+      padding-inline: 0.875rem;
+      gap: 0.5rem;
+      min-height: 3.5rem;
+    }
+    .sh-logo__text {
+      display: none;
+    }
+    .sh-theme {
+      display: none;
+    }
+    .sh-tools {
+      gap: 0.4rem;
+    }
+    .sh-menu__panel {
+      top: calc(3.5rem + 1px + 0.5rem);
+    }
+    /* The account control has to fit beside the logo, the menu and the bell. The word "Connect"
+       and the kind line go; the wallet word and the avatar stay. */
+    .sh-account .account-signin__label,
+    .sh-account .account-trigger__kind {
+      display: none;
+    }
+    .sh-account .account-trigger {
+      padding: 0.35rem 0.6rem 0.35rem 0.35rem;
+    }
+    .sh-account .account-trigger__addr {
+      font-size: 0.75rem;
+    }
+  }
+  @media (max-width: 380px) {
+    .sh-account .account-trigger__addr {
+      display: none;
+    }
+    .sh-account .account-chevron {
+      display: none;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Breadcrumbs
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .crumbs {
+    margin: 0 0 1.25rem;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+  .crumbs__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.35rem;
+  }
+  .crumbs__item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    min-width: 0;
+    line-height: 1.4;
+  }
+  .crumbs__link {
+    color: var(--dim);
+    text-decoration: none;
+    padding: 0.2rem 0;
+  }
+  .crumbs__link:hover {
+    color: var(--crest);
+    text-decoration: none;
+  }
+  .crumbs__section {
+    color: var(--sand);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.6875rem;
+  }
+  .crumbs__here {
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 18rem;
+  }
+  .crumbs__sep {
+    color: rgba(var(--crest-rgb), 0.5);
+    line-height: 1;
+  }
+}
+
+@layer weir {
+  .weir-shell {
+    max-width: 80rem;
+    margin-inline: auto;
+    padding: 1.5rem 1.5rem 4rem;
+    display: grid;
+    gap: 2.5rem;
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .weir-shell[data-member] {
+    grid-template-columns: 14rem minmax(0, 1fr) 20rem;
+  }
+  .weir-shell[data-member] > .weir-appnav,
+  .weir-shell__rail {
+    position: sticky;
+    /* The header measures 65px; a bare 4rem leaves a one-pixel slot between them. */
+    top: calc(4rem + 1px + 1.5rem);
+    max-height: calc(100vh - 4rem - 3rem);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    display: grid;
+    gap: 1.5rem;
+    align-content: start;
+    min-width: 0;
+  }
+  .weir-shell__rail {
+    padding-right: 0.25rem;
+  }
+  /*
+    A page that brings its own aside — a creator's page and its pool box — keeps it as the third
+    column; the discovery rail steps aside rather than making four. The feed's own creators aside
+    is the discovery rail, so in the dashboard the feed runs one column and the rail carries it.
+  */
+  .weir-shell[data-member]:has(.weir-cols--22) {
+    grid-template-columns: 14rem minmax(0, 1fr);
+  }
+  .weir-shell[data-member]:has(.weir-cols--22) .weir-shell__rail {
+    display: none;
+  }
+  .weir-shell[data-member] .weir-cols:not(.weir-cols--22) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .weir-shell[data-member] .weir-cols:not(.weir-cols--22) > aside {
+    display: none !important;
+  }
+  /*
+    A page's own aside — the feed's creators for a guest, a creator's pool box — is pinned and
+    scrolls on its own, exactly as the dashboard's rails do. A guest on /feed gets the same reading
+    experience as a member: the feed moves, the column beside it stays.
+  */
+  .weir-cols > aside {
+    position: sticky;
+    top: calc(4rem + 1px + 1.5rem);
+    max-height: calc(100vh - 4rem - 3rem);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    padding-right: 0.25rem;
+  }
+  /*
+    The pool card is a card, not a rail: it holds one short argument and one control, so it stays
+    whole and pinned rather than growing a scrollbar of its own. The feed's discovery column keeps
+    its scroll, because that one is a list that can run long.
+  */
+  .weir-cols--22 > aside {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  /*
+    Unless the window is too short to hold it. Pinned content taller than the viewport puts its own
+    last line — here, the deposit button — somewhere the reader cannot reach.
+  */
+  @media (max-height: 780px) {
+    .weir-cols--22 > aside {
+      position: static;
+    }
+  }
+  @media (max-width: 1023px) {
+    .weir-cols > aside {
+      position: static;
+      max-height: none;
+      overflow: visible;
+    }
+  }
+  .rr-built {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+  .rr-built li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+  }
+  .rr-built a {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .rr-built__note {
+    font-size: 0.8125rem;
+    color: var(--dim);
+  }
+  /* The discovery rail leaves first, when the middle would otherwise drop under a reading measure. */
+  @media (max-width: 1240px) {
+    .weir-shell[data-member] {
+      grid-template-columns: 14rem minmax(0, 1fr);
+    }
+    .weir-shell__rail {
+      display: none;
+    }
+    /* With no rail to carry it, the feed's own aside comes back, under the feed. */
+    .weir-shell[data-member] .weir-cols:not(.weir-cols--22) > aside {
+      display: grid !important;
+    }
+  }
+  .weir-shell__col {
+    min-width: 0;
+  }
+  .weir-shell__main {
+    min-width: 0;
+  }
+  /* Every page's first blocks arrive in sequence, as the dashboard's did. */
+  .weir-shell__main > * {
+    animation: pageIn 0.5s var(--ease-reveal, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+  .weir-shell__main > *:nth-child(2) {
+    animation-delay: 70ms;
+  }
+  .weir-shell__main > *:nth-child(3) {
+    animation-delay: 140ms;
+  }
+  .weir-shell__main > *:nth-child(n + 4) {
+    animation-delay: 210ms;
+  }
+  .weir-appnav__group {
+    display: grid;
+    gap: 0.5rem;
+  }
+  @media (max-width: 900px) {
+    .weir-shell,
+    .weir-shell[data-member] {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1rem;
+      padding-top: 0.75rem;
+    }
+    .weir-shell[data-member] > .weir-appnav {
+      position: static;
+      max-height: none;
+      overflow-y: visible;
+      grid-auto-flow: column;
+      grid-auto-columns: max-content;
+      gap: 1rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent);
+      mask-image: linear-gradient(90deg, #000 90%, transparent);
+    }
+    .weir-appnav__group {
+      grid-auto-flow: column;
+      grid-auto-columns: max-content;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .weir-appnav__group + .weir-appnav__group {
+      padding-left: 0.75rem;
+      border-left: 1px solid rgba(var(--line-rgb), 0.9);
+    }
+  }
+  @media (max-width: 760px) {
+    .weir-shell {
+      padding-inline: 0.875rem;
+      /* Room for the bottom bar, plus the phone's own inset beneath it. */
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The footer
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .sf {
+    max-width: none;
+    font-family: var(--weir-sans, 'Geist', system-ui, sans-serif);
+    line-height: 1.6;
+    overflow-x: clip;
+    overflow-y: visible;
+    position: relative;
+    margin-top: 4rem;
+    padding: 3rem 0 2rem;
+    background: linear-gradient(180deg, rgba(var(--pb), 0.55), rgba(var(--pf), 0.95));
+    border-top: 1px solid rgba(var(--crest-rgb), 0.18);
+    box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), 0.05);
+    color: var(--dim);
+    font-size: 0.9375rem;
+  }
+  .sf::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(var(--crest-rgb), 0.85) 22%, rgba(var(--sand-rgb), 0.7) 62%, transparent);
+  }
+  .sf__inner,
+  .sf__foot {
+    max-width: 80rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+  .sf__inner {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: 1.4fr repeat(3, 1fr);
+  }
+  .sf__brand {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .sf__tile {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 14px;
+  }
+  .sf__word {
+    margin: 0;
+    line-height: 1;
+    font-size: 1.75rem;
+  }
+  .sf__tag {
+    margin: 0.35rem 0 0;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sand);
+  }
+  .sf__col {
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+  }
+  .sf__k {
+    margin: 0 0 0.25rem;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--sand);
+  }
+  .sf__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--dim);
+    text-decoration: none;
+    min-height: 1.75rem;
+  }
+  .sf__link:hover {
+    color: var(--crest);
+    text-decoration: none;
+  }
+  .sf__mark {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(var(--pa), 0.95), rgba(var(--pb), 0.95));
+    border: 1px solid rgba(var(--crest-rgb), 0.28);
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.625rem;
+    font-weight: 500;
+    color: var(--crest);
+  }
+  .sf__note {
+    font-size: 0.8125rem;
+    color: var(--dim);
+    opacity: 0.8;
+  }
+  .sf__foot {
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(var(--line-rgb), 0.8);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+  }
+  .sf__foot p {
+    margin: 0;
+  }
+  .sf__foot a {
+    color: var(--crest);
+  }
+  @media (max-width: 900px) {
+    .sf__inner {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .sf__brand {
+      grid-column: 1 / -1;
+    }
+  }
+  @media (max-width: 760px) {
+    .sf__inner,
+    .sf__foot {
+      padding-inline: 0.875rem;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The phone's bottom bar — four destinations under the thumb, below 760px.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .mbar {
+    display: none;
+  }
+  @media (max-width: 760px) {
+    .mbar {
+      position: fixed;
+      z-index: 15;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom));
+      background: linear-gradient(180deg, rgba(var(--pb), 0.92), rgba(var(--pe), 0.97));
+      backdrop-filter: blur(16px) saturate(1.3);
+      border-top: 1px solid rgba(var(--crest-rgb), 0.16);
+    }
+    .mbar__link {
+      display: grid;
+      justify-items: center;
+      gap: 0.2rem;
+      padding: 0.4rem 0.25rem;
+      min-height: 44px;
+      border-radius: 10px;
+      color: var(--dim);
+      text-decoration: none;
+      font-family: var(--weir-mono, 'Geist Mono', monospace);
+      font-size: 0.625rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .mbar__link[aria-current='page'] {
+      color: var(--crest);
+      background: rgba(var(--crest-rgb), 0.08);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @layer weir {
+    .weir-shell__main > * {
+      animation: none !important;
+    }
+  }
+}
+
+@layer weir {
+  .nf-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.6rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    max-width: 62rem;
+  }
+  .nf-link {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.9rem 1rem;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .nf-link:hover {
+    text-decoration: none;
+    border-color: var(--crest);
+  }
+  .nf-link__label {
+    font-weight: 600;
+  }
+  .nf-link__blurb {
+    font-size: 0.8125rem;
+    color: var(--dim);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Page tabs — a page with several jobs names them in one row.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .ptabs {
+    display: flex;
+    gap: 0.25rem;
+    margin: -0.5rem 0 1.75rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid rgba(var(--line-rgb), 0.9);
+  }
+  .ptabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ptabs__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--dim);
+    text-decoration: none;
+    min-height: 44px;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .ptabs__tab:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .ptabs__tab[aria-current='page'] {
+    color: var(--crest);
+    border-bottom-color: var(--crest);
+  }
+  .ptabs__note {
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+  /* The tabs sit directly under the head's rule; the rule's own bottom margin is enough. */
+  .weir-pagehead + .ptabs {
+    margin-top: -1rem;
+  }
+}
+
+@layer weir {
+  .feed-session {
+    margin: -1rem 0 1.25rem;
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.8125rem;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Two columns that become one on a phone.
+   The ported screens drew `grid-template-columns: minmax(0,1fr) 22rem` inline,
+   which no media query can reach — measured at 375px, the aside was laid over
+   the posts column and the column's text broke one word to a line.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .weir-cols {
+    display: grid;
+    gap: 3rem;
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+  .weir-cols--22 {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+  }
+  /* Between 1024 and 1240 the member shell's 14rem nav is also on screen, so the side column
+     gives up some width rather than the main column giving up all of it. */
+  @media (max-width: 1240px) {
+    .weir-cols,
+    .weir-cols--22 {
+      grid-template-columns: minmax(0, 1fr) 18rem;
+      gap: 2rem;
+    }
+  }
+  @media (max-width: 1023px) {
+    .weir-cols,
+    .weir-cols--22 {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2rem;
+    }
+  }
+  /* The identity row: avatar, name and handle, the follow control at the end of the line — or on
+     its own line when the name needs the width. */
+  .weir-identity {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  .weir-identity__text {
+    flex: 1 1 16rem;
+    min-width: 0;
+  }
+}
+
+@layer weir {
+  .feed-wall {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--crest);
+    border-radius: 10px;
+    color: var(--dim);
+    font-size: 0.9375rem;
+  }
+  .feed-wall a {
+    color: var(--crest);
+    font-weight: 600;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Sticky rails need a body that is not a scroll container.
+   `globals.css` sets `overflow-x: hidden` on body to stop a phone scrolling
+   sideways. `hidden` on one axis makes the body a scroll container, and every
+   `position: sticky` inside it then sticks to the body's own scrollport — which
+   never moves, because it is the viewport that scrolls. Measured: both dashboard
+   rails scrolled away with the feed. `clip` clips the same overflow and creates
+   no scroll container, so the rails pin under the header as intended.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  body {
+    overflow-x: clip;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   A post card is the excerpt; the body is a fold.
+   The excerpt is held to four lines so a feed of cards keeps one rhythm; the
+   body opens under a "Read more" that reads as a dropdown.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .post-preview {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+    max-width: 62ch;
+    text-wrap: pretty;
+  }
+  /* The excerpt sits before the fold as a sibling; when the fold is open the body carries it. */
+  .card__main:has(.post-body-wrap[data-open]) .post-preview {
+    display: none;
+  }
+  .post-body-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.45rem 0.8rem;
+    border: 1px solid rgba(var(--crest-rgb), 0.3);
+    border-radius: 10px;
+    background: rgba(var(--crest-rgb), 0.05);
+    color: var(--crest);
+    font-size: 0.875rem;
+    font-weight: 600;
+    min-height: 36px;
+  }
+  .post-body-toggle:hover {
+    text-decoration: none;
+    border-color: var(--crest);
+    background: rgba(var(--crest-rgb), 0.1);
+  }
+  .post-body-toggle__mark {
+    font-size: 0.75rem;
+  }
+  .post-body {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(var(--line-rgb), 0.9);
+    white-space: pre-wrap;
+    max-width: 62ch;
+    color: var(--ink-2, #b9cdc9);
+  }
+}
+
+@layer weir {
+  /* Who has tipped you, on a thread row. */
+  .thread-supporter {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 99px;
+    border: 1px solid rgba(var(--crest-rgb), 0.45);
+    background: rgba(var(--crest-rgb), 0.08);
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--crest);
+    vertical-align: middle;
+  }
+  /* The perks editor. */
+  .perks-edit__rows {
+    display: grid;
+    gap: 1rem;
+  }
+  .perks-edit__row {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .perks-edit__row label {
+    display: grid;
+    gap: 0.35rem;
+  }
+  .perks-edit__amount {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .perks-edit__actions {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .perks-edit__first {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+    color: var(--ink-2, #b9cdc9);
+  }
+  .perks-edit__honest {
+    margin-top: 1.25rem;
+  }
+  @media (min-width: 700px) {
+    .perks-edit__row {
+      grid-template-columns: 12rem 1fr auto;
+      align-items: start;
+    }
+    .perks-edit__row label:nth-of-type(3) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The names a wallet holds.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .names-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .names-item {
+    display: grid;
+    gap: 0.5rem;
+    padding: 1rem 1.125rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(var(--pa), 0.6), rgba(var(--pb), 0.8));
+  }
+  .names-item__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .names-item__name {
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 1.0625rem;
+    color: var(--ink);
+  }
+  .names-item__meta {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--dim);
+  }
+  .names-item__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+  .names-displayed {
+    margin: 1.25rem 0 0;
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(var(--crest-rgb), 0.25);
+    background: rgba(var(--crest-rgb), 0.05);
+    font-size: 0.9375rem;
+    color: var(--ink-2, #b9cdc9);
+  }
+  .names-displayed strong {
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    color: var(--crest);
+  }
+  .linklike {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--crest);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Legal documents.
+   A reading measure, generous leading, and numbering that stays legible at the
+   length these run to. Nothing decorative: somebody reading this is checking
+   something, not being sold to.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .legal-prose {
+    max-width: 74ch;
+  }
+  .legal-prose h2 {
+    margin: 2.75rem 0 0;
+    font-family: var(--weir-sans, 'Geist', system-ui, sans-serif);
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    scroll-margin-top: 6rem;
+  }
+  .legal-prose h3 {
+    margin: 2rem 0 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .legal-prose p {
+    margin: 1rem 0 0;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--ink-2, #b9cdc9);
+    text-wrap: pretty;
+  }
+  .legal-prose strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .legal-prose a {
+    color: var(--crest);
+  }
+  .legal-prose code {
+    font-size: 0.9em;
+    color: var(--sand);
+  }
+  .legal-prose ul {
+    margin: 1rem 0 0;
+    padding-left: 1.25rem;
+    display: grid;
+    gap: 0.5rem;
+  }
+  .legal-prose li {
+    font-size: 1rem;
+    line-height: 1.65;
+    color: var(--ink-2, #b9cdc9);
+  }
+  .legal-prose li::marker {
+    color: var(--crest);
+  }
+  .legal-prose .weir-rule {
+    margin-block: 2.5rem;
+  }
+  .legal-tablewrap {
+    margin-top: 1.25rem;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .legal-table {
+    width: 100%;
+    min-width: 34rem;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+  .legal-table th,
+  .legal-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(var(--line-rgb), 0.6);
+    color: var(--ink-2, #b9cdc9);
+  }
+  .legal-table thead th {
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--sand);
+  }
+  .legal-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .legal-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(var(--line-rgb), 0.9);
+  }
+  .legal-nav__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .legal-nav__link,
+  .legal-nav__here {
+    padding: 0.35rem 0.75rem;
+    border-radius: 99px;
+    border: 1px solid var(--line);
+    font-size: 0.875rem;
+    text-decoration: none;
+    color: var(--dim);
+  }
+  .legal-nav__link:hover {
+    text-decoration: none;
+    border-color: var(--crest);
+    color: var(--crest);
+  }
+  .legal-nav__here {
+    border-color: rgba(var(--crest-rgb), 0.45);
+    background: rgba(var(--crest-rgb), 0.08);
+    color: var(--crest);
+  }
+  .legal-nav__date {
+    margin: 0;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+  /* The line at the point somebody creates an account. */
+  .legal-consent {
+    margin: 1.25rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--dim);
+  }
+  .legal-consent a {
+    color: var(--crest);
+  }
+}

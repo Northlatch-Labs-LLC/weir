@@ -1,0 +1,733 @@
+'use client';
+// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+
+/**
+ * The composer half of the creator studio.
+ *
+ * # A paid post is priced on chain before it is published, never after
+ *
+ * `unlock` reads the price from the vault and refuses content that has none, so a post stored as
+ * paid whose key was never priced would show a buy button that aborts every time. The composer
+ * therefore refuses to publish until the pricing transaction has landed — the publish button does
+ * not exist before then, in the same way the checkout's confirm button does not exist before a
+ * simulation passes.
+ *
+ * Authorship is not asserted here either. The publish route reads the vault's owner from chain and
+ * refuses anyone else, so a forged form field buys nothing.
+ *
+ * # The target was declared and never read
+ *
+ * The page this was split out of carried `target` and `targetState` and nothing ever assigned to
+ * either: there was no fetch. `target` was therefore `null` for every visitor, `canPublish` was
+ * false for every visitor, and the publish button could not render at all — the studio could
+ * compose a post and never file one. The three status notes were unreachable for the same reason.
+ * The load is now performed, and every state it can end in is shown.
+ *
+ * # Which vault, when there are several
+ *
+ * A creator may hold more than one vault, so "the" vault is not something this page can assume. The
+ * published ones are offered and the choice is explicit; an unpublished vault is not offered at
+ * all, because posts hang off a profile handle and a vault without one has nowhere to file them.
+ */
+
+import { useEffect, useState } from 'react';
+import { formatUnits } from '@/lib/units';
+import { retentionDays } from '@/lib/storage-retention';
+import { useSigner } from '@/components/SignerProvider';
+import { SignIn } from '@/components/SignIn';
+
+interface Target { vaultId: string; coinType: string; handle: string }
+
+type Access = 'public' | 'subscribers' | 'paid';
+
+/** What the target load ended in. `loading` and `none` are different answers and look different. */
+type TargetState = 'idle' | 'loading' | 'none' | 'failed' | 'ready';
+
+type Stage =
+  | { name: 'idle' }
+  | { name: 'pricing' }
+  | { name: 'priced'; digest: string }
+  | { name: 'publishing' }
+  | { name: 'published'; id: string }
+  | { name: 'failed'; message: string };
+
+/**
+ * What happened to an attached image, kept separate from `Stage`.
+ *
+ * A post that published and whose image failed to store is **not** a failed post — the words are
+ * live and readable. Folding the two together would either roll back a good publish or hide a lost
+ * upload, and a creator needs to be told exactly which half went wrong.
+ */
+type MediaState =
+  | { name: 'none' }
+  | { name: 'storing' }
+  /** `endEpoch` is when the storage lease runs out, not a decoration. */
+  | { name: 'stored'; blobId: string; endEpoch: number }
+  | { name: 'failed'; message: string };
+
+/**
+ * SHA-256 as lower-case hex, from the browser's own crypto.
+ *
+ * Must agree byte for byte with `contentDigest` on the server, including the length prefixes —
+ * those exist so that moving text between the preview and the body cannot produce the same digest.
+ */
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The same digest, over raw bytes rather than text.
+ *
+ * Separate from `sha256Hex` deliberately: putting a file through `TextEncoder` mangles every byte
+ * above 0x7F, so the hash would never match the one the server computes over the same file, and the
+ * signature would be refused with nothing on screen explaining why.
+ */
+async function sha256HexBytes(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Filters the picker only. The real check is a magic-number sniff of the bytes, server-side. */
+const ACCEPTED_IMAGES = 'image/png,image/jpeg,image/gif,image/webp';
+
+/** USDC decimal string → smallest units, by string manipulation. No float touches a price. */
+function toMinor(input: string): bigint | null {
+  const t = input.trim();
+  if (!/^\d+(\.\d{1,6})?$/.test(t)) return null;
+  const [whole, frac = ''] = t.split('.');
+  return BigInt(whole + frac.padEnd(6, '0'));
+}
+
+/** The shape `/api/creator` answers with, narrowed to what publishing needs. */
+interface CreatorBody {
+  stage?: 'no-account' | 'no-vault' | 'ready';
+  vaults?: { vaultId: string; coinType: string; handle: string | null }[];
+}
+
+export function StudioComposer() {
+  const { signer } = useSigner();
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [targetState, setTargetState] = useState<TargetState>('idle');
+  const [title, setTitle] = useState('');
+  const [preview, setPreview] = useState('');
+  const [text, setText] = useState('');
+  const [access, setAccess] = useState<Access>('public');
+  const [contentKey, setContentKey] = useState('');
+  const [price, setPrice] = useState('0.10');
+  const [stage, setStage] = useState<Stage>({ name: 'idle' });
+  /** Chosen before publishing, attached after — a post must exist for media to belong to. */
+  const [image, setImage] = useState<File | null>(null);
+  const [media, setMedia] = useState<MediaState>({ name: 'none' });
+  /**
+   * What the vault already charges for the key being typed.
+   *
+   * Four states, and the fourth is the reason this is not a boolean. `unknown` is "not asked yet",
+   * `checking` is in flight, `{ price }` is a measured price, `null` is a measured absence, and
+   * `unreadable` is a chain we could not reach. The last two look identical to a boolean and mean
+   * opposite things: absence means price it, unreadable means conclude nothing.
+   */
+  const [keyPrice, setKeyPrice] = useState<
+    { name: 'unknown' } | { name: 'checking' } | { name: 'known'; price: bigint | null } | { name: 'unreadable' }
+  >({ name: 'unknown' });
+
+  /*
+    The load that was missing. A failure is kept distinct from an empty result: telling a creator
+    they have no vault because the chain was unreachable sends them to open a second one.
+  */
+  useEffect(() => {
+    const address = signer?.address;
+    if (address === undefined) {
+      setTargets([]);
+      setSelected(null);
+      setTargetState('idle');
+      return;
+    }
+
+    let cancelled = false;
+    setTargetState('loading');
+
+    void fetch(`/api/creator?owner=${encodeURIComponent(address)}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`the chain returned ${response.status}`);
+        return (await response.json()) as CreatorBody;
+      })
+      .then((body) => {
+        if (cancelled) return;
+        // Only a published vault can take a post: content is filed under the profile handle, and a
+        // vault without one has no page for it to appear on.
+        const publishable = (body.vaults ?? []).flatMap((vault) =>
+          vault.handle === null
+            ? []
+            : [{ vaultId: vault.vaultId, coinType: vault.coinType, handle: vault.handle }],
+        );
+        setTargets(publishable);
+        setSelected(publishable[0]?.vaultId ?? null);
+        setTargetState(publishable.length === 0 ? 'none' : 'ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTargets([]);
+        setSelected(null);
+        setTargetState('failed');
+      });
+
+    return () => { cancelled = true; };
+  }, [signer]);
+
+  const target = targets.find((t) => t.vaultId === selected) ?? null;
+
+  async function signAndSubmit(bytes: string): Promise<string> {
+    if (signer === null) throw new Error('not signed in');
+    const signature = await signer.signTransaction(bytes);
+    const response = await fetch('/api/checkout/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bytes, signature }),
+    });
+    const body = (await response.json()) as { digest?: string; error?: string };
+    if (body.digest === undefined) throw new Error(body.error ?? 'submission failed');
+    return body.digest;
+  }
+
+  /*
+    Ask the chain what this key already costs, while it is being typed.
+  */
+  useEffect(() => {
+    const key = contentKey.trim();
+    if (access !== 'paid' || target === null || key === '') {
+      setKeyPrice({ name: 'unknown' });
+      return;
+    }
+
+    setKeyPrice({ name: 'checking' });
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await fetch(
+            `/api/studio/content-price?vaultId=${encodeURIComponent(target.vaultId)}` +
+              `&contentKey=${encodeURIComponent(key)}`,
+            { signal: controller.signal },
+          );
+          if (!response.ok) {
+            setKeyPrice({ name: 'unreadable' });
+            return;
+          }
+          const body = (await response.json()) as { price?: string | null };
+          setKeyPrice({
+            name: 'known',
+            price: body.price == null ? null : BigInt(body.price),
+          });
+        } catch (error) {
+          // An abort is this effect being replaced, not a failure. Reporting it as one would flash
+          // "could not read" on every keystroke.
+          if (!(error instanceof Error) || error.name !== 'AbortError') {
+            setKeyPrice({ name: 'unreadable' });
+          }
+        }
+      })();
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [access, contentKey, target]);
+
+  async function priceOnChain() {
+    if (signer === null || target === null) return;
+    const minor = toMinor(price);
+    if (minor === null) {
+      setStage({ name: 'failed', message: 'Price must be a decimal with up to 6 places.' });
+      return;
+    }
+    if (contentKey.trim() === '') {
+      setStage({ name: 'failed', message: 'A paid post needs a content key.' });
+      return;
+    }
+
+    setStage({ name: 'pricing' });
+    try {
+      const response = await fetch('/api/studio/price', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sender: signer.address,
+          vaultId: target.vaultId,
+          coinType: target.coinType,
+          contentKey: contentKey.trim(),
+          price: minor.toString(),
+        }),
+      });
+      const body = (await response.json()) as {
+        quote?: { bytes: string };
+        blocked?: string;
+        error?: string;
+      };
+      if (body.blocked === 'no-creator-cap') {
+        setStage({
+          name: 'failed',
+          message: 'This wallet does not hold a CreatorCap, so it cannot price content.',
+        });
+        return;
+      }
+      if (body.quote === undefined) {
+        setStage({ name: 'failed', message: body.error ?? 'pricing simulation failed' });
+        return;
+      }
+      setStage({ name: 'priced', digest: await signAndSubmit(body.quote.bytes) });
+    } catch (error) {
+      setStage({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  /**
+   * Attach one image to a post that already exists.
+   *
+   * # Why this route had no caller until now
+   *
+   * `/api/studio/upload` was written, typed, tested and complete, and nothing in the interface ever
+   * called it — it was the last entry on the reachability guard's list. It also stored bytes to a
+   * per-instance serverless disk that vanished with the instance, so wiring it up earlier would
+   * have produced uploads that silently disappeared. Both halves are fixed now: the bytes go to
+   * Walrus, and this is the caller.
+   *
+   * # The signature covers the file, not just the intent
+   *
+   * The statement binds the post id **and a hash of the bytes**, so a captured signature cannot be
+   * replayed to attach a different image to the same post. It must match `statementFor` in
+   * lib/identity.ts exactly.
+   */
+  async function attachMedia(postId: string, file: File) {
+    if (signer === null) return;
+    setMedia({ name: 'storing' });
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const fileSha256 = await sha256HexBytes(bytes);
+      const timestampMs = Date.now();
+      const statement =
+        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}` +
+        `\naction: upload\npost: ${postId}\nfile-sha256: ${fileSha256}`;
+      const signature = await signer.signPersonalMessage(new TextEncoder().encode(statement));
+
+      const form = new FormData();
+      form.set('postId', postId);
+      form.set('author', signer.address);
+      form.set('file', file);
+      form.set('signature', signature);
+      form.set('timestampMs', String(timestampMs));
+
+      // No content-type header: the browser sets the multipart boundary, and naming it by hand
+      // produces a body the server cannot parse.
+      const response = await fetch('/api/studio/upload', { method: 'POST', body: form });
+      const body = (await response.json()) as {
+        assetId?: string;
+        blobId?: string;
+        endEpoch?: number;
+        error?: string;
+      };
+
+      if (body.assetId === undefined || body.blobId === undefined || body.endEpoch === undefined) {
+        setMedia({ name: 'failed', message: body.error ?? 'the image could not be stored' });
+        return;
+      }
+      setMedia({ name: 'stored', blobId: body.blobId, endEpoch: body.endEpoch });
+    } catch (error) {
+      setMedia({
+        name: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async function publish() {
+    if (target === null) return;
+    if (signer === null) return;
+    setStage({ name: 'publishing' });
+    try {
+      /*
+        Publishing is signed, with no gas and no transaction.
+
+        The route used to accept an `author` field and check it against the vault's owner from
+        chain — which authorises nothing, because a vault's owner is public and anyone could put it
+        in the body. The statement below must match `statementFor` in lib/identity.ts exactly, or
+        the signature will not verify.
+      */
+      const timestampMs = Date.now();
+      const contentSha256 = await sha256Hex(`${preview.length}:${preview}${text.length}:${text}`);
+      /*
+        Signed and sent must be the same values, so both come from here.
+
+        `signedKey` and `signedPrice` are what the body carries below. A post that is not paid
+        signs empty strings for both, matching what the server rebuilds — deriving them differently
+        on the two sides is how a statement stops verifying for reasons nobody can see.
+      */
+      const signedKey = access === 'paid' ? contentKey.trim() : '';
+      const signedPrice = access === 'paid' ? (effectivePrice?.toString() ?? '') : '';
+      const statement =
+        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}` +
+        `\naction: publish\ncreator: ${target.handle}\naccess: ${access}\ntitle: ${title}\ncontent-sha256: ${contentSha256}\nkey: ${signedKey}\nprice: ${signedPrice}`;
+      const signature = await signer.signPersonalMessage(new TextEncoder().encode(statement));
+
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          handle: target.handle,
+          author: signer.address,
+          title,
+          preview,
+          text,
+          access,
+          signature,
+          timestampMs,
+          ...(access === 'paid'
+            ? { contentKey: signedKey, price: signedPrice }
+            : {}),
+        }),
+      });
+      const body = (await response.json()) as { post?: { id: string }; error?: string };
+      if (body.post === undefined) {
+        setStage({ name: 'failed', message: body.error ?? 'publish failed' });
+        return;
+      }
+      setStage({ name: 'published', id: body.post.id });
+
+      /*
+        Media is attached after the post exists, because the upload is signed against the post id.
+        Awaited rather than fired and forgotten: a creator who navigates away mid-store loses the
+        image with no record that it was ever chosen.
+      */
+      if (image !== null) await attachMedia(body.post.id, image);
+
+      setTitle('');
+      setPreview('');
+      setText('');
+      setContentKey('');
+      setImage(null);
+    } catch (error) {
+      setStage({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  /*
+    What is stopping a publish, named rather than counted.
+
+    The button now always renders. Disabled, it says which field it is waiting for.
+  */
+  const blockers = [
+    title.trim() === '' ? 'a title' : null,
+    preview.trim() === '' ? 'a preview' : null,
+    text.trim() === '' ? 'a body' : null,
+  ].filter((reason): reason is string => reason !== null);
+
+  /*
+    The price this post is actually sold at, in minor units.
+
+    Three sources, most-recently-true first: a price set in this session, then the price already on
+    the vault, then the form field. They genuinely differ — the field holds its default while the
+    key carries a price set weeks ago — and the contract charges whatever the table says. Sending
+    the form's number would advertise a price on the feed that the buy button does not honour.
+  */
+  const onChainPrice = keyPrice.name === 'known' ? keyPrice.price : null;
+  const effectivePrice =
+    stage.name === 'priced' ? toMinor(price) : (onChainPrice ?? toMinor(price));
+
+  /*
+    A paid post is publishable only once its price is on chain. Anything else would ship a buy
+    button that aborts.
+  */
+  const needsPricing = access === 'paid' && stage.name !== 'priced' && onChainPrice === null;
+  const canPublish =
+    blockers.length === 0 && !needsPricing && signer !== null && target !== null;
+
+  /*
+    Signed out, the composer is withheld rather than shown disabled. A form that cannot submit
+    teaches nothing about why; the page above has already explained what publishing does, so what is
+    left to say here is that it needs to know who it would be publishing as.
+  */
+  if (signer === null) {
+    return (
+      <div className="panel">
+        <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
+          Posts are filed under a creator page, and the publish route reads that page&rsquo;s owner
+          from chain before it accepts anything — so the composer opens once a wallet is connected
+          and it knows who it would be publishing as.
+        </p>
+        <SignIn />
+      </div>
+    );
+  }
+
+  if (targetState === 'idle' || targetState === 'loading') {
+    return (
+      <div className="panel">
+        <p style={{ margin: 0, color: 'var(--text-tertiary)' }}>Reading your vaults…</p>
+      </div>
+    );
+  }
+
+  if (targetState === 'failed') {
+    return (
+      <div className="note crit">
+        <span className="lbl">Not measured</span>
+        <p>
+          Your vaults could not be read, so there is nothing to publish to. This is not the same as
+          having none, and the composer stays hidden rather than guessing a target.
+        </p>
+      </div>
+    );
+  }
+
+  if (target === null) {
+    return (
+      <div className="note warn">
+        <span className="lbl">No published vault</span>
+        <p>
+          Posts hang off a creator page, and this address has none yet — either no vault, or a vault
+          that has not been named. <a href="/creator">Set one up</a>; it takes one transaction.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {targets.length > 1 ? (
+        <div className="panel" style={{ marginBottom: 'var(--space-16)' }}>
+          <label className="k" htmlFor="v">PUBLISH TO</label>
+          <select
+            id="v"
+            className="field"
+            value={target.vaultId}
+            onChange={(e) => {
+              setSelected(e.target.value);
+              // A price signed against one vault means nothing on another.
+              setStage({ name: 'idle' });
+            }}
+          >
+            {targets.map((t) => (
+              <option key={t.vaultId} value={t.vaultId}>
+                @{t.handle} — {t.vaultId.slice(0, 14)}…
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <p className="section-note">
+          Publishing as <strong>@{target.handle}</strong> into{' '}
+          <span className="mono">{target.vaultId.slice(0, 14)}…</span>
+        </p>
+      )}
+
+      <div className="panel" style={{ display: 'grid', gap: 14, marginTop: 24 }}>
+        <div>
+          <label className="k" htmlFor="t">TITLE</label>
+          <input id="t" className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+        <div>
+          <label className="k" htmlFor="p">PREVIEW — always visible, even when locked</label>
+          <input id="p" className="field" value={preview} onChange={(e) => setPreview(e.target.value)} />
+        </div>
+        <div>
+          <label className="k" htmlFor="b">BODY — withheld until the reader is entitled</label>
+          <textarea id="b" rows={8} className="field" value={text} onChange={(e) => setText(e.target.value)} />
+        </div>
+
+        <div>
+          <label className="k" htmlFor="img">IMAGE — optional, stored on Walrus</label>
+          <input
+            id="img"
+            type="file"
+            className="field"
+            accept={ACCEPTED_IMAGES}
+            onChange={(e) => {
+              setImage(e.target.files?.[0] ?? null);
+              setMedia({ name: 'none' });
+            }}
+          />
+          {image !== null && (
+            <p className="enc-status" style={{ marginTop: 6 }}>
+              {/*
+                Said before publishing, not after. A paid post's image is encrypted before it leaves
+                this server; a public one is not, and anybody can then read it from any Walrus
+                aggregator without us. That is a deliberate property and the creator should know
+                which of the two they are about to choose.
+              */}
+              {access === 'paid' ? (
+                <>
+                  <span className="enc-tag">encrypted</span> stored as ciphertext — unreadable
+                  without an entitlement, even to somebody holding the blob. Kept for{' '}
+                  <strong>{retentionDays('durable')} days</strong>, about two years.
+                </>
+              ) : (
+                <>
+                  <span className="enc-tag off">
+                    {access === 'public' ? 'public' : 'subscribers'}
+                  </span>{' '}
+                  {access === 'public'
+                    ? 'readable by anyone from any Walrus aggregator, without this platform. '
+                    : 'stored unencrypted, so the words are gated but the image is not. '}
+                  Kept for <strong>{retentionDays('ephemeral')} days</strong>, then{' '}
+                  <strong>deleted</strong> — the post stays, the picture goes.
+                </>
+              )}
+            </p>
+          )}
+
+          {media.name === 'storing' && <p className="unmeasured">Storing the image on Walrus…</p>}
+          {media.name === 'stored' && (
+            <div className="note" style={{ marginTop: 'var(--space-12)' }}>
+              <span className="lbl">Image stored</span>
+              <p>
+                <span className="mono">{media.blobId.slice(0, 14)}…</span> — the storage lease runs
+                to Walrus epoch {media.endEpoch}. Storage is a lease, not permanence: unless it is
+                extended before then, the image is deleted and this post keeps its words without its
+                picture.
+              </p>
+            </div>
+          )}
+          {media.name === 'failed' && (
+            // The post is live regardless. Saying so prevents a creator republishing the words to
+            // recover an image, which would leave two posts and still no image.
+            <p className="unmeasured">
+              The post published, but the image did not store: {media.message}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="k" htmlFor="a">ACCESS</label>
+          <select
+            id="a"
+            className="field"
+            value={access}
+            onChange={(e) => {
+              setAccess(e.target.value as Access);
+              // Changing access invalidates a price that was signed for a different shape.
+              setStage({ name: 'idle' });
+            }}
+          >
+            <option value="public">Public — anyone</option>
+            <option value="subscribers">Subscribers only</option>
+            <option value="paid">Paid — bought once</option>
+          </select>
+        </div>
+
+        {access === 'paid' && (
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr' }}>
+            <div>
+              <label className="k" htmlFor="k">CONTENT KEY — what a reader buys, on chain</label>
+              <input id="k" className="field" value={contentKey} onChange={(e) => setContentKey(e.target.value)} />
+              {/*
+                Said before publishing, not after — an `Unlock` cannot be withdrawn.
+
+                A key is a product, not a post: everyone holding one reads every post published
+                under it. Selling a series that way is the point, so this describes rather than
+                warns. What it prevents is the same thing happening by typo, which is
+                indistinguishable from the deliberate version once the post is out.
+              */}
+              {keyPrice.name === 'checking' && (
+                <p className="unmeasured" style={{ marginTop: 6 }}>Reading the vault…</p>
+              )}
+              {keyPrice.name === 'unreadable' && (
+                <p className="unmeasured" style={{ marginTop: 6 }}>
+                  This key&rsquo;s price could not be read, so whether anyone already holds it is
+                  unknown. Not the same as it being free.
+                </p>
+              )}
+              {keyPrice.name === 'known' && keyPrice.price !== null && (
+                <p className="enc-status" style={{ marginTop: 6 }}>
+                  <span className="enc-tag">in use</span> already sells at{' '}
+                  {formatUnits(keyPrice.price, 6)} USDC — everyone who has bought it receives this
+                  post too, at no extra charge
+                </p>
+              )}
+              {keyPrice.name === 'known' && keyPrice.price === null && contentKey.trim() !== '' && (
+                <p className="enc-status" style={{ marginTop: 6 }}>
+                  <span className="enc-tag off">new</span> nothing is sold under this key yet, so
+                  this post starts it
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="k" htmlFor="pr">PRICE · USDC</label>
+              <input id="pr" className="field" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        {needsPricing && (
+          <div className="note warn">
+            <span className="lbl">Price it on chain first</span>
+            <p>
+              A paid post cannot be sold until its key has a price on the vault — the contract reads
+              the price itself and refuses content that has none. Publishing before that would put a
+              buy button on the feed that aborts every time.
+            </p>
+          </div>
+        )}
+
+        {stage.name === 'priced' && (
+          <div className="note">
+            <span className="lbl">Priced on chain</span>
+            <p className="mono" style={{ fontSize: 13 }}>{stage.digest}</p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {access === 'paid' && stage.name !== 'priced' && (
+            <button
+              className="btn ghost"
+              type="button"
+              disabled={stage.name === 'pricing'}
+              onClick={() => void priceOnChain()}
+            >
+              {stage.name === 'pricing' ? 'Pricing…' : 'Price on chain'}
+            </button>
+          )}
+          <button
+            className="btn"
+            type="button"
+            disabled={!canPublish || stage.name === 'publishing'}
+            onClick={() => void publish()}
+          >
+            {stage.name === 'publishing' ? 'Publishing…' : 'Publish'}
+          </button>
+        </div>
+
+        {/*
+          Named next to the control it disables, so the answer is where the question is asked.
+          Pricing is left out: it has its own note and its own button directly above, and repeating
+          it here would read as a second, different requirement.
+        */}
+        {blockers.length > 0 && (
+          <p className="section-note" style={{ margin: 0 }}>
+            Waiting on{' '}
+            {blockers.length > 1
+              ? `${blockers.slice(0, -1).join(', ')} and ${blockers[blockers.length - 1]}`
+              : blockers[0]}
+            .
+          </p>
+        )}
+
+        {stage.name === 'published' && (
+          <div className="note">
+            <span className="lbl">Published</span>
+            <p>
+              <a href="/">Back to the feed</a> — post {stage.id}.
+            </p>
+          </div>
+        )}
+        {stage.name === 'failed' && (
+          <div className="note crit">
+            <span className="lbl">Nothing was published</span>
+            <p className="mono" style={{ fontSize: 13 }}>{stage.message}</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

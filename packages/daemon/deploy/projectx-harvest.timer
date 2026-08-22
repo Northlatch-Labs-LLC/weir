@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the ProjectX harvest daemon hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+# Spreads the start across a window so several deployments do not hit the fullnode in lockstep —
+# the same reason the in-process backoff uses jitter.
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

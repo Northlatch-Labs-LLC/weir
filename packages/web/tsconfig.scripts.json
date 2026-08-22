@@ -1,0 +1,21 @@
+{
+  /*
+    For `scripts/` only, run under tsx rather than bundled by Next.
+
+    `server-only` throws on import outside a React Server Component — that is its whole job, and it
+    is what keeps a derivation seed or a database credential from being pulled into a browser
+    bundle. A standalone script is neither a server component nor a browser, so the tripwire fires
+    on modules the script has every right to use.
+
+    Mapped to the same no-op stub the test runner uses. `next build` and `tsc --noEmit` both resolve
+    the real package, so the guard is intact everywhere it means anything — see vitest.config.ts,
+    which carries the same alias for the same reason.
+  */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./test/stubs/server-only.ts"]
+    }
+  }
+}

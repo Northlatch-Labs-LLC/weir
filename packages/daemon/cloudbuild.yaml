@@ -1,0 +1,32 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Cloud Build for the harvest daemon image.
+#
+# `gcloud builds submit --tag` exists and would be shorter, but it only ever looks for a Dockerfile
+# at the root of the build context. This Dockerfile lives in the package while its context must be
+# the repository root — it copies the workspace manifests and the SDK source, neither of which is
+# reachable from inside `packages/daemon`. A config file is the only way to say both things.
+#
+#   gcloud builds submit --config packages/daemon/cloudbuild.yaml .
+#
+# Run from the repository root, so `.` is the workspace and the `.gcloudignore` there decides what
+# is uploaded — that file is what keeps `.secrets/` and every `.env` out of the build service.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --file=packages/daemon/Dockerfile
+      - --tag=europe-west2-docker.pkg.dev/projectx-daemon-prod/projectx/social-harvest:v3
+      - .
+
+images:
+  - europe-west2-docker.pkg.dev/projectx-daemon-prod/projectx/social-harvest:v3
+
+# The default is ten minutes. A cold pnpm install plus two TypeScript builds runs close enough to
+# that for a timeout to be a coin flip, and a build that fails on the clock reads like a broken
+# Dockerfile to whoever sees it next.
+timeout: 1800s
+
+options:
+  logging: CLOUD_LOGGING_ONLY

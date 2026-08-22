@@ -1,0 +1,728 @@
+// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+import 'server-only';
+
+/**
+ * The content store: profiles, posts, media metadata, comments, follows and messages.
+ *
+ * # What lives here and what lives on chain
+ *
+ * So a row here records *that* something is locked and what it costs. There is no column for who
+ * may read it, and adding one would create a second source of truth for a question the chain
+ * already answers.
+ *
+ * # Postgres, and why nothing else changed
+ *
+ * This was a JSON file. Every exported signature survived the move, so no route, page or
+ * entitlement check was touched. That was only possible because access control never lived in the
+ * storage layer — had `canRead` consulted the store, this migration would have reached into every
+ * gate in the system.
+ *
+ * Every query is parameterised. There is no string interpolation of values into SQL in this file.
+ */
+
+import { db, normaliseAddress } from './db';
+
+export interface Post {
+  id: string;
+  vaultId: string;
+  authorHandle: string;
+  createdAtMs: number;
+  title: string;
+  preview: string;
+  /** Withheld until the reader holds an entitlement — see `visiblePost`. */
+  body: string;
+  access: PostAccess;
+  /** Attached media, by asset id. Ids only — never paths and never URLs. */
+  assetIds?: string[];
+}
+
+export type PostAccess =
+  | { kind: 'public' }
+  | { kind: 'subscribers' }
+  | { kind: 'paid'; price: string; contentKey: string };
+
+export interface Profile {
+  handle: string;
+  /** Null until this account opens a vault — registering is not becoming a creator. */
+  vaultId: string | null;
+  owner: string;
+  displayName: string;
+  bio: string;
+  /** Null until a vault exists; a vault's coin is chosen when the vault is opened. */
+  coinType: string | null;
+}
+
+export interface AssetRecord {
+  id: string;
+  postId: string;
+  contentType: string;
+  bytes: number;
+  label: string;
+  sha256: string;
+  /** The Walrus blob holding the bytes. */
+  blobId: string;
+  /** The epoch after which Walrus deletes the blob unless the lease is extended. */
+  endEpoch: number;
+  /** Present exactly when the bytes were encrypted before storage. Null means a public blob. */
+  encryption: { key: string; nonce: string } | null;
+}
+
+export interface Comment {
+  id: string;
+  postId: string;
+  author: string;
+  text: string;
+  createdAtMs: number;
+}
+
+export interface Follow {
+  follower: string;
+  handle: string;
+  createdAtMs: number;
+}
+
+export interface Message {
+  id: string;
+  threadId: string;
+  from: string;
+  to: string;
+  createdAtMs: number;
+  /**
+   * Empty when {@link encryption} is present, and the database enforces that rather than trusting
+   * a caller — see the `encrypted_rows_are_complete` constraint. A preview is a plaintext excerpt,
+   * so an encrypted message cannot have one and still be encrypted.
+   */
+  preview: string;
+  body: string;
+  access: MessageAccess;
+  /**
+   * Ciphertext and the per-participant key envelopes, when the sender encrypted this message.
+   *
+   * The server stores it and can do nothing else with it. There is no key here, and no code path
+   * that reads {@link body} for such a row because the row's `body` is the empty string.
+   */
+  encryption: MessageEncryption | null;
+}
+
+/** The stored form of `EncryptedPayload` from `lib/e2e.ts`. Shape asserted by a test. */
+export interface MessageEncryption {
+  ciphertext: string;
+  nonce: string;
+  envelopes: Array<{
+    recipient: string;
+    ephemeralPublic: string;
+    nonce: string;
+    wrappedKey: string;
+  }>;
+}
+
+export type MessageAccess =
+  | { kind: 'open' }
+  | { kind: 'paid'; price: string; contentKey: string; vaultId: string };
+
+export const MAX_COMMENT_LENGTH = 1000;
+export const MAX_MESSAGE_LENGTH = 4000;
+
+/*
+  Posts were the one write with no ceiling at all.
+
+  Comments bound at 1000, messages at 4000, and a profile's name and bio are sliced to 60 and 280 —
+  posts bounded nothing, so a signed vault owner could write a row of any size. Signature-gated, so
+  this is a real creator overreaching rather than an outside attack, which is why the limits are
+  generous rather than tight: a long-form post is the product working.
+*/
+export const MAX_POST_TITLE_LENGTH = 200;
+export const MAX_POST_PREVIEW_LENGTH = 1000;
+export const MAX_POST_BODY_LENGTH = 100_000;
+
+/*
+  `bigint` columns arrive from `pg` as strings, deliberately — the driver will not silently narrow
+  a value that does not fit a JS number. Timestamps are widened back because they are safely within
+  range; amounts stay strings the whole way to the wire.
+*/
+
+interface PostRow {
+  id: string;
+  vault_id: string;
+  author_handle: string;
+  created_at_ms: string;
+  title: string;
+  preview: string;
+  body: string;
+  access_kind: string;
+  price: string | null;
+  content_key: string | null;
+  asset_ids: string[] | null;
+}
+
+function toPost(row: PostRow): Post {
+  const access: PostAccess =
+    row.access_kind === 'paid'
+      ? { kind: 'paid', price: row.price ?? '0', contentKey: row.content_key ?? '' }
+      : row.access_kind === 'subscribers'
+        ? { kind: 'subscribers' }
+        : { kind: 'public' };
+
+  const assetIds = row.asset_ids ?? [];
+  return {
+    id: row.id,
+    vaultId: row.vault_id,
+    authorHandle: row.author_handle,
+    createdAtMs: Number(row.created_at_ms),
+    title: row.title,
+    preview: row.preview,
+    body: row.body,
+    access,
+    ...(assetIds.length > 0 ? { assetIds } : {}),
+  };
+}
+
+/**
+ * Posts with their asset ids, in one query.
+ *
+ * A left join with aggregation rather than a query per post. The N+1 shape is invisible with six
+ * posts and is what makes a feed unusable at six hundred.
+ */
+const POST_SELECT = `
+  SELECT p.id, p.vault_id, p.author_handle, p.created_at_ms, p.title, p.preview, p.body,
+         p.access_kind, p.price, p.content_key,
+         COALESCE(array_agg(a.id ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '{}') AS asset_ids
+  FROM posts p
+  LEFT JOIN assets a ON a.post_id = p.id
+`;
+
+interface ProfileRow {
+  handle: string;
+  /*
+    Null until the account opens a vault.
+
+    Registering and becoming a creator are separate acts — see `db/006_accounts_without_vaults.sql`.
+    Typed as nullable rather than defaulted to '' so that every place assuming a vault exists is
+    named by the compiler, instead of receiving a string that looks like an object id and resolves
+    to nothing.
+  */
+  vault_id: string | null;
+  owner: string;
+  display_name: string;
+  bio: string;
+  coin_type: string | null;
+}
+
+function toProfile(row: ProfileRow): Profile {
+  return {
+    handle: row.handle,
+    vaultId: row.vault_id,
+    owner: row.owner,
+    displayName: row.display_name,
+    bio: row.bio,
+    coinType: row.coin_type,
+  };
+}
+
+export async function listProfiles(): Promise<Profile[]> {
+  const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles ORDER BY handle');
+  return rows.map(toProfile);
+}
+
+/**
+ * The row that already names this vault, whatever handle it is filed under.
+ *
+ * A vault is named by exactly one row — `007_one_profile_per_vault` enforces it — but that row is
+ * keyed by handle, and a handle can differ from the one the chain now reports. Looking a vault up
+ * by the *expected* handle therefore misses the row that is actually answering for it, and writes a
+ * second one: the save succeeds, and every page keeps reading the first. This is the lookup that
+ * asks the question the caller means.
+ */
+export async function findProfileByVault(vaultId: string): Promise<Profile | null> {
+  const { rows } = await db().query<ProfileRow>(
+    'SELECT * FROM profiles WHERE lower(vault_id) = lower($1)',
+    [vaultId],
+  );
+  return rows[0] === undefined ? null : toProfile(rows[0]);
+}
+
+/**
+ * The profile an address owns, if any.
+ *
+ * `profiles_owner_idx` serves this. Addresses are stored normalised, so the parameter is too —
+ * comparing a raw address against a normalised column is how a lookup returns nothing for somebody
+ * who is plainly there.
+ */
+export async function findProfileByOwner(owner: string): Promise<Profile | null> {
+  const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles WHERE owner = $1', [
+    normaliseAddress(owner),
+  ]);
+  return rows[0] === undefined ? null : toProfile(rows[0]);
+}
+
+export async function findProfile(handle: string): Promise<Profile | null> {
+  const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles WHERE handle = $1', [handle]);
+  return rows[0] === undefined ? null : toProfile(rows[0]);
+}
+
+/**
+ * Write a profile, without destroying the links this caller does not carry.
+ *
+ * # The defect this fixes, exactly
+ *
+ * `COALESCE(EXCLUDED.x, profiles.x)` on the three nullable links makes an omitted field mean "leave
+ * it alone" rather than "clear it". `display_name` and `bio` are exempt deliberately: they are not
+ * nullable, an empty bio is a value somebody chose, and treating `''` as absent would make a bio
+ * impossible to delete.
+ *
+ * # What this deliberately cannot do
+ *
+ * Unlink a vault. Nothing in the product offers that today, and a helper that can silently sever a
+ * creator from a vault holding deposits is the more dangerous of the two shapes. When unlinking is
+ * a real action it gets its own function that says so in its name.
+ */
+export async function upsertProfile(profile: Profile): Promise<void> {
+  await db().query(
+    `INSERT INTO profiles (handle, vault_id, owner, display_name, bio, coin_type)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (handle) DO UPDATE SET
+       vault_id = COALESCE(EXCLUDED.vault_id, profiles.vault_id),
+       owner = EXCLUDED.owner,
+       display_name = EXCLUDED.display_name, bio = EXCLUDED.bio,
+       coin_type = COALESCE(EXCLUDED.coin_type, profiles.coin_type)`,
+    [
+      profile.handle,
+      profile.vaultId,
+      normaliseAddress(profile.owner),
+      profile.displayName,
+      profile.bio,
+      profile.coinType,
+    ],
+  );
+}
+
+/**
+ * Newest first.
+ *
+ * `handles` narrows the feed to a set of creators. An **empty array means an empty feed**, not an
+ * unfiltered one — treating "follows nobody" as "show everything" is how a following feed silently
+ * stops filtering while still looking full. `= ANY($n)` over an empty array matches nothing, which
+ * is exactly the wanted behaviour and is why it is written this way rather than as a dynamic
+ * `IN (...)` that would have to special-case empty.
+ */
+export async function listPosts(options?: {
+  handle?: string;
+  handles?: readonly string[];
+}): Promise<Post[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (options?.handle !== undefined) {
+    params.push(options.handle);
+    conditions.push(`p.author_handle = $${params.length}`);
+  }
+  if (options?.handles !== undefined) {
+    params.push([...options.handles]);
+    conditions.push(`p.author_handle = ANY($${params.length}::text[])`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const { rows } = await db().query<PostRow>(
+    `${POST_SELECT} ${where} GROUP BY p.id ORDER BY p.created_at_ms DESC`,
+    params,
+  );
+  return rows.map(toPost);
+}
+
+export async function findPost(postId: string): Promise<Post | null> {
+  const { rows } = await db().query<PostRow>(`${POST_SELECT} WHERE p.id = $1 GROUP BY p.id`, [postId]);
+  return rows[0] === undefined ? null : toPost(rows[0]);
+}
+
+export async function addPost(post: Post): Promise<void> {
+  const paid = post.access.kind === 'paid' ? post.access : null;
+  await db().query(
+    `INSERT INTO posts (id, vault_id, author_handle, created_at_ms, title, preview, body,
+                        access_kind, price, content_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
+      post.body, post.access.kind, paid?.price ?? null, paid?.contentKey ?? null,
+    ],
+  );
+}
+
+/** Attach a stored asset. The `EXISTS` guard makes a missing post a refusal, not an orphan. */
+export async function attachAsset(record: AssetRecord): Promise<boolean> {
+  const { rowCount } = await db().query(
+    `INSERT INTO assets (id, post_id, content_type, bytes, label, sha256,
+                         blob_id, end_epoch, enc_key, enc_nonce)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+     WHERE EXISTS (SELECT 1 FROM posts WHERE id = $2)`,
+    [
+      record.id, record.postId, record.contentType, record.bytes, record.label, record.sha256,
+      record.blobId, record.endEpoch,
+      // Both or neither — the table's CHECK enforces it, because a key without its nonce opens
+      // nothing and leaves a blob no one can ever read.
+      record.encryption?.key ?? null, record.encryption?.nonce ?? null,
+    ],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function findAsset(assetId: string): Promise<AssetRecord | null> {
+  const { rows } = await db().query<{
+    id: string; post_id: string; content_type: string;
+    bytes: string; label: string; sha256: string;
+    blob_id: string | null; end_epoch: string | null;
+    enc_key: string | null; enc_nonce: string | null;
+  }>('SELECT * FROM assets WHERE id = $1', [assetId]);
+
+  const row = rows[0];
+  if (row === undefined) return null;
+  /*
+    A row without a blob predates the move to Walrus. Its bytes lived on a per-instance disk that
+    has long since been discarded, so there is nothing to serve — reported as absent rather than
+    returned as a record whose `blobId` is an empty string, which would reach the aggregator as a
+    malformed request and come back as a confusing transport error.
+  */
+  if (row.blob_id === null || row.end_epoch === null) return null;
+
+  return {
+    id: row.id, postId: row.post_id, contentType: row.content_type,
+    bytes: Number(row.bytes), label: row.label, sha256: row.sha256,
+    blobId: row.blob_id, endEpoch: Number(row.end_epoch),
+    encryption:
+      row.enc_key === null || row.enc_nonce === null
+        ? null
+        : { key: row.enc_key, nonce: row.enc_nonce },
+  };
+}
+
+export async function addComment(comment: Comment): Promise<void> {
+  await db().query(
+    'INSERT INTO comments (id, post_id, author, body, created_at_ms) VALUES ($1, $2, $3, $4, $5)',
+    [comment.id, comment.postId, normaliseAddress(comment.author), comment.text, comment.createdAtMs],
+  );
+}
+
+interface CommentRow {
+  id: string;
+  post_id: string;
+  author: string;
+  body: string;
+  created_at_ms: string;
+}
+
+function toComment(r: CommentRow): Comment {
+  return {
+    id: r.id, postId: r.post_id, author: r.author,
+    text: r.body, createdAtMs: Number(r.created_at_ms),
+  };
+}
+
+/** Oldest first — a conversation reads forwards. */
+export async function listComments(postId: string): Promise<Comment[]> {
+  const { rows } = await db().query<CommentRow>(
+    'SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at_ms ASC',
+    [postId],
+  );
+  return rows.map(toComment);
+}
+
+/**
+ * Follow or unfollow. Idempotent in both directions.
+ *
+ * `ON CONFLICT DO NOTHING` against the composite key deduplicates in the database rather than in a
+ * read-then-write, which two concurrent requests can interleave.
+ */
+export async function setFollow(
+  follower: string,
+  handle: string,
+  following: boolean,
+): Promise<boolean> {
+  const address = normaliseAddress(follower);
+  if (following) {
+    await db().query(
+      `INSERT INTO follows (follower, handle, created_at_ms) VALUES ($1, $2, $3)
+       ON CONFLICT (follower, handle) DO NOTHING`,
+      [address, handle, Date.now()],
+    );
+  } else {
+    await db().query('DELETE FROM follows WHERE follower = $1 AND handle = $2', [address, handle]);
+  }
+  return following;
+}
+
+export async function countFollowers(handle: string): Promise<number> {
+  const { rows } = await db().query<{ count: string }>(
+    'SELECT count(*)::text AS count FROM follows WHERE handle = $1',
+    [handle],
+  );
+  return Number(rows[0]?.count ?? '0');
+}
+
+export async function isFollowing(follower: string | null, handle: string): Promise<boolean> {
+  if (follower === null) return false;
+  const { rows } = await db().query('SELECT 1 FROM follows WHERE follower = $1 AND handle = $2', [
+    normaliseAddress(follower),
+    handle,
+  ]);
+  return rows.length > 0;
+}
+
+/**
+ * The handles this address follows.
+ *
+ * Not signed, deliberately. A following list is public on every social network and the follower
+ * counts already disclose it. Contrast messaging, where the store is the only authority and reading
+ * therefore has to be proved.
+ */
+export async function listFollowing(address: string): Promise<string[]> {
+  const { rows } = await db().query<{ handle: string }>(
+    'SELECT handle FROM follows WHERE follower = $1 ORDER BY handle',
+    [normaliseAddress(address)],
+  );
+  return rows.map((r) => r.handle);
+}
+
+/**
+ * The thread two addresses share.
+ *
+ * Derived by sorting, so both participants compute the same id and neither owns it. A stored
+ * relationship would need creating, and then two people could disagree about whether it exists.
+ */
+export function threadIdFor(a: string, b: string): string {
+  const [first, second] = [normaliseAddress(a), normaliseAddress(b)].sort();
+  return `${first}:${second}`;
+}
+
+export async function addMessage(message: Message): Promise<void> {
+  const paid = message.access.kind === 'paid' ? message.access : null;
+  const e = message.encryption;
+  await db().query(
+    `INSERT INTO messages (id, thread_id, from_addr, to_addr, created_at_ms, preview, body,
+                           access_kind, price, content_key, vault_id,
+                           encrypted, ciphertext, nonce, envelopes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+    [
+      message.id, message.threadId, normaliseAddress(message.from), normaliseAddress(message.to),
+      message.createdAtMs, message.preview, message.body, message.access.kind,
+      paid?.price ?? null, paid?.contentKey ?? null, paid?.vaultId ?? null,
+      e !== null, e?.ciphertext ?? null, e?.nonce ?? null,
+      e === null ? null : JSON.stringify(e.envelopes),
+    ],
+  );
+}
+
+interface MessageRow {
+  id: string;
+  thread_id: string;
+  from_addr: string;
+  to_addr: string;
+  created_at_ms: string;
+  preview: string;
+  body: string;
+  access_kind: string;
+  price: string | null;
+  content_key: string | null;
+  vault_id: string | null;
+  encrypted: boolean;
+  ciphertext: string | null;
+  nonce: string | null;
+  envelopes: MessageEncryption['envelopes'] | null;
+}
+
+function toMessage(row: MessageRow): Message {
+  const access: MessageAccess =
+    row.access_kind === 'paid'
+      ? {
+          kind: 'paid', price: row.price ?? '0',
+          contentKey: row.content_key ?? '', vaultId: row.vault_id ?? '',
+        }
+      : { kind: 'open' };
+
+  /*
+    `encrypted` alone does not make the payload usable, so all three parts are required before this
+    is reported as encrypted. The database constraint already guarantees it; this agrees with the
+    constraint rather than trusting it, because the alternative failure is a row that claims to be
+    encrypted and decodes to nothing.
+  */
+  const encryption: MessageEncryption | null =
+    row.encrypted && row.ciphertext !== null && row.nonce !== null && row.envelopes !== null
+      ? { ciphertext: row.ciphertext, nonce: row.nonce, envelopes: row.envelopes }
+      : null;
+
+  return {
+    id: row.id, threadId: row.thread_id, from: row.from_addr, to: row.to_addr,
+    createdAtMs: Number(row.created_at_ms), preview: row.preview, body: row.body, access,
+    encryption,
+  };
+}
+
+/**
+ * Every message in a thread, oldest first.
+ *
+ * Takes the two participants rather than a thread id, so a caller cannot ask for a thread it is not
+ * part of by passing an id it guessed. The id is derived here from addresses already proved.
+ */
+export async function listThread(a: string, b: string): Promise<Message[]> {
+  const { rows } = await db().query<MessageRow>(
+    'SELECT * FROM messages WHERE thread_id = $1 ORDER BY created_at_ms ASC',
+    [threadIdFor(a, b)],
+  );
+  return rows.map(toMessage);
+}
+
+/**
+ * Threads this address participates in, most recent first.
+ *
+ * `lastEncrypted` rather than a preview string for encrypted threads: the server has no preview to
+ * give, and substituting one — even "(encrypted)" — would put server-authored text where the
+ * sender's words are expected. The flag lets the client say so in its own voice.
+ */
+export async function listThreads(
+  address: string,
+): Promise<
+  Array<{
+    threadId: string;
+    other: string;
+    lastAtMs: number;
+    lastPreview: string;
+    lastEncrypted: boolean;
+  }>
+> {
+  const { rows } = await db().query<{
+    thread_id: string; other: string; last_at_ms: string; last_preview: string;
+    last_encrypted: boolean;
+  }>(
+    `SELECT DISTINCT ON (thread_id)
+            thread_id,
+            CASE WHEN from_addr = $1 THEN to_addr ELSE from_addr END AS other,
+            created_at_ms AS last_at_ms,
+            preview       AS last_preview,
+            encrypted     AS last_encrypted
+     FROM messages
+     WHERE from_addr = $1 OR to_addr = $1
+     ORDER BY thread_id, created_at_ms DESC`,
+    [normaliseAddress(address)],
+  );
+
+  return rows
+    .map((r) => ({
+      threadId: r.thread_id, other: r.other,
+      lastAtMs: Number(r.last_at_ms), lastPreview: r.last_preview,
+      lastEncrypted: r.last_encrypted,
+    }))
+    .sort((x, y) => y.lastAtMs - x.lastAtMs);
+}
+
+/*
+  Narrow reads for the notification inbox.
+
+  The JSON store had no choice but to load everything and filter in memory. These do the filtering
+  in the database and cap the result, so an inbox does not get slower as the platform grows.
+*/
+
+export async function commentsOnPostsBy(
+  handles: readonly string[],
+  excluding: string,
+): Promise<Comment[]> {
+  if (handles.length === 0) return [];
+  const { rows } = await db().query<CommentRow>(
+    `SELECT c.* FROM comments c
+     JOIN posts p ON p.id = c.post_id
+     WHERE p.author_handle = ANY($1::text[]) AND c.author <> $2
+     ORDER BY c.created_at_ms DESC LIMIT 100`,
+    [[...handles], normaliseAddress(excluding)],
+  );
+  return rows.map(toComment);
+}
+
+export async function followsOf(handles: readonly string[]): Promise<Follow[]> {
+  if (handles.length === 0) return [];
+  const { rows } = await db().query<{ follower: string; handle: string; created_at_ms: string }>(
+    'SELECT * FROM follows WHERE handle = ANY($1::text[]) ORDER BY created_at_ms DESC LIMIT 100',
+    [[...handles]],
+  );
+  return rows.map((r) => ({
+    follower: r.follower, handle: r.handle, createdAtMs: Number(r.created_at_ms),
+  }));
+}
+
+export async function messagesTo(address: string): Promise<Message[]> {
+  const { rows } = await db().query<MessageRow>(
+    'SELECT * FROM messages WHERE to_addr = $1 ORDER BY created_at_ms DESC LIMIT 100',
+    [normaliseAddress(address)],
+  );
+  return rows.map(toMessage);
+}
+
+export interface VisiblePost extends Omit<Post, 'body' | 'assetIds'> {
+  body?: string;
+  assetIds?: string[];
+  locked: boolean;
+  unlockWith: 'subscribe' | 'purchase' | null;
+}
+
+/**
+ * Strip the body from a post the reader cannot see.
+ *
+ * **The only place a body is released.** It takes the entitlement decision as an argument rather
+ * than computing it, so there is exactly one predicate in the system and this cannot drift from it.
+ * `body` is omitted rather than blanked: a client that receives no field cannot render one by
+ * mistake, where an empty string can be rendered as an empty post.
+ */
+export function visiblePost(post: Post, entitled: boolean): VisiblePost {
+  const base = {
+    id: post.id, vaultId: post.vaultId, authorHandle: post.authorHandle,
+    createdAtMs: post.createdAtMs, title: post.title, preview: post.preview, access: post.access,
+  };
+
+  if (post.access.kind === 'public' || entitled) {
+    return {
+      ...base,
+      body: post.body,
+      ...(post.assetIds === undefined ? {} : { assetIds: post.assetIds }),
+      locked: false,
+      unlockWith: null,
+    };
+  }
+  return {
+    ...base,
+    locked: true,
+    unlockWith: post.access.kind === 'subscribers' ? 'subscribe' : 'purchase',
+  };
+}
+
+export interface VisibleMessage extends Omit<Message, 'body'> {
+  body?: string;
+  locked: boolean;
+}
+
+/**
+ * Strip a paid message's body when the recipient has not bought it.
+ *
+ * The **sender always sees their own message** — they wrote it, and hiding it from them would be
+ * absurd. Only the recipient's view is gated.
+ *
+ * # Encrypted messages are released unconditionally, and that is not a hole
+ *
+ * There is nothing to withhold: `body` is empty and the ciphertext is useless without a key this
+ * server does not have. The gate above is a server-side gate, and a server-side gate over a
+ * payload the server cannot read is theatre. So encryption and payment are mutually exclusive —
+ * enforced at the point of sending, in `app/api/messages/route.ts`, and asserted here by the
+ * `access.kind === 'open'` branch being the only one an encrypted message can take.
+ */
+export function visibleMessage(
+  message: Message,
+  viewer: string,
+  entitled: boolean,
+): VisibleMessage {
+  const base = {
+    id: message.id, threadId: message.threadId, from: message.from, to: message.to,
+    createdAtMs: message.createdAtMs, preview: message.preview, access: message.access,
+    encryption: message.encryption,
+  };
+
+  const isSender = message.from === normaliseAddress(viewer);
+  if (message.access.kind === 'open' || isSender || entitled) {
+    return { ...base, body: message.body, locked: false };
+  }
+  return { ...base, locked: true };
+}

@@ -1,0 +1,105 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# ProjectX Social — the whole thing, locally or on one host.
+#
+# Three services: Postgres, the web application, and the harvest daemon. The daemon is `--once`
+# under a restart policy rather than a long-lived loop, because a restart policy is a supervisor and
+# it is better at restarting than the process is at not dying.
+#
+#   cp .env.example .env      # then fill it in — there are no defaults, deliberately
+#   docker compose up --build
+#
+# Secrets arrive from `.env` at run time and are never baked into an image. A key in a Dockerfile is
+# in every layer, every registry copy, and every `docker history` of it, forever.
+
+name: projectx-social
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: projectx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env — there is no default}
+      POSTGRES_DB: projectx_social
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      # Mounted file by file, not as directories. The Postgres entrypoint executes what it finds at
+      # the TOP level of initdb.d and does not recurse — mounting the two `db/` directories left the
+      # database empty and the application returning 500 on every page that touches it, with nothing
+      # in the Postgres log to say why. Naming each file also puts the migration order on screen,
+      # where a reader can check it, rather than leaving it to two independent numbering schemes.
+      #
+      # These run on FIRST BOOT ONLY. Re-running compose against an existing volume does not re-run
+      # them, which is correct — they are migrations, not fixtures. Adding a migration means either
+      # applying it by hand or recreating the volume deliberately.
+      - ./packages/web/db/001_init.sql:/docker-entrypoint-initdb.d/01-web-init.sql:ro
+      - ./packages/web/db/002_e2e.sql:/docker-entrypoint-initdb.d/02-web-e2e.sql:ro
+      - ./packages/web/db/003_encrypted_is_open.sql:/docker-entrypoint-initdb.d/03-web-encrypted-is-open.sql:ro
+      - ./packages/web/db/004_keys_move_on_chain.sql:/docker-entrypoint-initdb.d/04-web-keys-on-chain.sql:ro
+      - ./packages/daemon/db/001_journal.sql:/docker-entrypoint-initdb.d/05-daemon-journal.sql:ro
+    healthcheck:
+      # `pg_isready` alone reports the server listening before it will accept a real query, so the
+      # dependents start, fail their first connection and restart-loop through the window.
+      test: ['CMD-SHELL', 'psql -U projectx -d projectx_social -c "SELECT 1" || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PROJECTX_DATABASE_URL: postgresql://projectx:${POSTGRES_PASSWORD}@postgres:5432/projectx_social
+      PROJECTX_SOCIAL_NETWORK: ${PROJECTX_SOCIAL_NETWORK:?}
+      PROJECTX_SOCIAL_GRPC_URL: ${PROJECTX_SOCIAL_GRPC_URL:?}
+      PROJECTX_SOCIAL_PACKAGE_ID: ${PROJECTX_SOCIAL_PACKAGE_ID:?}
+      PROJECTX_SOCIAL_LATEST_PACKAGE_ID: ${PROJECTX_SOCIAL_LATEST_PACKAGE_ID:?}
+      PROJECTX_SOCIAL_PLATFORM_ID: ${PROJECTX_SOCIAL_PLATFORM_ID:?}
+      PROJECTX_SOCIAL_REGISTRY_ID: ${PROJECTX_SOCIAL_REGISTRY_ID:?}
+      PROJECTX_SOCIAL_KEY_REGISTRY_ID: ${PROJECTX_SOCIAL_KEY_REGISTRY_ID:?}
+      PROJECTX_MEDIA_ROOT: /app/media
+    volumes:
+      # Paid media, outside the image and outside `public/`. It is served by a route that checks
+      # entitlement on chain; the static handler never sees it.
+      - media:/app/media
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  daemon:
+    build:
+      context: .
+      dockerfile: packages/daemon/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PROJECTX_SOCIAL_GRPC_URL: ${PROJECTX_SOCIAL_GRPC_URL:?}
+      PROJECTX_SOCIAL_PACKAGE_ID: ${PROJECTX_SOCIAL_PACKAGE_ID:?}
+      PROJECTX_SOCIAL_LATEST_PACKAGE_ID: ${PROJECTX_SOCIAL_LATEST_PACKAGE_ID:?}
+      PROJECTX_DAEMON_DATABASE_URL: postgresql://projectx:${POSTGRES_PASSWORD}@postgres:5432/projectx_social
+      # Empty is legitimate: with no key the daemon can only run --dry-run, which is the mode to
+      # bring a deployment up in before pointing it at a funded address.
+      PROJECTX_DAEMON_SIGNER_SECRET: ${PROJECTX_DAEMON_SIGNER_SECRET:-}
+      PROJECTX_DAEMON_TICK_SECONDS: ${PROJECTX_DAEMON_TICK_SECONDS:-3600}
+    command: ['--once', '--dry-run']
+    # `on-failure` and NOT `unless-stopped`. `--once` exits 0 when it has done its work, and
+    # restarting on success is a tick loop with no interval at all. Exit 1 (misconfigured) and 2
+    # (another instance holds the lock) are not fixed by trying again either, so the count is
+    # bounded — an unbounded retry on a bad config is a loop that looks like activity in the logs.
+    restart: on-failure:3
+
+volumes:
+  postgres:
+  media:

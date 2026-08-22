@@ -1,0 +1,40 @@
+{
+  "name": "@projectx-social/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify:site-admin": "tsx --tsconfig tsconfig.scripts.json --env-file=.env.local scripts/verify-site-admin.ts",
+    "verify:zklogin": "tsx --tsconfig tsconfig.scripts.json scripts/verify-zklogin.ts"
+  },
+  "dependencies": {
+    "@mysten/sui": "2.24.0",
+    "@mysten/suins": "^1.2.14",
+    "@mysten/wallet-standard": "0.21.14",
+    "@noble/ciphers": "2.3.0",
+    "@noble/curves": "2.3.0",
+    "@noble/hashes": "2.3.0",
+    "@projectx-social/sdk": "workspace:*",
+    "@types/pg": "8.21.0",
+    "jose": "^6.2.9",
+    "next": "16.3.1",
+    "pg": "8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "happy-dom": "^20.11.2",
+    "tailwindcss": "^4"
+  }
+}

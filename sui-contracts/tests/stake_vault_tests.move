@@ -1,0 +1,560 @@
+// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+/// Tests for the stake leg, against a real `SuiSystemState` with real epoch advancement.
+///
+/// These are integration tests, not simulations. `governance_test_utils` stands up an actual
+/// validator set, and `advance_epoch_with_reward_amounts` distributes actual staking rewards, so
+/// yield here is produced by the same code path that produces it on mainnet. That matters more
+/// than usual for this module: the two defects it is built to avoid — withdrawing inside the
+/// activation epoch, and a ladder that silently collapses into a lump — both present as a yield of
+/// exactly zero, and neither is visible to a test that mocks the staking layer.
+#[test_only]
+module projectx_social::stake_vault_tests;
+
+use projectx_social::account::{Self, Registry, SocialAccount};
+use projectx_social::platform::{Self, Platform, PlatformCap};
+use projectx_social::stake_ladder as ladder;
+use projectx_social::stake_vault::{Self as sv, StakeVault, StakeCap};
+use sui::clock;
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui_system::governance_test_utils as gtu;
+use sui_system::sui_system::SuiSystemState;
+
+
+const ADMIN: address = @0xAD;
+const CREATOR: address = @0xC1;
+const FAN: address = @0xFA;
+const FAN2: address = @0xFB;
+const VALIDATOR: address = @0x1001;
+
+const SUI_1: u64 = 1_000_000_000;
+/// The platform fee on yield, in bps — the rate chosen for deployment.
+const FEE_BPS: u64 = 290;
+
+// === Fixtures ===
+
+fun setup(): Scenario {
+    let mut sc = ts::begin(ADMIN);
+    gtu::set_up_sui_system_state(vector[VALIDATOR]);
+
+    sc.next_tx(ADMIN);
+    {
+        let ctx = sc.ctx();
+        platform::init_for_testing(ctx);
+        account::init_for_testing(ctx);
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        platform::set_fees(&mut p, &cap, FEE_BPS, 0, 0);
+        platform::set_creation_paused(&mut p, &cap, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(p);
+    };
+
+    open_account(&mut sc, CREATOR, b"creator");
+    open_account(&mut sc, FAN, b"fan");
+    open_account(&mut sc, FAN2, b"fantwo");
+
+    sc.next_tx(CREATOR);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let cap = sv::open(&mut p, &acct, VALIDATOR, sc.ctx());
+        transfer::public_transfer(cap, CREATOR);
+        sc.return_to_sender(acct);
+        ts::return_shared(p);
+    };
+    sc
+}
+
+fun open_account(sc: &mut Scenario, who: address, handle: vector<u8>) {
+    sc.next_tx(who);
+    let mut p = sc.take_shared<Platform>();
+    let mut reg = sc.take_shared<Registry>();
+    let clk = clock::create_for_testing(sc.ctx());
+    account::open(&mut p, &mut reg, handle.to_string(), option::none(), &clk, sc.ctx());
+    clock::destroy_for_testing(clk);
+    ts::return_shared(p);
+    ts::return_shared(reg);
+}
+
+fun deposit(sc: &mut Scenario, who: address, amount: u64) {
+    sc.next_tx(who);
+    let p = sc.take_shared<Platform>();
+    let mut v = sc.take_shared<StakeVault>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let funds = coin::mint_for_testing<SUI>(amount, sc.ctx());
+    sv::deposit(&p, &mut v, &acct, funds, sc.ctx());
+    sc.return_to_sender(acct);
+    ts::return_shared(v);
+    ts::return_shared(p);
+}
+
+fun harvest(sc: &mut Scenario) {
+    sc.next_tx(ADMIN); // permissionless — deliberately not the creator
+    let mut v = sc.take_shared<StakeVault>();
+    let mut state = sc.take_shared<SuiSystemState>();
+    sv::harvest(&mut v, &mut state, sc.ctx());
+    ts::return_shared(state);
+    ts::return_shared(v);
+}
+
+/// Advance far enough that a tranche staked in the current epoch has matured.
+///
+/// Derived from `ladder_depth()` rather than written as 7, so a depth change moves every test with
+/// it instead of leaving them asserting the wrong boundary.
+fun advance_to_maturity(sc: &mut Scenario) {
+    let mut i = 0;
+    while (i <= ladder::ladder_depth()) {
+        gtu::advance_epoch_with_reward_amounts(0, 400, sc);
+        i = i + 1;
+    };
+}
+
+// === The yield split, pure ===
+
+#[test]
+fun the_yield_split_conserves_and_takes_the_rebate_from_the_creator() {
+    // No rebate: creator takes everything after the platform's 290 bps.
+    let (c, p, r) = sv::compute_yield_split(1_000_000, FEE_BPS, 0);
+    assert!(p == 29_000, 0);
+    assert!(c == 971_000, 1);
+    assert!(r == 0, 2);
+    assert!(c + p + r == 1_000_000, 3);
+
+    // Half rebate: the platform's cut is untouched; the creator's halves.
+    let (c2, p2, r2) = sv::compute_yield_split(1_000_000, FEE_BPS, 5_000);
+    assert!(p2 == 29_000, 4); // identical — the rebate is not taken from the platform
+    assert!(r2 == 485_500, 5);
+    assert!(c2 == 485_500, 6);
+    assert!(c2 + p2 + r2 == 1_000_000, 7);
+
+    // Full rebate: the creator gives away all of their own yield, and none of the platform's.
+    let (c3, p3, r3) = sv::compute_yield_split(1_000_000, FEE_BPS, 10_000);
+    assert!(c3 == 0, 8);
+    assert!(p3 == 29_000, 9);
+    assert!(r3 == 971_000, 10);
+    assert!(c3 + p3 + r3 == 1_000_000, 11);
+}
+
+#[test]
+fun the_yield_split_conserves_across_a_sweep() {
+    let mut gross = 1;
+    while (gross < 10_000_000) {
+        let mut rebate = 0;
+        while (rebate <= 10_000) {
+            let (c, p, r) = sv::compute_yield_split(gross, FEE_BPS, rebate);
+            assert!(c + p + r == gross, 0);
+            rebate = rebate + 1_111;
+        };
+        gross = gross * 7 + 3;
+    };
+}
+
+// === The regression that matters ===
+
+#[test]
+/// **Principal staked across a full ladder period must realise non-zero yield.**
+///
+/// This is the direct regression for the mainnet defect: a pool whose 22 consecutive harvests all
+/// read zero because its tranches shared an activation epoch and matured as one lump. If this
+/// asserts a positive number, the ladder is laddering.
+fun a_matured_tranche_actually_yields() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 100 * SUI_1);
+
+    harvest(&mut sc); // stakes the first rung
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::tranche_count(&v) == 1, 0);
+        assert!(sv::staked_principal(&v) > 0, 1);
+        ts::return_shared(v);
+    };
+
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        // The whole point: yield is strictly positive.
+        assert!(sv::lifetime_yield(&v) > 0, 2);
+        assert!(sv::platform_yield_value(&v) > 0, 3);
+        assert!(sv::creator_yield_value(&v) > 0, 4);
+        // And principal is still fully backed.
+        assert!(sv::is_solvent(&v), 5);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// Two stakes in one epoch would share an activation epoch and collapse the ladder. The guard
+/// makes the second harvest a no-op for staking rather than a second rung.
+fun the_ladder_stakes_at_most_one_rung_per_epoch() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 100 * SUI_1);
+
+    harvest(&mut sc);
+    harvest(&mut sc); // same epoch
+    harvest(&mut sc); // still the same epoch
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::tranche_count(&v) == 1, 0);
+        ts::return_shared(v);
+    };
+
+    // A new epoch permits exactly one more.
+    gtu::advance_epoch_with_reward_amounts(0, 400, &mut sc);
+    harvest(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::tranche_count(&v) == 2, 1);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+// === The no-loss guarantee ===
+
+#[test]
+/// A depositor gets their whole principal back, even when every unit of it is staked and the
+/// liquid buffer is empty. The vault unwinds tranches to make them whole immediately.
+fun principal_is_returned_in_full_even_when_fully_staked() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 100 * SUI_1);
+
+    // Build several rungs so principal is genuinely delegated.
+    let mut i = 0;
+    while (i < 4) {
+        harvest(&mut sc);
+        gtu::advance_epoch_with_reward_amounts(0, 400, &mut sc);
+        i = i + 1;
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::staked_principal(&v) > 0, 0);
+        assert!(sv::liquid_value(&v) < 100 * SUI_1, 1); // buffer alone cannot cover it
+        ts::return_shared(v);
+    };
+
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+
+        let out = sv::withdraw(&mut v, &acct, 100 * SUI_1, &mut state, sc.ctx());
+
+        // Exactly what was deposited. Not less, and not after a waiting period.
+        assert!(out.value() == 100 * SUI_1, 2);
+        assert!(sv::total_principal(&v) == 0, 3);
+        assert!(sv::principal_of(&v, FAN) == 0, 4);
+        assert!(sv::is_solvent(&v), 5);
+
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// The solvency invariant holds through a mixed sequence of deposits, harvests and withdrawals.
+fun the_vault_stays_solvent_through_churn() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    deposit(&mut sc, FAN2, 30 * SUI_1);
+
+    let mut round = 0;
+    while (round < 3) {
+        harvest(&mut sc);
+        gtu::advance_epoch_with_reward_amounts(0, 400, &mut sc);
+
+        sc.next_tx(FAN);
+        {
+            let mut v = sc.take_shared<StakeVault>();
+            let mut state = sc.take_shared<SuiSystemState>();
+            let acct = sc.take_from_sender<SocialAccount>();
+            let out = sv::withdraw(&mut v, &acct, 5 * SUI_1, &mut state, sc.ctx());
+            assert!(out.value() == 5 * SUI_1, 0);
+            assert!(sv::is_solvent(&v), 1);
+            coin::burn_for_testing(out);
+            sc.return_to_sender(acct);
+            ts::return_shared(state);
+            ts::return_shared(v);
+        };
+
+        deposit(&mut sc, FAN2, 10 * SUI_1);
+        round = round + 1;
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::is_solvent(&v), 2);
+        assert!(sv::principal_of(&v, FAN) == 35 * SUI_1, 3);
+        assert!(sv::principal_of(&v, FAN2) == 60 * SUI_1, 4);
+        assert!(sv::total_principal(&v) == 95 * SUI_1, 5);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EInsufficientPrincipal)]
+fun a_depositor_cannot_withdraw_more_than_they_deposited() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 10 * SUI_1);
+
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::withdraw(&mut v, &acct, 10 * SUI_1 + 1, &mut state, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+/// Deposits can be closed; withdrawals and rebate claims cannot. Same asymmetry as the flow leg.
+fun closing_deposits_does_not_close_withdrawals() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 10 * SUI_1);
+
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::set_accepting(&mut v, &cap, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::withdraw(&mut v, &acct, 10 * SUI_1, &mut state, sc.ctx());
+        assert!(out.value() == 10 * SUI_1, 0);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+// === The rebate ===
+
+#[test]
+/// Rebate accrues pro rata to principal, and only to deposits present when it was earned.
+fun the_rebate_is_shared_in_proportion_to_principal() {
+    let mut sc = setup();
+
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::set_rebate_bps(&mut v, &cap, 10_000); // creator gives away all of their yield
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    // 75 / 25 split of the pool.
+    deposit(&mut sc, FAN, 75 * SUI_1);
+    deposit(&mut sc, FAN2, 25 * SUI_1);
+
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::rebate_pool_value(&v) > 0, 0);
+        // The creator kept nothing, having set a 100% rebate.
+        assert!(sv::creator_yield_value(&v) == 0, 1);
+
+        let a = sv::claimable_rebate(&v, FAN);
+        let b = sv::claimable_rebate(&v, FAN2);
+        assert!(a > 0 && b > 0, 2);
+        // 75:25. Compared as a ratio with a one-unit tolerance for floor division rather than as
+        // an exact equality, because the accumulator floors twice.
+        assert!(a >= b * 3 - 1 && a <= b * 3 + 1, 3);
+        ts::return_shared(v);
+    };
+
+    // And it can actually be taken out.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let expected = sv::claimable_rebate(&v, FAN);
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(out.value() == expected, 4);
+        assert!(sv::claimable_rebate(&v, FAN) == 0, 5);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// A depositor who arrives after a harvest must not be paid a rebate they were not there to earn.
+fun a_late_depositor_does_not_share_earlier_yield() {
+    let mut sc = setup();
+
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::set_rebate_bps(&mut v, &cap, 10_000);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc); // yield earned entirely by FAN
+
+    deposit(&mut sc, FAN2, 50 * SUI_1); // arrives afterwards
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::claimable_rebate(&v, FAN) > 0, 0);
+        assert!(sv::claimable_rebate(&v, FAN2) == 0, 1);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+// === Claims ===
+
+#[test]
+fun the_creator_and_platform_can_take_their_yield() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    let creator_due;
+    let platform_due;
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        creator_due = sv::creator_yield_value(&v);
+        platform_due = sv::platform_yield_value(&v);
+        assert!(creator_due > 0 && platform_due > 0, 0);
+        ts::return_shared(v);
+    };
+
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        let out = sv::claim_creator_yield(&mut v, &cap, creator_due, sc.ctx());
+        assert!(out.value() == creator_due, 1);
+        assert!(sv::creator_yield_value(&v) == 0, 2);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        let out = sv::claim_platform_yield(&mut v, &cap, platform_due, sc.ctx());
+        assert!(out.value() == platform_due, 3);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// Yield claims must never be able to reach principal. Both parties drain everything they are
+/// owed; the depositor must still be able to take their full deposit afterwards.
+fun draining_all_yield_cannot_touch_principal() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        let amt = sv::creator_yield_value(&v);
+        let out = sv::claim_creator_yield(&mut v, &cap, amt, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        let amt = sv::platform_yield_value(&v);
+        let out = sv::claim_platform_yield(&mut v, &cap, amt, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::withdraw(&mut v, &acct, 100 * SUI_1, &mut state, sc.ctx());
+        assert!(out.value() == 100 * SUI_1, 0);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EDepositTooSmall)]
+fun a_dust_deposit_is_refused() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, sv::min_deposit_mist() - 1);
+    sc.end();
+}

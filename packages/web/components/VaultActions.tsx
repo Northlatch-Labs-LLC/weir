@@ -1,0 +1,70 @@
+'use client';
+// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+
+/**
+ * Everything a supporter does with one vault, behind one prompt.
+ *
+ * # Why this exists
+ *
+ * Position and deposit were separate sections, and each rendered its own sign-in when nobody was
+ * connected. So a signed-out visitor was asked to connect twice on one page for one activity — and
+ * with Google now in the header, three times in three shapes.
+ *
+ * That follows from every component asking `useSigner()` for itself and rendering its own prompt on
+ * `null`. The provider unified *how* somebody signs in; nothing unified *asking*. This asks once,
+ * for the page, and then shows the actions.
+ *
+ * # Asking once is not the same as gating once
+ *
+ * Neither action trusts this component. Both still build and simulate their own transaction against
+ * the connected address, and the chain refuses anything else. What is removed is the repetition,
+ * not a check.
+ */
+
+import { useSigner } from '@/components/SignerProvider';
+import { SignIn } from '@/components/SignIn';
+import { StakePosition } from '@/components/StakePosition';
+import { DepositCheckout } from '@/components/DepositCheckout';
+
+export function VaultActions({ vaultId, known }: { vaultId: string; known: boolean }) {
+  const { signer } = useSigner();
+
+  if (signer === null) {
+    return (
+      <div className="card">
+        <span className="k">SUPPORT THIS VAULT</span>
+        <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-12)' }}>
+          Sign in to deposit, see your position and withdraw it. Your deposit stays yours — this is
+          the one place on the platform where the money comes back.
+        </p>
+        <SignIn />
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <span className="k">YOUR POSITION</span>
+      <StakePosition vaultId={vaultId} />
+
+      <div className="feed-head" style={{ marginTop: 'var(--space-24)' }}>
+        <h2>Deposit</h2>
+      </div>
+      {/*
+        Withheld for a vault this site did not open. The page above says why; repeating the
+        explanation next to a form that cannot work would be two notices for one situation.
+      */}
+      {known ? (
+        <DepositCheckout vaultId={vaultId} />
+      ) : (
+        <div className="note crit">
+          <span className="lbl">Unknown vault</span>
+          <p>
+            No <span className="mono">StakeVaultOpened</span> event names this object, so it was not
+            created by this site and no deposit form is offered for it.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

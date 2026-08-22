@@ -1,0 +1,74 @@
+// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+/**
+ * There is no icon font and no sprite sheet. At this size the whole set is smaller than one request
+ * would be, and inlining means an icon can inherit `currentColor` from whatever it sits inside —
+ * which is what lets the same glyph read correctly on a crest button and in dim body text.
+ */
+
+export const IP: Record<string, readonly string[]> = {
+  compass: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M14.9 9.1 12.9 13.1 8.9 15.1 10.9 11.1Z"],
+  waves: ["M3 8.5c2.4-2 4.4-2 6.8 0s4.4 2 6.8 0 3.9-1.5 3.9-1.5", "M3 13c2.4-2 4.4-2 6.8 0s4.4 2 6.8 0 3.9-1.5 3.9-1.5", "M3 17.5c2.4-2 4.4-2 6.8 0s4.4 2 6.8 0 3.9-1.5 3.9-1.5"],
+  users: ["M9.2 11.2a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z", "M2.8 19.6a6.6 6.6 0 0 1 12.8 0", "M16.4 5.2a3.4 3.4 0 0 1 0 6.6", "M17.4 13.6a6.6 6.6 0 0 1 3.8 5"],
+  vault: ["M4 5.2h16v13.6H4z", "M12 15.4a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z", "M12 9v-1.4", "M12 15.4v1.4"],
+  chest: ["M4.2 10.6h15.6v8.8H4.2z", "M4.2 10.6a7.8 7.8 0 0 1 15.6 0", "M12 13.2v3.4"],
+  key: ["M9.4 14.6a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2Z", "M12.1 12.4 20 20.3", "M17.4 17.6l-2 2"],
+  bell: ["M6.6 10.4a5.4 5.4 0 0 1 10.8 0v4.8l1.6 2.6H5l1.6-2.6z", "M10 20.6h4"],
+  cube: ["M12 3.2 20.8 8v8L12 20.8 3.2 16V8z", "M12 12.2 20.8 8", "M12 12.2v8.6", "M12 12.2 3.2 8"],
+  arrow: ["M4.5 12h14", "M13 6.5l5.5 5.5L13 17.5"],
+  coin: ["M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z", "M9.4 14.2h4.2a1.9 1.9 0 0 0 0-3.8h-3.1a1.9 1.9 0 0 1 0-3.8h4.1"],
+  lock: ["M5.6 11.2h12.8v8.6H5.6z", "M8.6 11.2V8.4a3.4 3.4 0 0 1 6.8 0v2.8"],
+  drop: ["M12 3.4s5 5.9 5 9.7a5 5 0 0 1-10 0c0-3.8 5-9.7 5-9.7Z"],
+  wallet: ["M3.6 7.4h16.8v12.2H3.6z", "M3.6 11.6h16.8", "M15.8 15.6h2.4"],
+  check: ["M5 12.6l4.2 4.2L19 7"],
+  warn: ["M12 4.2l8.8 15.6H3.2z", "M12 10v4.8", "M12 17.4v.4"],
+  chart: ["M4.5 20V10", "M10.5 20V4.8", "M16.5 20v-6.8", "M21.5 20H2.5"],
+  shield: ["M12 3.4 20 6v6.2c0 4.2-3.2 6.9-8 8.4-4.8-1.5-8-4.2-8-8.4V6z"],
+  doc: ["M6 3.4h8l4 4v13.2H6z", "M14 3.4v4h4", "M9 12h6", "M9 15.6h6"],
+  layers: ["M12 3.4 21 8l-9 4.6L3 8z", "M3 12.4l9 4.6 9-4.6", "M3 16.6 12 21.2l9-4.6"],
+  unlock: ["M5.6 11.2h12.8v8.6H5.6z", "M8.6 11.2V8.4a3.4 3.4 0 0 1 6.6-1.1"],
+  eye: ["M12 5.6c5 0 8.6 4 9.4 6.4-0.8 2.4-4.4 6.4-9.4 6.4S4.2 14.4 3.4 12C4.2 9.6 7 5.6 12 5.6Z", "M12 14.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Z"],
+  scales: ["M12 4v16", "M6 20h12", "M4 8h16", "M4 8l-2 5a3.4 3.4 0 0 0 4 0z", "M20 8l2 5a3.4 3.4 0 0 1-4 0z"],
+  sun: ["M12 16.4a4.4 4.4 0 1 0 0-8.8 4.4 4.4 0 0 0 0 8.8Z", "M12 2.6v2.4", "M12 19v2.4", "M2.6 12H5", "M19 12h2.4", "M5.4 5.4 7.1 7.1", "M16.9 16.9l1.7 1.7", "M18.6 5.4 16.9 7.1", "M7.1 16.9 5.4 18.6"],
+  moon: ["M20 14.6A8.6 8.6 0 0 1 9.4 4a8.6 8.6 0 1 0 10.6 10.6Z"],
+  spark: ["M12 3.6v4.2", "M12 16.2v4.2", "M4.8 12h4.2", "M15 12h4.2", "M7 7l2.6 2.6", "M14.4 14.4 17 17", "M17 7l-2.6 2.6", "M9.6 14.4 7 17"],
+};
+
+export type IconName = keyof typeof IP;
+
+/**
+ * `flexShrink: 0` is not decoration: every one of these sits inside a flex row beside text, and
+ * without it the icon is the thing that gets squeezed when the line is tight — which turns a round
+ * glyph into an oval at exactly the widths where it is hardest to notice.
+ *
+ * An unknown name renders nothing rather than throwing. A missing glyph should cost a label its
+ * decoration, never a whole route its render.
+ */
+export function Icon({
+  name,
+  size = 17,
+  color,
+}: {
+  name: string;
+  size?: number;
+  color?: string;
+}) {
+  const paths = IP[name] ?? [];
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color ?? 'currentColor'}
+      strokeWidth={1.55}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={{ flexShrink: 0, display: 'block' }}
+    >
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
+    </svg>
+  );
+}
