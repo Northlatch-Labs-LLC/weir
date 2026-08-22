@@ -1,0 +1,98 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# A nightly copy of the content store, taken somewhere that is always on.
+#
+# The database this protects is Supabase (eu-west-2). A laptop cannot do this job: it is asleep at
+# night, and a machine holding the only copy of something is the machine whose failure loses it.
+#
+# Free-plan Supabase includes no automated backups, so this duplicates no managed feature. If the
+# project moves to Pro, its own daily backups and point-in-time recovery are strictly better and
+# this should be retired rather than run alongside.
+
+name: Backup
+
+on:
+  schedule:
+    # 03:17 UTC. Off the hour deliberately — scheduled jobs pile up on the hour and get delayed.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  dump:
+    name: Dump the content store
+    runs-on: ubuntu-latest
+    steps:
+      # The client must be at least the server's major version or pg_dump refuses. Supabase is 17.
+      - name: Install postgresql-client 17
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          # Ubuntu keeps its own older client first on PATH, and pg_dump refuses to dump a server
+          # newer than itself — so the installed binaries are put ahead of it explicitly.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      # Supabase's direct host resolves to IPv6 only, and GitHub's runners have no IPv6 route — a
+      # dump against it fails with "Network is unreachable" before it reads a byte. The pooler is
+      # reachable over IPv4, and its *session* port (5432) holds a connection open for the whole
+      # dump, which the transaction port (6543) will not.
+      #
+      # Rewriting here rather than asking for a corrected secret: the secret is write-only, so this
+      # is the only place the value can be repaired, and it keeps a direct URL working if one is
+      # ever set deliberately.
+      - name: Resolve an IPv4 session-mode connection
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "BACKUP_DATABASE_URL is not set. Refusing to report a successful backup of nothing."
+            exit 1
+          fi
+          URL=$(python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse, urlunparse
+          u = urlparse(os.environ['DATABASE_URL'])
+          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname or '')
+          if m:
+              ref = m.group(1)
+              region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
+              u = u._replace(
+                  netloc=f'postgres.{ref}:{u.password or ""}@aws-0-{region}.pooler.supabase.com:5432'
+              )
+          print(urlunparse(u))
+          PY
+          )
+          # Masked before it is used anywhere, so a failing command cannot print credentials.
+          echo "::add-mask::$URL"
+          echo "PGURL=$URL" >> "$GITHUB_ENV"
+
+      - name: Dump
+        run: |
+          /usr/lib/postgresql/17/bin/pg_dump "$PGURL" --format=custom --no-owner --no-privileges \
+            -f "backup-$(date -u +%Y%m%dT%H%M%SZ).dump"
+
+      # A backup nobody reads is a belief. This one is opened and its contents listed, so a dump
+      # that is empty, truncated, or missing a table fails tonight rather than on the day it is
+      # needed.
+      - name: Verify the dump can be read back
+        run: |
+          FILE=$(ls -1 backup-*.dump)
+          SIZE=$(stat -c%s "$FILE")
+          echo "$FILE is $SIZE bytes"
+          [ "$SIZE" -gt 1000 ] || { echo "Dump is implausibly small — treating as failed."; exit 1; }
+
+          /usr/lib/postgresql/17/bin/pg_restore --list "$FILE" > contents.txt
+          for table in profiles posts assets comments follows messages; do
+            grep -q "TABLE DATA public $table" contents.txt \
+              || { echo "Dump does not contain $table. Treating as failed."; exit 1; }
+          done
+          echo "All six tables present."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: content-store-backup
+          path: backup-*.dump
+          # Roughly three months of nightly copies. Long enough that a loss noticed weeks later is
+          # still recoverable, which is the realistic case — today's was noticed within hours only
+          # by accident.
+          retention-days: 90
