@@ -1,0 +1,35 @@
+Copyright (c) 2026 Northlatch Labs LLC. All rights reserved.
+
+This repository is licensed in tiers. Which tier applies depends on where a file
+sits. Each directory named below carries its own LICENSE file, and that file
+governs its directory and prevails over this one.
+
+1. MOVE PACKAGE — Business Source License 1.1
+   sui-contracts/
+
+   Licensed Work is projectx_social. Licensor is Northlatch Labs LLC. The Change
+   Date is 2029-09-01, after which it converts to Apache-2.0. The Additional Use
+   Grant permits any use that does not involve a production deployment of the
+   Licensed Work, or a fork or derivative of it, on any blockchain network.
+
+   Full terms: sui-contracts/LICENSE
+
+2. SDK AND DAEMON — Apache License 2.0
+   packages/sdk/
+   packages/daemon/
+
+   Open source under the standard Apache-2.0 terms, so that anything reading the
+   protocol can depend on them freely.
+
+   Full terms: packages/sdk/LICENSE, packages/daemon/LICENSE
+
+3. WEB APPLICATION AND EVERYTHING ELSE — PROPRIETARY, NO LICENCE GRANTED
+   packages/web/, and all material not covered above.
+
+   Proprietary property of Northlatch Labs LLC. No right to use, copy, modify,
+   merge, publish, distribute, sublicense or sell any part of it is granted by
+   its publication here.
+
+Viewing this repository does not grant any licence, express or implied.
+
+For licensing enquiries, contact Northlatch Labs LLC.
