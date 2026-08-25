@@ -63,6 +63,17 @@ esac
 # and something a local hook cannot reproduce. Running them again here would add minutes to every
 # push and buy nothing, and a slow hook is a hook that gets `--no-verify`d, taking the secret scan
 # with it. The scan is what cannot wait for CI: by the time CI reports, the bytes have left.
+
+# First: does the scanner still work at all? Pure in-process arithmetic over synthesised values,
+# so it costs nothing and reads no file. Silent unless it fails — because a guard that has quietly
+# stopped catching things prints exactly the same "CLEAN" as one that is working.
+if ! selftest="$(python3 "$root/scripts/scan-secrets.py" --selftest)"; then
+  printf '%s\n' "$selftest" >&2
+  printf '\n  PUSH REFUSED — the secret scanner failed its own self-test.\n' >&2
+  printf '  A CLEAN result from it cannot be trusted until that passes.\n\n' >&2
+  exit 1
+fi
+
 if ! python3 "$root/scripts/scan-secrets.py" --all; then
   printf '\n  PUSH REFUSED — a tracked file carries a credential.\n' >&2
   printf '  Rotate it at the provider first; removing it from the file is not the fix, because\n' >&2

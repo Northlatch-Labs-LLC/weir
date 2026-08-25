@@ -8,15 +8,16 @@
 #
 #   bash scripts/install-hooks.sh
 #
-# Then prove the scanner refuses something, because a guard that has never refused anything is not
-# known to protect anything. Plant a key-shaped string made of filler characters, watch the commit
-# be refused, and remove it:
+# Then prove the scanner still refuses what it should and still ignores what it should, because a
+# guard that has never refused anything is not known to protect anything — and one that has only
+# been made quieter has been disabled rather than corrected:
 #
-#   printf 'const PLANTED = "suiprivkey1%s";\n' "$(printf 'q%.0s' $(seq 59))" > packages/daemon/planted.ts
-#   git add packages/daemon/planted.ts
-#   git commit -m "planted"        # MUST be refused, naming packages/daemon/planted.ts
-#   git rm --cached -q packages/daemon/planted.ts && rm packages/daemon/planted.ts
-#   git status --porcelain         # MUST be empty again
+#   python3 scripts/scan-secrets.py --selftest    # both directions, every validated rule
+#   python3 scripts/scan-secrets.py --all         # this tree, EXPECT: CLEAN
+#
+# A key-shaped string of filler characters is NOT enough to test this scanner any more, and that is
+# the point: the bech32 rule verifies the checksum, so only a format-valid value trips it. The
+# selftest builds one from 33 zero bytes — correct in every respect and provably nobody's key.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 git config core.hooksPath scripts/git-hooks
