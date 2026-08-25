@@ -27,6 +27,11 @@ const config: NextConfig = {
   distDir: process.env['NEXT_DIST_DIR'] ?? '.next',
 
   /*
+    `X-Powered-By: Next.js` is free reconnaissance and buys the reader nothing. Off.
+  */
+  poweredByHeader: false,
+
+  /*
     Every response says which commit built it.
 
     `VERCEL_GIT_COMMIT_SHA` is set by the platform at build time. A header rather than a route,
@@ -55,6 +60,38 @@ const config: NextConfig = {
     ];
   },
 
+  /*
+    Four headers this origin had none of, and the session cookie is why they matter here more than
+    anywhere else in the estate.
+
+    `X-Frame-Options: DENY` — /signin can otherwise be framed by an attacker page and clicked
+    through by a visitor who thinks they are clicking something else. The consequence is not a
+    defaced page: it is a sign-in, or a wallet approval, that the visitor authorised without
+    knowing what they authorised. DENY rather than SAMEORIGIN because nothing here frames itself —
+    there is no iframe and no embed route in this package.
+
+    `X-Content-Type-Options: nosniff` — without it a response served with a loose content type can
+    be sniffed into `text/html` and executed *on this origin*, which is the origin holding the
+    HttpOnly session cookie. HttpOnly stops a script reading the cookie; it does nothing about a
+    script that simply makes requests the cookie authorises.
+
+    `Referrer-Policy` and `Permissions-Policy` are the cheap two: stop the full URL leaving on
+    outbound links, and refuse four device capabilities this app never calls. Verified against the
+    source rather than assumed — nothing here touches getUserMedia, the Geolocation API or
+    PaymentRequest, so denying them costs nothing today and denies them by default to whatever is
+    written next.
+
+    Deliberately not here: `Content-Security-Policy`, which needs a report-only period against real
+    traffic before it can be enforced, and `Strict-Transport-Security`, whose `preload` is a
+    one-way door and the operator's call, not this file's.
+
+    The values match `projectx-website/next.config.mjs` and `projectx-raffle/web/vercel.json` on
+    purpose — one estate should not have three answers to the same question.
+
+    Caveat, which cannot be settled from this tree: weir.social is fronted by Cloudflare. What Next
+    emits is what the origin sends, not necessarily what the edge finally serves — the edge may add
+    to these or override them. Prove it on the live response, not on this file.
+  */
   async headers() {
     return [
       {
@@ -63,6 +100,13 @@ const config: NextConfig = {
           {
             key: 'x-projectx-commit',
             value: process.env['VERCEL_GIT_COMMIT_SHA'] ?? 'local',
+          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), payment=()',
           },
         ],
       },
