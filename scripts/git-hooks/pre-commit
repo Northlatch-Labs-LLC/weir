@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refuse any commit that would publish a credential. See scripts/scan-secrets.py.
+#
+# Scans what is STAGED, not the working tree — after a partial `git add` those differ, and the
+# staged blob is the one that becomes history.
+exec python3 "$(git rev-parse --show-toplevel)/scripts/scan-secrets.py"

@@ -71,3 +71,28 @@ PLAN.md
 # Local editor/agent launch configs.
 .claude/
 .env*
+
+# Signing key material, by every filename this repository actually gives it.
+#
+# The harvest signer is a bech32 `suiprivkey1...` — packages/daemon/.env.example documents it and
+# packages/daemon/deploy/social-startup.sh fetches it from Secret Manager into a 0600 file. On a
+# laptop it lands in a file instead, and until now nothing here refused it: `harvest.key` and
+# `signer.json` were both committable. `.env` was ignored and these were not, which is the gap a
+# key walks through.
+#
+# `*.key` and `*.pem` are the same two globs .gcloudignore already uses to keep key material out of
+# the Cloud Build context; git should refuse what the build context refuses.
+harvest.key
+signer.json
+*.key
+*.pem
+
+# The runtime secrets file. install-cos.sh and social-startup.sh write PROJECTX_DAEMON_SIGNER_SECRET
+# and the journal URL to /run/projectx-social/secrets.env, which is tmpfs precisely so no disk holds
+# a credential. A copy pulled back here for debugging keeps that name and must not be committed.
+secrets.env
+*.secrets.env
+
+# The Sui CLI keystore. sui-contracts/deploy/mainnet.json records keys being added to and removed
+# from this machine's keystore around the multisig transfer; the file itself holds them in the clear.
+sui.keystore

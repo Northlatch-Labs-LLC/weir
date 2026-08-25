@@ -1,0 +1,73 @@
+#!/bin/sh
+# Refuse a push whose provenance or destination cannot be established, and refuse one carrying a
+# credential.
+#
+# The commit gate only ever sees what one machine staged. This is the last point before bytes leave
+# the tree, so it scans EVERY TRACKED FILE rather than a diff: a secret that arrived before the
+# hooks existed is still a secret, and history is what a clone gets.
+#
+# The destination check is not a formality here. This repository holds key material by design — the
+# harvest signer is a bech32 `suiprivkey1...` (packages/daemon/.env.example) — and a repository can
+# be flipped to public in two clicks long after anyone wrote down that it was private. So the
+# question is asked of GitHub at push time and anything other than a definite yes fails closed.
+set -e
+refs="$(cat)"
+root="$(git rev-parse --show-toplevel)"
+
+if [ "$GIT_PUSH_ANYWAY" != "1" ]; then
+  if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+    printf '\n  PUSH REFUSED — this is a linked worktree, not the main checkout\n\n' >&2
+    exit 1
+  fi
+  branch="$(git symbolic-ref --short -q HEAD)" || branch=""
+  if [ -z "$branch" ]; then
+    printf '\n  PUSH REFUSED — HEAD is detached; commits here belong to no branch\n\n' >&2
+    exit 1
+  fi
+  # Force-pushes only. Git already refuses a non-fast-forward; this catches the --force that
+  # overrules it, which is the only thing here that destroys somebody else's commits for good.
+  printf '%s\n' "$refs" | while read -r _l local_sha _r remote_sha; do
+    [ -z "$local_sha" ] && continue
+    case "$remote_sha" in
+      *[!0]*) git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null || exit 9 ;;
+    esac
+  done
+  if [ $? -eq 9 ]; then
+    printf '\n  PUSH REFUSED — this would rewrite history already on the remote\n\n' >&2
+    exit 1
+  fi
+fi
+
+# Is the destination actually private, right now?
+remote_url="$2"
+repo_path="$(printf '%s' "$remote_url" | sed -e 's#^git@github.com:#github.com/#' -e 's#^https://github.com/#github.com/#' -e 's#\.git$##')"
+case "$repo_path" in
+  github.com/*)
+    name="${repo_path#github.com/}"
+    private="$(gh repo view "$name" --json isPrivate -q .isPrivate 2>/dev/null || echo unknown)"
+    if [ "$private" != "true" ]; then
+      printf '\n  PUSH REFUSED — destination is not verified private (%s)\n\n' "$private" >&2
+      printf '  This tree carries signing key material. Anything other than a definite yes\n' >&2
+      printf '  fails closed. If the answer is genuinely "false", that is not a hook to fix.\n\n' >&2
+      exit 1
+    fi ;;
+  *)
+    printf '\n  PUSH REFUSED — not a github.com remote, so visibility cannot be checked\n\n' >&2
+    exit 1 ;;
+esac
+
+# The gate. A push is a claim that this passes; run it rather than assume it.
+#
+# Typecheck, tests and the Move suite are NOT run here. .github/workflows/ci.yml already runs all
+# three on every push, on a machine that has never seen this project — which is the point of them,
+# and something a local hook cannot reproduce. Running them again here would add minutes to every
+# push and buy nothing, and a slow hook is a hook that gets `--no-verify`d, taking the secret scan
+# with it. The scan is what cannot wait for CI: by the time CI reports, the bytes have left.
+if ! python3 "$root/scripts/scan-secrets.py" --all; then
+  printf '\n  PUSH REFUSED — a tracked file carries a credential.\n' >&2
+  printf '  Rotate it at the provider first; removing it from the file is not the fix, because\n' >&2
+  printf '  every clone and every commit already made still holds it.\n\n' >&2
+  printf '  `git push --no-verify` overrides this, deliberately: the override should be a\n' >&2
+  printf '  decision somebody made, not one nobody saw.\n\n' >&2
+  exit 1
+fi
