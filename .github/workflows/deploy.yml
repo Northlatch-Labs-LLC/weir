@@ -23,6 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This is a pnpm workspace; the Vercel CLI shells out to pnpm during the
+      # build and fails with ENOENT if it is not on PATH first.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
