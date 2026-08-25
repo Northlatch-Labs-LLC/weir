@@ -70,3 +70,4 @@ PLAN.md
 
 # Local editor/agent launch configs.
 .claude/
+.env*
