@@ -207,5 +207,5 @@ export async function readCreatorSetup(owner: string): Promise<Reading<CreatorSe
 
 /** Mirrored from `creator.move`. Asserted against the source by a drift test. */
 export const MAX_TIERS = 16;
-export const MIN_PERIOD_MS = 24 * 60 * 60 * 1000;
+export const MIN_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_PERIOD_MS = 3_650 * 24 * 60 * 60 * 1000;

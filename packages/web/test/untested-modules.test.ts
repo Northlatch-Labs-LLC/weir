@@ -64,11 +64,11 @@ describe('constants mirrored from creator.move', () => {
     expect(MIN_PERIOD_MS).toBeLessThan(MAX_PERIOD_MS);
   });
 
-  it('a one-hour period is refused and a one-day period is not', () => {
-    // Both sides of the boundary. The contract rejects a period below MIN_PERIOD_MS, and an
-    // interface that accepted one would spend a user's gas to learn that.
-    expect(60 * 60 * 1000).toBeLessThan(MIN_PERIOD_MS);
-    expect(24 * 60 * 60 * 1000).toBe(MIN_PERIOD_MS);
+  it('a one-day period is refused and thirty days is the floor', () => {
+    // Both sides of the boundary. The upgraded contract rejects a period below MIN_PERIOD_MS,
+    // and an interface that accepted one would spend a user's gas to learn that.
+    expect(24 * 60 * 60 * 1000).toBeLessThan(MIN_PERIOD_MS);
+    expect(30 * 24 * 60 * 60 * 1000).toBe(MIN_PERIOD_MS);
   });
 });
 
