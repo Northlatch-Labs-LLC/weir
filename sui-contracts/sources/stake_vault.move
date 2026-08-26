@@ -42,6 +42,7 @@ use projectx_social::platform::{Self, Platform, PlatformCap};
 use projectx_social::stake_ladder;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
+use sui::dynamic_field as df;
 use sui::event;
 use sui::sui::SUI;
 use sui::table::{Self, Table};
@@ -299,8 +300,124 @@ public fun open(
 // === Depositor accounting ===
 
 /// Bring a position's accrued rebate up to date. Must be called before principal changes.
-fun accrue(position: &mut Position, acc: u128) {
-    let entitled = ((position.principal as u128) * acc) / ACC_SCALE;
+/// Rebate eligibility for principal deposited since the last harvest.
+///
+/// # The defect this closes
+///
+/// The accumulator credits `rebate_cut / denominator` per unit of principal. A deposit made in the
+/// same transaction as a harvest used to sit inside that denominator, so a large enough deposit
+/// took almost the whole cut and withdrew again in the same transaction at no cost — every epoch,
+/// forever, out of the depositors the rebate exists to reward.
+///
+/// Freshly deposited principal has not been delegated yet — `stake_one_rung` stakes it on a later
+/// harvest — so it earned none of the yield being split. It is therefore excluded from *both*
+/// sides: it does not count toward the denominator, and it does not accrue. Withdrawal is
+/// untouched; this delays when a deposit starts earning a rebate, never whether it can be taken out.
+///
+/// Eligibility advances on the harvest counter rather than on the depositor doing something, so a
+/// depositor who deposits and waits still earns. `at_harvest` no longer matching `vault.harvests`
+/// *is* maturity — nothing has to sweep.
+public struct FreshEntry has copy, drop, store {
+    at_harvest: u64,
+    amount: u64,
+    /// `Σ amount_i * acc_i / ACC_SCALE` over the deposits in this window. Added to the position's
+    /// debt when the money matures, so it earns from harvests after its deposit and not before.
+    /// Without this the newly-eligible principal would be credited the whole accumulator history.
+    debt_delta: u128,
+}
+public struct Fresh has copy, drop, store { who: address }
+/// `acc_rebate_per_unit` as it stood at the end of harvest `harvest`. Fresh principal that matured
+/// out of harvest H must start earning from the value recorded at H+1 — the harvest it sat out —
+/// and not from the value at its deposit, which would hand it exactly the harvest it missed.
+public struct AccAt has copy, drop, store { harvest: u64 }
+public struct FreshTotal has copy, drop, store {}
+
+fun record_acc_at(vault: &mut StakeVault) {
+    let h = vault.harvests;
+    let acc = vault.acc_rebate_per_unit;
+    if (df::exists(&vault.id, AccAt { harvest: h })) {
+        *df::borrow_mut<AccAt, u128>(&mut vault.id, AccAt { harvest: h }) = acc;
+    } else {
+        df::add(&mut vault.id, AccAt { harvest: h }, acc);
+    }
+}
+
+/// The accumulator as of the end of harvest `h`. Falls back to the current value, which is the
+/// conservative direction: an unrecorded boundary yields nothing rather than everything.
+fun acc_at(vault: &StakeVault, h: u64): u128 {
+    if (df::exists(&vault.id, AccAt { harvest: h })) *df::borrow<AccAt, u128>(&vault.id, AccAt { harvest: h })
+    else vault.acc_rebate_per_unit
+}
+
+fun fresh_of(vault: &StakeVault, who: address): u64 {
+    if (!df::exists(&vault.id, Fresh { who })) return 0;
+    let e = df::borrow<Fresh, FreshEntry>(&vault.id, Fresh { who });
+    if (e.at_harvest == vault.harvests) e.amount else 0
+}
+
+/// Principal that may accrue rebate: everything except what arrived since the last harvest.
+fun eligible_of(vault: &StakeVault, who: address): u64 {
+    let p = vault.positions.borrow(who).principal;
+    let f = fresh_of(vault, who);
+    if (f >= p) 0 else p - f
+}
+
+/// Fold matured principal into the debt and drop the marker. Idempotent, and a no-op while the
+/// money is still fresh.
+fun settle_fresh(vault: &mut StakeVault, who: address) {
+    if (!df::exists(&vault.id, Fresh { who })) return;
+    let e = *df::borrow<Fresh, FreshEntry>(&vault.id, Fresh { who });
+    if (e.at_harvest == vault.harvests) return;
+    let _: FreshEntry = df::remove(&mut vault.id, Fresh { who });
+    // Start from where the accumulator stood once the harvest this money sat out had finished.
+    let start = acc_at(vault, e.at_harvest + 1);
+    let owed_from = ((e.amount as u128) * start) / ACC_SCALE;
+    let position = vault.positions.borrow_mut(who);
+    position.rebate_debt = position.rebate_debt + owed_from;
+}
+
+fun note_fresh(vault: &mut StakeVault, who: address, amount: u64, acc: u128) {
+    let h = vault.harvests;
+    let add_debt = ((amount as u128) * acc) / ACC_SCALE;
+
+    let cur = if (df::exists(&vault.id, Fresh { who })) {
+        let e = *df::borrow<Fresh, FreshEntry>(&vault.id, Fresh { who });
+        if (e.at_harvest == h) e else FreshEntry { at_harvest: h, amount: 0, debt_delta: 0 }
+    } else FreshEntry { at_harvest: h, amount: 0, debt_delta: 0 };
+    let next = FreshEntry {
+        at_harvest: h,
+        amount: cur.amount + amount,
+        debt_delta: cur.debt_delta + add_debt,
+    };
+    if (df::exists(&vault.id, Fresh { who })) {
+        *df::borrow_mut<Fresh, FreshEntry>(&mut vault.id, Fresh { who }) = next;
+    } else {
+        df::add(&mut vault.id, Fresh { who }, next);
+    };
+
+    let curt = if (df::exists(&vault.id, FreshTotal {})) {
+        let e = *df::borrow<FreshTotal, FreshEntry>(&vault.id, FreshTotal {});
+        if (e.at_harvest == h) e.amount else 0
+    } else 0;
+    let nextt = FreshEntry { at_harvest: h, amount: curt + amount, debt_delta: 0 };
+    if (df::exists(&vault.id, FreshTotal {})) {
+        *df::borrow_mut<FreshTotal, FreshEntry>(&mut vault.id, FreshTotal {}) = nextt;
+    } else {
+        df::add(&mut vault.id, FreshTotal {}, nextt);
+    };
+}
+
+/// Principal that has actually been earning: the denominator the accumulator must divide by.
+public fun eligible_total(vault: &StakeVault): u64 {
+    let f = if (df::exists(&vault.id, FreshTotal {})) {
+        let e = df::borrow<FreshTotal, FreshEntry>(&vault.id, FreshTotal {});
+        if (e.at_harvest == vault.harvests) e.amount else 0
+    } else 0;
+    if (f >= vault.total_principal) 0 else vault.total_principal - f
+}
+
+fun accrue_on(position: &mut Position, acc: u128, eligible: u64) {
+    let entitled = ((eligible as u128) * acc) / ACC_SCALE;
     // `acc` only ever increases and `rebate_debt` was set from the same principal, so this cannot
     // underflow — provided `resync_debt` follows every principal change, which is why the two are
     // never called separately.
@@ -310,8 +427,8 @@ fun accrue(position: &mut Position, acc: u128) {
 }
 
 /// Re-baseline a position after its principal changed.
-fun resync_debt(position: &mut Position, acc: u128) {
-    position.rebate_debt = ((position.principal as u128) * acc) / ACC_SCALE;
+fun resync_debt_on(position: &mut Position, acc: u128, eligible: u64) {
+    position.rebate_debt = ((eligible as u128) * acc) / ACC_SCALE;
 }
 
 /// The no-loss invariant. Asserted after every operation that moves principal.
@@ -349,11 +466,22 @@ public fun deposit(
     if (!vault.positions.contains(who)) {
         vault.positions.add(who, Position { principal: 0, rebate_debt: 0, pending: 0 });
     };
-    let position = vault.positions.borrow_mut(who);
-    accrue(position, acc);
-    position.principal = position.principal + amount;
-    resync_debt(position, acc);
-    let principal_after = position.principal;
+    settle_fresh(vault, who);
+    let eligible = eligible_of(vault, who);
+    {
+        let position = vault.positions.borrow_mut(who);
+        accrue_on(position, acc, eligible);
+        position.principal = position.principal + amount;
+    };
+    // The deposit raises principal and `fresh` by the same amount, so eligibility is unchanged —
+    // which is the whole point, and why the debt below is the same number it already was.
+    note_fresh(vault, who, amount, acc);
+    let eligible_after = eligible_of(vault, who);
+    let principal_after = {
+        let position = vault.positions.borrow_mut(who);
+        resync_debt_on(position, acc, eligible_after);
+        position.principal
+    };
 
     vault.total_principal = vault.total_principal + amount;
     vault.liquid.join(payment.into_balance());
@@ -388,9 +516,11 @@ public fun withdraw(
     assert!(vault.positions.contains(who), ENoPosition);
 
     let acc = vault.acc_rebate_per_unit;
+    settle_fresh(vault, who);
+    let eligible = eligible_of(vault, who);
     {
         let position = vault.positions.borrow_mut(who);
-        accrue(position, acc);
+        accrue_on(position, acc, eligible);
         assert!(position.principal >= amount, EInsufficientPrincipal);
     };
 
@@ -409,10 +539,16 @@ public fun withdraw(
         credit_proceeds(vault, proceeds, principal);
     };
 
-    let position = vault.positions.borrow_mut(who);
-    position.principal = position.principal - amount;
-    resync_debt(position, acc);
-    let principal_after = position.principal;
+    {
+        let position = vault.positions.borrow_mut(who);
+        position.principal = position.principal - amount;
+    };
+    let eligible_after = eligible_of(vault, who);
+    let principal_after = {
+        let position = vault.positions.borrow_mut(who);
+        resync_debt_on(position, acc, eligible_after);
+        position.principal
+    };
 
     vault.total_principal = vault.total_principal - amount;
     let out = coin::from_balance(vault.liquid.split(amount), ctx);
@@ -444,8 +580,10 @@ public fun claim_rebate(
     assert!(vault.positions.contains(who), ENoPosition);
 
     let acc = vault.acc_rebate_per_unit;
+    settle_fresh(vault, who);
+    let eligible = eligible_of(vault, who);
     let position = vault.positions.borrow_mut(who);
-    accrue(position, acc);
+    accrue_on(position, acc, eligible);
     let amount = position.pending;
     position.pending = 0;
 
@@ -480,11 +618,14 @@ fun credit_proceeds(vault: &mut StakeVault, mut proceeds: Balance<SUI>, principa
     // A rebate with nobody to pay it goes to the creator rather than being stranded in a pool no
     // accumulator can distribute. `total_principal` is zero only if every depositor has exited,
     // in which case there is no one whose deposit earned it.
-    if (rebate_cut > 0 && vault.total_principal > 0) {
+    // Divide by principal that was actually delegated when this yield accrued, not by everything
+    // sitting in the vault. They differ by exactly the deposits made since the last harvest.
+    let eligible = eligible_total(vault);
+    if (rebate_cut > 0 && eligible > 0) {
         vault.rebate_pool.join(proceeds.split(rebate_cut));
         vault.acc_rebate_per_unit =
             vault.acc_rebate_per_unit +
-            (((rebate_cut as u128) * ACC_SCALE) / (vault.total_principal as u128));
+            (((rebate_cut as u128) * ACC_SCALE) / (eligible as u128));
     };
 
     // Whatever remains is the creator's, joined rather than split — conservation is structural.
@@ -532,6 +673,7 @@ public fun harvest(
     );
 
     vault.harvests = vault.harvests + 1;
+    record_acc_at(vault);
     assert_solvent(vault);
 
     event::emit(Harvested {
@@ -614,6 +756,28 @@ public fun migrate(vault: &mut StakeVault, cap: &StakeCap) {
     vault.version = VERSION;
 }
 
+/// The same migration, reachable by the platform when the creator's cap is not.
+///
+/// # Why a second door is necessary rather than tidy
+///
+/// `StakeCap` has `store`, so it can be transferred, sold, or lost, and `migrate` was the only
+/// way to advance a vault's stored version. Every entry point here begins with `assert_version`,
+/// including `withdraw` — so a creator who walks away with, or simply loses, their cap would
+/// leave their depositors unable to reach their own principal through the current package the
+/// moment a new version ships. The old package stays callable, so the money is not gone, but
+/// asking a depositor to hand-build transactions against a retired package id is not a
+/// withdrawal path, and it contradicts the one promise this vault makes.
+///
+/// This grants the platform nothing else. Version is the only field it touches; principal,
+/// tranches, yield and the rebate accumulator are all out of reach, and the vault it migrates to
+/// is the same version the creator's own `migrate` would have reached.
+public fun migrate_as_platform(vault: &mut StakeVault, platform: &Platform, cap: &PlatformCap) {
+    assert!(vault.platform == object::id(platform), EWrongPlatform);
+    assert!(cap.cap_platform_id() == vault.platform, EWrongPlatform);
+    assert!(vault.version < VERSION, ENotUpgraded);
+    vault.version = VERSION;
+}
+
 // === Assertions ===
 
 fun assert_version(vault: &StakeVault) {
@@ -679,8 +843,17 @@ public fun principal_of(vault: &StakeVault, who: address): u64 {
 public fun claimable_rebate(vault: &StakeVault, who: address): u64 {
     if (!vault.positions.contains(who)) return 0;
     let position = vault.positions.borrow(who);
-    let entitled = ((position.principal as u128) * vault.acc_rebate_per_unit) / ACC_SCALE;
-    position.pending + ((entitled - position.rebate_debt) as u64)
+    // Mirrors `settle_fresh` + `accrue_on` without mutating: matured principal counts, and carries
+    // the debt it was deposited with.
+    let (fresh, carried) = if (df::exists(&vault.id, Fresh { who })) {
+        let e = *df::borrow<Fresh, FreshEntry>(&vault.id, Fresh { who });
+        if (e.at_harvest == vault.harvests) (e.amount, 0u128)
+        else (0, ((e.amount as u128) * acc_at(vault, e.at_harvest + 1)) / ACC_SCALE)
+    } else (0, 0u128);
+    let eligible = if (fresh >= position.principal) 0 else position.principal - fresh;
+    let debt = position.rebate_debt + carried;
+    let entitled = ((eligible as u128) * vault.acc_rebate_per_unit) / ACC_SCALE;
+    if (entitled <= debt) position.pending else position.pending + ((entitled - debt) as u64)
 }
 
 public fun min_deposit_mist(): u64 { MIN_DEPOSIT_MIST }

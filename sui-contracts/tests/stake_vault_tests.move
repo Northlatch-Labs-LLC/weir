@@ -560,3 +560,78 @@ fun a_dust_deposit_is_refused() {
     deposit(&mut sc, FAN, sv::min_deposit_mist() - 1);
     sc.end();
 }
+
+/// The August 2026 audit finding: a deposit must not earn the harvest it walks into.
+///
+/// Before the fix the accumulator divided the rebate by *all* principal, so principal deposited
+/// moments earlier — still sitting in `liquid`, never delegated, having earned nothing — took a
+/// share proportional to its size. Deposit big, harvest, claim, withdraw, all in one transaction,
+/// at no cost, every epoch. The money came out of the depositors the rebate exists to reward.
+#[test]
+fun a_deposit_does_not_earn_the_harvest_it_walks_into() {
+    let mut sc = setup();
+
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::set_rebate_bps(&mut v, &cap, 10_000); // the attack is only armed when a rebate exists
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    // An honest depositor, staked and earning.
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+
+    // The attacker arrives with ten times the honest stake, immediately before the harvest.
+    deposit(&mut sc, FAN2, 500 * SUI_1);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        // The whole finding, in two lines.
+        assert!(sv::claimable_rebate(&v, FAN2) == 0, 0);
+        assert!(sv::claimable_rebate(&v, FAN) > 0, 1);
+        ts::return_shared(v);
+    };
+
+    // And the fix must not confiscate — once the money has actually been delegated through a
+    // harvest, it earns like anybody else's.
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::claimable_rebate(&v, FAN2) > 0, 2);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+/// `StakeCap` has `store`, so it can be transferred, sold or lost — and `migrate` was the only
+/// way to advance a vault's version. Since every entry point begins with `assert_version`,
+/// including `withdraw`, a creator who loses their cap would strand their depositors' access to
+/// their own principal the moment a new version shipped. `migrate_as_platform` is the second door.
+///
+/// It cannot be exercised at the current version, so this pins the gate the same way
+/// `platform_tests` pins its own: calling it when there is nothing to migrate is a named refusal
+/// rather than a silent no-op.
+#[test]
+#[expected_failure(abort_code = projectx_social::stake_vault::ENotUpgraded)]
+fun the_platform_door_refuses_a_vault_already_at_version() {
+    let mut sc = setup();
+    sc.next_tx(ADMIN);
+    let mut v = sc.take_shared<StakeVault>();
+    let p = sc.take_shared<Platform>();
+    let cap = sc.take_from_sender<PlatformCap>();
+    sv::migrate_as_platform(&mut v, &p, &cap);
+    sc.return_to_sender(cap);
+    ts::return_shared(p);
+    ts::return_shared(v);
+    sc.end();
+}

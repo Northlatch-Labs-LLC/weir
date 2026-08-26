@@ -331,6 +331,11 @@ public fun period_identity(vault: ID, tier: u64, period: u64): vector<u8> {
 }
 
 /// Which period a moment falls in. The publisher stamps content with this; the check below reads it.
+/// The width of a Seal content period. Exposed so `creator` can require tier terms to be whole
+/// multiples of it rather than copying the number — a copied constant is exactly how these two
+/// drifted apart: tiers could be sold by the day while access was granted by the month.
+public fun seal_period_ms(): u64 { PERIOD_MS }
+
 public fun period_of(timestamp_ms: u64): u64 {
     timestamp_ms / PERIOD_MS
 }

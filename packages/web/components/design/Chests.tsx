@@ -170,7 +170,7 @@ export function DesignChests({
               that does not come back. Somebody landing on this page has no way to know that without
               visiting two other pages and holding both in their head. Every cell below is a fact
               this deployment can stand behind: the fee is the live one, the pool's principal is
-              withdrawable because no function exists that moves it, and a subscription is an object
+              withdrawable because no deployed function moves it, and a subscription is an object
               in the buyer's wallet.
             */}
             <section data-reveal aria-labelledby="ways-title" style={{ marginTop: '3.5rem' }}>
