@@ -756,6 +756,28 @@ public fun migrate(vault: &mut StakeVault, cap: &StakeCap) {
     vault.version = VERSION;
 }
 
+/// The same migration, reachable by the platform when the creator's cap is not.
+///
+/// # Why a second door is necessary rather than tidy
+///
+/// `StakeCap` has `store`, so it can be transferred, sold, or lost, and `migrate` was the only
+/// way to advance a vault's stored version. Every entry point here begins with `assert_version`,
+/// including `withdraw` — so a creator who walks away with, or simply loses, their cap would
+/// leave their depositors unable to reach their own principal through the current package the
+/// moment a new version ships. The old package stays callable, so the money is not gone, but
+/// asking a depositor to hand-build transactions against a retired package id is not a
+/// withdrawal path, and it contradicts the one promise this vault makes.
+///
+/// This grants the platform nothing else. Version is the only field it touches; principal,
+/// tranches, yield and the rebate accumulator are all out of reach, and the vault it migrates to
+/// is the same version the creator's own `migrate` would have reached.
+public fun migrate_as_platform(vault: &mut StakeVault, platform: &Platform, cap: &PlatformCap) {
+    assert!(vault.platform == object::id(platform), EWrongPlatform);
+    assert!(cap.cap_platform_id() == vault.platform, EWrongPlatform);
+    assert!(vault.version < VERSION, ENotUpgraded);
+    vault.version = VERSION;
+}
+
 // === Assertions ===
 
 fun assert_version(vault: &StakeVault) {

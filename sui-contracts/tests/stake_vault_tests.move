@@ -612,3 +612,26 @@ fun a_deposit_does_not_earn_the_harvest_it_walks_into() {
 
     sc.end();
 }
+
+/// `StakeCap` has `store`, so it can be transferred, sold or lost — and `migrate` was the only
+/// way to advance a vault's version. Since every entry point begins with `assert_version`,
+/// including `withdraw`, a creator who loses their cap would strand their depositors' access to
+/// their own principal the moment a new version shipped. `migrate_as_platform` is the second door.
+///
+/// It cannot be exercised at the current version, so this pins the gate the same way
+/// `platform_tests` pins its own: calling it when there is nothing to migrate is a named refusal
+/// rather than a silent no-op.
+#[test]
+#[expected_failure(abort_code = projectx_social::stake_vault::ENotUpgraded)]
+fun the_platform_door_refuses_a_vault_already_at_version() {
+    let mut sc = setup();
+    sc.next_tx(ADMIN);
+    let mut v = sc.take_shared<StakeVault>();
+    let p = sc.take_shared<Platform>();
+    let cap = sc.take_from_sender<PlatformCap>();
+    sv::migrate_as_platform(&mut v, &p, &cap);
+    sc.return_to_sender(cap);
+    ts::return_shared(p);
+    ts::return_shared(v);
+    sc.end();
+}
