@@ -2,7 +2,7 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'Weir — support that stays yours. Waiting list open.';
+export const alt = 'Weir is in closed alpha — creators are onboarding by invitation.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -11,8 +11,10 @@ export const contentType = 'image/png';
  *
  * # What it claims
  *
- * Only what the live site can honour. The site is in waiting-list mode, so the card leads with the
- * tagline and invites the email — the vault pitch returns to this file on the day the product does.
+ * Only what the live site says: Weir is in closed alpha, creators onboard by invitation, and an
+ * email gets one message when the doors open. The card wears the site's own world — deep teal
+ * water, mint headline accent, gold for the invitation — so a shared link looks like the page it
+ * opens. The product pitch returns here the day the doors do.
  *
  * # Built from divs, deliberately
  *
@@ -31,89 +33,78 @@ export default function OpengraphImage() {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          background: '#05080f',
+          background: '#051a21',
           backgroundImage:
-            'radial-gradient(ellipse 70% 60% at 84% 6%, rgba(61,220,151,0.20), transparent 70%),' +
-            'radial-gradient(ellipse 80% 60% at 10% 0%, rgba(77,162,255,0.20), transparent 70%),' +
-            'radial-gradient(ellipse 60% 60% at 34% 100%, rgba(139,107,255,0.14), transparent 70%)',
-          color: '#eef3fa',
+            'radial-gradient(ellipse 80% 70% at 50% 115%, rgba(20,84,88,0.55), transparent 70%),' +
+            'radial-gradient(ellipse 60% 50% at 88% 0%, rgba(28,60,66,0.6), transparent 70%)',
+          color: '#e8f1f2',
           fontFamily: 'sans-serif',
           padding: 72,
           justifyContent: 'space-between',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* The stake ladder: four rungs, the staked one lit. The product's own mechanism. */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', fontSize: 26, fontWeight: 700, letterSpacing: -1, color: '#8be3c4' }}>
+              <span>weir</span>
+            </div>
+            <div style={{ fontSize: 11, letterSpacing: 4, color: '#7d979e', marginTop: 3 }}>
+              ON SUI
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexGrow: 1 }} />
           <div
             style={{
               display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              width: 30,
-              height: 44,
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 22px',
+              borderRadius: 999,
+              border: '1px solid rgba(139,227,196,0.35)',
+              fontSize: 16,
+              letterSpacing: 3,
+              color: '#8be3c4',
             }}
           >
-            <div style={{ display: 'flex', height: 7, borderRadius: 2, background: 'rgba(255,255,255,0.22)' }} />
-            <div style={{ display: 'flex', height: 7, borderRadius: 2, background: '#3ddc97' }} />
-            <div style={{ display: 'flex', height: 7, borderRadius: 2, background: 'rgba(255,255,255,0.22)' }} />
-            <div style={{ display: 'flex', height: 7, borderRadius: 2, background: 'rgba(255,255,255,0.22)' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', fontSize: 24, fontWeight: 700, letterSpacing: -1.2 }}>
-              <span>weir</span>
-            </div>
-            <div style={{ fontSize: 11, letterSpacing: 4, color: '#6b7a95', marginTop: 3 }}>
-              ON SUI
-            </div>
+            <div style={{ display: 'flex', width: 8, height: 8, borderRadius: 999, background: '#8be3c4' }} />
+            <span>CLOSED ALPHA — BY INVITATION</span>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', fontSize: 66, fontWeight: 700, letterSpacing: -2.4 }}>
-            <span>Support that</span>
-          </div>
-          <div style={{ display: 'flex', fontSize: 66, fontWeight: 700, letterSpacing: -2.4 }}>
-            <span>stays</span>
+          <div style={{ display: 'flex', fontSize: 72, fontWeight: 700, letterSpacing: -2.6 }}>
+            <span>Weir is in</span>
             <span>&nbsp;</span>
-            <span style={{ color: '#3ddc97' }}>yours.</span>
+            <span style={{ color: '#8be3c4' }}>closed alpha.</span>
           </div>
           <div
             style={{
               display: 'flex',
               fontSize: 25,
-              color: '#9fb0c9',
+              color: '#9db4bb',
               marginTop: 22,
-              maxWidth: 860,
+              maxWidth: 900,
               lineHeight: 1.45,
             }}
           >
             <span>
-              A creator network on Sui, built in the open. Leave an email and we will tell you when
-              something ships — one email, no newsletter.
+              Creators are onboarding now, by invitation. Leave your email and we will send one
+              message when the doors open — and note the handle you would like.
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {['On Sui', 'Waiting list open'].map((label) => (
-            <div
-              key={label}
-              style={{
-                display: 'flex',
-                padding: '10px 18px',
-                borderRadius: 999,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'rgba(10,18,32,0.82)',
-                fontSize: 18,
-                color: '#c9d6e8',
-              }}
-            >
-              {label}
+        {/* The waterline — the site's own motif, one calm line above the depth. */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', height: 2, background: 'rgba(139,227,196,0.6)', borderRadius: 2 }} />
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: 18 }}>
+            <div style={{ display: 'flex', fontSize: 18, color: '#e8d5a4' }}>
+              <span>Have an invitation? Enter your code and go straight in.</span>
             </div>
-          ))}
-          <div style={{ display: 'flex', flexGrow: 1 }} />
-          <div style={{ display: 'flex', fontSize: 18, color: '#6b7a95' }}>
-            <span>Settled on chain, not in a database</span>
+            <div style={{ display: 'flex', flexGrow: 1 }} />
+            <div style={{ display: 'flex', fontSize: 18, color: '#7d979e' }}>
+              <span>weir.social</span>
+            </div>
           </div>
         </div>
       </div>

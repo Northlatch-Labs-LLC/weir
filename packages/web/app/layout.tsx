@@ -48,8 +48,8 @@ const TAGLINE = 'Support that stays yours.';
   people who were coming in anyway.
 */
 const DESCRIPTION =
-  'SocialFi on Sui: a creator network where support stays yours. Waiting list open — leave an ' +
-  'email and we will tell you when something ships. One email, no newsletter.';
+  'SocialFi on Sui: a creator network where support stays yours. Now in closed alpha — creators ' +
+  'onboard by invitation. Leave an email for one message when the doors open.';
 
 /*
   The phone.
