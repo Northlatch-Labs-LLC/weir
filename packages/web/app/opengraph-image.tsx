@@ -2,7 +2,7 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'Weir — a creator network whose economics are contracts on Sui';
+export const alt = 'Weir — support that stays yours. Waiting list open.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -11,9 +11,8 @@ export const contentType = 'image/png';
  *
  * # What it claims
  *
- * The no-loss vault, because it is the thing nobody else offers and the only line worth spending a
- * preview on. Everything stated here is true of the contracts: a deposit is delegated, the yield
- * goes to the creator, and the principal stays withdrawable in full.
+ * Only what the live site can honour. The site is in waiting-list mode, so the card leads with the
+ * tagline and invites the email — the vault pitch returns to this file on the day the product does.
  *
  * # Built from divs, deliberately
  *
@@ -71,12 +70,12 @@ export default function OpengraphImage() {
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', fontSize: 66, fontWeight: 700, letterSpacing: -2.4 }}>
-            <span>Support a creator</span>
+            <span>Support that</span>
           </div>
           <div style={{ display: 'flex', fontSize: 66, fontWeight: 700, letterSpacing: -2.4 }}>
-            <span>without spending</span>
+            <span>stays</span>
             <span>&nbsp;</span>
-            <span style={{ color: '#3ddc97' }}>anything</span>
+            <span style={{ color: '#3ddc97' }}>yours.</span>
           </div>
           <div
             style={{
@@ -89,14 +88,14 @@ export default function OpengraphImage() {
             }}
           >
             <span>
-              Park SUI in their vault. It is delegated, the staking yield goes to them, and your
-              principal stays yours — withdrawable in full, any time.
+              A creator network on Sui, built in the open. Leave an email and we will tell you when
+              something ships — one email, no newsletter.
             </span>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {['Subscriptions', 'Paid posts', 'No-loss vaults'].map((label) => (
+          {['On Sui', 'Waiting list open'].map((label) => (
             <div
               key={label}
               style={{

@@ -48,8 +48,8 @@ const TAGLINE = 'Support that stays yours.';
   people who were coming in anyway.
 */
 const DESCRIPTION =
-  'SocialFi on Sui: a creator network whose economics are Move contracts. Subscriptions and tips ' +
-  'settle on chain; a profile can be a no-loss vault that pays its creator from staking yield.';
+  'SocialFi on Sui: a creator network where support stays yours. Waiting list open — leave an ' +
+  'email and we will tell you when something ships. One email, no newsletter.';
 
 /*
   The phone.
