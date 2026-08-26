@@ -57,7 +57,7 @@ const MAX_TIERS: u64 = 16;
 
 /// One day, in milliseconds. The floor on a subscription period — a period of a few seconds turns
 /// renewal into a griefing tool and makes the price list meaningless.
-const MIN_PERIOD_MS: u64 = 24 * 60 * 60 * 1000;
+const MIN_PERIOD_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
 /// Roughly ten years. The ceiling on a period, so a fat-fingered value cannot sell a
 /// subscription that outlives the platform.
@@ -105,6 +105,15 @@ const ESubscriptionVaultMismatch: u64 = 15;
 const EEmptyName: u64 = 16;
 /// `migrate` was called when the stored version already matches the package.
 const ENotUpgraded: u64 = 17;
+
+/// A tier term that is not a whole number of Seal content periods.
+///
+/// Access is released in fixed 30-day quanta by `entitlement::seal_approve_subscription`, while
+/// tier terms used to be free-form from one day to ten years. A one-day tier bought in the 24
+/// hours before a period boundary satisfied both of that function's time checks and released the
+/// whole next 30-day period — thirty days of content for one day of payment — while the same tier
+/// bought at any other time released nothing at all. The two models now agree by construction.
+const EPeriodNotWholeSealPeriods: u64 = 18;
 
 // === Types ===
 
@@ -355,6 +364,7 @@ public fun add_tier<T>(
     assert!(name.as_bytes().length() > 0, EEmptyName);
     assert!(price > 0, EZeroPrice);
     assert!(period_ms >= MIN_PERIOD_MS && period_ms <= MAX_PERIOD_MS, EBadPeriod);
+    assert!(period_ms % entitlement::seal_period_ms() == 0, EPeriodNotWholeSealPeriods);
 
     vault.tiers.push_back(Tier { name, price, period_ms, active: true });
     event::emit(TiersUpdated { vault: object::id(vault), tier_count: vault.tiers.length() });
@@ -379,6 +389,7 @@ public fun update_tier<T>(
     assert!(index < vault.tiers.length(), ENoSuchTier);
     assert!(price > 0, EZeroPrice);
     assert!(period_ms >= MIN_PERIOD_MS && period_ms <= MAX_PERIOD_MS, EBadPeriod);
+    assert!(period_ms % entitlement::seal_period_ms() == 0, EPeriodNotWholeSealPeriods);
 
     let tier = &mut vault.tiers[index];
     tier.price = price;

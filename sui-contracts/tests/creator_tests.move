@@ -711,3 +711,56 @@ fun a_creator_cannot_claim_more_than_they_earned() {
     clock::destroy_for_testing(clock);
     sc.end();
 }
+
+// === Tier terms must be whole Seal content periods ===
+//
+// Access is released in fixed 30-day quanta by `entitlement::seal_approve_subscription`, but tier
+// terms were free-form. A one-day tier bought in the 24 hours before a period boundary satisfied
+// both of that function's time checks and released the entire next 30-day period — thirty days of
+// content for one day of payment — while the same tier bought at any other moment released
+// nothing. Sold monthly, charged daily. These three tests pin the two models together.
+
+#[test]
+/// The guard is the whole finding: a term that is not a whole number of periods is refused.
+#[expected_failure(abort_code = projectx_social::creator::EPeriodNotWholeSealPeriods)]
+fun a_tier_term_that_is_not_whole_periods_is_refused() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    // Six weeks: longer than a period, but not a multiple of one.
+    creator::add_tier(&mut vault, &cap, b"Six weeks".to_string(), 1_000, MONTH_MS + 12 * DAY_MS);
+    sc.return_to_sender(cap);
+    ts::return_shared(vault);
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+#[test]
+/// Multi-period terms stay legal — the fix constrains the shape, not the length.
+fun a_multi_period_tier_term_is_accepted() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::add_tier(&mut vault, &cap, b"Quarterly".to_string(), 3_000, 3 * MONTH_MS);
+        creator::add_tier(&mut vault, &cap, b"Annual".to_string(), 12_000, 12 * MONTH_MS);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+#[test]
+/// A drift test. `creator` and `entitlement` must keep agreeing about how wide a period is; the
+/// original defect was precisely that they did not, and nothing failed when they diverged.
+fun the_tier_floor_is_exactly_one_seal_period() {
+    assert!(creator::min_period_ms() == entitlement::seal_period_ms(), 0);
+    assert!(creator::min_period_ms() % entitlement::seal_period_ms() == 0, 1);
+}
