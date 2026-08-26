@@ -252,7 +252,7 @@
     "v2": {
       "date": "2026-08-14",
       "reason": "Adds key_registry: a shared, on-chain registry of X25519 encryption keys for direct messages. It replaces a Postgres table which, although self-certifying (entries were signed by their owner), could still be WITHHELD by the operator — and a withheld key is indistinguishable from an address that never published one, so the sender falls back to plaintext with nothing looking wrong. A downgrade attack with no signal.",
-      "packageId": "0xa7fd154039f77780f808c7262511a9f4a860620d57e17b58e0e2ca010e1d214d",
+      "packageId": "0xfa7eb18bbb29b047ec86434e8a8f4cfba35615bde9680eebd781a187ca3a3694",
       "upgradeTxDigest": "7GmmGJpYYAeWH1EZqPwbYpCoSQ5a26M6EurwSVizE1L4",
       "gasSpentMist": 183905740,
       "modulesAdded": [
