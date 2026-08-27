@@ -242,11 +242,16 @@ describe('the rebate accumulator mirrors the contract', () => {
     */
     const source = moveSource('stake_vault');
     expect(source).toMatch(
-      /let entitled = \(\(position\.principal as u128\) \* vault\.acc_rebate_per_unit\) \/ ACC_SCALE;\s*position\.pending \+ \(\(entitled - position\.rebate_debt\) as u64\)/,
+      /let debt = position\.rebate_debt \+ carried;\s*let entitled = \(\(eligible as u128\) \* vault\.acc_rebate_per_unit\) \/ ACC_SCALE;\s*if \(entitled <= debt\) position\.pending else position\.pending \+ \(\(entitled - debt\) as u64\)/,
     );
     const position = { principalMist: 7_000_000_000n, pendingRebateMist: 3n, rebateDebt: 5n };
     const acc = 123_456_789n;
     const entitled = (position.principalMist * acc) / ACC_SCALE;
     expect(claimableRebateMist(position, acc)).toBe(position.pendingRebateMist + (entitled - position.rebateDebt));
+    // The clamp the contract applies when entitlement has not yet caught up to the debt: pending
+    // comes back untouched rather than reduced by a negative difference.
+    expect(
+      claimableRebateMist({ principalMist: 0n, pendingRebateMist: 3n, rebateDebt: 5n }, acc),
+    ).toBe(3n);
   });
 });

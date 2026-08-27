@@ -55,7 +55,7 @@ describe('the tier bounds the client mirrors', () => {
     expect(Number(max)).toBe(16);
     // Written as arithmetic in Move — evaluated rather than pattern-matched, so reformatting the
     // expression does not fail the test while changing the value silently would.
-    expect(eval(min!.replace(/_/g, ''))).toBe(24 * 60 * 60 * 1000);
+    expect(eval(min!.replace(/_/g, ''))).toBe(30 * 24 * 60 * 60 * 1000);
     expect(eval(maxPeriod!.replace(/_/g, ''))).toBe(3650 * 24 * 60 * 60 * 1000);
   });
 

@@ -370,10 +370,16 @@ export const ACC_SCALE = 1_000_000_000_000n;
  * has raised `acc_rebate_per_unit` without touching their entry, so `pending` alone understates
  * what they are owed by exactly `principal * (acc - acc_at_last_touch) / ACC_SCALE`. The contract
  * keeps `rebate_debt` so that difference is one subtraction. Same arithmetic, same integer
- * division, so this agrees with the contract to the MIST.
+ * division, same clamp when `entitled` has not yet caught up to the debt, so this agrees with the
+ * contract to the MIST.
+ *
+ * This is the settled-position path of `claimable_rebate` — the contract additionally discounts a
+ * `Fresh` deposit made since the last harvest, which lives in a dynamic field this decoder does
+ * not read. For such a position this can overstate until the next harvest settles it.
  */
 export function claimableRebateMist(position: StakePosition, accRebatePerUnit: bigint): bigint {
   const entitled = (position.principalMist * accRebatePerUnit) / ACC_SCALE;
+  if (entitled <= position.rebateDebt) return position.pendingRebateMist;
   return position.pendingRebateMist + (entitled - position.rebateDebt);
 }
 
