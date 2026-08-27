@@ -149,6 +149,23 @@ jobs:
 
       - run: sui --version
 
+      # The deployed-drift tripwire: weir v3 is live on mainnet, and source that stops building
+      # to the recorded package digest fails here, on the pull request, instead of during an
+      # upgrade ceremony. Updating ci-expected-digest is a deliberate act that rides an
+      # intended upgrade commit.
+      - name: Digest guard
+        working-directory: sui-contracts
+        run: |
+          EXPECTED="$(tr -d '[:space:]' < ci-expected-digest)"
+          ACTUAL="$(sui move build --dump-bytecode-as-base64 2>/dev/null | python3 -c "import json,sys; print(bytes(json.load(sys.stdin)['digest']).hex())")"
+          if [ "$ACTUAL" = "$EXPECTED" ]; then
+            echo "digest-guard: OK ($ACTUAL)"
+          else
+            echo "digest-guard: MISMATCH — expected $EXPECTED, built $ACTUAL"
+            echo "If this is a deliberate upgrade, update ci-expected-digest in this commit."
+            exit 1
+          fi
+
       - name: Move tests
         working-directory: sui-contracts
         run: sui move test
