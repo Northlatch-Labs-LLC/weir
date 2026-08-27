@@ -157,7 +157,20 @@ jobs:
         working-directory: sui-contracts
         run: |
           EXPECTED="$(tr -d '[:space:]' < ci-expected-digest)"
-          ACTUAL="$(sui move build --dump-bytecode-as-base64 2>/dev/null | python3 -c "import json,sys; print(bytes(json.load(sys.stdin)['digest']).hex())")"
+          # Surface the compiler's own failure instead of feeding python an empty
+          # stream, and parse from the first JSON brace: on a cold runner the
+          # compiler prefixes stdout with dependency-fetch lines before the JSON.
+          if ! sui move build --dump-bytecode-as-base64 >build-out.json 2>build-err.log; then
+            echo "digest-guard: sui move build FAILED — stderr follows"
+            cat build-err.log
+            exit 1
+          fi
+          ACTUAL="$(python3 -c "import json,sys; raw=sys.stdin.read(); print(bytes(json.JSONDecoder().raw_decode(raw[raw.index('{'):])[0]['digest']).hex())" < build-out.json || true)"
+          if [ -z "$ACTUAL" ]; then
+            echo "digest-guard: no JSON object in build output — head follows"
+            head -c 400 build-out.json
+            exit 1
+          fi
           if [ "$ACTUAL" = "$EXPECTED" ]; then
             echo "digest-guard: OK ($ACTUAL)"
           else
