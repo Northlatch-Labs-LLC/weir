@@ -764,3 +764,125 @@ fun the_tier_floor_is_exactly_one_seal_period() {
     assert!(creator::min_period_ms() == entitlement::seal_period_ms(), 0);
     assert!(creator::min_period_ms() % entitlement::seal_period_ms() == 0, 1);
 }
+
+#[test]
+#[expected_failure(abort_code = projectx_social::creator::ETierInactive)]
+/// A tier the creator has retired must refuse new subscriptions.
+fun a_retired_tier_cannot_be_subscribed_to() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+
+    sc.next_tx(CREATOR);
+    {
+        let mut platform = sc.take_shared<Platform>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+        let (cap, change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+        transfer::public_transfer(cap, CREATOR);
+        coin::burn_for_testing(change);
+        sc.return_to_sender(acct);
+        ts::return_shared(platform);
+    };
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::add_tier(&mut vault, &cap, b"Monthly".to_string(), 10_000_000, MONTH_MS);
+        // Retire the tier.
+        creator::update_tier(&mut vault, &cap, 0, 10_000_000, MONTH_MS, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+
+    sc.next_tx(FAN);
+    {
+        let platform = sc.take_shared<Platform>();
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+        let change = creator::subscribe(&platform, &mut vault, &acct, 0, payment, &clock, sc.ctx());
+        coin::burn_for_testing(change);
+        sc.return_to_sender(acct);
+        ts::return_shared(vault);
+        ts::return_shared(platform);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENotAccepting)]
+/// A vault that has stopped accepting payments must refuse new ones.
+fun a_vault_that_has_stopped_accepting_refuses_new_payments() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+
+    sc.next_tx(CREATOR);
+    {
+        let mut platform = sc.take_shared<Platform>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+        let (cap, change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+        transfer::public_transfer(cap, CREATOR);
+        coin::burn_for_testing(change);
+        sc.return_to_sender(acct);
+        ts::return_shared(platform);
+    };
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::add_tier(&mut vault, &cap, b"Monthly".to_string(), 10_000_000, MONTH_MS);
+        // Stop accepting payments.
+        creator::set_accepting(&mut vault, &cap, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+
+    sc.next_tx(FAN);
+    {
+        let platform = sc.take_shared<Platform>();
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+        let change = creator::subscribe(&platform, &mut vault, &acct, 0, payment, &clock, sc.ctx());
+        coin::burn_for_testing(change);
+        sc.return_to_sender(acct);
+        ts::return_shared(vault);
+        ts::return_shared(platform);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = projectx_social::creator::EZeroPrice)]
+/// A tier with a zero price must be refused — a free tier is a free subscription to everything.
+fun a_tier_with_a_zero_price_is_refused() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+
+    sc.next_tx(CREATOR);
+    {
+        let mut platform = sc.take_shared<Platform>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+        let (cap, change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+        transfer::public_transfer(cap, CREATOR);
+        coin::burn_for_testing(change);
+        sc.return_to_sender(acct);
+        ts::return_shared(platform);
+    };
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::add_tier(&mut vault, &cap, b"Free".to_string(), 0, MONTH_MS);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}

@@ -178,6 +178,101 @@ mutate "rebate re-baseline skipped" sources/stake_vault.move \
   's|        resync_debt_on(position, acc, eligible_after);||' \
   "a depositor accrues rebate only from the moment they deposit"
 
+# --- Expansion set from data-room doc 13 (2026-08-27): 23 further load-bearing
+# --- invariants. Patterns source-verified before installation; survivors are findings.
+
+mutate "referral ceiling removed" sources/platform.move \
+  's|    assert!(referral_share_bps <= MAX_REFERRAL_SHARE_BPS, EFeeAboveCeiling);||' \
+  "the referral share ceiling bounds what PlatformCap may set"
+
+mutate "treasury sweep guard removed" sources/platform.move \
+  's|    assert!(platform.treasury.value() >= amount_mist, EInsufficientTreasury);||' \
+  "the treasury cannot sweep more than it holds"
+
+mutate "migrate version guard removed" sources/platform.move \
+  's|    assert!(platform.version < VERSION, ENotUpgraded);||' \
+  "migrate refuses a platform already at the current version"
+
+mutate "creation fee underpayment guard removed" sources/platform.move \
+  's|    assert!(payment.value() >= due, EInsufficientFee);||' \
+  "underpaying the creation fee aborts"
+
+mutate "creation paused check removed" sources/platform.move \
+  's|    assert!(!platform.creation_paused, ECreationPaused);||' \
+  "no vault or account can be opened while creation is paused"
+
+mutate "payments paused check removed" sources/platform.move \
+  's|    assert!(!platform.payments_paused, EPaymentsPaused);||' \
+  "the payments pause switch blocks new payments"
+
+mutate "handle length bounds removed" sources/account.move \
+  's|    assert!(len >= MIN_HANDLE_LEN \&\& len <= MAX_HANDLE_LEN, EHandleLength);||' \
+  "a handle must be within the compiled length bounds"
+
+mutate "duplicate handle guard removed" sources/account.move \
+  's|    assert!(!registry.by_handle.contains(handle), EHandleTaken);||' \
+  "two accounts cannot share a handle"
+
+mutate "self-referral guard removed" sources/account.move \
+  's|    assert!(\*referrer.borrow() != owner, ESelfReferral);||' \
+  "a referrer must not be the account being opened"
+
+mutate "inactive tier guard removed" sources/creator.move \
+  's|    assert!(tier.active, ETierInactive);||' \
+  "a retired tier cannot be subscribed to"
+
+mutate "seal period alignment guard removed" sources/creator.move \
+  's|    assert!(period_ms % entitlement::seal_period_ms() == 0, EPeriodNotWholeSealPeriods);||' \
+  "a tier term must be a whole number of seal periods"
+
+mutate "vault accepting check removed" sources/creator.move \
+  's|    assert!(vault.accepting, ENotAccepting);||' \
+  "a vault that has stopped accepting payments refuses new ones"
+
+mutate "zero price guard removed (add_tier)" sources/creator.move \
+  's|    assert!(price > 0, EZeroPrice);| |' \
+  "a tier with a zero price is refused"
+
+mutate "insufficient payment guard removed" sources/creator.move \
+  's|    assert!(payment.value() >= price, EInsufficientPayment);||' \
+  "underpaying a purchase aborts rather than silently crediting less"
+
+mutate "seal unlock tag flipped to subscription tag" sources/entitlement.move \
+  's|const SEAL_UNLOCK: u8 = 0;|const SEAL_UNLOCK: u8 = 1;|' \
+  "an unlock identity must not collide with a subscription identity"
+
+mutate "unlock holder check removed" sources/entitlement.move \
+  's|    assert!(unlock.buyer == ctx.sender(), ENotHolder);||' \
+  "an unlock may only be used by its buyer"
+
+mutate "subscription expiry check removed from assert_subscribed" sources/entitlement.move \
+  's|    assert!(clock.timestamp_ms() < subscription.expires_at_ms, EExpired);||' \
+  "a lapsed subscription does not authenticate"
+
+mutate "rung size min stake floor removed" sources/stake_ladder.move \
+  's|    if (even < MIN_STAKE_MIST) MIN_STAKE_MIST |    even |' \
+  "a rung below the minimum stake is refused"
+
+mutate "max tranches cap removed" sources/stake_ladder.move \
+  's|    if (tranches.length() >= MAX_TRANCHES) return 0;||' \
+  "the tranche cap prevents unbounded gas cost in harvest"
+
+mutate "available-exceeds-liquid assertion removed" sources/stake_ladder.move \
+  's|    assert!(available <= liquid.value(), EAvailableExceedsLiquid);||' \
+  "a caller cannot claim more spendable balance than the liquid buffer holds"
+
+mutate "min deposit guard removed" sources/stake_vault.move \
+  's|    assert!(amount >= MIN_DEPOSIT_MIST, EDepositTooSmall);||' \
+  "a deposit below the minimum is refused"
+
+mutate "rebate max guard removed" sources/stake_vault.move \
+  's|    assert!(rebate_bps <= BPS_DENOMINATOR, ERebateAboveMax);||' \
+  "a rebate above 100% of the creator's post-fee share is refused"
+
+mutate "vault version check removed from deposit" sources/stake_vault.move \
+  's|    assert_version(vault);||' \
+  "every entry point checks the vault version before mutating"
+
 restore
 
 echo

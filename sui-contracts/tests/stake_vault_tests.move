@@ -635,3 +635,20 @@ fun the_platform_door_refuses_a_vault_already_at_version() {
     ts::return_shared(v);
     sc.end();
 }
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::ERebateAboveMax)]
+/// A rebate share above 100% of the creator's post-fee yield must be refused.
+fun a_rebate_above_one_hundred_percent_is_refused() {
+    let mut sc = setup();
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        // 10_001 bps is above the 10_000 bps ceiling.
+        sv::set_rebate_bps(&mut v, &cap, 10_001);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}

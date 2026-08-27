@@ -410,3 +410,31 @@ fun periods_partition_time_at_a_fixed_width() {
 
     ts::end(scenario);
 }
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::EExpired)]
+/// `assert_subscribed` must refuse a subscription whose expiry has passed.
+fun assert_subscribed_refuses_an_expired_subscription() {
+    // The expiry check in `assert_subscribed` is a separate code path from the period checks
+    // in `seal_approve_subscription` — both must be covered.
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 0);
+
+    // A subscription covering period 0.
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let subscription = ts::take_from_sender<Subscription>(&scenario);
+    // Clock at PERIOD_MS + 1 ms: the subscription expired at PERIOD_MS.
+    let mut later = clock_at(&mut scenario, PERIOD_MS + 1);
+    entitlement::assert_subscribed(
+        &subscription,
+        vault,
+        FAN,
+        &later,
+    );
+    abort 0
+}
