@@ -175,7 +175,7 @@ mutate "emergency unwind removed" sources/stake_vault.move \
 # --- Rebate accounting. Skipping the re-baseline pays a new depositor for yield earned before
 # --- they arrived, at the expense of the depositors who actually earned it.
 mutate "rebate re-baseline skipped" sources/stake_vault.move \
-  's|    resync_debt(position, acc);||' \
+  's|        resync_debt_on(position, acc, eligible_after);||' \
   "a depositor accrues rebate only from the moment they deposit"
 
 restore
