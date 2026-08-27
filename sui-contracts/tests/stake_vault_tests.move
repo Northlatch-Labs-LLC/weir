@@ -652,3 +652,99 @@ fun a_rebate_above_one_hundred_percent_is_refused() {
     };
     sc.end();
 }
+
+// === Adversarial sequences ===
+//
+// `a_deposit_does_not_earn_the_harvest_it_walks_into` proves the one known timing attack;
+// these drive the class — adversarially timed sequences trying to beat an honest holder.
+
+fun set_full_rebate(sc: &mut Scenario) {
+    sc.next_tx(CREATOR);
+    let mut v = sc.take_shared<StakeVault>();
+    let cap = sc.take_from_sender<StakeCap>();
+    sv::set_rebate_bps(&mut v, &cap, 10_000);
+    sc.return_to_sender(cap);
+    ts::return_shared(v);
+}
+
+fun withdraw_exact(sc: &mut Scenario, who: address, amount: u64) {
+    sc.next_tx(who);
+    let mut v = sc.take_shared<StakeVault>();
+    let mut state = sc.take_shared<SuiSystemState>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let out = sv::withdraw(&mut v, &acct, amount, &mut state, sc.ctx());
+    assert!(out.value() == amount, 99);
+    coin::burn_for_testing(out);
+    sc.return_to_sender(acct);
+    ts::return_shared(state);
+    ts::return_shared(v);
+}
+
+#[test]
+/// Churning the same principal in and out around harvests must never out-earn holding it.
+///
+/// The holder commits once, before anyone else, and waits. The churner deposits the same
+/// amount immediately before each harvest and withdraws immediately after, three cycles in a
+/// row — the rational strategy if timing could beat commitment. Every epoch the churner is
+/// present the holder is present too, and the holder is also there for the opening harvest the
+/// churner missed, so the holder must end strictly ahead.
+fun churning_around_harvests_beats_nobody() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);                      // the holder's head start, earned alone
+
+    let mut cycle = 0;
+    while (cycle < 3) {
+        deposit(&mut sc, FAN2, 100 * SUI_1);
+        harvest(&mut sc);
+        advance_to_maturity(&mut sc);
+        harvest(&mut sc);
+        withdraw_exact(&mut sc, FAN2, 100 * SUI_1);
+        cycle = cycle + 1;
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        let holder = sv::claimable_rebate(&v, FAN);
+        let churner = sv::claimable_rebate(&v, FAN2);
+        assert!(holder > 0, 0);
+        assert!(churner < holder, 1);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+/// A second claim in the same state takes nothing. The guard is accounting, not an abort: the
+/// first claim zeroes `pending`, so the second returns an empty coin rather than a double
+/// payment — and the pool balance is untouched by the repeat.
+fun a_second_claim_in_the_same_state_takes_nothing() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let first = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(first.value() > 0, 0);
+        let pool_after_first = sv::rebate_pool_value(&v);
+        let second = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(second.value() == 0, 1);
+        assert!(sv::rebate_pool_value(&v) == pool_after_first, 2);
+        coin::burn_for_testing(first);
+        coin::destroy_zero(second);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
