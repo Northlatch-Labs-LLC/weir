@@ -26,7 +26,7 @@
  * only that the code does what it does.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { generateKeyPairSync, sign as nodeSign, type KeyObject } from 'node:crypto';
 import { createLocalJWKSet, exportJWK } from 'jose';
@@ -290,10 +290,13 @@ describe('Google’s two issuer spellings must reach one address', () => {
   });
 
   it('normaliseIssuer still matches the SDK’s own implementation', () => {
+    // Resolved through the node_modules symlink, never a version-pinned store path: this
+    // test exists to catch the SDK changing behavior, and a hardcoded version made it fail
+    // on every dependency bump for the wrong reason — file-not-found instead of drift.
     const sdk = readFileSync(
       resolve(
-        import.meta.dirname,
-        '../../../node_modules/.pnpm/@mysten+sui@2.24.0_typescript@7.0.2/node_modules/@mysten/sui/dist/zklogin/utils.mjs',
+        realpathSync(resolve(import.meta.dirname, '../node_modules/@mysten/sui')),
+        'dist/zklogin/utils.mjs',
       ),
       'utf8',
     );
