@@ -21,7 +21,7 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # This is a pnpm workspace; the Vercel CLI shells out to pnpm during the
       # build and fails with ENOENT if it is not on PATH first. The version is

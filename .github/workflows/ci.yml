@@ -56,7 +56,7 @@ jobs:
       PROJECTX_TEST_DATABASE_URL: postgres://postgres:ci@localhost:5432/projectx_social_test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # No `version` here on purpose. The root package.json pins pnpm with an integrity hash, and
       # the action reads it from there — naming it twice makes the action refuse outright, and the
@@ -131,7 +131,7 @@ jobs:
     name: Move tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Pinned to the version the contracts were published and tested with. A floating toolchain
       # means a framework revision can change what compiles without a line of this repository
