@@ -175,6 +175,6 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
         waitlistInsertFailed: error instanceof Error ? error.message : String(error),
       }),
     );
-    return NextResponse.json({ error: 'waitlist-store-failed' }, { status: 502 });
+    return NextResponse.json({ error: 'waitlist-store-failed' }, { status: 424 });
   }
 }

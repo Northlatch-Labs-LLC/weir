@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     (failure) =>
       NextResponse.json(
         { error: failure.detail, kind: failure.kind },
-        { status: failure.kind === 'unconfigured' ? 503 : failure.kind === 'transport' ? 502 : 400 },
+        { status: failure.kind === 'unconfigured' ? 503 : failure.kind === 'transport' ? 424 : 400 },
       ),
   );
 }

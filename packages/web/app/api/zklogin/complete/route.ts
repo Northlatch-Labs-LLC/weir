@@ -106,7 +106,7 @@ export async function POST(request: Request) {
   if (!proof.ok) {
     return NextResponse.json(
       { error: proof.failure.detail, kind: proof.failure.kind },
-      { status: 502 },
+      { status: 424 },
     );
   }
 
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   if (!checked.ok) {
     return NextResponse.json(
       { error: checked.failure.detail, kind: checked.failure.kind },
-      { status: 502 },
+      { status: 424 },
     );
   }
 

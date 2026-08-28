@@ -40,7 +40,7 @@ export async function GET(request: Request): Promise<Response> {
     return fold<Array<{ capId: string; vaultId: string }>, NextResponse>(
       await findStakeCaps(owner),
       (found) => NextResponse.json({ stakeCaps: found }),
-      (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 502 }),
+      (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 424 }),
     );
   }
 
@@ -70,13 +70,13 @@ export async function GET(request: Request): Promise<Response> {
                   pendingRebateMist: position.pendingRebateMist.toString(),
                 },
         }),
-      (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 502 }),
+      (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 424 }),
     );
   }
 
   return fold<StakeVaultView, NextResponse>(
     await readVault(vault),
     (v) => NextResponse.json({ vault: serialise(v) }),
-    (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 502 }),
+    (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 424 }),
   );
 }

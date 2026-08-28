@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   if (!vault.ok) {
     return NextResponse.json(
       { error: `the vault could not be read: ${vault.failure.detail}` },
-      { status: 502 },
+      { status: 424 },
     );
   }
   /*
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
   const handle = await accountHandle(b.owner);
   if (!handle.ok) {
-    return NextResponse.json({ error: handle.failure.detail }, { status: 502 });
+    return NextResponse.json({ error: handle.failure.detail }, { status: 424 });
   }
   if (handle.value === null) {
     return NextResponse.json(

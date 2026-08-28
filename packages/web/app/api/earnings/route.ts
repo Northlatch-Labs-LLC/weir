@@ -48,6 +48,6 @@ export async function GET(request: Request) {
           capId: v.capId,
         })),
       }),
-    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 502 }),
+    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 424 }),
   );
 }

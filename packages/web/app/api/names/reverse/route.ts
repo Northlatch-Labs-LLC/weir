@@ -27,6 +27,6 @@ export async function GET(request: Request) {
   return fold<string | null, NextResponse>(
     await reverseName(address),
     (name) => NextResponse.json({ name }),
-    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 502 }),
+    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 424 }),
   );
 }

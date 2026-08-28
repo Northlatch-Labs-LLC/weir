@@ -119,7 +119,7 @@ export async function GET(
   */
   const read = await readAsset(record);
   if (!read.ok) {
-    return new Response('this media could not be retrieved from storage', { status: 502 });
+    return new Response('this media could not be retrieved from storage', { status: 424 });
   }
   const bytes = read.value;
 

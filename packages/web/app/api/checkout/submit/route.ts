@@ -25,6 +25,6 @@ export async function POST(request: Request) {
   return fold<string, NextResponse>(
     result,
     (digest) => NextResponse.json({ digest }),
-    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 502 }),
+    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 424 }),
   );
 }

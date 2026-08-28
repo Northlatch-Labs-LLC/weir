@@ -38,6 +38,6 @@ export async function GET(request: Request) {
         unlocks: p.unlocks.map((u) => ({ ...u, pricePaid: u.pricePaid.toString() })),
         truncated: p.truncated,
       }),
-    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 502 }),
+    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 424 }),
   );
 }

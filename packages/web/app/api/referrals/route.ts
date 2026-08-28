@@ -21,6 +21,6 @@ export async function GET(request: Request) {
   return fold<ReferralEarnings, NextResponse>(
     await readReferrals(address),
     (r) => NextResponse.json({ ...r, earned: r.earned.toString() }),
-    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 502 }),
+    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 424 }),
   );
 }
