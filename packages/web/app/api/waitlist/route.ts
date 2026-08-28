@@ -42,9 +42,10 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
 
     `db()` throws when the connection string is unset, and that throw is indistinguishable at the
     catch site from a database that is simply down. Checking here separates "this deployment has no
-    list" — a calm, permanent 503 the form explains — from "the write failed", which is a 502 and
-    worth retrying. Collapsing them would tell a visitor to try again forever on a deployment that
-    was never configured.
+    list" — a calm, permanent 503 the form explains — from "the write failed", which is a 424 and
+    worth retrying. (424 rather than 502: the edge replaces 502 bodies with its own HTML page, so
+    the honest message would never reach the browser.) Collapsing them would tell a visitor to try
+    again forever on a deployment that was never configured.
   */
   const configured = (process.env['PROJECTX_DATABASE_URL'] ?? '').trim() !== '';
   if (!configured) {

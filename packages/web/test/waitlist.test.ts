@@ -107,7 +107,10 @@ describe('the route never turns a failure into a success', () => {
     const created = route.match(/status:\s*201/g) ?? [];
     expect(created).toHaveLength(2);
 
-    for (const status of ['400', '422', '502', '503']) {
+    // 424 rather than 502 for the failed write: the edge in front of this deployment
+    // replaces 502 bodies with its own HTML error page, which the browser then fails to
+    // parse as JSON — 424 carries the route's honest message through untouched.
+    for (const status of ['400', '422', '424', '503']) {
       expect(route, `status ${status} is unreachable`).toContain(`status: ${status}`);
     }
   });
