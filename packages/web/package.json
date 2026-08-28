@@ -13,16 +13,16 @@
     "verify:zklogin": "tsx --tsconfig tsconfig.scripts.json scripts/verify-zklogin.ts"
   },
   "dependencies": {
-    "@mysten/sui": "2.24.0",
+    "@mysten/sui": "2.26.2",
     "@mysten/suins": "^1.2.14",
-    "@mysten/wallet-standard": "0.21.14",
+    "@mysten/wallet-standard": "0.21.18",
     "@noble/ciphers": "2.3.0",
     "@noble/curves": "2.3.0",
     "@noble/hashes": "2.3.0",
     "@projectx-social/sdk": "workspace:*",
-    "@types/pg": "8.21.0",
-    "jose": "^6.2.9",
-    "next": "16.3.1",
+    "@types/pg": "8.23.1",
+    "jose": "^6.2.10",
+    "next": "16.3.3",
     "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -33,8 +33,8 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
-    "happy-dom": "^20.11.2",
+    "@types/react-dom": "19.2.5",
+    "happy-dom": "^20.11.6",
     "tailwindcss": "^4"
   }
 }
