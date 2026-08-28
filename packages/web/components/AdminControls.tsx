@@ -68,18 +68,45 @@ export function AdminControls({
 
   const { signer } = useSigner();
 
+  /**
+   * Fetch that survives the edge. Both admin routes do fullnode work, and the platform in front of
+   * this deployment answers a slow upstream with an HTML error page — which `response.json()` used
+   * to surface verbatim as "Unexpected token '<'", reading like a broken console to the one person
+   * it must never fail. So: parse from text, and when the answer is not JSON (or is a 5xx), wait a
+   * beat and try again. Both calls are safe to repeat — prepare only simulates, and submit carries
+   * an already-signed transaction the chain will accept exactly once no matter how often it hears
+   * it. Three attempts, then an honest sentence instead of a stack trace.
+   */
+  async function fetchJson(url: string, init: RequestInit): Promise<Record<string, unknown>> {
+    let lastFailure = 'the server did not answer';
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const response = await fetch(url, init);
+        const text = await response.text();
+        try {
+          return JSON.parse(text) as Record<string, unknown>;
+        } catch {
+          lastFailure = `the network in front of the server hiccupped (status ${response.status})`;
+        }
+      } catch (cause) {
+        lastFailure = cause instanceof Error ? cause.message : String(cause);
+      }
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+    }
+    throw new Error(`${lastFailure} — tried three times; wait a moment and press once more`);
+  }
+
   async function prepare(action: Action) {
     setBusy(true);
     setError(null);
     setQuote(null);
     setDigest(null);
     try {
-      const response = await fetch('/api/admin/prepare', {
+      const body = (await fetchJson('/api/admin/prepare', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sender: address, action }),
-      });
-      const body = (await response.json()) as { quote?: Quote; error?: string };
+      })) as { quote?: Quote; error?: string };
       if (body.quote === undefined) setError(body.error ?? 'the transaction could not be prepared');
       else setQuote(body.quote);
     } catch (cause) {
@@ -94,14 +121,14 @@ export function AdminControls({
     setBusy(true);
     setError(null);
     try {
+      // Sign once; the retries below resend the same signed bytes, never a new signature.
       const signature = await signer.signTransaction(quote.bytes);
-      const response = await fetch('/api/checkout/submit', {
+      const body = (await fetchJson('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         // The bytes that were simulated, unchanged.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
-      });
-      const body = (await response.json()) as { digest?: string; error?: string };
+      })) as { digest?: string; error?: string };
       if (body.digest === undefined) setError(body.error ?? 'the transaction was not accepted');
       else setDigest(body.digest);
     } catch (cause) {
