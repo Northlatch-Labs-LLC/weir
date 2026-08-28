@@ -392,7 +392,7 @@ function quoteDigest(bytes: string): Buffer {
  * cannot forget: forgetting makes its own quotes unsubmittable, which fails loudly in development
  * rather than silently widening what the relay accepts.
  */
-async function rememberQuote(bytes: string): Promise<string> {
+export async function rememberQuote(bytes: string): Promise<string> {
   await db().query(
     `INSERT INTO issued_quotes (digest, expires_at_ms)
      VALUES ($1, $2)

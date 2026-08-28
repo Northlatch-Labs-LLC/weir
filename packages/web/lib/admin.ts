@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { rememberQuote } from './checkout';
 
 /**
  * Who may operate this platform, and what the platform currently says.
@@ -400,7 +401,10 @@ export async function prepareAdminAction(input: {
 
     return ok(
       {
-        bytes: Buffer.from(bytes).toString('base64'),
+        // Registered in issued_quotes like every quote that leaves checkout.ts — the submit
+        // relay refuses unregistered bytes, and this module forgot, which made every
+        // admin-prepared transaction structurally unsubmittable through the console.
+        bytes: await rememberQuote(Buffer.from(bytes).toString('base64')),
         gasMist: (at('computationCost') + at('storageCost') - at('storageRebate')).toString(),
         summary: describe(input.action),
       },
