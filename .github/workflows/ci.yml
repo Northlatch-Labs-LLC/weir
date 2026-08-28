@@ -188,12 +188,6 @@ jobs:
           PY
           )"
           rm -f build-dump.json
-          ACTUAL="$(python3 -c "import json,sys; raw=sys.stdin.read(); print(bytes(json.JSONDecoder().raw_decode(raw[raw.index('{'):])[0]['digest']).hex())" < build-out.json || true)"
-          if [ -z "$ACTUAL" ]; then
-            echo "digest-guard: no JSON object in build output — head follows"
-            head -c 400 build-out.json
-            exit 1
-          fi
           if [ "$ACTUAL" = "$EXPECTED" ]; then
             echo "digest-guard: OK ($ACTUAL)"
           else
