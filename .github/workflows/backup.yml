@@ -94,7 +94,7 @@ jobs:
           done
           echo "All six tables present."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: content-store-backup
           path: backup-*.dump
