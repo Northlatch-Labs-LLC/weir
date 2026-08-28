@@ -1,0 +1,42 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# The robot that watches the shelves.
+#
+# Two jobs, both free on a private repository:
+#
+#   - npm: reads the pnpm lockfile at the root and opens a pull request when a dependency
+#     falls behind — grouped, so a quiet week is one PR of minor bumps, not eleven. Security
+#     bumps arrive individually and immediately, outside the group, because a patched
+#     vulnerability should not wait for Monday.
+#   - github-actions: the workflows themselves pin actions; those go stale too.
+#
+# What this file deliberately does NOT buy: CodeQL code scanning, which on a private
+# repository requires paid GitHub Advanced Security. The desk pays for nothing; the code
+# gets reviewed by the estate's own reviewers instead.
+#
+# Move dependencies (sui-contracts) are not covered — Dependabot has no Move ecosystem.
+# The framework dependency there moves only when the packages are deliberately upgraded.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 3
