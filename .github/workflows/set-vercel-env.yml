@@ -1,0 +1,57 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+#
+# Push runtime configuration into Vercel, from the one place that already holds the deploy token.
+#
+# The application reads its on-ramp credentials at request time, so they have to live in Vercel's
+# own environment rather than in a build argument. The token that can write them is a repository
+# secret and is write-only to anybody outside CI — which is the point: this workflow is the desk's
+# hands, and the values it copies are themselves repository secrets, never committed.
+#
+# Manual dispatch only. Configuration should move when somebody decides it moves, not on a push.
+
+name: Set Vercel env
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which Vercel environment to write
+        required: true
+        default: production
+        type: choice
+        options: [production, preview]
+
+permissions:
+  contents: read
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the on-ramp configuration
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          TRANSAK_API_KEY: ${{ secrets.TRANSAK_API_KEY }}
+          TRANSAK_API_SECRET: ${{ secrets.TRANSAK_API_SECRET }}
+          TRANSAK_ENVIRONMENT: ${{ secrets.TRANSAK_ENVIRONMENT }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          api="https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true"
+          for name in TRANSAK_API_KEY TRANSAK_API_SECRET TRANSAK_ENVIRONMENT; do
+            value="${!name}"
+            if [ -z "$value" ]; then echo "::error::$name is empty — refusing to write a blank secret"; exit 1; fi
+            # `encrypted` so the value is not readable back out of the dashboard, and `upsert`
+            # so re-running this is safe rather than a duplicate-key error.
+            code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$api" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -d "$(jq -nc --arg k "$name" --arg v "$value" --arg t "$TARGET" \
+                    '{key:$k, value:$v, type:"encrypted", target:[$t]}')")
+            if [ "$code" != "200" ] && [ "$code" != "201" ]; then
+              echo "::error::$name failed with HTTP $code"; jq -r '.error.message // .' /tmp/resp.json; exit 1
+            fi
+            echo "$name → set for $TARGET"
+          done
