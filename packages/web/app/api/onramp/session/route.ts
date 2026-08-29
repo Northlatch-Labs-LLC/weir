@@ -1,7 +1,12 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
+import { fold } from '@projectx-social/sdk';
 import { rateLimit, clientKey } from '@/lib/rate-limit';
 import { createOnrampSession } from '@/lib/onramp';
+import { readSiteMode } from '@/lib/site-mode';
+import { passIsValid, passTokenFrom } from '@/lib/access-codes';
+import { provenReaderFor } from '@/lib/read-session';
+import { isSiteAdmin } from '@/lib/site-admin';
 
 /**
  * Mint a card-purchase session.
@@ -25,6 +30,33 @@ const ADDRESS = /^0x[0-9a-fA-F]{64}$/;
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
+
+  /*
+    The front-door rule, applied to this door too. `proxy.ts` leaves the API open because every
+    route on it resolves its own authority — and this one had none to resolve, which left the only
+    payment-session mint on the site answering anonymous callers while the site itself was closed.
+    While the waiting list is up, minting a session takes the same standing as walking the pages:
+    a pass from a redeemed code, or the site administrator. When the door opens, this check
+    disappears with it — the visitor who needs this route most has not signed in yet, and that
+    design (see below) stands.
+  */
+  const mode = await readSiteMode();
+  if (mode.waitlistMode) {
+    let admitted = await passIsValid(passTokenFrom(request.headers.get('cookie')));
+    if (!admitted) {
+      const viewer = fold(
+        await provenReaderFor(request),
+        (value) => value,
+        () => null,
+      );
+      admitted = await isSiteAdmin(viewer);
+    }
+    if (!admitted) {
+      // The same words the closed site gives everywhere else, and no more: which check failed is
+      // nobody's business but ours.
+      return NextResponse.json({ error: 'the site is not open yet' }, { status: 403 });
+    }
+  }
 
   let body: { walletAddress?: unknown; asset?: unknown; fiatAmount?: unknown; fiatCurrency?: unknown };
   try {
