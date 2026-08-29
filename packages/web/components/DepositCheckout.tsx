@@ -20,6 +20,7 @@
 
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
+import { AddFundsButton } from '@/components/AddFundsButton';
 import { SignIn } from '@/components/SignIn';
 
 const MIST_PER_SUI = 1_000_000_000n;
@@ -242,6 +243,16 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
           <p className="mono" style={{ fontSize: 13 }}>
             {stage.message}
           </p>
+          {signer !== null && (
+            <div style={{ marginTop: 12 }}>
+              {/*
+                Offered here because the most common reason a deposit cannot be simulated is that
+                the wallet is empty, and telling somebody "not enough balance" without a way to fix
+                it is where a supporter who wanted to help gives up.
+              */}
+              <AddFundsButton walletAddress={signer.address} asset="SUI" />
+            </div>
+          )}
         </div>
       )}
     </div>
