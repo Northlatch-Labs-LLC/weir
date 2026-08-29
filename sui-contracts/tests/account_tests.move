@@ -223,3 +223,50 @@ fun no_account_can_be_opened_while_creation_is_paused() {
     open_as(&mut sc, ALICE, b"alice", option::none());
     sc.end();
 }
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+fun a_stranger_presenting_someone_elses_account_cannot_close_it() {
+    // First survivor of the 2026-08-28 mutation sweep: deleting the owner check in
+    // `close` left the whole suite green. A SocialAccount has no store, so no on-chain
+    // path hands one to a stranger today — the scenario constructs the impossible
+    // holder deliberately, because this assert is the registry's last line if any such
+    // path ever appears, and an untested last line is the one that rots.
+    let mut sc = setup();
+    open_as(&mut sc, ALICE, b"alice", option::none());
+
+    sc.next_tx(BOB);
+    {
+        let mut registry = sc.take_shared<Registry>();
+        let acct = sc.take_from_address<SocialAccount>(ALICE);
+        account::close(&mut registry, acct, sc.ctx());
+        ts::return_shared(registry);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::EHandleMismatch)]
+fun a_registry_that_never_saw_the_handle_refuses_the_close() {
+    // Second survivor of the same sweep: the registry-drift guard. A second registry
+    // stands in for one that has drifted from the object graph — the account was opened
+    // in the first, and the second, which never saw the handle, must refuse to delete
+    // anything rather than free a handle another account may still carry.
+    let mut sc = setup();
+    open_as(&mut sc, ALICE, b"alice", option::none());
+
+    sc.next_tx(ADMIN);
+    {
+        account::init_for_testing(sc.ctx());
+    };
+
+    sc.next_tx(ALICE);
+    {
+        let drifted_id = ts::most_recent_id_shared<Registry>().destroy_some();
+        let mut drifted = sc.take_shared_by_id<Registry>(drifted_id);
+        let acct = sc.take_from_sender<SocialAccount>();
+        account::close(&mut drifted, acct, sc.ctx());
+        ts::return_shared(drifted);
+    };
+    sc.end();
+}
