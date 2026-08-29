@@ -49,6 +49,7 @@ export const MEMBER: readonly Destination[] = [
   { href: '/alerts', label: 'Alerts', icon: 'bell', section: 'Your account' },
   { href: '/purchases', label: 'Purchases', icon: 'unlock', section: 'Your account' },
   { href: '/vault', label: 'My vault', icon: 'cube', section: 'Your account' },
+  { href: '/add-funds', label: 'Add funds', icon: 'coin', section: 'Your account' },
   { href: '/referrals', label: 'Referrals', icon: 'spark', section: 'Your account' },
 ];
 
