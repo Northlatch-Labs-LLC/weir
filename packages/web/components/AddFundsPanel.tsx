@@ -16,9 +16,9 @@
 
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
+import { useOnrampDoor } from '@/components/useOnrampDoor';
 
 type Asset = 'SUI' | 'USDC';
-type State = { name: 'idle' } | { name: 'opening' } | { name: 'refused'; message: string };
 
 const AMOUNTS = [25, 50, 100] as const;
 
@@ -26,34 +26,9 @@ export function AddFundsPanel() {
   const { signer } = useSigner();
   const [asset, setAsset] = useState<Asset>('SUI');
   const [amount, setAmount] = useState<number>(25);
-  const [state, setState] = useState<State>({ name: 'idle' });
-
-  async function open() {
-    if (signer === null) return;
-    setState({ name: 'opening' });
-    // Opened before the await: a browser blocks a popup that appears after an async gap, because
-    // by then it is no longer attributable to the click.
-    const tab = window.open('', '_blank', 'noopener');
-    try {
-      const response = await fetch('/api/onramp/session', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ walletAddress: signer.address, asset, fiatAmount: amount, fiatCurrency: 'USD' }),
-      });
-      const body = (await response.json()) as { widgetUrl?: string; error?: string };
-      if (body.widgetUrl === undefined) {
-        tab?.close();
-        setState({ name: 'refused', message: body.error ?? 'the card door did not open' });
-        return;
-      }
-      if (tab === null) window.location.href = body.widgetUrl;
-      else tab.location.href = body.widgetUrl;
-      setState({ name: 'idle' });
-    } catch (error) {
-      tab?.close();
-      setState({ name: 'refused', message: error instanceof Error ? error.message : String(error) });
-    }
-  }
+  // How the tab is opened is shared with the button inside the deposit panel. It was written
+  // twice, and both copies opened a blank tab while navigating this page into the widget.
+  const { state, open } = useOnrampDoor();
 
   if (signer === null) {
     return (
@@ -110,9 +85,30 @@ export function AddFundsPanel() {
         card, and this site never holds your money.
       </p>
 
-      <button className="btn" type="button" disabled={state.name === 'opening'} onClick={() => void open()}>
+      <button
+        className="btn"
+        type="button"
+        disabled={state.name === 'opening'}
+        onClick={() =>
+          void open({ walletAddress: signer.address, asset, fiatAmount: amount, fiatCurrency: 'USD' })
+        }
+      >
         {state.name === 'opening' ? 'Opening…' : `Buy $${amount} of ${asset}`}
       </button>
+
+      {state.name === 'blocked' && (
+        <div className="note" style={{ marginTop: 'var(--space-12)' }}>
+          <span className="lbl">Your browser blocked the tab</span>
+          <p>
+            The purchase is ready and nothing has been charged.{' '}
+            {/* Opened by the person's own click, so this page stays where it is. */}
+            <a href={state.widgetUrl} target="_blank" rel="noopener noreferrer">
+              Open the payment page
+            </a>{' '}
+            — the link is single use and good for five minutes.
+          </p>
+        </div>
+      )}
 
       {state.name === 'refused' && (
         <div className="note crit" style={{ marginTop: 'var(--space-12)' }} role="alert">

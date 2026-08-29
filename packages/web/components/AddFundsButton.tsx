@@ -11,11 +11,12 @@
  *
  * The session is minted by our server on each press — single use, five-minute life — so this
  * cannot be a plain link, and a stale tab cannot hand somebody a dead door.
+ *
+ * How the tab is opened lives in `useOnrampDoor`, which the `/add-funds` page shares. It was
+ * duplicated here once, and the duplicate carried the same bug.
  */
 
-import { useState } from 'react';
-
-type State = { name: 'idle' } | { name: 'opening' } | { name: 'refused'; message: string };
+import { useOnrampDoor } from '@/components/useOnrampDoor';
 
 export function AddFundsButton({
   walletAddress,
@@ -28,44 +29,28 @@ export function AddFundsButton({
   fiatAmount?: number;
   label?: string;
 }) {
-  const [state, setState] = useState<State>({ name: 'idle' });
-
-  async function open() {
-    setState({ name: 'opening' });
-    // Opened before the await: a browser blocks a popup that appears after an async gap, because
-    // by then it is no longer attributable to the click. The tab is filled in when the session
-    // arrives, and closed if it does not.
-    const tab = window.open('', '_blank', 'noopener');
-    try {
-      const response = await fetch('/api/onramp/session', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress,
-          asset,
-          ...(fiatAmount === undefined ? {} : { fiatAmount }),
-        }),
-      });
-      const body = (await response.json()) as { widgetUrl?: string; error?: string };
-      if (body.widgetUrl === undefined) {
-        tab?.close();
-        setState({ name: 'refused', message: body.error ?? 'the card door did not open' });
-        return;
-      }
-      if (tab === null) window.location.href = body.widgetUrl;
-      else tab.location.href = body.widgetUrl;
-      setState({ name: 'idle' });
-    } catch (error) {
-      tab?.close();
-      setState({ name: 'refused', message: error instanceof Error ? error.message : String(error) });
-    }
-  }
+  const { state, open } = useOnrampDoor();
 
   return (
     <>
-      <button className="btn ghost" type="button" disabled={state.name === 'opening'} onClick={() => void open()}>
+      <button
+        className="btn ghost"
+        type="button"
+        disabled={state.name === 'opening'}
+        onClick={() => void open({ walletAddress, asset, fiatAmount })}
+      >
         {state.name === 'opening' ? 'Opening…' : (label ?? `Add ${asset} with a card`)}
       </button>
+      {state.name === 'blocked' && (
+        <p className="k" style={{ marginTop: 8 }}>
+          Your browser blocked the new tab.{' '}
+          {/* The person's own click, so nothing is blocked and this page stays where it is. */}
+          <a href={state.widgetUrl} target="_blank" rel="noopener noreferrer">
+            Open the payment page
+          </a>{' '}
+          — the link is good for five minutes.
+        </p>
+      )}
       {state.name === 'refused' && (
         <p className="k" style={{ marginTop: 8, color: 'var(--crit, #dd8172)' }}>
           {state.message}
