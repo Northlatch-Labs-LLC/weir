@@ -6,6 +6,7 @@ import { PostBody } from '@/components/PostBody';
 import { Comments } from './Comments';
 import { PostActions } from '@/components/PostActions';
 import { EntityType, type Entity } from '@/components/EntityType';
+import { SealedMedia } from '@/components/SealedMedia';
 
 /**
  * One post.
@@ -29,6 +30,7 @@ export function PostCard({
   reader?: string;
 }) {
   const initial = post.authorHandle.slice(0, 2);
+
 
   return (
     <article className="card card--railed">
@@ -103,14 +105,21 @@ export function PostCard({
             on every request; naming an address grants nothing, because the decision is made from
             objects that address owns on chain.
           */}
-          {post.assetIds.map((assetId) => (
-            <img
-              key={assetId}
-              className="post-media"
-              alt=""
-              src={`/api/media/${post.id}/${assetId}${reader === undefined ? '' : `?reader=${reader}`}`}
-            />
-          ))}
+          {post.assetIds.map((assetId) => {
+            const href = `/api/media/${post.id}/${assetId}${reader === undefined ? '' : `?reader=${reader}`}`;
+
+            /*
+              Not an `<img>`, because a sealed asset is not an image until the reader opens it.
+
+              This card is rendered inside `Creator` and `Home`, both client components, so nothing
+              here may reach `siteConfig()` or any `server-only` module — PostCard is in the browser
+              bundle whether or not it says so. `SealedMedia` therefore *asks* the server for the
+              deployment's public settings, exactly as `Footer` asks `/api/deployment` and sign-in
+              asks `/api/zklogin/session`. That is this codebase's settled answer to configuration
+              in the browser, and this is not the place to make it the exception.
+            */
+            return <SealedMedia key={assetId} className="post-media" src={href} />;
+          })}
         </div>
       )}
 

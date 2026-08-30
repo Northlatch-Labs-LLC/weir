@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { rateLimit } from '@/lib/rate-limit';
 import { readAsset, isValidAssetId } from '@/lib/media';
-import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
+import { canRead, NO_ENTITLEMENTS, readEntitlements, unlockKey } from '@/lib/entitlement';
 import { provenReaderFor } from '@/lib/read-session';
 import { findAsset, findPost } from '@/lib/content';
 import { fold } from '@projectx-social/sdk';
@@ -143,8 +143,41 @@ export async function GET(
   */
   if (read.value.kind === 'sealed') {
     const { ciphertext, wrappedKey, nonce } = read.value;
+
+    /*
+      Which entitlement was accepted, named for the browser.
+
+      `canRead` above proved the reader holds one; the key servers will demand to be shown *which*,
+      because `seal_approve_unlock` takes `&Unlock` by reference and a reader cannot present an
+      object they have not identified. That identification is a search over the reader's owned
+      objects, and it already happened — `readEntitlements` decoded every `Unlock` a moment ago to
+      answer the yes-or-no question. Sending the id costs nothing and saves the tab from repeating
+      the walk.
+
+      Only paid media reaches here sealed: `studio/upload` seals against `unlock_identity` and
+      leaves subscriber media unsealed, so `access.kind` is `paid` on this line. It is read rather
+      than assumed, and a sealed asset that is somehow not paid gets no descriptor instead of a
+      fabricated one — the browser then reports that it could not be opened, which is true, rather
+      than presenting a wrong object to a key server and reading the abort back as a paywall.
+    */
+    const unlockId =
+      post.access.kind === 'paid'
+        ? entitlements.unlockIds?.get(unlockKey(post.vaultId, post.access.contentKey))
+        : undefined;
+
+    const descriptor: Record<string, string> =
+      unlockId === undefined || post.access.kind !== 'paid'
+        ? {}
+        : {
+            'x-seal-entitlement': 'unlock',
+            'x-seal-vault': post.vaultId,
+            'x-seal-object': unlockId,
+            'x-seal-content-key': post.access.contentKey,
+          };
+
     return new Response(ciphertext as unknown as BodyInit, {
       headers: {
+        ...descriptor,
         // Not `record.contentType`. These bytes are not an image and must never be rendered as one
         // — the real type is announced separately, for after the browser has decrypted.
         'content-type': 'application/octet-stream',

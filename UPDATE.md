@@ -13,6 +13,10 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-08-30 · Seal wired end to end in the browser. The opener existed and was tested; nothing called it, so a sealed asset reached the tab as ciphertext and painted a broken image on exactly the posts readers paid for. New client component SealedMedia fetches the asset, dispatches on the response, and for sealed bytes builds a reader-signed SessionKey and recovers the key through the key server committee. readEntitlements now keeps the Unlock object id it was already decoding and discarding; the media route names it back to the browser in x-seal-* headers, because seal_approve_unlock takes an owned object the reader must identify. One shared unlockKey builder now serves the reader, canRead and the route -- an inlined key string missed every lookup, since the vault is normalised and a raw id is not. Settings come from a new /api/seal endpoint rather than props: PostCard renders inside client components and cannot reach siteConfig, and this codebase's stated rule is that the browser asks. API keys are never published. 1020 tests pass, 5 new; build clean. Not yet exercisable end to end -- no key server is configured on any deployment and none exists on GCP.
+
+---
+
 ## 2026-08-30 · Paid media keys handed to Seal — and a live paywall bypass found on subscriber media
 
 **Who:** engineering agent, under Kaela · **Where:** `packages/sdk`, `packages/web`, `db/019`, `sui-contracts/tests/seal_tests.move` · **Ref:** PR #13, OPEN, all seven checks green, NOT merged

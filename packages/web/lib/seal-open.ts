@@ -58,6 +58,24 @@ export const SEAL_HEADERS = {
   nonce: 'x-blob-nonce',
   sha256: 'x-plaintext-sha256',
   contentType: 'x-plaintext-content-type',
+  /*
+    Which entitlement the route accepted, so the browser can name it back to the key servers.
+
+    The reader cannot work this out alone. `seal_approve_unlock` takes `&Unlock` — an owned object —
+    and finding which of a reader's unlocks matches this asset means paging their owned objects and
+    decoding each one, which the route has *already done* to decide whether to serve these bytes at
+    all. Repeating that walk in the tab would be a second chain read to re-derive an answer the
+    server just computed.
+
+    Naming it here grants nothing. Every value is either public on chain or already in this
+    response, and the key servers do not take the route's word for any of it: they re-execute
+    `seal_approve_unlock` with the reader as sender, so an object the reader does not own aborts.
+    This is a hint about where to look, not a credential.
+  */
+  entitlement: 'x-seal-entitlement',
+  vault: 'x-seal-vault',
+  entitlementObject: 'x-seal-object',
+  contentKey: 'x-seal-content-key',
 } as const;
 
 /**
@@ -78,6 +96,16 @@ export type MediaResponse =
       /** Hex, of the plaintext. Verified here, because here is where the plaintext appears. */
       sha256: string;
       contentType: string;
+      /**
+       * Which entitlement the route accepted, when it said.
+       *
+       * Optional, and deliberately not required: a caller that already knows the entitlement passes
+       * it to {@link openSealedMedia} directly, which is how the offline tests drive this without a
+       * route. Absent here means "the response did not say", never "the reader has none" — the
+       * caller that needs it must refuse rather than substitute a guess, because a guessed object
+       * id produces an abort inside a key server and reads back as a decryption failure.
+       */
+      entitlement?: Entitlement;
     };
 
 function base64ToBytes(value: string, field: string, expected?: number): Uint8Array {
@@ -132,6 +160,8 @@ export async function readMediaResponse(response: Response): Promise<MediaRespon
     throw new Error('a sealed response arrived without the headers needed to open it');
   }
 
+  const descriptor = readDescriptor(response.headers);
+
   return {
     kind: 'sealed',
     ciphertext: bytes,
@@ -139,7 +169,45 @@ export async function readMediaResponse(response: Response): Promise<MediaRespon
     nonce: base64ToBytes(nonce, SEAL_HEADERS.nonce, NONCE_BYTES),
     sha256,
     contentType,
+    ...(descriptor === undefined ? {} : { entitlement: descriptor }),
   };
+}
+
+/**
+ * The entitlement descriptor, if the route sent one.
+ *
+ * Returns `undefined` for a response that carries none, and throws for one that carries a partial
+ * or unknown descriptor. The distinction matters: silence is a caller's problem to handle, whereas
+ * half a descriptor is a bug on the wire, and quietly ignoring it would send the browser to the key
+ * servers with a plausible-looking request built from whatever happened to be present.
+ */
+function readDescriptor(headers: Headers): Entitlement | undefined {
+  const kind = headers.get(SEAL_HEADERS.entitlement);
+  if (kind === null) return undefined;
+
+  const vaultId = headers.get(SEAL_HEADERS.vault);
+  const objectId = headers.get(SEAL_HEADERS.entitlementObject);
+  if (vaultId === null || objectId === null) {
+    throw new Error('a sealed response named an entitlement without saying which object it is');
+  }
+
+  if (kind === 'unlock') {
+    const contentKey = headers.get(SEAL_HEADERS.contentKey);
+    if (contentKey === null) {
+      throw new Error('an unlock entitlement arrived without the content key it covers');
+    }
+    return { kind: 'unlock', vaultId, contentKey, unlockId: objectId };
+  }
+
+  /*
+    Only `unlock` is emitted today, because only paid media is sealed — a subscriber asset is bound
+    to `period_identity(vault, tier, period)`, which fixes the key to the month of publication, and
+    that decision is open rather than made. Rejecting the other value is not a placeholder for it:
+    when subscriber sealing lands, the period comes from the route that knows it, and until then
+    guessing one here would build an approval for the wrong month and fail as if the reader were not
+    subscribed.
+  */
+  throw new Error(`this build cannot open media entitled by "${kind}"`);
 }
 
 /**
