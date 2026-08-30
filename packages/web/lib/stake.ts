@@ -2,25 +2,20 @@
 import 'server-only';
 
 /**
- * The stake leg, as a product.
+ * The stake leg.
  *
  * # What this is for
  *
  * A supporter deposits SUI. The vault delegates it to a validator. The creator receives the
  * *staking yield*; the depositor's principal is untouched and withdrawable in full at any time.
- * Support that costs the supporter nothing but the time their money is parked.
+ * The contract and the harvest daemon were both live before this module existed, with no path to
+ * either from the application — a creator could not open a vault without a command line.
  *
- * That is the one thing this platform does that no competitor does, and until now it had a live
- * contract, a working daemon, and essentially no way to reach either from the application. A
- * creator could not even open a vault without a command line.
+ * # The magnitudes, stated here so nobody has to discover them later
  *
- * # The economics, stated here so nobody has to discover them later
- *
- * At Sui's current staking rate, generating a given monthly amount for a creator needs roughly
- * eight hundred times that amount parked. Per supporter it is far weaker than a subscription, and
- * anyone reading this file should know that before building a page that implies otherwise. Its
- * value is reach — it converts people who will never pay monthly into supporters — not revenue
- * density. The UI is written to match.
+ * At Sui's current staking rate, a given monthly amount of yield needs roughly eight hundred times
+ * that amount delegated. Anything rendered from these reads should be written against that scale
+ * rather than against a figure that looks like a subscription.
  *
  * # Solvency is a property of the contract, not a claim of this module
  *

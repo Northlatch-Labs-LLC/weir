@@ -8,21 +8,14 @@
 /// between the creator, the platform, and optionally back to the depositors themselves as a perk
 /// the creator configures.
 ///
-/// This is the second of two revenue legs. The first (`creator`) is flow: a fan pays and the money
-/// is gone. This one is stake: a fan commits and keeps everything. They monetise different people.
+/// The other path in this package, `creator`, transfers the payment itself; here the payment stays
+/// with the depositor and only the yield is divided.
 ///
-/// # The honest arithmetic, stated in the contract because it constrains the product
+/// # The magnitudes, stated in the contract because they constrain every caller
 ///
-/// Sui native staking yields roughly 1.4951% a year. Paying a creator `X` per month from yield
-/// alone therefore requires about `X * 802.6` of locked principal: ~$8,000 to produce $10 a month.
-/// A thousand fans parking $100 each generate about $125 a month for the creator, where the same
-/// thousand fans on a $5 subscription would generate $5,000.
-///
-/// So this leg is roughly **40× weaker per fan** than the flow leg, and anyone reasoning about it
-/// as a salary replacement will be wrong. Its value is that it converts fans who would never
-/// subscribe — parking money you keep is not spending — and that the revenue recurs without anyone
-/// deciding to spend again. Deposit size can also gate membership tiers, which is arguably the
-/// feature: subscriber status that costs nothing but commitment.
+/// Sui native staking yields roughly 1.4951% a year, so producing `X` of yield per month requires
+/// about `X * 802.6` of delegated principal. Anything built on these numbers must be written
+/// against that scale.
 ///
 /// # The no-loss guarantee, and why it is unconditional
 ///

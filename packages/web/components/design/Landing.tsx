@@ -68,15 +68,8 @@ export function DesignLanding({
               <p style={{ margin: '0 auto 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid var(--line,#1c3d47)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.6)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)', animation: 'rise .7s cubic-bezier(.16,1,.3,1) both 60ms' }}>
                 <span aria-hidden="true" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--crest,#8be3c6)', animation: 'pulseRing 2.6s ease-out infinite' }}></span>
                 {/*
-                  The category, then the state.
-
-                  "SocialFi" is the one word that tells a crypto-native reader what this is before
-                  they read a sentence, and it is where aggregators and search look. It stays out of
-                  the headline below, which has to work on a creator who has never heard it.
-
                   "alpha", not "beta". Every demo profile on this deployment says "Alpha with real
-                  funds", and a badge claiming a later stage than the product's own pages is the kind
-                  of small inconsistency that costs trust on a site arguing you should verify us.
+                  funds", and this badge must not claim a later stage than the product's own pages.
                 */}
                 SocialFi · live on Sui mainnet · alpha
               </p>

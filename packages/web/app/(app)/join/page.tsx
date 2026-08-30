@@ -48,7 +48,7 @@ export default async function Join({
 
           `JoinFlow` is a client component that shows nothing until a wallet is connected, so a
           visitor arriving here — including from the front page's "Become a creator" button — read a
-          heading and a blank column, and left. The gate was hiding the pitch as well as the form.
+          heading and a blank column. The gate was hiding this explanation as well as the form.
 
           Server-rendered rather than another signed-out branch inside the flow: it is the same
           answer for everyone, it is what a shared link or a search result should show, and it does
@@ -75,12 +75,8 @@ export default async function Join({
 
               `zkLoginSignerAdapter` in `components/SignerProvider.tsx` returns a full `ActiveSigner`
               labelled "Google" — a zkLogin session can claim a handle exactly as a wallet session
-              can, and `/signin` offers that path first. So this line told a visitor with no wallet
-              that the door was shut, on the one page whose job is to open it, and it contradicted
-              the page they had just come from.
-
-              It is the most expensive kind of wrong copy: correct-sounding, in a stat block that
-              reads as fact, turning away precisely the reader we are least likely to get back.
+              can, and `/signin` offers that path first. So this line stated a requirement the code
+              does not have, and contradicted the page the visitor had just come from.
             */}
             <div className="stat">
               <span className="k">What you need first</span>
@@ -91,9 +87,7 @@ export default async function Join({
             What "gas" is, said once, for the reader who has never paid any.
 
             "Gas only" is accurate and answers nothing: somebody arriving from outside crypto cannot
-            tell whether that means a cent or fifty dollars, and the honest answer — a fraction of a
-            cent — is the single most reassuring fact on this page. Leaving it unsaid asks them to
-            find out by signing a transaction, which is exactly the point they will not risk.
+            tell whether that means a cent or fifty dollars.
 
             No figure is quoted, deliberately. Gas is price times the amount a particular transaction
             uses, and both move; a number printed here would be a measurement nobody took. The order

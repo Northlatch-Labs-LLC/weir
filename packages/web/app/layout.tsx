@@ -25,27 +25,14 @@ import { AppShell } from '@/components/shell/AppShell';
 import './weir.css';
 
 /*
-  The name.
-
-  Weir is the product and Northlatch Labs LLC operates it; the protocol it settles on is stated
-  where it is checkable — `/security` and the package ids in the footer — rather than as a brand
-  endorsement in the chrome. A weir is the structure that holds water back and lets it through on
-  purpose — which is the vault, and the reason the name was chosen over the alternatives in
-  `strategy/naming-decision.md`.
+  The site name, used by the metadata below. The protocol this settles on is stated where it is
+  checkable — `/security` and the package ids in the footer — rather than in the chrome.
 */
 const TITLE = 'Weir';
 const TAGLINE = 'Support that stays yours.';
 /*
-  It opens with the category.
-
-  This string is what a search result, a link preview and an aggregator show, and every one of those
-  is read by somebody deciding in about a second whether this is worth a click. "A creator network
-  whose economics are Move contracts" is accurate and takes a paragraph to land; "SocialFi" lands
-  before the sentence does, for the audience that is already looking for one.
-
-  It earns its place here and nowhere in the headline. On the landing page the first line has to work
-  on a creator who has never heard the word, and jargon in a hero is a door that only opens for
-  people who were coming in anyway.
+  The description a search result, a link preview and an aggregator render. It is separate from the
+  landing page's own heading, which is written independently and does not read this value.
 */
 const DESCRIPTION =
   'SocialFi on Sui: a creator network where support stays yours. Now in closed alpha — creators ' +

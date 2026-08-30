@@ -129,7 +129,7 @@ export async function POST(request: Request) {
     not this migration's to make silently, so subscriber media keeps exactly the behaviour it had.
 
     What it had is worth stating plainly: subscriber-only media is NOT encrypted before it reaches
-    Walrus, and a Walrus blob is public. See the note in the pull request.
+    Walrus, and a Walrus blob is public.
   */
   const gated =
     post.access.kind === 'paid'

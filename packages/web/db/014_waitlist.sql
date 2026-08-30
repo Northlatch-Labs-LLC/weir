@@ -14,9 +14,8 @@
 -- # What it is NOT
 --
 -- It is not a waitlist for an unlaunched product. Weir is live — creators are posting, vaults are
--- staking, paid bodies are being released against on-chain objects — and the brand's own voice rule
--- is that live products are described as live. Nothing that reads from this table may imply the
--- product is pending.
+-- staking, paid bodies are being released against on-chain objects. Nothing that reads from this
+-- table may imply the product is pending.
 --
 -- # The email is the primary key
 --

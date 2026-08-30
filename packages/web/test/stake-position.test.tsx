@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 /**
- * `StakePosition` — the screen the whole product rests on.
+ * `StakePosition` — the screen the no-loss guarantee is rendered from.
  *
- * Everything else this platform does, a competitor also does. What nothing else does is: your money
- * stays yours, the creator earns the yield it generates, and you take the principal back in full
- * whenever you like. That claim is worth exactly as much as this component's withdraw button.
+ * The contract's promise is that principal stays the depositor's, the creator earns only the yield
+ * it generates, and the principal comes back in full on request. That property is worth exactly as
+ * much as this component's withdraw button.
  *
  * Two failures matter more than the rest, and neither throws:
  *

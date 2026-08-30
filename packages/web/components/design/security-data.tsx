@@ -16,10 +16,8 @@ import {
 /**
  * Security's data.
  *
- * Most of this page is argument, and the argument is the designer's — copied verbatim. Two things
- * are not: the fee, which is read, and the contract ids, which come from configuration.
- *
- * # The competitors' numbers are the one place a literal is correct
+ * Most of this page's copy is copied verbatim from the design. Two things are not: the fee, which
+ * is read from the Platform object, and the contract ids, which come from configuration.
  */
 
 const CREST = 'var(--crest,#8be3c6)';

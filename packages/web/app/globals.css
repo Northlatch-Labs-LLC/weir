@@ -1381,8 +1381,8 @@ footer {
 
 /* =====================================================================
    The two registration channels.
-   Standard is quiet; verified is the one that earns, so it carries the
-   accent border and the only button. Every colour is a token.
+   Standard is quiet; verified carries the accent border and the only
+   button. Every colour is a token.
    ===================================================================== */
 .channel-card { margin-top: var(--space-20); }
 
@@ -1414,7 +1414,7 @@ footer {
   color: var(--text-tertiary) !important;
 }
 
-/* The revenue path. Marked, because the ordering of these two is the product decision. */
+/* The emphasised channel. Marked here, because the ordering of the two is expressed in CSS. */
 .channel--featured {
   border-color: var(--border-accent-soft);
   background: linear-gradient(180deg, var(--alpha-sui-12), transparent 70%), var(--bg-surface-raised);
@@ -2340,11 +2340,9 @@ footer {
   color: var(--text-warning);
 }
 
-/* ---------------------------------------------------------------- the proposition
+/* ---------------------------------------------------------------- the hero block
 
-   Shown once, to a visitor who has not signed in. It carries the argument the social preview
-   image makes and the page previously did not: the money moves through contracts, and a supporter
-   can fund a creator without giving anything up.
+   Rendered once, to a visitor who has not signed in.
 */
 .hero {
   padding: var(--space-28) 0 var(--space-24);
@@ -2358,7 +2356,7 @@ footer {
   margin: 0 0 var(--space-12);
   text-wrap: balance;
 }
-/* The half that is the offer, in the colour this estate uses for value. */
+/* The emphasised half, in the colour used across the product for value. */
 .hero__line em {
   font-style: normal;
   color: var(--text-prize);
@@ -2453,11 +2451,8 @@ footer {
 }
 
 /*
-  The pitch card — the one section in this column that argues for this product.
-
-  Set in the body face at reading size rather than as a `.section-note`: it is the only prose in the
-  rail somebody is meant to actually read, and the notes around it are annotations. Nothing here
-  invents a colour; the crest is Weir's accent and carries the one line that answers the objection.
+  Set in the body face at reading size rather than as a `.section-note`: this block is running prose
+  and the notes around it are annotations. Nothing here invents a colour.
 */
 /* ---------- the browse grid ------------------------------------------------
    Explore listed posts as headline-and-blurb rows — the shape of a search

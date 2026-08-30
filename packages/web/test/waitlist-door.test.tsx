@@ -211,11 +211,10 @@ describe('the handle field never fails silently', () => {
   /*
     The bound is read from the SDK, not written here.
 
-    This assertion said `at most 32 characters` and went red the moment PR #11 landed the real
-    contract ceiling of 30 — which is the correct outcome and the reason it is worth recording:
-    a literal in a test is a second source of truth, and a second source of truth is the defect
-    PR #11 existed to remove. Written this way it cannot go stale again, because it moves with
-    `account.move` through the SDK's drift test.
+    This assertion held the literal `at most 32 characters` and went red the moment the real
+    contract ceiling of 30 reached the validator — which is the correct outcome: a literal in a
+    test is a second source of truth. Written this way it cannot go stale again, because it moves
+    with `account.move` through the SDK's drift test.
   */
   it('tells a too-long handle it is too long', async () => {
     expect(await noteFor('a'.repeat(MAX_HANDLE_LEN + 10))).toBe(
@@ -247,8 +246,8 @@ describe('the handle field never fails silently', () => {
     This test used to reach it with a 31-character handle, on the reasoning that the local rules
     and the contract's disagreed — `handleShapeProblem` permitted 32 while `account.move`
     permitted 30 — so a 31-character handle passed locally, reached the registry and came back
-    invalid. **PR #11 closed that gap**, and the route with it: 31 characters is now refused
-    before a request is ever made.
+    invalid. That gap is closed, and the route with it: 31 characters is now refused before a
+    request is ever made.
 
     Closing one route into a state does not make the state unreachable, and it must not make it
     untested. The registry is the authority on a handle and this client is not: it can refuse one

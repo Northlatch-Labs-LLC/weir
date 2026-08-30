@@ -144,12 +144,8 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
           )}
         </p>
         {/*
-          Who operates this, not what it is built on.
-
-          The line used to endorse the protocol and link off-site. Weir is Northlatch Labs LLC's
-          brand, and the bottom of the page is where a reader looks for the entity behind a service
-          they are about to send money through — so it names the company. What the contracts are is
-          still answered, one link along, by `/security` and by the package ids above.
+          The operating entity, and an on-site link. It used to link off-site; what the contracts
+          are is answered one link along, by `/security` and by the package ids above.
         */}
         <p className="sf__family">
           © Northlatch Labs LLC · <Link href="/security">Security</Link>

@@ -9,9 +9,8 @@
  * both harder to explain — somebody can already have an account, and somebody can own a name bought
  * straight from SuiNS, which is a perfectly real name that says nothing about this platform.
  *
- * Signing up is a wallet or a Google account and it lives in `/join`. This sells a name, which is
- * one of the things the protocol earns from. Keeping the two apart is what makes either of them
- * describable in a sentence.
+ * Signing up is a wallet or a Google account and it lives in `/join`. This route sells a name and
+ * nothing else. Keeping the two apart is what makes either of them describable in a sentence.
  *
  * # No `?ref=` here
  *

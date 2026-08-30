@@ -11,10 +11,9 @@ export const contentType = 'image/png';
  *
  * # What it claims
  *
- * Only what the live site says: Weir is in closed alpha, creators onboard by invitation, and an
- * email gets one message when the doors open. The card wears the site's own world — deep teal
- * water, mint headline accent, gold for the invitation — so a shared link looks like the page it
- * opens. The product pitch returns here the day the doors do.
+ * Only what the live site itself says; nothing here may assert anything the pages do not. The card
+ * uses the site's own palette — deep teal water, mint headline accent, gold for the invitation — so
+ * a shared link looks like the page it opens.
  *
  * # Built from divs, deliberately
  *

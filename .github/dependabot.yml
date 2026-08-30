@@ -9,9 +9,8 @@
 #     vulnerability should not wait for Monday.
 #   - github-actions: the workflows themselves pin actions; those go stale too.
 #
-# What this file deliberately does NOT buy: CodeQL code scanning, which on a private
-# repository requires paid GitHub Advanced Security. The desk pays for nothing; the code
-# gets reviewed by the estate's own reviewers instead.
+# Not configured here: CodeQL code scanning, which on a private repository requires GitHub
+# Advanced Security.
 #
 # Move dependencies (sui-contracts) are not covered — Dependabot has no Move ecosystem.
 # The framework dependency there moves only when the packages are deliberately upgraded.
