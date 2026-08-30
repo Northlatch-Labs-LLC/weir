@@ -30,6 +30,8 @@
  * client component. A type-only import would erase, but pointing a browser module at a `server-only`
  * file is the kind of edge that survives until somebody adds a value import to it.
  */
+import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
+
 export type WaitlistStanding = {
   /** 1-based, by arrival. A fact about when, not a promise about order of service. */
   position: number;
@@ -150,12 +152,27 @@ export function isWaitlistRole(value: unknown): value is WaitlistRole {
  * Checked here so a malformed handle never becomes a chain read, which is the same ordering
  * `checkHandle` uses. This is shape only — whether it is *free* is a question for the chain, and
  * the answer expires the moment it is given.
+ *
+ * # The bounds come from the SDK, and that is the whole point
+ *
+ * These were written out longhand as 3 and 32. The contract's ceiling is 30
+ * (`account.move:43`, `MAX_HANDLE_LEN`), so every 31- and 32-character handle this form accepted
+ * was one `account::open` will abort on with `EHandleLength`. Nobody was told. The waiting list
+ * recorded the intention, the page thanked them for it, and the name could never be minted —
+ * a promise the chain was always going to refuse.
+ *
+ * It is not a typo worth correcting in place, because a second literal would drift again the
+ * next time the contract moves. `MIN_HANDLE_LEN` and `MAX_HANDLE_LEN` are exported by the SDK
+ * and asserted against `account.move` itself by `packages/sdk/test/drift.test.ts`, so importing
+ * them makes the contract the single source and puts this rule under a test that already exists.
+ * The numbers now appear in the messages by interpolation, so the copy cannot disagree with the
+ * check either.
  */
 export function handleShapeProblem(handle: string): string | null {
   const h = handle.trim().replace(/^@/, '').toLowerCase();
   if (h === '') return null; // absent is allowed; the field is optional
-  if (h.length < 3) return 'A handle is at least 3 characters.';
-  if (h.length > 32) return 'A handle is at most 32 characters.';
+  if (h.length < MIN_HANDLE_LEN) return `A handle is at least ${MIN_HANDLE_LEN} characters.`;
+  if (h.length > MAX_HANDLE_LEN) return `A handle is at most ${MAX_HANDLE_LEN} characters.`;
   if (!/^[a-z0-9_]+$/.test(h)) return 'Handles use lowercase letters, numbers and underscores only.';
   return null;
 }

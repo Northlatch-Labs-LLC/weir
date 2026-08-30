@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import {
   canonicalEmail,
   canonicalHandle,
@@ -64,17 +65,41 @@ describe('a handle is checked for shape before it is ever looked up', () => {
   });
 
   it('rejects handles the contract would reject', () => {
-    expect(handleShapeProblem('ab')).not.toBeNull();
-    expect(handleShapeProblem('a'.repeat(33))).not.toBeNull();
+    expect(handleShapeProblem('a'.repeat(MIN_HANDLE_LEN - 1))).not.toBeNull();
+    expect(handleShapeProblem('a'.repeat(MAX_HANDLE_LEN + 1))).not.toBeNull();
     expect(handleShapeProblem('has-a-dash')).not.toBeNull();
     expect(handleShapeProblem('has space')).not.toBeNull();
     expect(handleShapeProblem('emoji🙂')).not.toBeNull();
   });
 
   it('accepts what the contract accepts', () => {
-    for (const handle of ['abc', 'alice', 'bob_99', 'a'.repeat(32)]) {
+    for (const handle of ['abc', 'alice', 'bob_99', 'a'.repeat(MAX_HANDLE_LEN)]) {
       expect(handleShapeProblem(handle), handle).toBeNull();
     }
+  });
+
+  /*
+    This test is the reason the bug lived.
+
+    It was written with the literals 32 and 33 while `account.move` has capped handles at 30
+    since it was written, and its name says "what the contract accepts". So it did not merely
+    fail to catch the defect — it asserted the defect was correct, under a name claiming the
+    contract had been consulted. A green suite said the boundary was right every time it ran.
+
+    The bounds are now imported from the SDK, which `packages/sdk/test/drift.test.ts` asserts
+    against `account.move` itself. That makes the chain of custody: Move source → SDK constant →
+    this test → the form. No literal anywhere in it, so the next time the contract's ceiling
+    moves, everything below it moves with it or fails loudly.
+
+    Pinned explicitly as well, because a test written entirely in terms of the thing it is
+    testing can agree with a wrong constant. If MAX_HANDLE_LEN ever stops being 30, this line
+    fails and a human reads the diff — which is what should have happened the first time.
+  */
+  it('is pinned to the contract ceiling of 30', () => {
+    expect(MAX_HANDLE_LEN).toBe(30);
+    expect(MIN_HANDLE_LEN).toBe(3);
+    expect(handleShapeProblem('a'.repeat(30))).toBeNull();
+    expect(handleShapeProblem('a'.repeat(31))).toBe('A handle is at most 30 characters.');
   });
 });
 
