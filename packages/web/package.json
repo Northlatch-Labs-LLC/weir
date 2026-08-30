@@ -10,9 +10,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify:site-admin": "tsx --tsconfig tsconfig.scripts.json --env-file=.env.local scripts/verify-site-admin.ts",
-    "verify:zklogin": "tsx --tsconfig tsconfig.scripts.json scripts/verify-zklogin.ts"
+    "verify:zklogin": "tsx --tsconfig tsconfig.scripts.json scripts/verify-zklogin.ts",
+    "seal:migrate": "tsx --tsconfig tsconfig.scripts.json --env-file=.env.local scripts/seal-migrate-keys.ts"
   },
   "dependencies": {
+    "@mysten/seal": "1.4.4",
     "@mysten/sui": "2.26.2",
     "@mysten/suins": "^1.2.18",
     "@mysten/wallet-standard": "0.21.18",

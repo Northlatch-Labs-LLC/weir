@@ -438,3 +438,63 @@ fun assert_subscribed_refuses_an_expired_subscription() {
     );
     abort 0
 }
+
+// === The wire format ===
+
+/*
+  Concrete bytes, asserted here and asserted identically in TypeScript.
+
+  `packages/sdk/src/seal.ts` re-implements `unlock_identity` and `period_identity`, because the
+  encryptor is a TypeScript process and cannot call a Move function without a chain round trip on
+  every upload. That is a second implementation of a byte layout — the exact defect this module's
+  own comments warn about — and the only thing that makes it safe is a shared, concrete example.
+
+  `packages/sdk/test/seal-identity.test.ts` asserts these same three vectors against the TypeScript.
+  Neither suite proves the other correct alone; together they fail the moment the two disagree.
+
+  So these literals are a contract between two languages, not a fixture. If a change here makes the
+  TypeScript suite fail, the TypeScript is what has drifted — unless the change was deliberate, in
+  which case both move together, in one commit, and every already-encrypted asset is stranded.
+  There is no migration for an identity change: a Seal key is derived from these bytes, so different
+  bytes are a different key, and the old ciphertext stays shut for ever.
+*/
+#[test]
+fun the_identity_bytes_are_exactly_these() {
+    let vault = object::id_from_address(
+        @0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff,
+    );
+
+    // <vault, 32 bytes> ‖ 0x00 ‖ "issue-7"
+    assert!(
+        entitlement::unlock_identity(vault, b"issue-7") ==
+            x"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0069737375652d37",
+        0,
+    );
+
+    // <vault, 32 bytes> ‖ 0x01 ‖ <tier 3, u64 LE> ‖ <period 5, u64 LE>
+    assert!(
+        entitlement::period_identity(vault, 3, 5) ==
+            x"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0103000000000000000500000000000000",
+        1,
+    );
+
+    // An empty content key still carries the tag byte, so it can never collide with a subscription
+    // identity's 0x01 — the shortest unlock identity is 33 bytes, not 32.
+    assert!(
+        entitlement::unlock_identity(vault, b"") ==
+            x"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00",
+        2,
+    );
+}
+
+#[test]
+/// The period arithmetic the TypeScript must reproduce, including both sides of a boundary.
+fun the_period_arithmetic_is_exactly_this() {
+    assert!(entitlement::seal_period_ms() == 2_592_000_000, 0);
+    assert!(entitlement::period_of(0) == 0, 1);
+    // One millisecond before the first boundary is still period 0. Integer division, so a
+    // floating-point reimplementation that rounds instead of truncating disagrees here.
+    assert!(entitlement::period_of(2_591_999_999) == 0, 2);
+    assert!(entitlement::period_of(2_592_000_000) == 1, 3);
+    assert!(entitlement::period_of(2_592_000_001) == 1, 4);
+}

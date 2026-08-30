@@ -170,3 +170,70 @@ describe('the response headers', () => {
     expect(route).toContain("'content-type': record.contentType");
   });
 });
+
+/**
+ * Seal custody, asserted against the source.
+ *
+ * # Why these read the file rather than call the function
+ *
+ * `storeAsset` seals through a threshold committee and stores through Walrus, so exercising it
+ * needs both a network and key servers — of which there are none open on Sui mainnet. What can be
+ * checked without either is the property that actually protects a creator: that no path through
+ * this module puts a plaintext media key on a record, and that the ordering which makes an
+ * unreachable committee cost nothing is still in place.
+ *
+ * A source assertion is a weak test in general and a strong one here, because the failure it guards
+ * is a line being added — a key assigned back onto the record, a seal moved after the upload — not
+ * a value being computed wrongly.
+ */
+describe('media keys are held by Seal, not by us', () => {
+  const media = read('lib/media.ts');
+  const route = read('app/api/media/[postId]/[assetId]/route.ts');
+
+  it('never puts a plaintext key on a stored record', () => {
+    /*
+      The single most important line in this suite.
+
+      `enc_key` is written only for the `platform` scheme, which nothing in this module produces any
+      more. A `key:` reappearing on the returned encryption record would restore exactly the custody
+      the Terms say we do not have, and it would do so silently — every test would still pass,
+      because the media would still decrypt.
+    */
+    expect(media).not.toMatch(/encryption:\s*\{[^}]*\bkey:/);
+    expect(media).toContain("scheme: 'seal'");
+  });
+
+  it('seals the key before the blob is paid for or stored', () => {
+    // If the committee is unreachable, nothing must have happened: no WAL spent, no blob on
+    // Walrus, no row. The only way to guarantee that is to seal first and return on failure.
+    const sealAt = media.indexOf('sealUnlockKey(');
+    const grantAt = media.indexOf('grantUpload(');
+    const storeAt = media.indexOf('storeBlob(');
+    expect(sealAt).toBeGreaterThan(-1);
+    expect(sealAt).toBeLessThan(grantAt);
+    expect(sealAt).toBeLessThan(storeAt);
+  });
+
+  it('dispatches on the recorded scheme rather than the shape of the row', () => {
+    // "It has a wrapped key, so it must be sealed" is an inference, and the one time it is wrong it
+    // is wrong silently.
+    expect(media).toContain("record.encryption.scheme === 'seal'");
+  });
+
+  it('never serves sealed bytes under the image type they will become', () => {
+    // The body of a sealed response is ciphertext. Announcing it as `image/png` is how a browser
+    // paints a broken image and the creator gets blamed for the file.
+    expect(route).toContain("'content-type': 'application/octet-stream'");
+    expect(route).toContain("'x-plaintext-content-type': record.contentType");
+  });
+
+  it('still checks entitlement before releasing anything at all', () => {
+    /*
+      Sealing makes the gate no longer load-bearing for confidentiality; it does not make it
+      optional. It keeps blob ids and wrapped keys off the open internet and it is the same one
+      predicate the feed uses.
+    */
+    expect(route).toContain('canRead(post, entitlements)');
+    expect(route.indexOf('canRead(post, entitlements)')).toBeLessThan(route.indexOf('readAsset('));
+  });
+});

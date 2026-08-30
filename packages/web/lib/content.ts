@@ -21,6 +21,7 @@ import 'server-only';
  */
 
 import { db, normaliseAddress } from './db';
+import type { AssetEncryption } from './media';
 
 export interface Post {
   id: string;
@@ -63,8 +64,14 @@ export interface AssetRecord {
   blobId: string;
   /** The epoch after which Walrus deletes the blob unless the lease is extended. */
   endEpoch: number;
-  /** Present exactly when the bytes were encrypted before storage. Null means a public blob. */
-  encryption: { key: string; nonce: string } | null;
+  /**
+   * How the bytes are locked, or null for a public blob stored as plaintext.
+   *
+   * The scheme is read from the row, never inferred from which columns happen to be populated. See
+   * `AssetEncryption` in `lib/media.ts` and the `assets_encryption_scheme` constraint in
+   * `db/019_seal_key_custody.sql`, which makes every other combination unrepresentable.
+   */
+  encryption: AssetEncryption | null;
 }
 
 export interface Comment {
@@ -349,17 +356,27 @@ export async function addPost(post: Post): Promise<void> {
 
 /** Attach a stored asset. The `EXISTS` guard makes a missing post a refusal, not an orphan. */
 export async function attachAsset(record: AssetRecord): Promise<boolean> {
+  const encryption = record.encryption;
+  /*
+    Written from the tagged union rather than from a bag of optional fields.
+
+    `enc_key` is populated only in the `platform` branch, and there is no expression anywhere in
+    this statement that could put a key on a sealed row — the union has no `key` to read. The
+    database enforces the same rule independently in `assets_encryption_scheme`, so a future edit
+    that reintroduced one would be refused at write time rather than quietly stored.
+  */
   const { rowCount } = await db().query(
     `INSERT INTO assets (id, post_id, content_type, bytes, label, sha256,
-                         blob_id, end_epoch, enc_key, enc_nonce)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                         blob_id, end_epoch, enc_key, enc_nonce, enc_scheme, seal_wrapped_key)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
      WHERE EXISTS (SELECT 1 FROM posts WHERE id = $2)`,
     [
       record.id, record.postId, record.contentType, record.bytes, record.label, record.sha256,
       record.blobId, record.endEpoch,
-      // Both or neither — the table's CHECK enforces it, because a key without its nonce opens
-      // nothing and leaves a blob no one can ever read.
-      record.encryption?.key ?? null, record.encryption?.nonce ?? null,
+      encryption?.scheme === 'platform' ? encryption.key : null,
+      encryption?.nonce ?? null,
+      encryption?.scheme ?? null,
+      encryption?.scheme === 'seal' ? encryption.wrappedKey : null,
     ],
   );
   return (rowCount ?? 0) > 0;
@@ -371,6 +388,7 @@ export async function findAsset(assetId: string): Promise<AssetRecord | null> {
     bytes: string; label: string; sha256: string;
     blob_id: string | null; end_epoch: string | null;
     enc_key: string | null; enc_nonce: string | null;
+    enc_scheme: string | null; seal_wrapped_key: string | null;
   }>('SELECT * FROM assets WHERE id = $1', [assetId]);
 
   const row = rows[0];
@@ -387,11 +405,49 @@ export async function findAsset(assetId: string): Promise<AssetRecord | null> {
     id: row.id, postId: row.post_id, contentType: row.content_type,
     bytes: Number(row.bytes), label: row.label, sha256: row.sha256,
     blobId: row.blob_id, endEpoch: Number(row.end_epoch),
-    encryption:
-      row.enc_key === null || row.enc_nonce === null
-        ? null
-        : { key: row.enc_key, nonce: row.enc_nonce },
+    encryption: readEncryption(row),
   };
+}
+
+/**
+ * Turn the four encryption columns into the one value that says how to open the asset.
+ *
+ * # Why an unrecognised scheme is `null` and not a guess
+ *
+ * Returning `null` means "treat these bytes as plaintext", which for an encrypted blob produces a
+ * broken image — visibly, immediately, for that one asset. Every alternative is worse. Guessing
+ * `platform` from the presence of `enc_key` would, on the day a third scheme exists, hand a reader
+ * the wrong key and a corrupt decrypt; guessing `seal` would ask a key server for a key nobody
+ * issued. A row this function cannot read is a row this deployment does not understand, and the
+ * safe response to that is to serve nothing usable rather than something plausible.
+ *
+ * In practice it is unreachable: `assets_encryption_scheme` permits exactly the three shapes below.
+ * It exists because the database is older than any one deployment of this code, and a rolled-back
+ * release must not decrypt with a scheme it has never heard of.
+ */
+function readEncryption(row: {
+  enc_key: string | null;
+  enc_nonce: string | null;
+  enc_scheme: string | null;
+  seal_wrapped_key: string | null;
+}): AssetEncryption | null {
+  if (row.enc_scheme === 'platform' && row.enc_key !== null && row.enc_nonce !== null) {
+    return { scheme: 'platform', key: row.enc_key, nonce: row.enc_nonce };
+  }
+  if (row.enc_scheme === 'seal' && row.seal_wrapped_key !== null && row.enc_nonce !== null) {
+    return { scheme: 'seal', wrappedKey: row.seal_wrapped_key, nonce: row.enc_nonce };
+  }
+  /*
+    A row written before 019 and not yet backfilled: a key and a nonce, but no scheme.
+
+    The migration sets `enc_scheme` for every such row, so this is reachable only if the code is
+    deployed ahead of the migration. It reads as platform custody because that is what those rows
+    factually are — and a paying reader must not be locked out by a deployment ordering.
+  */
+  if (row.enc_scheme === null && row.enc_key !== null && row.enc_nonce !== null) {
+    return { scheme: 'platform', key: row.enc_key, nonce: row.enc_nonce };
+  }
+  return null;
 }
 
 export async function addComment(comment: Comment): Promise<void> {

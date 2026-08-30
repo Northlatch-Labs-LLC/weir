@@ -25,11 +25,29 @@ export {
 export {
   type ProjectXSocialConfig,
   type Network,
+  type SealConfig,
+  type SealKeyServer,
   loadConfig,
   loadKeyRegistryId,
+  loadSealConfig,
   REQUIRED_ENV,
   KEY_REGISTRY_ENV,
+  SEAL_ENV,
 } from './config.js';
+
+export {
+  SEAL_UNLOCK,
+  SEAL_SUBSCRIPTION,
+  SEAL_PERIOD_MS,
+  unlockIdentity,
+  periodIdentity,
+  periodOf,
+  sealId,
+  sealPackageId,
+  approveUnlock,
+  approveSubscription,
+  approvalBytes,
+} from './seal.js';
 
 export {
   type StakeVaultState,
