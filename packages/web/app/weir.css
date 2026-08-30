@@ -1547,8 +1547,8 @@
    there is nothing left to give: it is the product.
 
    A strip rather than a hamburger, for the same reason as the header — several
-   of these destinations are reachable from nowhere else, and hiding them behind
-   a tap costs the conversion path a tap it does not need to cost.
+   of these destinations are reachable from nowhere else, so hiding them behind
+   a tap costs a tap on every visit.
    ========================================================================== */
 @layer weir {
 
@@ -1665,7 +1665,7 @@
     text-shadow: 0 0 18px rgba(var(--crest-rgb), 0.18);
     text-wrap: pretty;
   }
-  /* Centred, on the pages a visitor reads to be convinced. */
+  /* Centred, on the pages that carry a single column of prose. */
   .weir-pagehead--centered .weir-pagehead__row {
     justify-content: center;
   }

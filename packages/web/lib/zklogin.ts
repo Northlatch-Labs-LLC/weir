@@ -4,11 +4,10 @@
  *
  * # Why this exists
  *
- * Everything this platform does is reachable only after someone installs a browser extension and
- * writes down twelve words. Most people will not, and the ones who will are already served by four
- * other products. zkLogin removes both steps: a person signs in with an account they already have,
- * and the address they get is an ordinary Sui address that the contracts already accept. No
- * contract changed for this. Not one.
+ * Every paying call in this package needs a Sui address, which otherwise means installing a browser
+ * extension and writing down twelve words. zkLogin removes both steps: a person signs in with an
+ * account they already have, and the address they get is an ordinary Sui address that the contracts
+ * already accept. No contract changed for this. Not one.
  *
  * # What is actually happening
  *

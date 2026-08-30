@@ -171,9 +171,8 @@ export function DesignWaitlist({
 
     The chain below ended in a bare `Optional.` in dim grey, so a handle the registry had just
     called invalid produced the same note as an empty field: the person was told nothing, and
-    submitted. It is reachable even when `handleShapeProblem` is satisfied, because the two
-    disagree — see the note on the drift in the report; the shape check permits 32 characters and
-    the contract permits MAX_HANDLE_LEN. Anything that slips through locally lands here.
+    submitted. It is reachable even when `handleShapeProblem` is satisfied, because the registry is
+    the authority and this client is not. Anything that slips through locally lands here.
   */
   const wlHandleNote =
     handle.trim() === ''

@@ -6,7 +6,8 @@
 # # Why this machine exists at all
 #
 # zkLogin needs a Groth16 proof per sign-in. Mysten's public prover serves devnet and testnet only,
-# and Enoki declined this account — so the proving service is self-hosted or the feature is off.
+# and no managed mainnet prover is available to this deployment — so the proving service is
+# self-hosted or the feature is off.
 #
 # Measured here, so the sizing is not mistaken for something it is not: loading the 588 MB key takes
 # 928 ms and leaves the backend idling at ~655 MB. The 16 GB is headroom for *proof generation*, not

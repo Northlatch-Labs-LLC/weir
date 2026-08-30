@@ -178,8 +178,8 @@ mutate "rebate re-baseline skipped" sources/stake_vault.move \
   's|        resync_debt_on(position, acc, eligible_after);||' \
   "a depositor accrues rebate only from the moment they deposit"
 
-# --- Expansion set from data-room doc 13 (2026-08-27): 23 further load-bearing
-# --- invariants. Patterns source-verified before installation; survivors are findings.
+# --- Expansion set: 23 further load-bearing invariants. Patterns source-verified before
+# --- installation; survivors are findings.
 
 mutate "referral ceiling removed" sources/platform.move \
   's|    assert!(referral_share_bps <= MAX_REFERRAL_SHARE_BPS, EFeeAboveCeiling);||' \

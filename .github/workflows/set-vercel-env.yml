@@ -4,8 +4,8 @@
 #
 # The application reads its on-ramp credentials at request time, so they have to live in Vercel's
 # own environment rather than in a build argument. The token that can write them is a repository
-# secret and is write-only to anybody outside CI — which is the point: this workflow is the desk's
-# hands, and the values it copies are themselves repository secrets, never committed.
+# secret and is write-only to anybody outside CI, and the values it copies are themselves
+# repository secrets, never committed.
 #
 # Manual dispatch only. Configuration should move when somebody decides it moves, not on a push.
 

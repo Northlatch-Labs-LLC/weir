@@ -8,7 +8,7 @@
  * Both are small, both are pure, and both are wrong in ways that do not throw:
  *
  *   A `Creator` marker on a vault selling nothing sends a reader to a page with nothing to buy.
- *   A missing `Free support` marker hides the one thing this product does that competitors do not.
+ *   A missing `Free support` marker hides a vault whose principal is returnable in full.
  *
  * None of those raise an error. They render, and they are believed.
  */

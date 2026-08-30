@@ -4,12 +4,11 @@
 /**
  * A supporter's position in a vault: what they put in, what it has earned, and getting it back.
  *
- * # This screen is the whole differentiator
+ * # The withdraw button is what makes the no-loss guarantee real
  *
- * Everything else this platform does, a competitor also does. What nothing else does is: your money
- * stays yours, the creator earns the yield it generates, and you can take the principal back in
- * full whenever you like. That claim is only worth anything if the withdraw button actually works,
- * so it is the most important control in the product.
+ * The contract's promise is that principal stays the depositor's and is redeemable in full at any
+ * time; the creator earns only the yield it generates. That property is only as good as this
+ * control, so the withdraw path is the one this component exists to get right.
  *
  * # Principal and yield are never added together
  *

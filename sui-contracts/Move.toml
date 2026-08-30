@@ -13,9 +13,9 @@ license = "BUSL-1.1"
 #     framework to a revision DeepBook, SuiNS and Pyth all refuse, and it cannot be removed
 #     without redeploying. Depending on it would inherit that pin permanently.
 #
-#   * `projectx_protocol` (V1.1.1) is unpublished by choice — publishing it decides D-105 by
-#     default. A social platform must not be the thing that forces an unrelated governance
-#     decision about vault custody.
+#   * `projectx_protocol` (V1.1.1) is unpublished, so it cannot be depended on at all — and
+#     publishing it in order to depend on it would settle an unrelated open question about vault
+#     custody as a side effect.
 #
 # This package therefore depends on NO third-party Move package and NO other ProjectX package.
 # That is why there are no `override = true` dependency pins below: the framework conflict those
