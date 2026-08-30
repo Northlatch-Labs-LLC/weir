@@ -59,7 +59,20 @@ export const config = {
   waiting list does not: the product name and the public tagline. Both `og:image` and
   `twitter:image` point at it.
 */
-const ALWAYS_OPEN = ['/waitlist', '/signin', '/auth/callback', '/api/', '/legal', '/opengraph-image'];
+/*
+  `/security` is here for a fourth reason: the waiting list links to it.
+
+  The closed page carries one outbound link — "Read the contracts" — and it points here. Without
+  this entry the proxy answered 307 back to `/waitlist`, so the only door out of the only reachable
+  page returned the reader to the page they were standing on.
+
+  It is safe to open because it assumes nothing about who is reading. `app/security/page.tsx`
+  resolves the viewer with `fold(..., () => null)` and passes `signedIn`/`myHandle` down; both props
+  are unused by the render, so a signed-out reader sees exactly what a signed-in one sees. Every
+  figure on it is read from chain state that is public regardless of the gate, and it makes the
+  ownership argument checkable — which is what the waiting list is asking to be believed.
+*/
+const ALWAYS_OPEN = ['/waitlist', '/signin', '/auth/callback', '/api/', '/legal', '/opengraph-image', '/security'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -19,6 +19,12 @@ import {
   type WaitlistRole,
 } from '@/lib/waitlist';
 import { useHandleAvailability } from '@/components/design/use-handle-availability';
+/*
+  The bounds come from the SDK, never from literals here. `packages/sdk/src/accounts.ts` mirrors
+  `account.move` and a drift test asserts the two agree, so a bound that moves in the contract moves
+  in this sentence. A number typed into this file would not.
+*/
+import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import { Countdown } from '@/components/design/Countdown';
 
 const CREST = 'var(--crest,#8be3c6)';
@@ -148,22 +154,47 @@ export function DesignWaitlist({
   const wlEmailBorder = emailLooksWrong ? ALERT : LINE;
 
   const shapeProblem = handleShapeProblem(handle);
+
+  /*
+    Capitals, reported rather than absorbed.
+
+    `account.move` rejects any byte outside `[a-z0-9_]`, and the SDK spells out the reason it does
+    not fold instead: "a registry that lower-cases what you typed hands you a different handle from
+    the one you asked for and reports success." The availability check lower-cases before it looks,
+    so "Alice" is read as "alice" and comes back available — a green note for a handle the contract
+    would refuse as typed. Saying so here is the only warning the person gets.
+  */
+  const hasUppercase = /[A-Z]/.test(handle.trim().replace(/^@/, ''));
+
+  /*
+    `malformed` had no branch, and that was the whole defect.
+
+    The chain below ended in a bare `Optional.` in dim grey, so a handle the registry had just
+    called invalid produced the same note as an empty field: the person was told nothing, and
+    submitted. It is reachable even when `handleShapeProblem` is satisfied, because the two
+    disagree — see the note on the drift in the report; the shape check permits 32 characters and
+    the contract permits MAX_HANDLE_LEN. Anything that slips through locally lands here.
+  */
   const wlHandleNote =
     handle.trim() === ''
       ? 'Optional. We will note it — it is yours once you mint it on chain.'
       : shapeProblem !== null
         ? shapeProblem
-        : availability === 'checking'
-          ? 'Checking the registry…'
-          : availability === 'taken'
-            ? 'Taken — this handle already has a page.'
-            : availability === 'available'
-              ? 'Available right now.'
-              : availability === 'unreadable'
-                ? 'Could not check availability just now — you can still note it.'
-                : 'Optional.';
+        : hasUppercase
+          ? 'Lowercase only — the contract rejects capitals rather than converting them.'
+          : availability === 'malformed'
+            ? `Not a valid handle. Use ${MIN_HANDLE_LEN}–${MAX_HANDLE_LEN} characters: lowercase letters, numbers and underscores.`
+            : availability === 'checking'
+              ? 'Checking the registry…'
+              : availability === 'taken'
+                ? 'Taken — this handle already has a page.'
+                : availability === 'available'
+                  ? 'Available right now.'
+                  : availability === 'unreadable'
+                    ? 'Could not check availability just now — you can still note it.'
+                    : 'Optional.';
   const wlHandleColor =
-    shapeProblem !== null || availability === 'taken'
+    shapeProblem !== null || hasUppercase || availability === 'malformed' || availability === 'taken'
       ? ALERT
       : availability === 'unreadable'
         ? SAND
@@ -360,17 +391,44 @@ export function DesignWaitlist({
                         {/*
                           Stated as arrival order, never as a queue. `db/016_waitlist_growth.sql`
                           spells out why: this product is live, nobody is being served in turn, and
-                          "you are 47th in line" would describe a process that does not exist. What
-                          is true is that 46 addresses arrived first, and that is what this says.
+                          "you are 47th in line" would describe a process that does not exist. A
+                          plain count claims arrival, not a position being served.
+
+                          No ordinal suffix, and no noun left for one to strand on.
+
+                          This read "You are number 47 th address to join". The suffix was a bare
+                          literal, so it never agreed with the number in front of it — and no fixed
+                          suffix could: 1 wants "st", 47 wants "th", 21 wants "st" again. The
+                          cardinal form removes the agreement problem rather than solving it, and
+                          is correct at 1, 47, 100 and 1,000,000 alike.
+
+                          `position` is typed `number`, so the guard is not for `null` — it is for
+                          a number that is not finite. `NaN.toLocaleString()` is "NaN", which would
+                          print "You are number NaN on the list." to somebody who just joined.
                         */}
                         <p style={{ margin: '0.625rem 0 0', color: 'var(--ink,#dce9e6)', fontSize: '0.9375rem', textWrap: 'pretty' }}>
-                          You are number{' '}
-                          <span style={{ fontFamily: '\'Geist Mono\',monospace', color: CREST }}>{standing.position.toLocaleString()}</span>
-                          {' '}th address to join, of{' '}
-                          <span style={{ fontFamily: '\'Geist Mono\',monospace', color: CREST }}>{standing.total.toLocaleString()}</span> on the list.
+                          {Number.isFinite(standing.position) ? (
+                            <>
+                              You are number{' '}
+                              <span style={{ fontFamily: '\'Geist Mono\',monospace', color: CREST }}>{standing.position.toLocaleString()}</span>
+                              {' '}on the list.
+                            </>
+                          ) : (
+                            'You are on the list.'
+                          )}
                         </p>
+                        {/*
+                          Branches, because the gate can contradict it.
+
+                          "Weir is already live and open to read" was unconditional, so a reader the
+                          proxy had just turned away was told the door was open — by the very page
+                          that had turned them away. Every other sentence here already reads
+                          `gated`; this one now does too.
+                        */}
                         <p style={{ margin: '0.4rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
-                          Arrival order, not a queue. Nothing is served in turn — Weir is already live and open to read.
+                          {gated
+                            ? 'Arrival order, not a queue. Nothing is served in turn — the doors have not opened yet.'
+                            : 'Arrival order, not a queue. Nothing is served in turn — Weir is already live and open to read.'}
                         </p>
                       </div>
 
