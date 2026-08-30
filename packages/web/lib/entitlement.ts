@@ -68,6 +68,20 @@ export interface Entitlements {
   subscribedVaults: Set<string>;
   /** `${vaultId}:${contentKey}` for each unlock held. */
   unlocked: Set<string>;
+  /**
+   * The unlock **object id** behind each key in {@link unlocked}, same key shape.
+   *
+   * Parsed here all along and then dropped, because the only question this module was asked was
+   * yes-or-no. Seal asks a second one: `entitlement::seal_approve_unlock` takes `&Unlock`, an owned
+   * object, so a reader opening their own paid media has to *name* the object that entitles them.
+   * It cannot be derived from the vault and the content key — those identify the entitlement, not
+   * the instance of it — so it is kept rather than re-read on a second pass.
+   *
+   * Optional so that a hand-built `Entitlements` (a test, {@link NO_ENTITLEMENTS}) stays valid. An
+   * absent map is not "no unlocks"; it is "nobody asked for ids", and the sealed path treats it as
+   * an error rather than as a denial.
+   */
+  unlockIds?: Map<string, string>;
 }
 
 export const NO_ENTITLEMENTS: Entitlements = {
@@ -102,6 +116,7 @@ export async function readEntitlements(
 
     const subscribedVaults = new Set<string>();
     const unlocked = new Set<string>();
+    const unlockIds = new Map<string, string>();
     let truncated = false;
 
     /*
@@ -172,12 +187,14 @@ export async function readEntitlements(
     const unlocks = await drain(`${config.value.packageId}::entitlement::Unlock`, (bytes) => {
       const u = UnlockBcs.parse(bytes);
       const key = new TextDecoder().decode(Uint8Array.from(u.contentKey));
-      unlocked.add(`${normalise(u.vault)}:${key}`);
+      const held = unlockKey(u.vault, key);
+      unlocked.add(held);
+      unlockIds.set(held, normalise(u.id));
     });
     if (!unlocks.ok) return unlocks;
     truncated ||= unlocks.value;
 
-    return ok({ subscribedVaults, unlocked, truncated });
+    return ok({ subscribedVaults, unlocked, unlockIds, truncated });
   } catch (error) {
     const failure = classify(error, source);
     return fail(failure.kind, source, failure.detail);
@@ -201,8 +218,21 @@ export function canRead(post: Post, entitlements: Entitlements): boolean {
     case 'subscribers':
       return entitlements.subscribedVaults.has(normalise(post.vaultId));
     case 'paid':
-      return entitlements.unlocked.has(`${normalise(post.vaultId)}:${post.access.contentKey}`);
+      return entitlements.unlocked.has(unlockKey(post.vaultId, post.access.contentKey));
   }
+}
+
+/**
+ * The key an unlock is held under, built in one place.
+ *
+ * Three callers need this string — the reader that records unlocks, the predicate that checks them,
+ * and the media route that names the object to the browser — and they must agree exactly. They did
+ * not have to before, because only two of them existed and both were in this file; the moment a
+ * third was written outside it, an inlined `${vault}:${key}` silently missed every lookup, because
+ * the vault is normalised and a raw id is not.
+ */
+export function unlockKey(vaultId: string, contentKey: string): string {
+  return `${normalise(vaultId)}:${contentKey}`;
 }
 
 /** Object ids compare as hex strings; normalise so `0x0a…` and `0xa…` do not differ. */

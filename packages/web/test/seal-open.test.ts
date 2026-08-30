@@ -361,3 +361,92 @@ describe('the identity a reader asks for is the one the contract will check', ()
     expect(call.arguments).toHaveLength(4);
   });
 });
+
+/*
+  The entitlement descriptor.
+
+  These headers are how the route tells the browser *which* owned object opens an asset. The browser
+  cannot work it out alone — `seal_approve_unlock` takes `&Unlock`, and finding the right one means
+  paging the reader's owned objects, which the route already did to decide whether to serve the
+  bytes at all.
+
+  What is under test is the parsing, and specifically that the two ways of getting it wrong are
+  distinguished: a response that says nothing is a caller's problem to handle, and a response that
+  says half of something is a bug on the wire. Collapsing those was how a partial descriptor would
+  have reached a key server as a plausible-looking request built from whatever happened to arrive.
+*/
+describe('the entitlement descriptor a sealed response carries', () => {
+  async function withHeaders(extra: Record<string, string>): Promise<Response> {
+    const { response } = await sealedResponse();
+    const headers = new Headers(response.headers);
+    for (const [name, value] of Object.entries(extra)) headers.set(name, value);
+    return new Response(await response.arrayBuffer(), { headers });
+  }
+
+  it('reads an unlock descriptor into the shape the approval builder takes', async () => {
+    const media = await readMediaResponse(
+      await withHeaders({
+        [SEAL_HEADERS.entitlement]: 'unlock',
+        [SEAL_HEADERS.vault]: VAULT,
+        [SEAL_HEADERS.entitlementObject]: UNLOCK.unlockId,
+        [SEAL_HEADERS.contentKey]: 'issue-7',
+      }),
+    );
+
+    expect(media.kind).toBe('sealed');
+    if (media.kind !== 'sealed') return;
+    // Deep-equal against the value the offline tests pass by hand: the descriptor path and the
+    // explicit path must produce the same entitlement, or only one of them is really tested.
+    expect(media.entitlement).toEqual(UNLOCK);
+  });
+
+  it('leaves it absent when the route said nothing, rather than inventing one', async () => {
+    const { response } = await sealedResponse();
+    const media = await readMediaResponse(response);
+    expect(media.kind).toBe('sealed');
+    if (media.kind !== 'sealed') return;
+    expect(media.entitlement).toBeUndefined();
+  });
+
+  it('refuses a descriptor that names an entitlement without naming the object', async () => {
+    await expect(
+      readMediaResponse(
+        await withHeaders({
+          [SEAL_HEADERS.entitlement]: 'unlock',
+          [SEAL_HEADERS.vault]: VAULT,
+          // No `x-seal-object`. There is nothing to present to a key server.
+        }),
+      ),
+    ).rejects.toThrow(/which object/);
+  });
+
+  it('refuses an unlock that does not say which content key it covers', async () => {
+    await expect(
+      readMediaResponse(
+        await withHeaders({
+          [SEAL_HEADERS.entitlement]: 'unlock',
+          [SEAL_HEADERS.vault]: VAULT,
+          [SEAL_HEADERS.entitlementObject]: UNLOCK.unlockId,
+        }),
+      ),
+    ).rejects.toThrow(/content key/);
+  });
+
+  it('refuses an entitlement kind this build cannot approve, instead of guessing a period', async () => {
+    /*
+      Subscriber media is not sealed today, because `period_identity` binds the key to the month of
+      publication and that decision is open. If one ever arrives, the honest failure is this one —
+      a guessed period builds an approval for the wrong month and comes back looking exactly like a
+      reader who never subscribed.
+    */
+    await expect(
+      readMediaResponse(
+        await withHeaders({
+          [SEAL_HEADERS.entitlement]: 'subscription',
+          [SEAL_HEADERS.vault]: VAULT,
+          [SEAL_HEADERS.entitlementObject]: `0x${'ab'.repeat(32)}`,
+        }),
+      ),
+    ).rejects.toThrow(/cannot open media entitled by "subscription"/);
+  });
+});

@@ -1061,6 +1061,37 @@ footer {
   background: var(--bg-surface-sunken);
 }
 
+/*
+  A post's picture before it is a picture.
+
+  `SealedMedia` renders the same element whether it is loading, waiting for a sign-in, or holding
+  a decrypted blob — so the placeholder states are addressed by `data-media-state` rather than by a
+  second class. `.post-media` alone is the settled `<img>` and keeps `height: auto`; only the
+  states below reserve space, because a paid post's frame collapsing to nothing and then jumping
+  open is worse than a frame that was always the right size.
+*/
+.post-media[data-media-state] {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* The veil inside is `position: absolute`, so the box must state its own height. */
+  min-height: 180px;
+  overflow: hidden;
+}
+
+.post-media__note {
+  position: relative;
+  z-index: 1;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+  max-width: 85%;
+}
+
 /* The comment thread. Set apart from the post it hangs off, without becoming a second card. */
 .comments {
   margin-top: var(--space-20);
