@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@mysten/sui": "2.26.2",
+    "@mysten/sui": "2.27.0",
     "@projectx-social/sdk": "workspace:*",
     "pg": "8.23.0"
   },
