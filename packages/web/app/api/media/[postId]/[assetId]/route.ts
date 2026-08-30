@@ -121,7 +121,53 @@ export async function GET(
   if (!read.ok) {
     return new Response('this media could not be retrieved from storage', { status: 424 });
   }
-  const bytes = read.value;
+
+  /*
+    A sealed asset leaves here as ciphertext, and the reader's browser opens it.
+
+    This is the visible half of the custody change. This server no longer holds the key and cannot
+    produce one: the key servers release it only against a `SessionKey` the reader signed and an
+    on-chain entitlement the reader holds. So what is served is exactly what is already public on
+    Walrus, plus the wrapped key — which is safe to hand to anybody, because it is useless without a
+    threshold of key servers first executing `entitlement::seal_approve_*`.
+
+    That has a consequence worth being precise about: for sealed media the paywall no longer depends
+    on the check above being correct. The check stays — it is defence in depth, it keeps blob ids
+    and wrapped keys off the open internet, and it is the same one predicate the feed uses — but a
+    bug in it can no longer release a creator's paid media, because there is no plaintext here to
+    release. That is the property Creator Terms §4.3 describes.
+
+    The metadata rides in headers rather than in a JSON envelope so the body stays raw bytes: base64
+    in JSON would inflate an 8 MB image by a third for no gain, and the browser wants an
+    `ArrayBuffer` at the end of it either way.
+  */
+  if (read.value.kind === 'sealed') {
+    const { ciphertext, wrappedKey, nonce } = read.value;
+    return new Response(ciphertext as unknown as BodyInit, {
+      headers: {
+        // Not `record.contentType`. These bytes are not an image and must never be rendered as one
+        // — the real type is announced separately, for after the browser has decrypted.
+        'content-type': 'application/octet-stream',
+        'content-length': String(ciphertext.length),
+        'x-encryption': 'seal',
+        'x-seal-wrapped-key': wrappedKey,
+        'x-blob-nonce': nonce,
+        /*
+          The integrity check follows the plaintext.
+
+          `readAsset` verifies this hash for anything it can open; it cannot open this, so the
+          browser verifies it after decrypting. Sent rather than dropped, because the bytes still
+          travelled through storage nobody here operates.
+        */
+        'x-plaintext-sha256': record.sha256,
+        'x-plaintext-content-type': record.contentType,
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }
+
+  const bytes = read.value.bytes;
 
   return new Response(bytes as unknown as BodyInit, {
     headers: {

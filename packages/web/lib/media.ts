@@ -39,6 +39,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fail, ok, type Reading } from '@projectx-social/sdk';
 import { decryptBlob, encryptBlob } from './blob-crypto';
 import { grantUpload, type StorageTier } from './publisher-token';
+import { sealUnlockKey } from './seal';
 import { readBlob, storeBlob } from './walrus';
 
 export interface Asset {
@@ -56,9 +57,51 @@ export interface Asset {
   blobId: string;
   /** The epoch after which Walrus deletes the blob unless the lease is extended. */
   endEpoch: number;
-  /** Present exactly when the bytes were encrypted before storage. Null means a public blob. */
-  encryption: { key: string; nonce: string } | null;
+  /**
+   * How the bytes are locked, or `null` for a public blob stored as plaintext.
+   *
+   * A tagged union rather than a bag of nullable fields, because "which scheme opens this" must be
+   * read, never inferred. The two schemes differ in exactly one respect that matters — whether this
+   * platform can produce the key — and a reader that guessed wrong would either hand ciphertext to
+   * a browser as an image or ask a key server for a key that was never issued.
+   */
+  encryption: AssetEncryption | null;
 }
+
+/**
+ * The two custody models, and the seam between them.
+ *
+ * # `platform` is the interim model, and it is on its way out
+ *
+ * The 32-byte key sits in our database next to the row. We can decrypt this asset. Every row
+ * written before the Seal migration is in this state, and `scripts/seal-migrate-keys.ts` moves them
+ * across without touching a stored byte.
+ *
+ * # `seal` is the one the Terms describe
+ *
+ * The same ciphertext, under the same nonce, but the key is an `EncryptedObject` that only a
+ * threshold of key servers can open — and they open it only after executing
+ * `entitlement::seal_approve_*` against the reader's own on-chain entitlement. There is no
+ * `key` field here because there is no key here. That absence is the feature.
+ */
+export type AssetEncryption =
+  | {
+      scheme: 'platform';
+      /** 32 bytes, base64. The secret, held by us. */
+      key: string;
+      /** 12 bytes, base64. Never secret. */
+      nonce: string;
+    }
+  | {
+      scheme: 'seal';
+      /** The Seal `EncryptedObject` wrapping the 32-byte key, base64. Safe to publish. */
+      wrappedKey: string;
+      /**
+       * The same 12 bytes as before. The nonce is not secret and does not move with the key — the
+       * blob is unchanged, so what opens it is unchanged apart from who can produce the key.
+       */
+      nonce: string;
+    };
 
 /** Only these are served. An upload whose bytes are anything else is refused. */
 const ALLOWED: ReadonlyArray<{ type: string; magic: readonly number[] }> = [
@@ -112,13 +155,17 @@ export async function storeAsset(input: {
   /** How long the lease runs. See `TIER_EPOCHS` — the short tier saves far less than it looks. */
   tier: StorageTier;
   /**
-   * True when the post is paid.
+   * What this asset is gated by, or `null` for an open post whose bytes go up as plaintext.
    *
-   * Kept separate from `tier` on purpose. They happen to align today (free posts are ephemeral,
-   * paid ones durable), and conflating them would mean that changing the free tier's lease length
-   * silently changed whether free content was encrypted.
+   * A boolean before, which was enough when the answer was only "encrypt or not". Sealing needs to
+   * know *what the key is released against*, and the honest place to say so is here — the caller
+   * has the post and knows; this module would have to guess.
+   *
+   * Kept separate from `tier` on purpose, as the boolean was. They happen to align today (free
+   * posts are ephemeral, paid ones durable), and conflating them would mean that changing the free
+   * tier's lease length silently changed whether paid content was encrypted.
    */
-  gated: boolean;
+  gated: { vaultId: string; contentKey: string } | null;
 }): Promise<Reading<StoredAsset>> {
   const source = 'media store';
 
@@ -134,8 +181,37 @@ export async function storeAsset(input: {
 
   // Encrypt first: the token authorises an exact size, and for gated media that is the size of the
   // ciphertext, which is longer than the plaintext by the authentication tag.
-  const sealed = input.gated ? encryptBlob(input.bytes) : null;
-  const outgoing = sealed === null ? input.bytes : sealed.ciphertext;
+  const encrypted = input.gated === null ? null : encryptBlob(input.bytes);
+  const outgoing = encrypted === null ? input.bytes : encrypted.ciphertext;
+
+  /*
+    Seal the key before anything is bought, stored or written.
+
+    The ordering is the whole point of doing it here rather than after the upload. If the key server
+    committee is unreachable or misconfigured, this returns a failure and *nothing has happened*: no
+    WAL spent, no blob on Walrus, no row. The alternative — store first, seal second — has a failure
+    mode with no good exit, because the recovery from "the bytes are stored and the key cannot be
+    sealed" is either to keep the plaintext key (which is the defect this work removes) or to
+    abandon a blob that has already been paid for.
+  */
+  let custody: AssetEncryption | null = null;
+  if (input.gated !== null && encrypted !== null) {
+    const wrapped = await sealUnlockKey({
+      vaultId: input.gated.vaultId,
+      contentKey: input.gated.contentKey,
+      key: encrypted.key,
+    });
+    if (!wrapped.ok) return wrapped;
+    /*
+      `encrypted.key` is not carried past this point.
+
+      It exists as a local for as long as it takes to seal it and it is never placed on the returned
+      record, so there is no path from here to a database column holding it. That is what makes the
+      claim in Creator Terms §4.3 structural rather than procedural: not "we choose not to store the
+      key", but "the value that would be stored is not in scope by the time a row is built".
+    */
+    custody = { scheme: 'seal', wrappedKey: wrapped.value.wrappedKey, nonce: encrypted.nonce };
+  }
 
   const grant = await grantUpload({ owner: input.owner, size: outgoing.length, tier: input.tier });
   if (!grant.ok) return grant;
@@ -158,29 +234,77 @@ export async function storeAsset(input: {
     sha256: createHash('sha256').update(input.bytes).digest('hex'),
     blobId: stored.value.blobId,
     endEpoch: stored.value.endEpoch,
-    encryption: sealed === null ? null : { key: sealed.key, nonce: sealed.nonce },
+    encryption: custody,
   });
 }
 
 /**
- * Read an asset's bytes back.
+ * What came back from storage, and whether this server could open it.
+ *
+ * Two shapes because there are two truths, and collapsing them would mean inventing one. A
+ * `platform`-custody asset can be decrypted here, as it always has been. A `seal`-custody asset
+ * cannot be — not by policy, but because the key servers release the key only to a reader who
+ * signed a session key and holds the entitlement. Returning `Uint8Array` for both would require
+ * this function to produce plaintext it cannot produce.
+ */
+export type OpenedAsset =
+  | {
+      kind: 'plaintext';
+      /** Verified against `sha256` before it is returned. */
+      bytes: Uint8Array;
+    }
+  | {
+      kind: 'sealed';
+      /** Exactly what is on Walrus. Public already, and meaningless without the key. */
+      ciphertext: Uint8Array;
+      /** The Seal `EncryptedObject` the reader's browser must open. Base64. */
+      wrappedKey: string;
+      /** The AES-GCM nonce, base64. Not secret; required to open the blob once the key is out. */
+      nonce: string;
+    };
+
+/**
+ * Read an asset back from storage.
  *
  * Takes no entitlement argument and performs no check — deliberately, and unchanged from the
  * version this replaced. It is reachable only from a handler that has already decided, and giving
  * it a `reader` parameter would invite a second, independently written access rule. There is one
  * predicate, in `entitlement.ts`.
  *
- * The integrity check at the end is not ceremony. These bytes travelled through storage nobody here
- * operates and came back reassembled from slivers held by ninety-five separate nodes; serving
- * something that is not what was uploaded, under a content type we chose, is worth one hash.
+ * # Where the integrity check went for sealed assets
+ *
+ * For plaintext and platform-custody bytes the hash is still verified here, and it is not ceremony:
+ * these bytes travelled through storage nobody here operates and came back reassembled from slivers
+ * held by ninety-five separate nodes.
+ *
+ * For a sealed asset the check cannot happen here, because the plaintext does not exist here. It
+ * does not disappear — it moves to the only place that holds the plaintext, the reader's browser,
+ * which is handed `sha256` and checks it after decrypting. That is a real consequence of the
+ * custody change and is written down rather than dropped: verification follows the plaintext.
  */
 export async function readAsset(
   record: Pick<Asset, 'blobId' | 'sha256' | 'encryption'>,
-): Promise<Reading<Uint8Array>> {
+): Promise<Reading<OpenedAsset>> {
   const source = `media asset ${record.blobId}`;
 
   const blob = await readBlob(record.blobId);
   if (!blob.ok) return blob;
+
+  /*
+    Dispatched on the recorded scheme, never on the shape of the row.
+
+    "It has a wrapped key, so it must be sealed" is an inference, and the one time it is wrong it is
+    wrong silently. The column says which, and the switch is exhaustive, so a third scheme added
+    later fails to compile here instead of falling through to a default that guesses.
+  */
+  if (record.encryption !== null && record.encryption.scheme === 'seal') {
+    return ok({
+      kind: 'sealed',
+      ciphertext: blob.value,
+      wrappedKey: record.encryption.wrappedKey,
+      nonce: record.encryption.nonce,
+    });
+  }
 
   let bytes: Uint8Array;
   if (record.encryption === null) {
@@ -204,7 +328,7 @@ export async function readAsset(
   if (digest !== record.sha256) {
     return fail('malformed', source, 'the bytes returned do not match the hash recorded at upload');
   }
-  return ok(bytes);
+  return ok({ kind: 'plaintext', bytes });
 }
 
 export function isValidAssetId(id: string): boolean {

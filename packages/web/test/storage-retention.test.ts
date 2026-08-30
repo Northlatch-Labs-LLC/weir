@@ -45,8 +45,15 @@ describe('the lease the code buys', () => {
   });
 
   it('is still chosen by whether the post is gated', () => {
-    // If this stops being the rule, the composer's per-access copy answers the wrong question.
-    expect(upload).toContain("gated ? 'durable' : 'ephemeral'");
+    /*
+      If this stops being the rule, the composer's per-access copy answers the wrong question.
+
+      `gated` became `{ vaultId, contentKey } | null` when media keys moved to Seal — sealing needs
+      to know what the key is released against, which a boolean cannot say. The rule this test
+      exists to pin is unchanged: the lease still follows gating and nothing else. Only the shape of
+      the expression moved, so the assertion moved with it rather than being deleted.
+    */
+    expect(upload).toContain("gated !== null ? 'durable' : 'ephemeral'");
   });
 
   it('converts to the days a person can act on', () => {

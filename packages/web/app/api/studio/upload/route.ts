@@ -119,7 +119,22 @@ export async function POST(request: Request) {
     decides how long the lease runs. Changing the free tier's duration must not quietly change
     whether free content is encrypted.
   */
-  const gated = post.access.kind === 'paid';
+  /*
+    Only a paid post's media is sealed, and the reason is the identity rather than the intent.
+
+    `unlock_identity(vault, content_key)` needs a content key, and a paid post is the only kind that
+    has one. A subscriber-only post would have to be sealed to `period_identity(vault, tier,
+    period)` instead, which binds the key to the month the post was published — a real product
+    change, because a reader who subscribes later could no longer open older media. That decision is
+    not this migration's to make silently, so subscriber media keeps exactly the behaviour it had.
+
+    What it had is worth stating plainly: subscriber-only media is NOT encrypted before it reaches
+    Walrus, and a Walrus blob is public. See the note in the pull request.
+  */
+  const gated =
+    post.access.kind === 'paid'
+      ? { vaultId: post.vaultId, contentKey: post.access.contentKey }
+      : null;
   const stored = await storeAsset({
     postId,
     label: file.name,
@@ -127,7 +142,7 @@ export async function POST(request: Request) {
     // Not the form's `author` field: this is the address the vault reports as owner, already
     // checked above. It decides who ends up owning the `Blob` object we are about to pay for.
     owner: vault.value.owner,
-    tier: gated ? 'durable' : 'ephemeral',
+    tier: gated !== null ? 'durable' : 'ephemeral',
     gated,
   });
 
