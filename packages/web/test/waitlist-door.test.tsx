@@ -208,8 +208,19 @@ describe('the handle field never fails silently', () => {
     expect(await noteFor('ab')).toBe('A handle is at least 3 characters.');
   });
 
+  /*
+    The bound is read from the SDK, not written here.
+
+    This assertion said `at most 32 characters` and went red the moment PR #11 landed the real
+    contract ceiling of 30 — which is the correct outcome and the reason it is worth recording:
+    a literal in a test is a second source of truth, and a second source of truth is the defect
+    PR #11 existed to remove. Written this way it cannot go stale again, because it moves with
+    `account.move` through the SDK's drift test.
+  */
   it('tells a too-long handle it is too long', async () => {
-    expect(await noteFor('a'.repeat(40))).toBe('A handle is at most 32 characters.');
+    expect(await noteFor('a'.repeat(MAX_HANDLE_LEN + 10))).toBe(
+      `A handle is at most ${MAX_HANDLE_LEN} characters.`,
+    );
   });
 
   it('rejects a dash', async () => {
@@ -233,9 +244,21 @@ describe('the handle field never fails silently', () => {
   /*
     The state that had no branch at all.
 
-    Reachable while every local rule is satisfied, because the local rules and the contract's do not
-    agree: `handleShapeProblem` permits 32 characters and `account.move` permits MAX_HANDLE_LEN. A
-    31-character handle passes here, reaches the registry, and comes back invalid.
+    This test used to reach it with a 31-character handle, on the reasoning that the local rules
+    and the contract's disagreed — `handleShapeProblem` permitted 32 while `account.move`
+    permitted 30 — so a 31-character handle passed locally, reached the registry and came back
+    invalid. **PR #11 closed that gap**, and the route with it: 31 characters is now refused
+    before a request is ever made.
+
+    Closing one route into a state does not make the state unreachable, and it must not make it
+    untested. The registry is the authority on a handle and this client is not: it can refuse one
+    that satisfies every local rule — a name reserved on chain, a race against another mint, or a
+    rule `account.move` gains that this file has not learned yet. The handle below is deliberately
+    well-formed by every local rule, so the ONLY thing that can reject it is the registry, which is
+    exactly the condition this branch exists to render.
+
+    Written this way the test survives the next tightening of the local rules, where the old
+    version would have gone green while testing nothing at all.
   */
   it('surfaces a registry rejection instead of showing "Optional."', async () => {
     vi.useFakeTimers();
@@ -244,7 +267,7 @@ describe('the handle field never fails silently', () => {
       vi.fn(async () => new Response(JSON.stringify({ handle: { state: 'invalid' } }), { status: 200 })),
     );
     render(<DesignWaitlist />);
-    fireEvent.change(screen.getByLabelText(/Handle you want/), { target: { value: 'a'.repeat(31) } });
+    fireEvent.change(screen.getByLabelText(/Handle you want/), { target: { value: 'well_formed_handle' } });
     await vi.advanceTimersByTimeAsync(600);
     vi.useRealTimers();
 
