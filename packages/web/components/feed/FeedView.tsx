@@ -240,7 +240,7 @@ export async function FeedView({
   const BUILT_ON = [
     { name: 'Sui', mark: 'S', note: 'Settlement layer', href: 'https://sui.io' },
     { name: 'Walrus', mark: 'W', note: 'Where post bodies and media live', href: 'https://www.walrus.xyz' },
-    { name: 'Seal', mark: 'SL', note: 'Key release for encrypted bodies', href: 'https://seal-docs.wal.app' },
+    { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app' },
   ];
 
   /*

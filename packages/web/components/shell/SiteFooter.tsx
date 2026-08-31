@@ -20,6 +20,7 @@ import { WeirMark } from '@/components/shell/SiteHeader';
 const BUILT_ON = [
   { name: 'Sui', mark: 'S', note: 'Settlement', href: 'https://sui.io' },
   { name: 'Walrus', mark: 'W', note: 'Post bodies and media', href: 'https://www.walrus.xyz' },
+  { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app' },
   { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin' },
   { name: 'USDC', mark: '$', note: 'One of two denominations', href: 'https://www.circle.com/usdc' },
 ] as const;
