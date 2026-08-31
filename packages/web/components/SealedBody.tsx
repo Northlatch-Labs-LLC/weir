@@ -24,7 +24,12 @@
 
 import { useEffect, useState } from 'react';
 import { SealClient, SessionKey } from '@mysten/seal';
-import { createClient, unlockIdentity, type ProjectXSocialConfig } from '@projectx-social/sdk';
+import {
+  createClient,
+  periodIdentity,
+  unlockIdentity,
+  type ProjectXSocialConfig,
+} from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
 import { PostBody } from '@/components/PostBody';
@@ -36,6 +41,17 @@ export interface SealedBodyRef {
   sealWrappedKey: string;
   sha256: string;
 }
+
+/**
+ * Which `seal_approve_*` opens this body, and the object it is judged against.
+ *
+ * Restated structurally rather than imported from `@/lib/entitlement`, which is `server-only`. The
+ * shape is checked by the compiler at the one place the two meet — `PostCard` passes a
+ * `SealApprover` straight into this prop — so they cannot drift silently.
+ */
+export type Approver =
+  | { kind: 'unlock'; objectId: string }
+  | { kind: 'subscription'; objectId: string; tier: string; period: string };
 
 interface PublicKeyServer {
   objectId: string;
@@ -89,14 +105,20 @@ type State =
   | { phase: 'failed'; reason: string };
 
 export function SealedBody({
-  sealed, preview, vaultId, contentKey, unlockId,
+  sealed, preview, vaultId, contentKey, approver,
 }: {
   sealed: SealedBodyRef;
   preview: string;
+  /** Every Seal identity in this system begins with the vault's bytes. */
   vaultId: string;
-  contentKey: string;
-  /** The reader's own `Unlock`, which the key server checks. Absent means they hold none. */
-  unlockId?: string;
+  /** The post's content key. Present on a paid post; a subscriber post has none and needs none. */
+  contentKey?: string;
+  /**
+   * The entitlement this reader presents. Absent means they hold none that covers this post — for
+   * a subscriber post that includes holding a live subscription which simply began after the
+   * period this post was published in, which is the deliberate under-grant the contract makes.
+   */
+  approver?: Approver;
 }) {
   const { signer } = useSigner();
   const [state, setState] = useState<State>({ phase: 'loading' });
@@ -107,7 +129,7 @@ export function SealedBody({
     void (async () => {
       try {
         if (signer === null) { if (!cancelled) setState({ phase: 'needs-signer' }); return; }
-        if (unlockId === undefined) {
+        if (approver === undefined) {
           throw new Error('this post is not unlocked for you');
         }
 
@@ -135,17 +157,43 @@ export function SealedBody({
           verifyKeyServers: true,
         });
 
-        // Derived by the SDK, never rebuilt here. A hand-rolled identity with the tag and the
-        // vault the wrong way round produces the right length and the wrong key, and the key
-        // server refuses it in a way that looks exactly like having no entitlement.
-        const identity = unlockIdentity(vaultId, new TextEncoder().encode(contentKey));
-
         const { Transaction } = await import('@mysten/sui/transactions');
         const tx = new Transaction();
-        tx.moveCall({
-          target: `${config.latestPackageId}::entitlement::seal_approve_unlock`,
-          arguments: [tx.pure.vector('u8', Array.from(identity)), tx.object(unlockId)],
-        });
+
+        /*
+          The identity comes from the SDK's derivations, never rebuilt here.
+
+          A hand-rolled identity with the tag and the vault the wrong way round produces the right
+          length and the wrong key, and the key server refuses it in a way that reads exactly like
+          having no entitlement — a failure that costs an afternoon and blames the product.
+
+          The `tier` and `period` arguments are also *bound* to the identity: the contract asserts
+          `id == period_identity(vault, tier, period)`, so naming a period one did not pay for
+          cannot pass by disagreeing with the bytes.
+        */
+        if (approver.kind === 'unlock') {
+          if (contentKey === undefined) {
+            throw new Error('this post is unlock-gated but carries no content key');
+          }
+          const identity = unlockIdentity(vaultId, new TextEncoder().encode(contentKey));
+          tx.moveCall({
+            target: `${config.latestPackageId}::entitlement::seal_approve_unlock`,
+            arguments: [tx.pure.vector('u8', Array.from(identity)), tx.object(approver.objectId)],
+          });
+        } else {
+          const tier = BigInt(approver.tier);
+          const period = BigInt(approver.period);
+          const identity = periodIdentity(vaultId, tier, period);
+          tx.moveCall({
+            target: `${config.latestPackageId}::entitlement::seal_approve_subscription`,
+            arguments: [
+              tx.pure.vector('u8', Array.from(identity)),
+              tx.pure.u64(tier),
+              tx.pure.u64(period),
+              tx.object(approver.objectId),
+            ],
+          });
+        }
         tx.setSender(signer.address);
         const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
 
@@ -198,7 +246,16 @@ export function SealedBody({
     })();
 
     return () => { cancelled = true; };
-  }, [sealed.blobId, sealed.nonce, sealed.sealWrappedKey, sealed.sha256, signer, vaultId, contentKey, unlockId]);
+  }, [
+    sealed.blobId, sealed.nonce, sealed.sealWrappedKey, sealed.sha256,
+    signer, vaultId, contentKey,
+    // Depended on field by field rather than by identity: `approver` is rebuilt on every server
+    // render, so an object comparison would re-run this effect — and re-prompt the reader for a
+    // signature — on every navigation that changed nothing.
+    approver?.kind, approver?.objectId,
+    approver?.kind === 'subscription' ? approver.tier : undefined,
+    approver?.kind === 'subscription' ? approver.period : undefined,
+  ]);
 
   if (state.phase === 'ready') return <PostBody body={state.text} preview={preview} />;
 

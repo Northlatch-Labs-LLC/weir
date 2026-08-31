@@ -20,7 +20,7 @@ This policy explains what personal data Northlatch Labs LLC ("Northlatch", "we")
 |---|---|---|
 | **Account and identity** | Sui address; display name, avatar and bio you choose; zkLogin salt; email if you give it (waiting list, support) | You |
 | **On-chain activity** | Deposits, withdrawals, subscriptions, unlocks, tips, name registrations, tier changes — all as recorded on Sui | Public blockchain |
-| **Content** | Posts, media, metadata; for paid posts, encrypted words and media we cannot read; subscriber and free posts are stored unencrypted | You |
+| **Content** | Posts, media, metadata; for paid posts, encrypted words and media we cannot read; for subscriber-only posts, encrypted words we cannot read and media stored unencrypted; free posts stored unencrypted | You |
 | **Usage** | Pages viewed, actions taken, timestamps, referring page | Your browser |
 | **Technical** | IP address, approximate location derived from it, browser and device type, language | Your browser / our infrastructure |
 | **Communications** | Support requests, reports, DMCA notices, and our replies | You |
@@ -105,7 +105,7 @@ The Service is not directed at anyone under 18, and we do not knowingly collect 
 
 ## 14. Security
 
-We use encryption in transit, access controls, and monitoring to protect the data we hold. Paid content is encrypted before it reaches any storage, and we do not hold the key. Subscriber and free content is not encrypted. No system is perfectly secure; you are responsible for the security of your wallet, your seed phrase, and your Google account.
+We use encryption in transit, access controls, and monitoring to protect the data we hold. A paid post's words and media, and a subscriber-only post's words, are encrypted before they reach any storage, and we do not hold the key. A subscriber-only post's media and everything in a free post are not encrypted. No system is perfectly secure; you are responsible for the security of your wallet, your seed phrase, and your Google account.
 
 ## 15. Changes
 

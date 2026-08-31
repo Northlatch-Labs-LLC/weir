@@ -21,6 +21,13 @@ import 'server-only';
  */
 
 import { db, normaliseAddress } from './db';
+/*
+  Type-only, and circular on purpose: `entitlement.ts` imports `Post` from here to write `canRead`.
+  A value import either way round would be a real cycle; a type import is erased entirely by the
+  compiler, and the alternative — restating the approver's shape here — is a second definition of
+  one contract that would drift the first time an argument was added to a `seal_approve_*` call.
+*/
+import type { SealApprover } from './entitlement';
 import type { AssetEncryption } from './media';
 
 export interface Post {
@@ -50,6 +57,16 @@ export interface Post {
     nonce: string;
     sealWrappedKey: string;
     sha256: string;
+    /**
+     * The tier and period this body was sealed to, for a subscriber post.
+     *
+     * Absent on a paid post, whose identity is built from the content key it already carries.
+     * Present on a subscriber post because `seal_approve_subscription` takes both as arguments and
+     * neither can be recovered from anything else here — the period is the one the post was
+     * published in, not the one the reader is in now.
+     */
+    tier?: string;
+    period?: string;
   };
   access: PostAccess;
   /** Attached media, by asset id. Ids only — never paths and never URLs. */
@@ -181,6 +198,8 @@ interface PostRow {
   body_nonce: string | null;
   body_seal_wrapped_key: string | null;
   body_sha256: string | null;
+  body_tier: string | number | null;
+  body_period: string | number | null;
   price: string | null;
   content_key: string | null;
   asset_ids: string[] | null;
@@ -218,6 +237,18 @@ function toPost(row: PostRow): Post {
             nonce: row.body_nonce,
             sealWrappedKey: row.body_seal_wrapped_key,
             sha256: row.body_sha256,
+            /*
+              Strings, all the way to the browser.
+
+              These are `u64` in Move and `bigint` in Postgres. Round-tripping them through a
+              JavaScript `number` is lossless for every value anyone will ever see and lossy
+              eventually, and the failure is silent: an identity built from a rounded period is the
+              right length and the wrong bytes, and the key server refuses it in a way that reads
+              exactly like having no subscription.
+            */
+            ...(row.body_tier !== null && row.body_period !== null
+              ? { tier: String(row.body_tier), period: String(row.body_period) }
+              : {}),
           },
         }
       : {}),
@@ -236,6 +267,7 @@ const POST_SELECT = `
   SELECT p.id, p.vault_id, p.author_handle, p.created_at_ms, p.title, p.preview, p.body,
          p.access_kind, p.price, p.content_key,
          p.body_blob_id, p.body_end_epoch, p.body_nonce, p.body_seal_wrapped_key, p.body_sha256,
+         p.body_tier, p.body_period,
          COALESCE(array_agg(a.id ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '{}') AS asset_ids
   FROM posts p
   LEFT JOIN assets a ON a.post_id = p.id
@@ -389,8 +421,9 @@ export async function addPost(post: Post): Promise<void> {
   await db().query(
     `INSERT INTO posts (id, vault_id, author_handle, created_at_ms, title, preview, body,
                         access_kind, price, content_key,
-                        body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+                        body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256,
+                        body_tier, body_period)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     [
       post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
       /*
@@ -405,6 +438,7 @@ export async function addPost(post: Post): Promise<void> {
       post.sealedBody?.blobId ?? null, post.sealedBody?.endEpoch ?? null,
       post.sealedBody?.nonce ?? null, post.sealedBody?.sealWrappedKey ?? null,
       post.sealedBody?.sha256 ?? null,
+      post.sealedBody?.tier ?? null, post.sealedBody?.period ?? null,
     ],
   );
 }
@@ -769,8 +803,13 @@ export interface VisiblePost extends Omit<Post, 'body' | 'assetIds' | 'sealedBod
   assetIds?: string[];
   /** Present only for an entitled reader of a post whose body was sealed at publish. */
   sealedBody?: Post['sealedBody'];
-  /** The reader's own `Unlock` object, so the browser can name it to the key server. */
-  unlockId?: string;
+  /**
+   * The entitlement object the browser names to the key server, with its arguments.
+   *
+   * Built by `sealApprover`, never here: which object opens a post is the same question `canRead`
+   * answers yes-or-no, and there is one implementation of it.
+   */
+  approver?: SealApprover;
   locked: boolean;
   unlockWith: 'subscribe' | 'purchase' | null;
 }
@@ -787,14 +826,15 @@ export function visiblePost(
   post: Post,
   entitled: boolean,
   /**
-   * The reader's own `Unlock` for this post, when they hold one.
+   * The entitlement object this reader would present for this post, from `sealApprover`.
    *
-   * The key server needs the object named — `seal_approve_unlock` takes `&Unlock` — and finding
-   * which of a reader's unlocks matches means decoding every one they own, which `readEntitlements`
-   * has already done to answer `entitled`. Naming it grants nothing: the key server re-executes the
-   * policy with the reader as sender, so an object they do not own aborts.
+   * The key server needs it named — `seal_approve_unlock` takes `&Unlock` and
+   * `seal_approve_subscription` takes `&Subscription` — and finding which of a reader's objects
+   * matches means decoding every one they own, which `readEntitlements` has already done to answer
+   * `entitled`. Naming it grants nothing: the key server re-executes the policy with the reader as
+   * sender, so an object they do not own aborts.
    */
-  unlockId?: string,
+  approver?: SealApprover,
 ): VisiblePost {
   const base = {
     id: post.id, vaultId: post.vaultId, authorHandle: post.authorHandle,
@@ -815,7 +855,7 @@ export function visiblePost(
         nothing here.
       */
       ...(post.sealedBody === undefined ? {} : { sealedBody: post.sealedBody }),
-      ...(unlockId === undefined ? {} : { unlockId }),
+      ...(approver === undefined ? {} : { approver }),
       ...(post.assetIds === undefined ? {} : { assetIds: post.assetIds }),
       locked: false,
       unlockWith: null,

@@ -16,6 +16,7 @@ import {
   decodeObjectBytes,
   fail,
   ok,
+  SEAL_PERIOD_MS,
   type ProjectXSocialConfig,
   type Reading,
 } from '@projectx-social/sdk';
@@ -82,6 +83,34 @@ export interface Entitlements {
    * an error rather than as a denial.
    */
   unlockIds?: Map<string, string>;
+  /**
+   * Every `Subscription` this reader holds, by normalised vault id, **expired ones included**.
+   *
+   * Deliberately wider than {@link subscribedVaults}, which keeps only the unexpired and is the
+   * right answer to "may they see this post". This answers a different question that the contract
+   * asks differently: `seal_approve_subscription` has no `Clock` and grants the periods a
+   * subscription *paid for*, whether or not it has since lapsed — because a Seal key cannot be
+   * withdrawn, so refusing a lapsed subscriber the key to a period they paid for would punish the
+   * person who did not open the app in time and stop nobody else.
+   *
+   * A reader can hold more than one for a vault: renewal extends the object in place, but
+   * subscribing, lapsing and subscribing again mints a second. They are kept as a list, and
+   * {@link subscriptionForPeriod} picks the one that actually satisfies the policy.
+   *
+   * Optional for the same reason as {@link unlockIds}: an absent map means nobody asked, not that
+   * nothing is held.
+   */
+  subscriptions?: Map<string, HeldSubscription[]>;
+}
+
+/** One `Subscription` object, in the terms `seal_approve_subscription` judges it by. */
+export interface HeldSubscription {
+  /** The object id. The key server needs it named — the Move function takes `&Subscription`. */
+  objectId: string;
+  /** Reads content at this tier and every tier below it. */
+  tier: bigint;
+  startedAtMs: bigint;
+  expiresAtMs: bigint;
 }
 
 export const NO_ENTITLEMENTS: Entitlements = {
@@ -117,6 +146,7 @@ export async function readEntitlements(
     const subscribedVaults = new Set<string>();
     const unlocked = new Set<string>();
     const unlockIds = new Map<string, string>();
+    const subscriptions = new Map<string, HeldSubscription[]>();
     let truncated = false;
 
     /*
@@ -178,8 +208,22 @@ export async function readEntitlements(
 
     const subs = await drain(`${config.value.packageId}::entitlement::Subscription`, (bytes) => {
       const s = SubscriptionBcs.parse(bytes);
+      const vault = normalise(s.vault);
       // Exclusive, exactly as the contract compares it.
-      if (BigInt(s.expiresAtMs) > now) subscribedVaults.add(normalise(s.vault));
+      if (BigInt(s.expiresAtMs) > now) subscribedVaults.add(vault);
+      /*
+        Kept whether or not it is live, and this is the one place the two rules diverge on purpose.
+        The line above answers "show them the post"; this list answers "can they derive the key for
+        the period it was published in", which the contract decides without a clock.
+      */
+      const held = subscriptions.get(vault) ?? [];
+      held.push({
+        objectId: normalise(s.id),
+        tier: BigInt(s.tier),
+        startedAtMs: BigInt(s.startedAtMs),
+        expiresAtMs: BigInt(s.expiresAtMs),
+      });
+      subscriptions.set(vault, held);
     });
     if (!subs.ok) return subs;
     truncated ||= subs.value;
@@ -194,7 +238,7 @@ export async function readEntitlements(
     if (!unlocks.ok) return unlocks;
     truncated ||= unlocks.value;
 
-    return ok({ subscribedVaults, unlocked, unlockIds, truncated });
+    return ok({ subscribedVaults, unlocked, unlockIds, subscriptions, truncated });
   } catch (error) {
     const failure = classify(error, source);
     return fail(failure.kind, source, failure.detail);
@@ -220,6 +264,94 @@ export function canRead(post: Post, entitlements: Entitlements): boolean {
     case 'paid':
       return entitlements.unlocked.has(unlockKey(post.vaultId, post.access.contentKey));
   }
+}
+
+/**
+ * The object a reader must name to the key server to open one post, or `undefined`.
+ *
+ * Seal's `seal_approve_*` functions all take the entitlement **by reference**: the key server
+ * re-executes the policy with the reader as sender, and a policy over an owned object needs that
+ * object identified. Which object, and which arguments accompany it, depends entirely on how the
+ * post is gated — and that decision was being made inline at each render site, in a conditional
+ * that already existed twice and would have grown a third and fourth copy the moment subscriber
+ * posts joined paid ones. That is precisely the shape `canRead` exists to prevent, so this is its
+ * counterpart: one function, called wherever a post is prepared for a reader.
+ *
+ * Returning `undefined` is not a denial and grants nothing either way. The key server is the
+ * authority; this only decides what to hand it.
+ */
+export function sealApprover(post: Post, entitlements: Entitlements): SealApprover | undefined {
+  if (post.access.kind === 'paid') {
+    const objectId = entitlements.unlockIds?.get(unlockKey(post.vaultId, post.access.contentKey));
+    return objectId === undefined ? undefined : { kind: 'unlock', objectId };
+  }
+
+  if (post.access.kind === 'subscribers') {
+    // Only a sealed body needs an approver, and only a sealed body records the tier and period the
+    // contract will be asked about. A subscriber post published before sealing has its words in a
+    // column and is served the ordinary way.
+    const sealed = post.sealedBody;
+    if (sealed?.tier === undefined || sealed.period === undefined) return undefined;
+
+    const tier = BigInt(sealed.tier);
+    const period = BigInt(sealed.period);
+    const held = subscriptionForPeriod(entitlements, post.vaultId, tier, period);
+    return held === null
+      ? undefined
+      : { kind: 'subscription', objectId: held.objectId, tier: sealed.tier, period: sealed.period };
+  }
+
+  return undefined;
+}
+
+/**
+ * What the browser names to the key server, and the arguments that go with it.
+ *
+ * `tier` and `period` are decimal strings because this crosses into a client component as JSON,
+ * where `bigint` does not survive `JSON.stringify` at all — it throws — and `number` would round a
+ * `u64` silently into an identity that is the right length and the wrong bytes.
+ */
+export type SealApprover =
+  | { kind: 'unlock'; objectId: string }
+  | { kind: 'subscription'; objectId: string; tier: string; period: string };
+
+/**
+ * The subscription that can actually open one sealed period, or `null`.
+ *
+ * This re-checks, off chain, exactly what `entitlement::seal_approve_subscription` asserts on chain:
+ *
+ * ```move
+ * assert!(subscription.tier >= tier, ETierTooLow);
+ * let period_start = period * PERIOD_MS;
+ * assert!(subscription.started_at_ms <= period_start, EPeriodNotPaid);
+ * assert!(period_start < subscription.expires_at_ms, EPeriodNotPaid);
+ * ```
+ *
+ * Not as a gate — the key server re-executes the real policy with the reader as sender, so nothing
+ * here can grant anything. It is a *selection*: a reader may hold several subscriptions to one
+ * vault and only one of them covers a given period, and handing the browser the wrong object
+ * produces a `MoveAbort` that surfaces to a paying subscriber as "you do not have access". Picking
+ * the object the contract will accept is the difference between a post that opens and a post that
+ * accuses its reader.
+ *
+ * The earliest qualifying subscription wins, so a reader who has resubscribed keeps opening the
+ * older periods through the object that paid for them.
+ */
+export function subscriptionForPeriod(
+  entitlements: Entitlements,
+  vaultId: string,
+  tier: bigint,
+  period: bigint,
+): HeldSubscription | null {
+  const held = entitlements.subscriptions?.get(normalise(vaultId));
+  if (held === undefined) return null;
+
+  const periodStart = period * SEAL_PERIOD_MS;
+  return (
+    held
+      .filter((s) => s.tier >= tier && s.startedAtMs <= periodStart && periodStart < s.expiresAtMs)
+      .sort((a, b) => (a.startedAtMs < b.startedAtMs ? -1 : a.startedAtMs > b.startedAtMs ? 1 : 0))[0] ?? null
+  );
 }
 
 /**

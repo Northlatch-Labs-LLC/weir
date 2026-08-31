@@ -20,7 +20,7 @@ import {
   visiblePost,
 } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
-import { canRead, unlockKey, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
+import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
 import { DesignHome, type DesignFeedPost } from '@/components/design/Home';
 import { readEntityTypes } from '@/components/EntityType';
@@ -194,9 +194,7 @@ export async function FeedView({
     post: visiblePost(
       post,
       canRead(post, entitlements),
-      post.access.kind === 'paid'
-        ? entitlements.unlockIds?.get(unlockKey(post.vaultId, post.access.contentKey))
-        : undefined,
+      sealApprover(post, entitlements),
     ),
     price:
       post.access.kind === 'paid'

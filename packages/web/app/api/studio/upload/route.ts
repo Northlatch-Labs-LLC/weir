@@ -120,16 +120,20 @@ export async function POST(request: Request) {
     whether free content is encrypted.
   */
   /*
-    Only a paid post's media is sealed, and the reason is the identity rather than the intent.
+    Only a paid post's media is sealed, and this is a known gap rather than a decision.
 
-    `unlock_identity(vault, content_key)` needs a content key, and a paid post is the only kind that
-    has one. A subscriber-only post would have to be sealed to `period_identity(vault, tier,
-    period)` instead, which binds the key to the month the post was published — a real product
-    change, because a reader who subscribes later could no longer open older media. That decision is
-    not this migration's to make silently, so subscriber media keeps exactly the behaviour it had.
+    A subscriber post's *words* are now sealed to `period_identity(vault, tier, period)` at publish.
+    Its media is not, and the honest statement of what that means is: **subscriber-only media is
+    uploaded to Walrus in the clear, and a Walrus blob is public storage.** The route below
+    withholds the blob id from readers who are not entitled, and `visiblePost` withholds the asset
+    ids alongside it — so the file is not enumerable from here — but that is obscurity of a
+    location, not protection of the bytes, and it should not be described as the latter anywhere.
 
-    What it had is worth stating plainly: subscriber-only media is NOT encrypted before it reaches
-    Walrus, and a Walrus blob is public.
+    Closing it means sealing to the same period identity the body uses, which is the same shape of
+    change and needs the reader's `Subscription` named to the key server on the media path exactly
+    as `SealedBody` names it on the body path. Creator Terms §4.3 and the Privacy Policy state the
+    current gap plainly in the meantime; they are not permitted to describe this as sealed until it
+    is.
   */
   const gated =
     post.access.kind === 'paid'

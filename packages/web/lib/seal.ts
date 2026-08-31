@@ -39,6 +39,7 @@ import {
   fail,
   loadSealConfig,
   ok,
+  periodIdentity,
   sealId,
   sealPackageId,
   unlockIdentity,
@@ -114,11 +115,12 @@ export interface SealedKey {
 }
 
 /**
- * Seal the key to one piece of priced content.
+ * Seal a 32-byte blob key to one Seal identity.
  *
- * The identity is `unlock_identity(vault, content_key)`, so the only reader who can ever reconstruct
- * this key is one holding an `Unlock` for exactly this content, in exactly this vault, and the key
- * servers establish that by running the contract rather than by trusting us.
+ * Everything below this line is common to both gates, and it is one function so that they cannot
+ * drift: the same committee, the same threshold, the same original-package rule, the same refusal
+ * to keep the symmetric key, the same failure taxonomy. Only the identity differs, and it is
+ * computed by the caller from the SDK's derivations — never here, and never by hand.
  *
  * # Why a `Reading` and not a throw
  *
@@ -126,21 +128,19 @@ export interface SealedKey {
  * ours and they can do nothing about it; an unreachable key server is transient; a package id that
  * is not the first version is a deployment mistake. A thrown string collapses those into one 500.
  */
-export async function sealUnlockKey(input: {
-  vaultId: string;
-  contentKey: string;
+async function sealTo(
+  identity: Uint8Array,
   /** The blob key from `blob-crypto.ts`, base64. */
-  key: string;
-}): Promise<Reading<SealedKey>> {
-  const source = 'seal media key';
-
+  key64: string,
+  source: string,
+): Promise<Reading<SealedKey>> {
   const config = siteConfig();
   if (!config.ok) return config;
 
   const seal = sealSettings();
   if (!seal.ok) return seal;
 
-  const raw = Buffer.from(input.key, 'base64');
+  const raw = Buffer.from(key64, 'base64');
   if (raw.length !== KEY_BYTES) {
     // Length checked rather than accepted. Sealing a truncated key produces something that
     // decrypts to a key that opens nothing, discovered only when a buyer asks for what they paid
@@ -148,13 +148,6 @@ export async function sealUnlockKey(input: {
     return fail('malformed', source, `a blob key must be ${KEY_BYTES} bytes; this one is ${raw.length}`);
   }
 
-  /*
-    `content_key` is `vector<u8>` in Move and the contract matches it byte-for-byte, never
-    interpreting it. The application stores it as text, so UTF-8 is the encoding that round-trips —
-    and it must be the same encoding `creator::unlock` was called with, or the buyer holds an
-    `Unlock` whose identity does not match the one their media was sealed to.
-  */
-  const identity = unlockIdentity(input.vaultId, new TextEncoder().encode(input.contentKey));
 
   try {
     const { encryptedObject, key } = await client(config.value, seal.value).encrypt({
@@ -196,4 +189,63 @@ export async function sealUnlockKey(input: {
     */
     return fail('transport', source, error instanceof Error ? error.message : String(error));
   }
+}
+
+/**
+ * Seal the key to one piece of priced content.
+ *
+ * The identity is `unlock_identity(vault, content_key)`, so the only reader who can ever reconstruct
+ * this key is one holding an `Unlock` for exactly this content, in exactly this vault, and the key
+ * servers establish that by running the contract rather than by trusting us.
+ */
+export async function sealUnlockKey(input: {
+  vaultId: string;
+  contentKey: string;
+  /** The blob key from `blob-crypto.ts`, base64. */
+  key: string;
+}): Promise<Reading<SealedKey>> {
+  /*
+    `content_key` is `vector<u8>` in Move and the contract matches it byte-for-byte, never
+    interpreting it. The application stores it as text, so UTF-8 is the encoding that round-trips —
+    and it must be the same encoding `creator::unlock` was called with, or the buyer holds an
+    `Unlock` whose identity does not match the one their media was sealed to.
+  */
+  const identity = unlockIdentity(input.vaultId, new TextEncoder().encode(input.contentKey));
+  return sealTo(identity, input.key, 'seal media key');
+}
+
+/**
+ * Seal the key to one creator-period at one tier.
+ *
+ * The identity is `period_identity(vault, tier, period)`, released by `seal_approve_subscription` to
+ * a reader holding a `Subscription` to this vault, at this tier or above, whose paid window covers
+ * the period's start.
+ *
+ * # Why the period is in the identity at all
+ *
+ * A Seal key, once derived, is permanent — it is a deterministic function of the identity, not a
+ * session token, and no later check runs. Seal every subscriber post to `<vault> ‖ 0x01 ‖ <tier>`
+ * and the product silently becomes *pay for one month, read this creator forever, including
+ * everything published after you stop paying*. Nothing would look wrong: the entitlement check
+ * passes at derivation time and there is no second one. The period index is what makes a lapsed
+ * subscription stop granting new content while still opening what it paid for.
+ *
+ * # Why the caller supplies the period rather than this reading a clock
+ *
+ * The period must be the one the post was published in, forever. A `periodOf(Date.now())` here
+ * would seal correctly today and, thirty days on, seal a post to a period the publisher is no
+ * longer in — or, worse, be re-derived at read time and stop opening every post older than a month.
+ * The number is decided once, at publish, and stored beside the ciphertext.
+ */
+export async function sealPeriodKey(input: {
+  vaultId: string;
+  /** The tier the creator published at. Subscribers at this tier **or above** can open it. */
+  tier: bigint;
+  /** `periodOf(publishedAtMs)`. Not `periodOf(now)` — see above. */
+  period: bigint;
+  /** The blob key from `blob-crypto.ts`, base64. */
+  key: string;
+}): Promise<Reading<SealedKey>> {
+  const identity = periodIdentity(input.vaultId, input.tier, input.period);
+  return sealTo(identity, input.key, 'seal subscriber key');
 }

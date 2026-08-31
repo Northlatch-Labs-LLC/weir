@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { createClient, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
+import { createClient, periodOf, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
 import {
   addPost,
   findProfile,
@@ -12,7 +12,7 @@ import {
   type PostAccess,
 } from '@/lib/content';
 import { siteConfig } from '@/lib/chain';
-import { storeBody } from '@/lib/body-storage';
+import { storeBody, type BodyGate } from '@/lib/body-storage';
 import { verifyAction } from '@/lib/identity';
 
 export const dynamic = 'force-dynamic';
@@ -247,20 +247,46 @@ export async function POST(request: Request) {
     the picture and separately fail to acquire the sentence under it — and no new Move function is
     needed, because `seal_approve_unlock` is already deployed.
 
-    Subscriber bodies are NOT sealed here. They need `period_identity`, and SEAL.md sets out why
-    the period cannot simply be dropped: a Seal key is permanent, so one identity per tier would
-    mean a single month's subscription buying the archive in perpetuity. That is a separate change.
+    A subscriber body is sealed too, to `period_identity(vault, tier, period)` and released by
+    `seal_approve_subscription`. The period index is not decoration: a Seal key is permanent, so one
+    identity per tier would mean a single month's subscription buying that creator's archive in
+    perpetuity, including everything published after it lapsed.
+
+    Only a `public` post keeps its words in a column, which is the one case where that is the truth
+    rather than a contradiction of it.
   */
-  let sealedBody: Awaited<ReturnType<typeof storeBody>> | null = null;
+  const publishedAtMs = Date.now();
+
+  let gate: BodyGate | null = null;
   if (postAccess.kind === 'paid') {
+    gate = { kind: 'unlock', contentKey: postAccess.contentKey };
+  } else if (postAccess.kind === 'subscribers') {
+    /*
+      Tier 0, and the period this post is published in.
+
+      Tier 0 because `seal_approve_subscription` compares `subscription.tier >= tier`, so tier 0 is
+      readable by every subscriber at any tier — which is exactly what "subscribers only" means in
+      the product today, where a post belongs to no tier. It is stored on the row rather than
+      assumed, so that publishing at tier 1 later cannot strand what was sealed at tier 0.
+
+      The period is stamped from the publish clock once. `seal_approve_subscription` judges a period
+      at its start, so a subscriber who joins mid-period gets the next one rather than this one —
+      the deliberate under-grant, taken because a derived key cannot be withdrawn and the creator
+      can always sell the missing period as an `Unlock`.
+    */
+    gate = { kind: 'period', tier: 0n, period: periodOf(BigInt(publishedAtMs)) };
+  }
+
+  let sealedBody: Awaited<ReturnType<typeof storeBody>> | null = null;
+  if (gate !== null) {
     sealedBody = await storeBody({
       body: text,
       vaultId: profile.vaultId,
-      contentKey: postAccess.contentKey,
+      gate,
       owner: vault.value.owner,
     });
     if (!sealedBody.ok) {
-      // Nothing is written. A paid post whose body failed to seal must not fall back to storing
+      // Nothing is written. A gated post whose body failed to seal must not fall back to storing
       // the words in the clear — that is the exact state this change exists to end.
       return NextResponse.json(
         { error: `the body could not be sealed: ${sealedBody.failure.detail}` },
@@ -273,7 +299,7 @@ export async function POST(request: Request) {
     id: postId,
     vaultId: profile.vaultId,
     authorHandle: handle,
-    createdAtMs: Date.now(),
+    createdAtMs: publishedAtMs,
     title,
     preview,
     body: text,

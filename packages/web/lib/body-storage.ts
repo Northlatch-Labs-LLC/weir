@@ -23,17 +23,30 @@ import 'server-only';
  *
  * # The identity is deliberately the same as the media's
  *
- * Both are sealed to `unlock_identity(vault, contentKey)`. One `Unlock` therefore opens the post's
- * words and its images together — a reader who paid does not acquire the picture and separately
- * fail to acquire the sentence under it. It also means no new Move function and no upgrade: the
- * `seal_approve_unlock` already deployed is what releases this key.
+ * A paid post's words and its images are both sealed to `unlock_identity(vault, contentKey)`. One
+ * `Unlock` therefore opens them together — a reader who paid does not acquire the picture and
+ * separately fail to acquire the sentence under it. It also means no new Move function and no
+ * upgrade: the `seal_approve_unlock` already deployed is what releases this key.
+ *
+ * # And a subscriber post is sealed to a period, not to itself
+ *
+ * `period_identity(vault, tier, period)`, released by `seal_approve_subscription`. The period index
+ * is the load-bearing part: a Seal key is permanent, so one identity per tier would mean a single
+ * month's subscription buying that creator's archive in perpetuity, including everything published
+ * after the subscription lapsed. `lib/seal.ts` carries the full reasoning.
+ *
+ * Two consequences are accepted deliberately, not overlooked. **A new subscriber cannot read the
+ * back catalogue** — their `Subscription` does not cover periods that ended before they joined, and
+ * back-catalogue access has to be sold, which is what `Unlock` already exists for. And **the period
+ * width is frozen**: `entitlement::seal_period_ms` is a constant precisely because changing it
+ * re-partitions every identity ever issued and strands keys on both sides of the change.
  */
 
 import { createHash } from 'node:crypto';
 import { fail, ok, type Reading } from '@projectx-social/sdk';
 import { encryptBlob } from './blob-crypto';
 import { grantUpload } from './publisher-token';
-import { sealUnlockKey } from './seal';
+import { sealPeriodKey, sealUnlockKey } from './seal';
 import { storeBlob } from './walrus';
 
 /**
@@ -45,6 +58,17 @@ import { storeBlob } from './walrus';
  * the storage step, after the signature had already been spent.
  */
 const MAX_BODY_BYTES = 512 * 1024;
+
+/**
+ * Which `seal_approve_*` will be asked to release this body's key.
+ *
+ * Named for the Move function rather than for the post's access level, because that is what the
+ * value decides. `paid` maps to `unlock` and `subscribers` to `period`, but the mapping belongs to
+ * the caller that knows about posts; this module knows about gates.
+ */
+export type BodyGate =
+  | { kind: 'unlock'; contentKey: string }
+  | { kind: 'period'; tier: bigint; period: bigint };
 
 export interface SealedBody {
   /** Walrus blob id. Public — the bytes there are ciphertext. */
@@ -59,6 +83,17 @@ export interface SealedBody {
   sha256: string;
   /** Bytes of the plaintext, for display. Not of the ciphertext. */
   bytes: number;
+  /**
+   * Present only for a period-sealed body. Both, or neither.
+   *
+   * Decimal strings, not `bigint`s. They are `u64` on chain, they end up in a `bigint` column and
+   * in JSON on its way to a browser, and neither of those round-trips a JavaScript `number`
+   * safely. Taken as `bigint` on the way in — where they build an identity and precision is
+   * load-bearing — and handed back as strings, which is what every consumer downstream stores or
+   * serialises.
+   */
+  tier?: string;
+  period?: string;
 }
 
 /**
@@ -71,10 +106,17 @@ export interface SealedBody {
  */
 export async function storeBody(input: {
   body: string;
-  /** The vault the post is priced against. Half of the seal identity. */
+  /** The vault the post belongs to. Every Seal identity in this system begins with it. */
   vaultId: string;
-  /** The post's content key. The other half. */
-  contentKey: string;
+  /**
+   * Which gate opens these words.
+   *
+   * A discriminated union rather than two optional fields, because the two gates need disjoint
+   * information and "contentKey and tier are both optional" is a shape in which supplying neither
+   * type-checks. There is no third case: a `public` post is not sealed at all, and this function is
+   * not called for one.
+   */
+  gate: BodyGate;
   /** The creator's address. Receives the `Blob` object the platform pays for. */
   owner: string;
 }): Promise<Reading<SealedBody>> {
@@ -92,11 +134,19 @@ export async function storeBody(input: {
   // ciphertext's — longer than the plaintext by GCM's authentication tag.
   const encrypted = encryptBlob(plaintext);
 
-  const wrapped = await sealUnlockKey({
-    vaultId: input.vaultId,
-    contentKey: input.contentKey,
-    key: encrypted.key,
-  });
+  const wrapped =
+    input.gate.kind === 'unlock'
+      ? await sealUnlockKey({
+          vaultId: input.vaultId,
+          contentKey: input.gate.contentKey,
+          key: encrypted.key,
+        })
+      : await sealPeriodKey({
+          vaultId: input.vaultId,
+          tier: input.gate.tier,
+          period: input.gate.period,
+          key: encrypted.key,
+        });
   if (!wrapped.ok) return wrapped;
 
   /*
@@ -131,5 +181,17 @@ export async function storeBody(input: {
     // ciphertext's own integrity is already covered by GCM's tag.
     sha256: createHash('sha256').update(plaintext).digest('hex'),
     bytes: plaintext.length,
+    /*
+      Carried out so the row records them, because the reader has to name them back.
+
+      `seal_approve_subscription` takes `tier` and `period` as arguments and asserts
+      `id == period_identity(vault, tier, period)`. They are not recoverable from anything else the
+      row holds: the period is the one the post was published in and drifts from `periodOf(now)` the
+      moment a month passes, and the tier is a publishing choice. Recomputing either at read time is
+      the bug that arrives on its own, in production, thirty days later.
+    */
+    ...(input.gate.kind === 'period'
+      ? { tier: input.gate.tier.toString(), period: input.gate.period.toString() }
+      : {}),
   });
 }
