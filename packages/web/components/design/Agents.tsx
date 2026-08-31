@@ -462,11 +462,19 @@ export function DesignAgents(props: AgentsProps) {
           <div>
             <strong>Origin anchor — out of band</strong>
             <p style={{ margin: '0.4rem 0 0', ...MUTED }}>
-              A signature proves the document was not altered in transit. It does not by itself prove
-              the key is ours, because an intermediary who rewrote the body would have rewritten the
-              key field too. The manifest therefore names a DNS TXT record at{' '}
-              <code style={MONO}>{dnsAnchor}</code> that publishes the signing key independently.
-              Resolve it and refuse any document whose signer differs.
+              A signature alone proves the document was not altered in transit. It does not prove the
+              key is ours — an intermediary who rewrote the body would have rewritten the key field
+              beside it. So the signing key is also published out of band, in a DNS TXT record at{' '}
+              <code style={MONO}>{dnsAnchor}</code>, in the form{' '}
+              <code style={MONO}>v=weir-agent1; alg=EdDSA; kid=&lt;address&gt;; pk=&lt;base64&gt;</code>.
+              Verify against <em>that</em> key rather than the one inside the document, and refuse any
+              manifest whose signer differs. That is what turns integrity into origin.
+            </p>
+            <p style={{ margin: '0.6rem 0 0', ...MUTED }}>
+              One trap worth naming, because it cost us two attempts in two languages: the base64 key
+              ends in <code style={MONO}>=</code> padding. Parsing that record by splitting on{' '}
+              <code style={MONO}>=</code> silently drops the key, and a verifier then &ldquo;passes&rdquo;
+              against an empty string. Split on the first <code style={MONO}>=</code> only.
             </p>
           </div>
         </div>
