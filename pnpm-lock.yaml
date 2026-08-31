@@ -24,8 +24,8 @@ importers:
   packages/daemon:
     dependencies:
       '@mysten/sui':
-        specifier: 2.27.0
-        version: 2.27.0(typescript@7.0.2)
+        specifier: 2.27.1
+        version: 2.27.1(typescript@7.0.2)
       '@projectx-social/sdk':
         specifier: workspace:*
         version: link:../sdk
@@ -40,8 +40,8 @@ importers:
   packages/sdk:
     dependencies:
       '@mysten/sui':
-        specifier: 2.27.0
-        version: 2.27.0(typescript@7.0.2)
+        specifier: 2.27.1
+        version: 2.27.1(typescript@7.0.2)
     devDependencies:
       typescript:
         specifier: 7.0.2
@@ -50,17 +50,17 @@ importers:
   packages/web:
     dependencies:
       '@mysten/seal':
-        specifier: 1.4.5
-        version: 1.4.5(@mysten/sui@2.27.0(typescript@7.0.2))
+        specifier: 1.4.6
+        version: 1.4.6(@mysten/sui@2.27.1(typescript@7.0.2))
       '@mysten/sui':
-        specifier: 2.27.0
-        version: 2.27.0(typescript@7.0.2)
+        specifier: 2.27.1
+        version: 2.27.1(typescript@7.0.2)
       '@mysten/suins':
         specifier: ^1.2.18
-        version: 1.2.18(@mysten/sui@2.27.0(typescript@7.0.2))
+        version: 1.2.18(@mysten/sui@2.27.1(typescript@7.0.2))
       '@mysten/wallet-standard':
         specifier: 0.21.19
-        version: 0.21.19(@mysten/sui@2.27.0(typescript@7.0.2))
+        version: 0.21.19(@mysten/sui@2.27.1(typescript@7.0.2))
       '@noble/ciphers':
         specifier: 2.4.0
         version: 2.4.0
@@ -498,13 +498,13 @@ packages:
   '@mysten/bcs@2.1.1':
     resolution: {integrity: sha512-IDYomoQ6+yvOIClBHmNdScttv+h/HbGGHLEdUmGQptR3YdqqLM5vJD28wf2QP/UXCEBkCoG7TOT6pFNw8ExYmA==}
 
-  '@mysten/seal@1.4.5':
-    resolution: {integrity: sha512-IQ5tyOIopqyVgjffFHi46YPNzo5JWDu2B4UmPKwfVx4g0tpdTZDBoNOJPxQJmYUPoselTTopL4lPtXkZTCgtvw==}
+  '@mysten/seal@1.4.6':
+    resolution: {integrity: sha512-rAVzHvJIrE99SZcxQlE9hPb1lybYyy0QOUUwoRtWvkCJtjOYw9k1cA8N/QPqdkWHRYChOlItgF3/jYvGWPWB/A==}
     peerDependencies:
-      '@mysten/sui': ^2.27.0
+      '@mysten/sui': ^2.27.1
 
-  '@mysten/sui@2.27.0':
-    resolution: {integrity: sha512-b0r/Ze/pwXpHuDCpbB7SS7MNqcpRlGQh4lHpsj96dPIAlYNo/csjZ0e3R3WLNc8O3UpMfXxQ4RHMoru2c41n3A==}
+  '@mysten/sui@2.27.1':
+    resolution: {integrity: sha512-GYvDGxEq5jU6FBRtM5F1FOWxLr/Ell/1J3ta4UwyI8bKiI9jDv007j6Ozhun4+Qt1LXRHmgOeNUDQsAASxrw3Q==}
     engines: {node: '>=22'}
 
   '@mysten/suins@1.2.18':
@@ -576,16 +576,8 @@ packages:
     resolution: {integrity: sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw==}
     engines: {node: '>= 20.19.0'}
 
-  '@noble/curves@2.3.0':
-    resolution: {integrity: sha512-v7cY+4oWYPQszRj6ZFGzTVL7uP2TaLo1xMhWHzYC5wj0ZhOXQ5x+sBre8rF3hi8cAoi0bh1qXoovoOkdFtvqEg==}
-    engines: {node: '>= 20.19.0'}
-
   '@noble/curves@2.4.0':
     resolution: {integrity: sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/hashes@2.3.0':
-    resolution: {integrity: sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ==}
     engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@2.4.0':
@@ -2000,20 +1992,20 @@ snapshots:
       '@mysten/utils': 0.4.1
       '@scure/base': 2.4.0
 
-  '@mysten/seal@1.4.5(@mysten/sui@2.27.0(typescript@7.0.2))':
+  '@mysten/seal@1.4.6(@mysten/sui@2.27.1(typescript@7.0.2))':
     dependencies:
       '@mysten/bcs': 2.1.1
-      '@mysten/sui': 2.27.0(typescript@7.0.2)
+      '@mysten/sui': 2.27.1(typescript@7.0.2)
       '@noble/curves': 2.4.0
       '@noble/hashes': 2.4.0
 
-  '@mysten/sui@2.27.0(typescript@7.0.2)':
+  '@mysten/sui@2.27.1(typescript@7.0.2)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@17.0.2)
       '@mysten/bcs': 2.1.1
       '@mysten/utils': 0.4.1
-      '@noble/curves': 2.3.0
-      '@noble/hashes': 2.3.0
+      '@noble/curves': 2.4.0
+      '@noble/hashes': 2.4.0
       '@protobuf-ts/grpcweb-transport': 2.11.1
       '@protobuf-ts/runtime': 2.11.1
       '@protobuf-ts/runtime-rpc': 2.11.1
@@ -2029,9 +2021,9 @@ snapshots:
       - '@gql.tada/vue-support'
       - typescript
 
-  '@mysten/suins@1.2.18(@mysten/sui@2.27.0(typescript@7.0.2))':
+  '@mysten/suins@1.2.18(@mysten/sui@2.27.1(typescript@7.0.2))':
     dependencies:
-      '@mysten/sui': 2.27.0(typescript@7.0.2)
+      '@mysten/sui': 2.27.1(typescript@7.0.2)
       axios: 1.19.0
       axios-retry: 4.5.0(axios@1.19.0)
     transitivePeerDependencies:
@@ -2042,9 +2034,9 @@ snapshots:
     dependencies:
       '@scure/base': 2.4.0
 
-  '@mysten/wallet-standard@0.21.19(@mysten/sui@2.27.0(typescript@7.0.2))':
+  '@mysten/wallet-standard@0.21.19(@mysten/sui@2.27.1(typescript@7.0.2))':
     dependencies:
-      '@mysten/sui': 2.27.0(typescript@7.0.2)
+      '@mysten/sui': 2.27.1(typescript@7.0.2)
       '@wallet-standard/core': 1.1.2
 
   '@next/env@16.3.3': {}
@@ -2075,15 +2067,9 @@ snapshots:
 
   '@noble/ciphers@2.4.0': {}
 
-  '@noble/curves@2.3.0':
-    dependencies:
-      '@noble/hashes': 2.3.0
-
   '@noble/curves@2.4.0':
     dependencies:
       '@noble/hashes': 2.4.0
-
-  '@noble/hashes@2.3.0': {}
 
   '@noble/hashes@2.4.0': {}
 
