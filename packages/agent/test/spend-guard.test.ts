@@ -89,3 +89,64 @@ describe('what the guard refuses', () => {
     expect(guard(-1n, 1n).ok).toBe(false);
   });
 });
+
+describe('the fields a JavaScript caller can drop', () => {
+  /*
+   * Found by the live verification script, and found by accident: it called `guardPrice` with
+   * `price:` instead of `livePrice:`, so `livePrice` arrived `undefined` — and the guard returned
+   * `ok(undefined)`.
+   *
+   * `maxPrice` had a runtime check whose comment argued that "this package is a library, JavaScript
+   * callers exist, and JSON round-trips drop fields". Every word of that applied to `livePrice`,
+   * which had no check.
+   *
+   * The asymmetry was in the operators, not the intent. A missing ceiling was tested with
+   * `=== undefined` and failed closed. A missing price was tested with `>` and `< 0n` — and every
+   * relational comparison against `undefined` is `false`, so both guards were skipped and the
+   * function fell through to its success return. The type signature says `bigint` and TypeScript
+   * protected every caller inside this repository; the one caller that was not type-checked walked
+   * straight through it.
+   *
+   * The casts below are the point. They are what a JavaScript caller, a JSON body, or a field
+   * renamed in one place reaches without a compiler ever objecting.
+   */
+  const at = { what: 'a test purchase', coinType: '0x2::sui::SUI' };
+
+  it('refuses a missing livePrice rather than returning ok(undefined)', () => {
+    const result = guardPrice({ ...at, livePrice: undefined as unknown as bigint, maxPrice: 50_000n });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses a livePrice that is a number rather than a bigint', () => {
+    // `10000 > 50000n` is a valid comparison in JavaScript and would have passed the ceiling. The
+    // failure would then surface inside BCS serialisation, far from the decision that caused it.
+    const result = guardPrice({ ...at, livePrice: 10_000 as unknown as bigint, maxPrice: 50_000n });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses a livePrice that is a numeric string', () => {
+    const result = guardPrice({ ...at, livePrice: '10000' as unknown as bigint, maxPrice: 50_000n });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses an expected that is present but not a bigint', () => {
+    // A belief that cannot be compared cannot be checked. Passing it silently would drop the second
+    // half of the guard — the one that catches a quiet overpay rather than a catastrophic one.
+    const result = guardPrice({
+      ...at, livePrice: 10_000n, maxPrice: 50_000n, expected: 10_000 as unknown as bigint,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('still refuses a missing maxPrice, which always failed closed', () => {
+    const result = guardPrice({ ...at, livePrice: 10_000n, maxPrice: undefined as unknown as bigint });
+    expect(result.ok).toBe(false);
+  });
+
+  it('still allows a well-formed spend under the ceiling', () => {
+    // The fix must not have closed the door on the case the guard exists to permit.
+    const result = guardPrice({ ...at, livePrice: 10_000n, maxPrice: 50_000n });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe(10_000n);
+  });
+});

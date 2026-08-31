@@ -436,6 +436,39 @@ export function guardPrice(input: {
         'content somebody else wrote. Nothing was spent.',
     );
   }
+  /*
+    The live price gets the same runtime check, for the same reason.
+
+    `maxPrice` was validated at runtime because "this package is a library, JavaScript callers
+    exist, and JSON round-trips drop fields" — and every word of that applies to `livePrice`, which
+    had no such check. A caller who dropped it reached `undefined > maxPrice`, which is `false`, and
+    `undefined < 0n`, which is also `false`. Both guards below were skipped and the function
+    returned `ok(undefined)`: a spend the operator never authorised, approved by the component whose
+    only job is to refuse exactly that.
+
+    The comparison operators are the trap. A missing ceiling fails closed because it is tested with
+    `=== undefined`; a missing price failed open because it was tested with `>`, and every
+    comparison against `undefined` is `false`. Anything reached only through a relational operator
+    has to be proved to be a number first.
+  */
+  if (typeof input.livePrice !== 'bigint') {
+    return fail(
+      'malformed',
+      source,
+      'livePrice is required and must be a bigint read from the chain. It was not supplied, so ' +
+        'there was no price to compare the ceiling against and nothing could be authorised. ' +
+        'Nothing was spent.',
+    );
+  }
+  if (input.expected !== undefined && typeof input.expected !== 'bigint') {
+    return fail(
+      'malformed',
+      source,
+      'expected was supplied but is not a bigint; a belief that cannot be compared cannot be ' +
+        'checked, and passing it silently would drop the second half of the guard. Nothing was ' +
+        'spent.',
+    );
+  }
   if (input.maxPrice < 0n || input.livePrice < 0n) {
     return fail('malformed', source, 'a price may not be negative.');
   }
