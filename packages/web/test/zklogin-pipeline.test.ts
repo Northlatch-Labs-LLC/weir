@@ -47,7 +47,7 @@ import {
   readIdTokenFromFragment,
   readUnverifiedClaims,
 } from '../lib/zklogin';
-import { deriveUserSalt, verifyGoogleIdToken } from '../lib/zklogin-server';
+import { deriveUserSalt, nonceFor, verifyGoogleIdToken } from '../lib/zklogin-server';
 
 const CLIENT_ID = '1234567890-testclient.apps.googleusercontent.com';
 const ISSUER = 'https://accounts.google.com';
@@ -78,6 +78,34 @@ function issueToken(claims: Record<string, unknown>): string {
 
 const oneHourFromNow = () => Math.floor(Date.now() / 1000) + 3600;
 
+/**
+ * One sign-in commitment and the nonce it produces.
+ *
+ * The verifier derives the nonce from a commitment now, so a test cannot hand it a literal. Every
+ * case below that is not *about* the nonce needs a real one anyway, and this is how they get it.
+ */
+function commitmentFor(maxEpoch = 1222) {
+  const ephemeral = Ed25519Keypair.generate();
+  const jwtRandomness = generateRandomness();
+  return {
+    ephemeral,
+    commitment: {
+      extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeral.getPublicKey()),
+      maxEpoch,
+      jwtRandomness,
+    },
+    nonce: generateNonce(ephemeral.getPublicKey(), maxEpoch, jwtRandomness),
+  };
+}
+
+/**
+ * Shared by the cases that check the signature, the audience, the issuer and the expiry.
+ *
+ * Those used to pass the literal `'N'` as both the token's nonce and the expected one, which is no
+ * longer expressible. Sharing one real commitment keeps them about what they are actually about.
+ */
+const { commitment: COMMITMENT, nonce: NONCE } = commitmentFor();
+
 /** One complete sign-in, from keypair to address, exactly as the app performs it. */
 async function runSignIn(overrides: { maxEpoch?: number } = {}) {
   const maxEpoch = overrides.maxEpoch ?? 1222;
@@ -104,7 +132,13 @@ async function runSignIn(overrides: { maxEpoch?: number } = {}) {
   const claims = await verifyGoogleIdToken({
     jwt,
     clientId: CLIENT_ID,
-    expectedNonce: nonce,
+    // The commitment, not the nonce. The verifier re-derives the nonce from these three and
+    // compares it against the one Google signed, so this asserts a real sign-in still passes.
+    commitment: {
+      extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeral.getPublicKey()),
+      maxEpoch,
+      jwtRandomness: randomness,
+    },
     keys,
   });
   if (!claims.ok) throw new Error(`verification failed: ${claims.failure.detail}`);
@@ -179,15 +213,16 @@ describe('tokens that must be refused', () => {
    */
 
   it('a token for a different sign-in attempt — replay across sessions', async () => {
-    const ephemeral = Ed25519Keypair.generate();
-    const nonceA = generateNonce(ephemeral.getPublicKey(), 1222, generateRandomness());
-    const nonceB = generateNonce(ephemeral.getPublicKey(), 1222, generateRandomness());
+    const sessionA = commitmentFor();
+    const sessionB = commitmentFor();
 
     const jwt = issueToken({
-      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: nonceA, exp: oneHourFromNow(),
+      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: sessionA.nonce, exp: oneHourFromNow(),
     });
     // Google signed this perfectly. It belongs to another session, and that is the whole check.
-    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: nonceB, keys });
+    const result = await verifyGoogleIdToken({
+      jwt, clientId: CLIENT_ID, commitment: sessionB.commitment, keys,
+    });
     expect(result.ok).toBe(false);
   });
 
@@ -195,29 +230,29 @@ describe('tokens that must be refused', () => {
     const stranger = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
     const head = `${b64({ alg: 'RS256', kid: 'test-key' })}.${b64({
-      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: 'N', exp: oneHourFromNow(),
+      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: NONCE, exp: oneHourFromNow(),
     })}`;
     const forged = `${head}.${nodeSign('RSA-SHA256', Buffer.from(head), stranger.privateKey).toString('base64url')}`;
 
-    const result = await verifyGoogleIdToken({ jwt: forged, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt: forged, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(false);
   });
 
   it('a token with the signature swapped for another token’s', async () => {
-    const a = issueToken({ iss: ISSUER, aud: CLIENT_ID, sub: 'user-a', nonce: 'N', exp: oneHourFromNow() });
-    const b = issueToken({ iss: ISSUER, aud: CLIENT_ID, sub: 'user-b', nonce: 'N', exp: oneHourFromNow() });
+    const a = issueToken({ iss: ISSUER, aud: CLIENT_ID, sub: 'user-a', nonce: NONCE, exp: oneHourFromNow() });
+    const b = issueToken({ iss: ISSUER, aud: CLIENT_ID, sub: 'user-b', nonce: NONCE, exp: oneHourFromNow() });
     const spliced = `${a.split('.').slice(0, 2).join('.')}.${b.split('.')[2]}`;
 
-    const result = await verifyGoogleIdToken({ jwt: spliced, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt: spliced, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(false);
   });
 
   it('an expired token, with no grace period', async () => {
     const jwt = issueToken({
-      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: 'N',
+      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: NONCE,
       exp: Math.floor(Date.now() / 1000) - 1,
     });
-    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(false);
   });
 
@@ -226,24 +261,24 @@ describe('tokens that must be refused', () => {
     // this user derive their address here.
     const jwt = issueToken({
       iss: ISSUER, aud: 'another-app.apps.googleusercontent.com', sub: SUBJECT,
-      nonce: 'N', exp: oneHourFromNow(),
+      nonce: NONCE, exp: oneHourFromNow(),
     });
-    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(false);
   });
 
   it('a token from an issuer that is not Google', async () => {
     const jwt = issueToken({
       iss: 'https://accounts.evil.example', aud: CLIENT_ID, sub: SUBJECT,
-      nonce: 'N', exp: oneHourFromNow(),
+      nonce: NONCE, exp: oneHourFromNow(),
     });
-    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(false);
   });
 
   it('a token carrying no nonce at all', async () => {
     const jwt = issueToken({ iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, exp: oneHourFromNow() });
-    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(false);
   });
 
@@ -251,9 +286,9 @@ describe('tokens that must be refused', () => {
     // Google has emitted both `accounts.google.com` and `https://accounts.google.com` for years.
     // Rejecting the bare form would fail genuine sign-ins intermittently.
     const jwt = issueToken({
-      iss: 'accounts.google.com', aud: CLIENT_ID, sub: SUBJECT, nonce: 'N', exp: oneHourFromNow(),
+      iss: 'accounts.google.com', aud: CLIENT_ID, sub: SUBJECT, nonce: NONCE, exp: oneHourFromNow(),
     });
-    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
     expect(result.ok).toBe(true);
   });
 });
@@ -270,8 +305,8 @@ describe('Google’s two issuer spellings must reach one address', () => {
    */
   it('both spellings verify to the same issuer', async () => {
     for (const iss of ['accounts.google.com', 'https://accounts.google.com']) {
-      const jwt = issueToken({ iss, aud: CLIENT_ID, sub: SUBJECT, nonce: 'N', exp: oneHourFromNow() });
-      const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+      const jwt = issueToken({ iss, aud: CLIENT_ID, sub: SUBJECT, nonce: NONCE, exp: oneHourFromNow() });
+      const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value.iss).toBe('https://accounts.google.com');
     }
@@ -279,8 +314,8 @@ describe('Google’s two issuer spellings must reach one address', () => {
 
   it('both spellings therefore reach the same address', async () => {
     const addressFor = async (iss: string) => {
-      const jwt = issueToken({ iss, aud: CLIENT_ID, sub: SUBJECT, nonce: 'N', exp: oneHourFromNow() });
-      const claims = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, expectedNonce: 'N', keys });
+      const jwt = issueToken({ iss, aud: CLIENT_ID, sub: SUBJECT, nonce: NONCE, exp: oneHourFromNow() });
+      const claims = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: COMMITMENT, keys });
       if (!claims.ok) throw new Error(claims.failure.detail);
       const salt = deriveUserSalt({ seed: SEED, iss: claims.value.iss, aud: claims.value.aud, sub: claims.value.sub });
       const seed = genAddressSeed(salt, KEY_CLAIM_NAME, claims.value.sub, claims.value.aud);
@@ -319,5 +354,119 @@ describe('what the browser shows before the round trip', () => {
       expect(claims.value.sub).toBe(SUBJECT);
       expect(claims.value.aud).toBe(CLIENT_ID);
     }
+  });
+});
+
+describe('the nonce must be derived, never accepted', () => {
+  /*
+   * The defect this block exists for.
+   *
+   * `verifyGoogleIdToken` took an `expectedNonce: string`, and both routes passed
+   * `body['nonce']` — a field on the same request that carried the JWT. So the check compared the
+   * nonce Google signed against a copy of that nonce supplied by whoever sent the token. It passed
+   * unconditionally. A Google identity token for this client id was a bearer credential: present it
+   * with its own nonce echoed back and `/complete` returned the account's address and a proof,
+   * while `/export` returned the salt.
+   *
+   * The parameter is now a commitment and the nonce is derived from it. The echo is not merely
+   * rejected — it cannot be expressed, because no parameter accepts a nonce. These tests assert the
+   * derived comparison actually discriminates, which is the part a type signature cannot promise.
+   */
+
+  /** A victim's sign-in: their commitment, and the token Google signed for it. */
+  function victim() {
+    const session = commitmentFor();
+    const jwt = issueToken({
+      iss: ISSUER, aud: CLIENT_ID, sub: SUBJECT, nonce: session.nonce, exp: oneHourFromNow(),
+    });
+    return { ...session, jwt };
+  }
+
+  it('accepts the sign-in the token was actually issued to', async () => {
+    const { jwt, commitment } = victim();
+    const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment, keys });
+    expect(result.ok).toBe(true);
+  });
+
+  it('refuses a stolen token presented with the holder’s own commitment', async () => {
+    // The whole attack, in three lines. The thief has a valid, unexpired, correctly-signed token
+    // for this application and this user. They have no way to make it verify.
+    const { jwt } = victim();
+    const thief = commitmentFor();
+    const result = await verifyGoogleIdToken({
+      jwt, clientId: CLIENT_ID, commitment: thief.commitment, keys,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses a commitment differing only in the ephemeral key', async () => {
+    const { jwt, commitment } = victim();
+    const other = commitmentFor(commitment.maxEpoch);
+    const result = await verifyGoogleIdToken({
+      jwt,
+      clientId: CLIENT_ID,
+      commitment: { ...commitment, extendedEphemeralPublicKey: other.commitment.extendedEphemeralPublicKey },
+      keys,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses a commitment differing only in maxEpoch', async () => {
+    // Not cosmetic: maxEpoch is how long the ephemeral key may sign. A token accepted under a
+    // raised ceiling would extend a session past the epoch the user consented to.
+    const { jwt, commitment } = victim();
+    const result = await verifyGoogleIdToken({
+      jwt, clientId: CLIENT_ID, commitment: { ...commitment, maxEpoch: commitment.maxEpoch + 1 }, keys,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses a commitment differing only in the randomness', async () => {
+    const { jwt, commitment } = victim();
+    const result = await verifyGoogleIdToken({
+      jwt, clientId: CLIENT_ID, commitment: { ...commitment, jwtRandomness: generateRandomness() }, keys,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses, rather than throws, on a commitment that is not well formed', async () => {
+    // These arrive from the request body, so every one of them is reachable by a stranger. A throw
+    // here would be a 500 for what is a bad request, and a stack trace for what is not a fault.
+    const { jwt, commitment } = victim();
+    const malformed = [
+      { ...commitment, extendedEphemeralPublicKey: 'not base64 at all !!' },
+      { ...commitment, extendedEphemeralPublicKey: '' },
+      { ...commitment, jwtRandomness: 'not a number' },
+      { ...commitment, maxEpoch: 0 },
+      { ...commitment, maxEpoch: -1 },
+      { ...commitment, maxEpoch: 1.5 },
+      { ...commitment, maxEpoch: Number.NaN },
+    ];
+    for (const bad of malformed) {
+      const result = await verifyGoogleIdToken({ jwt, clientId: CLIENT_ID, commitment: bad, keys });
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('derives exactly the nonce the browser generated', () => {
+    // `nonceFor` is the server half of a value the browser computes with the SDK. If these ever
+    // disagree, every real sign-in fails — so this is the test that would catch a well-meaning
+    // reimplementation of `generateNonce` on either side.
+    const { ephemeral, commitment, nonce } = commitmentFor();
+    const derived = nonceFor(commitment);
+    expect(derived.ok).toBe(true);
+    if (derived.ok) {
+      expect(derived.value).toBe(nonce);
+      expect(derived.value).toBe(
+        generateNonce(ephemeral.getPublicKey(), commitment.maxEpoch, commitment.jwtRandomness),
+      );
+    }
+  });
+
+  it('reconstructs the ephemeral key the browser sent, byte for byte', () => {
+    // `getExtendedEphemeralPublicKey` is `toSuiPublicKey()`, and the server inverts it with
+    // `publicKeyFromSuiBytes`. The round trip is what lets the server derive at all.
+    const { ephemeral, commitment } = commitmentFor();
+    expect(commitment.extendedEphemeralPublicKey).toBe(ephemeral.getPublicKey().toSuiPublicKey());
   });
 });

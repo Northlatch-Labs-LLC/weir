@@ -50,6 +50,8 @@ import 'server-only';
 import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { generateNonce } from '@mysten/sui/zklogin';
+import { publicKeyFromSuiBytes } from '@mysten/sui/verify';
 import { fail, ok, type Reading } from '@projectx-social/sdk';
 import { GOOGLE_ISSUERS, GOOGLE_JWKS_URL, KEY_CLAIM_NAME, normaliseIssuer } from './zklogin';
 
@@ -203,6 +205,51 @@ export interface VerifiedClaims {
 }
 
 /**
+ * The three values a zkLogin nonce commits to.
+ *
+ * `extendedEphemeralPublicKey` is what `getExtendedEphemeralPublicKey()` produces: base64 of the
+ * signature-scheme flag followed by the raw public key. `publicKeyFromSuiBytes` is its exact
+ * inverse, which is why the server can rebuild the browser's key without being told which curve it
+ * is on.
+ */
+export type NonceCommitment = {
+  extendedEphemeralPublicKey: string;
+  maxEpoch: number;
+  jwtRandomness: string;
+};
+
+/**
+ * Derive the nonce a commitment must have produced.
+ *
+ * `generateNonce` is imported from the SDK rather than reimplemented here. It is `base64urlnopad(
+ * poseidonHash([key_hi, key_lo, maxEpoch, randomness]))`, and a second implementation of that would
+ * be a second thing to keep in step with the circuit — where "in step" is the difference between
+ * refusing a stolen token and refusing every real user.
+ *
+ * Every failure is folded into one `Reading`. The inputs are attacker-controlled: a public key that
+ * is not base64, a flag naming no scheme, randomness that is not a number. `generateNonce` throws
+ * on all of them, and a throw here would be a 500 for what is a bad request.
+ */
+export function nonceFor(commitment: NonceCommitment): Reading<string> {
+  const source = 'sign-in commitment';
+  if (!Number.isInteger(commitment.maxEpoch) || commitment.maxEpoch <= 0) {
+    return fail('malformed', source, 'maxEpoch must be a positive integer');
+  }
+  try {
+    const publicKey = publicKeyFromSuiBytes(commitment.extendedEphemeralPublicKey);
+    return ok(generateNonce(publicKey, commitment.maxEpoch, commitment.jwtRandomness));
+  } catch (error) {
+    return fail(
+      'malformed',
+      source,
+      `the ephemeral key, epoch and randomness do not form a nonce: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+/**
  * Verify an identity token really came from Google, for this application, for this session.
  *
  * **This is the only thing standing between a stranger and another user's salt.** Without a
@@ -218,11 +265,35 @@ export interface VerifiedClaims {
  * for it: the nonce commits to the ephemeral public key, `maxEpoch` and the randomness. A token
  * captured from one session cannot be replayed into another, because the other session's nonce is
  * different and Google signed the first one.
+ *
+ * **That guarantee is only real if the server derives the nonce.** This function used to accept an
+ * `expectedNonce: string`, and both callers passed the value straight out of the request body that
+ * carried the JWT. The comparison was therefore between the nonce Google signed and a copy of that
+ * same nonce, echoed back by whoever sent the token — a self-comparison that passed unconditionally.
+ * The whole replay defence was absent, and a Google identity token for this client id functioned as
+ * a bearer credential for the account it named.
+ *
+ * The parameter is now the *commitment* — the ephemeral public key, `maxEpoch` and the randomness —
+ * and the nonce is derived here with the SDK's own `generateNonce`, the same function the browser
+ * called. A caller cannot hand this function the answer it is checking for, because no parameter
+ * accepts one. That is the point of the shape: the unsafe call is unrepresentable rather than
+ * merely discouraged.
+ *
+ * Deriving rather than storing also means there is no pending-nonce table to expire, and no state
+ * shared between the instance that started a sign-in and the instance that finishes it.
  */
 export async function verifyGoogleIdToken(input: {
   jwt: string;
   clientId: string;
-  expectedNonce: string;
+  /**
+   * What the signed nonce must commit to. Not a nonce — see the note above.
+   *
+   * Supplied by the caller and entirely untrusted: every field here is attacker-controlled. That is
+   * fine, and it is the reason this works. An attacker who holds somebody else's JWT must produce
+   * three values that Poseidon-hash to the nonce Google already signed, which is a preimage search,
+   * not an echo. Supplying their own ephemeral key instead yields a nonce that does not match.
+   */
+  commitment: NonceCommitment;
   /**
    * The key set to verify against. Defaults to Google's, and production never passes anything.
    *
@@ -264,7 +335,13 @@ export async function verifyGoogleIdToken(input: {
     if (typeof nonce !== 'string') {
       return fail('malformed', source, 'the token carries no nonce');
     }
-    if (nonce !== input.expectedNonce) {
+    const expected = nonceFor(input.commitment);
+    if (!expected.ok) {
+      // The commitment did not parse. Reported against this token rather than as a server fault:
+      // the values came in on the same request as the JWT and are the caller's to get right.
+      return fail('malformed', source, expected.failure.detail);
+    }
+    if (nonce !== expected.value) {
       return fail(
         'malformed',
         source,

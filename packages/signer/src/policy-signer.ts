@@ -142,114 +142,164 @@ export function policySigner(options: PolicySignerOptions): PolicySigner {
     return fail<T>(kind, source, reason);
   };
 
+
+  /**
+   * Anything thrown, turned into a recorded refusal.
+   *
+   * This file's header states that refusals are values rather than exceptions, and until now only
+   * the *expected* refusals honoured it. `evaluate()` does not catch a throwing rule, and
+   * `options.ledger()` is caller-supplied I/O — a file, a database — so either could escape.
+   *
+   * Escaping had two costs and the second is the serious one. An unattended loop that caught the
+   * rejection three frames up would retry, which is the loop-hammering-a-wall this file exists to
+   * prevent. And nothing was recorded: `refuse()` is what appends a deny entry, so a throw bypassed
+   * the audit chain entirely and left no evidence that a signature had even been attempted.
+   * Measured before the fix — a ledger that throws produced a rejected promise and zero entries.
+   *
+   * Failing closed was never in question; this path cannot produce a signature. What was missing is
+   * that the refusal be a value, and be visible.
+   */
+  const refuseUnexpected = <T>(error: unknown): Reading<T> => {
+    const detail = error instanceof Error ? error.message : String(error);
+    const reason =
+      `refused: the gate raised an unexpected error and nothing was signed — ${detail}. This is ` +
+      `a fault in the policy evaluation or the ledger read rather than a decision about the ` +
+      `transaction, and it is recorded as a denial because the transaction was in fact denied.`;
+    try {
+      return refuse<T>('malformed', reason, '');
+    } catch {
+      // The audit append itself failed. Still a value, never a throw: a caller handed an exception
+      // here would retry, and the one thing known for certain is that retrying will not help.
+      return fail<T>('malformed', source, reason);
+    }
+  };
+
+  /**
+   * The five steps. Held apart from the property below so that every way this can end — a refusal,
+   * a signature, or a throw from anything it calls — passes through one place that records.
+   */
+  const attemptSign = async (transaction: Transaction): Promise<Reading<SignedTransaction>> => {
+    // 1. Build once. Every later step uses these bytes.
+    const built = await buildBytes(options.client, transaction, address);
+    if (!built.ok) {
+      return refuse('malformed', `refused before simulation: ${built.failure.detail}`, '');
+    }
+    const bytes = built.value;
+
+    // 2. Observe once: verdict and effects from the same simulation.
+    const observed = await simulation.observe({ transactionBytes: bytes, sender: address });
+    if (!observed.ok) {
+      return refuse(
+        observed.failure.kind,
+        `the simulation could not be read, so nothing was signed: ${observed.failure.detail}`,
+        '',
+      );
+    }
+    const evidence = observed.value;
+
+    if (!evidence.wouldSucceed) {
+      return refuse(
+        'malformed',
+        `the transaction would abort, so it was not signed: ${explainAbort(evidence.abort, evidence.status)}`,
+        evidence.txDigest,
+      );
+    }
+
+    // 3. The mandated gate. It can veto; it never grants on its own.
+    const verdict = await simulate(options.client, transaction, address);
+    if (!verdict.ok) {
+      return refuse(
+        verdict.failure.kind,
+        `the SDK simulation gate did not confirm success (${verdict.failure.kind}): ` +
+          `${verdict.failure.detail} — note that on @mysten/sui 2.27.1 gRPC this is also what ` +
+          `a genuine abort looks like through that function, because a failing simulation is ` +
+          `returned under FailedTransaction and simulate() reads only Transaction.`,
+        evidence.txDigest,
+      );
+    }
+    if (!verdict.value.wouldSucceed) {
+      return refuse(
+        'malformed',
+        `the SDK simulation gate reports the transaction would fail: ${verdict.value.status}`,
+        evidence.txDigest,
+      );
+    }
+
+    // 4. Policy.
+    const decision: Decision = evaluate(evidence.effects, options.policy, options.ledger());
+    if (!decision.allow) {
+      return refuse('unconfigured', decision.reason, evidence.txDigest);
+    }
+
+    // 5. Record BEFORE signing. See this file's header; never swap these.
+    const auditEntry = audit.append({
+      ts: Date.now(),
+      address,
+      txDigest: evidence.txDigest,
+      policyHash: hash,
+      decision: 'allow',
+      reason: '',
+    });
+
+    const signature = await options.inner.signTransaction(bytes);
+    if (!signature.ok) {
+      // The allow entry stands. It is true: the policy did permit this, and the signer then
+      // could not act. Deleting it would make the chain a record of successes rather than of
+      // decisions, and the following entry says what happened next.
+      return refuse(
+        signature.failure.kind,
+        `the policy permitted this transaction and the signer could not produce a signature: ` +
+          `${signature.failure.detail}`,
+        evidence.txDigest,
+      );
+    }
+
+    return ok({
+      signature: signature.value,
+      bytes,
+      txDigest: evidence.txDigest,
+      effects: evidence.effects,
+      auditEntry,
+    });
+  };
+
   return {
     address,
     audit,
     policyHash: hash,
 
     signTransaction: async (transaction) => {
-      // 1. Build once. Every later step uses these bytes.
-      const built = await buildBytes(options.client, transaction, address);
-      if (!built.ok) {
-        return refuse('malformed', `refused before simulation: ${built.failure.detail}`, '');
+      try {
+        return await attemptSign(transaction);
+      } catch (error) {
+        return refuseUnexpected<SignedTransaction>(error);
       }
-      const bytes = built.value;
-
-      // 2. Observe once: verdict and effects from the same simulation.
-      const observed = await simulation.observe({ transactionBytes: bytes, sender: address });
-      if (!observed.ok) {
-        return refuse(
-          observed.failure.kind,
-          `the simulation could not be read, so nothing was signed: ${observed.failure.detail}`,
-          '',
-        );
-      }
-      const evidence = observed.value;
-
-      if (!evidence.wouldSucceed) {
-        return refuse(
-          'malformed',
-          `the transaction would abort, so it was not signed: ${explainAbort(evidence.abort, evidence.status)}`,
-          evidence.txDigest,
-        );
-      }
-
-      // 3. The mandated gate. It can veto; it never grants on its own.
-      const verdict = await simulate(options.client, transaction, address);
-      if (!verdict.ok) {
-        return refuse(
-          verdict.failure.kind,
-          `the SDK simulation gate did not confirm success (${verdict.failure.kind}): ` +
-            `${verdict.failure.detail} — note that on @mysten/sui 2.27.1 gRPC this is also what ` +
-            `a genuine abort looks like through that function, because a failing simulation is ` +
-            `returned under FailedTransaction and simulate() reads only Transaction.`,
-          evidence.txDigest,
-        );
-      }
-      if (!verdict.value.wouldSucceed) {
-        return refuse(
-          'malformed',
-          `the SDK simulation gate reports the transaction would fail: ${verdict.value.status}`,
-          evidence.txDigest,
-        );
-      }
-
-      // 4. Policy.
-      const decision: Decision = evaluate(evidence.effects, options.policy, options.ledger());
-      if (!decision.allow) {
-        return refuse('unconfigured', decision.reason, evidence.txDigest);
-      }
-
-      // 5. Record BEFORE signing. See this file's header; never swap these.
-      const auditEntry = audit.append({
-        ts: Date.now(),
-        address,
-        txDigest: evidence.txDigest,
-        policyHash: hash,
-        decision: 'allow',
-        reason: '',
-      });
-
-      const signature = await options.inner.signTransaction(bytes);
-      if (!signature.ok) {
-        // The allow entry stands. It is true: the policy did permit this, and the signer then
-        // could not act. Deleting it would make the chain a record of successes rather than of
-        // decisions, and the following entry says what happened next.
-        return refuse(
-          signature.failure.kind,
-          `the policy permitted this transaction and the signer could not produce a signature: ` +
-            `${signature.failure.detail}`,
-          evidence.txDigest,
-        );
-      }
-
-      return ok({
-        signature: signature.value,
-        bytes,
-        txDigest: evidence.txDigest,
-        effects: evidence.effects,
-        auditEntry,
-      });
     },
 
     signPersonalMessage: async (bytes) => {
-      const signature = await options.inner.signPersonalMessage(bytes);
-      if (!signature.ok) {
-        return refuse(
-          signature.failure.kind,
-          `a personal message could not be signed: ${signature.failure.detail}`,
-          '',
-        );
+      // Wrapped for the same reason: `options.inner` is an adapter, and an adapter that reaches a
+      // KMS or a hardware device can throw rather than return a failure.
+      try {
+        const signature = await options.inner.signPersonalMessage(bytes);
+        if (!signature.ok) {
+          return refuse(
+            signature.failure.kind,
+            `a personal message could not be signed: ${signature.failure.detail}`,
+            '',
+          );
+        }
+        audit.append({
+          ts: Date.now(),
+          address,
+          txDigest: '',
+          policyHash: hash,
+          decision: 'allow',
+          reason: 'personal message; no effects to evaluate',
+        });
+        return ok(signature.value);
+      } catch (error) {
+        return refuseUnexpected<SerializedSignature>(error);
       }
-      audit.append({
-        ts: Date.now(),
-        address,
-        txDigest: '',
-        policyHash: hash,
-        decision: 'allow',
-        reason: 'personal message; no effects to evaluate',
-      });
-      return ok(signature.value);
     },
   };
 }

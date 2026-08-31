@@ -12,7 +12,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "tsx scripts/verify-agent.ts"
   },
   "dependencies": {
     "@mysten/seal": "1.4.6",

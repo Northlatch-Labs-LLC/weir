@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { deriveUserSalt, verifyGoogleIdToken, zkLoginConfig } from '@/lib/zklogin-server';
@@ -35,10 +35,23 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as Record<string, unknown>;
 
-  const required = ['jwt', 'nonce'] as const;
+  /*
+    The commitment is required here, exactly as it is on `/complete`, and for a sharper reason.
+
+    This route answers with the salt. When the nonce was taken from the request body the check was
+    a self-comparison, so any Google identity token for this client id — however obtained — was
+    enough to be handed the salt for the account it named. Requiring the ephemeral key, the epoch
+    and the randomness means a caller must hold the sign-in that token was issued to, not merely
+    the token.
+  */
+  const required = ['jwt', 'extendedEphemeralPublicKey', 'jwtRandomness'] as const;
   const missing = required.filter((key) => typeof body[key] !== 'string' || body[key] === '');
   if (missing.length > 0) {
     return NextResponse.json({ error: `missing: ${missing.join(', ')}` }, { status: 400 });
+  }
+  const maxEpoch = body['maxEpoch'];
+  if (typeof maxEpoch !== 'number' || !Number.isInteger(maxEpoch) || maxEpoch <= 0) {
+    return NextResponse.json({ error: 'maxEpoch must be a positive integer' }, { status: 400 });
   }
 
   const config = zkLoginConfig();
@@ -52,7 +65,11 @@ export async function POST(request: Request) {
   const claims = await verifyGoogleIdToken({
     jwt: body['jwt'] as string,
     clientId: config.value.googleClientId,
-    expectedNonce: body['nonce'] as string,
+    commitment: {
+      extendedEphemeralPublicKey: body['extendedEphemeralPublicKey'] as string,
+      maxEpoch,
+      jwtRandomness: body['jwtRandomness'] as string,
+    },
   });
   if (!claims.ok) {
     return NextResponse.json(

@@ -76,6 +76,28 @@ export function boundedPayment(
   tx: Transaction,
   args: BoundedPaymentArgs,
 ): TransactionObjectArgument {
+  /*
+    The type is checked before the value, because every check below is a comparison.
+
+    Measured on the three shapes a caller without a compiler reaches. `undefined` fell through both
+    comparisons — `undefined <= 0n` and `undefined > MAX_U64` are each `false` — and died inside
+    `splitCoins` with "Invalid type: Expected Object but received undefined", which names neither
+    this function nor the ceiling. `null` coerced to `0` and entered the first branch, then threw a
+    TypeError building its own error message on `null.toString()`. A plain `number` or a numeric
+    string was accepted silently: it happens to work, and it quietly leaves the bigint discipline
+    that keeps minor units exact above 2^53.
+
+    All three failed closed, so none was a way to overspend. They were ways to be handed a fault
+    that does not say what went wrong, which is its own cost at three in the morning.
+  */
+  if (typeof args.ceiling !== 'bigint') {
+    throw new Error(
+      `boundedPayment needs a bigint ceiling in the coin's smallest unit; got ` +
+        `${typeof args.ceiling} (${String(args.ceiling)}). A number loses precision above 2^53 ` +
+        `and a missing value would reach splitCoins as an error naming neither this function nor ` +
+        `the ceiling.`,
+    );
+  }
   if (args.ceiling <= 0n) {
     throw new Error(
       `boundedPayment needs a positive ceiling; got ${args.ceiling.toString()}. A zero-funded ` +

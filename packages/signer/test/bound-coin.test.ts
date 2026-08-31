@@ -79,3 +79,38 @@ describe('boundedPayment', () => {
     expect(() => boundedPayment(tx, { source: tx.gas, ceiling: MAX_U64 })).not.toThrow();
   });
 });
+
+describe('a ceiling that is not a bigint', () => {
+  /*
+   * Every check in `boundedPayment` is a comparison, and a comparison against `undefined` is
+   * `false` in both directions — so the two guards were skipped entirely and the failure surfaced
+   * inside `splitCoins`, naming neither this function nor the ceiling. `null` coerced to `0`,
+   * entered the positive-ceiling branch, and then threw a TypeError while building that branch's
+   * own error message. A plain number was accepted silently.
+   *
+   * None of these was a way to overspend — they all failed closed. They were ways to be handed a
+   * fault that does not say what went wrong.
+   */
+  const tx = () => {
+    const t = new Transaction();
+    t.setSender(`0x${'9'.repeat(64)}`);
+    return t;
+  };
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['a number', 10_000],
+    ['a numeric string', '10000'],
+    ['NaN', Number.NaN],
+  ])('refuses %s with a message naming the ceiling', (_label, ceiling) => {
+    const t = tx();
+    expect(() => boundedPayment(t, { source: t.gas, ceiling: ceiling as unknown as bigint }))
+      .toThrow(/bigint ceiling/);
+  });
+
+  it('still accepts a well-formed bigint ceiling', () => {
+    const t = tx();
+    expect(() => boundedPayment(t, { source: t.gas, ceiling: 10_000n })).not.toThrow();
+  });
+});

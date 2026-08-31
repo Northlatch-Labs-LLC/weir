@@ -14,6 +14,8 @@
 import { createHash, generateKeyPairSync, sign as nodeSign } from 'node:crypto';
 import { createClient, readCurrentEpoch } from '@projectx-social/sdk';
 import { loadConfig } from '@projectx-social/sdk';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { generateNonce, generateRandomness, getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
 import { buildAuthUrl, maxEpochFrom } from '../lib/zklogin';
 import { deriveUserSalt, verifyGoogleIdToken, zkLoginConfig } from '../lib/zklogin-server';
 
@@ -82,16 +84,33 @@ async function main(): Promise<void> {
   console.log('\nToken verification (the only thing protecting the salt)');
   const clientId = configured.ok ? configured.value.googleClientId : 'test-client-id';
 
+  /*
+    A real commitment, because the verifier derives the nonce rather than being told it.
+
+    It used to be handed `expectedNonce: 'N'` alongside a token carrying `nonce: 'N'`, which is
+    precisely the shape the production callers had: the expected value came from the same place as
+    the token. That parameter no longer exists.
+  */
+  const ephemeral = Ed25519Keypair.generate();
+  const jwtRandomness = generateRandomness();
+  const maxEpoch = 1222;
+  const commitment = {
+    extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeral.getPublicKey()),
+    maxEpoch,
+    jwtRandomness,
+  };
+  const nonce = generateNonce(ephemeral.getPublicKey(), maxEpoch, jwtRandomness);
+
   const forged = await verifyGoogleIdToken({
     jwt: forgeToken({
       iss: 'https://accounts.google.com',
       aud: clientId,
       sub: 'victim-account',
-      nonce: 'N',
+      nonce,
       exp: Math.floor(Date.now() / 1000) + 3600,
     }),
     clientId,
-    expectedNonce: 'N',
+    commitment,
   });
   expect(
     !forged.ok,
@@ -102,7 +121,7 @@ async function main(): Promise<void> {
   const garbage = await verifyGoogleIdToken({
     jwt: 'not.a.jwt',
     clientId,
-    expectedNonce: 'N',
+    commitment,
   });
   expect(!garbage.ok, 'a malformed token is refused rather than throwing');
 
