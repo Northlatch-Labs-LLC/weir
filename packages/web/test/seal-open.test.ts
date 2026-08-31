@@ -432,21 +432,55 @@ describe('the entitlement descriptor a sealed response carries', () => {
     ).rejects.toThrow(/content key/);
   });
 
-  it('refuses an entitlement kind this build cannot approve, instead of guessing a period', async () => {
-    /*
-      Subscriber media is not sealed today, because `period_identity` binds the key to the month of
-      publication and that decision is open. If one ever arrives, the honest failure is this one —
-      a guessed period builds an approval for the wrong month and comes back looking exactly like a
-      reader who never subscribed.
-    */
+  it('reads a subscription descriptor into the arguments the contract takes', async () => {
+    const media = await readMediaResponse(
+      await withHeaders({
+        [SEAL_HEADERS.entitlement]: 'subscription',
+        [SEAL_HEADERS.vault]: VAULT,
+        [SEAL_HEADERS.entitlementObject]: `0x${'ab'.repeat(32)}`,
+        [SEAL_HEADERS.tier]: '0',
+        [SEAL_HEADERS.period]: '640',
+      }),
+    );
+
+    expect(media.kind).toBe('sealed');
+    if (media.kind !== 'sealed') return;
+
+    // `bigint`, not `number`. Both are `u64` on chain, and a rounded period builds an identity of
+    // the right length and the wrong bytes — refused in a way that reads as "you never subscribed".
+    expect(media.entitlement).toEqual({
+      kind: 'subscription',
+      vaultId: VAULT,
+      subscriptionId: `0x${'ab'.repeat(32)}`,
+      tier: 0n,
+      period: 640n,
+    });
+  });
+
+  it('refuses a subscription that does not say which period it covers', async () => {
+    // Guessing one would build an approval for the wrong month and fail exactly like a reader who
+    // never subscribed — a wrong answer wearing the right error.
     await expect(
       readMediaResponse(
         await withHeaders({
           [SEAL_HEADERS.entitlement]: 'subscription',
           [SEAL_HEADERS.vault]: VAULT,
           [SEAL_HEADERS.entitlementObject]: `0x${'ab'.repeat(32)}`,
+          [SEAL_HEADERS.tier]: '0',
         }),
       ),
-    ).rejects.toThrow(/cannot open media entitled by "subscription"/);
+    ).rejects.toThrow(/tier and period/);
+  });
+
+  it('refuses an entitlement kind this build has never heard of', async () => {
+    await expect(
+      readMediaResponse(
+        await withHeaders({
+          [SEAL_HEADERS.entitlement]: 'bearer-token',
+          [SEAL_HEADERS.vault]: VAULT,
+          [SEAL_HEADERS.entitlementObject]: `0x${'ab'.repeat(32)}`,
+        }),
+      ),
+    ).rejects.toThrow(/cannot open media entitled by "bearer-token"/);
   });
 });

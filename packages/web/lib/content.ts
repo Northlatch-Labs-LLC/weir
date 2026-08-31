@@ -456,8 +456,9 @@ export async function attachAsset(record: AssetRecord): Promise<boolean> {
   */
   const { rowCount } = await db().query(
     `INSERT INTO assets (id, post_id, content_type, bytes, label, sha256,
-                         blob_id, end_epoch, enc_key, enc_nonce, enc_scheme, seal_wrapped_key)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                         blob_id, end_epoch, enc_key, enc_nonce, enc_scheme, seal_wrapped_key,
+                         seal_tier, seal_period)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
      WHERE EXISTS (SELECT 1 FROM posts WHERE id = $2)`,
     [
       record.id, record.postId, record.contentType, record.bytes, record.label, record.sha256,
@@ -466,6 +467,8 @@ export async function attachAsset(record: AssetRecord): Promise<boolean> {
       encryption?.nonce ?? null,
       encryption?.scheme ?? null,
       encryption?.scheme === 'seal' ? encryption.wrappedKey : null,
+      encryption?.scheme === 'seal' ? (encryption.tier ?? null) : null,
+      encryption?.scheme === 'seal' ? (encryption.period ?? null) : null,
     ],
   );
   return (rowCount ?? 0) > 0;
@@ -478,6 +481,7 @@ export async function findAsset(assetId: string): Promise<AssetRecord | null> {
     blob_id: string | null; end_epoch: string | null;
     enc_key: string | null; enc_nonce: string | null;
     enc_scheme: string | null; seal_wrapped_key: string | null;
+    seal_tier: string | number | null; seal_period: string | number | null;
   }>('SELECT * FROM assets WHERE id = $1', [assetId]);
 
   const row = rows[0];
@@ -519,12 +523,24 @@ function readEncryption(row: {
   enc_nonce: string | null;
   enc_scheme: string | null;
   seal_wrapped_key: string | null;
+  seal_tier?: string | number | null;
+  seal_period?: string | number | null;
 }): AssetEncryption | null {
   if (row.enc_scheme === 'platform' && row.enc_key !== null && row.enc_nonce !== null) {
     return { scheme: 'platform', key: row.enc_key, nonce: row.enc_nonce };
   }
   if (row.enc_scheme === 'seal' && row.seal_wrapped_key !== null && row.enc_nonce !== null) {
-    return { scheme: 'seal', wrappedKey: row.seal_wrapped_key, nonce: row.enc_nonce };
+    return {
+      scheme: 'seal',
+      wrappedKey: row.seal_wrapped_key,
+      nonce: row.enc_nonce,
+      // Strings, because they are `u64` and a `number` would round one silently into an identity
+      // that is the right length and the wrong bytes.
+      ...(row.seal_tier !== null && row.seal_tier !== undefined
+        && row.seal_period !== null && row.seal_period !== undefined
+        ? { tier: String(row.seal_tier), period: String(row.seal_period) }
+        : {}),
+    };
   }
   /*
     A row written before 019 and not yet backfilled: a key and a nonce, but no scheme.

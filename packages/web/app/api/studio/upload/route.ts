@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
-import { createClient, readCreatorVault } from '@projectx-social/sdk';
+import { createClient, periodOf, readCreatorVault } from '@projectx-social/sdk';
 import { attachAsset, findPost, findProfile } from '@/lib/content';
-import { MAX_BYTES, storeAsset } from '@/lib/media';
+import { MAX_BYTES, storeAsset, type AssetGate } from '@/lib/media';
 import { siteConfig } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
@@ -120,25 +120,41 @@ export async function POST(request: Request) {
     whether free content is encrypted.
   */
   /*
-    Only a paid post's media is sealed, and this is a known gap rather than a decision.
+    Every gated post's media is sealed. Only an open post's bytes go up in the clear.
 
-    A subscriber post's *words* are now sealed to `period_identity(vault, tier, period)` at publish.
-    Its media is not, and the honest statement of what that means is: **subscriber-only media is
-    uploaded to Walrus in the clear, and a Walrus blob is public storage.** The route below
-    withholds the blob id from readers who are not entitled, and `visiblePost` withholds the asset
-    ids alongside it — so the file is not enumerable from here — but that is obscurity of a
-    location, not protection of the bytes, and it should not be described as the latter anywhere.
+    This line used to read `post.access.kind === 'paid'`, and it was older than this storage layer.
+    It was written when media lived on `/app/media`, a private volume served by a route that checked
+    entitlement, where "not encrypted" honestly meant "only our server can read it". Storage then
+    moved to Walrus — **a Walrus blob is public** — and the line did not change, so subscriber media
+    went from a private file to a public one with no edit to mark the moment.
 
-    Closing it means sealing to the same period identity the body uses, which is the same shape of
-    change and needs the reader's `Subscription` named to the key server on the media path exactly
-    as `SealedBody` names it on the body path. Creator Terms §4.3 and the Privacy Policy state the
-    current gap plainly in the meantime; they are not permitted to describe this as sealed until it
-    is.
+    A paid post seals to `unlock_identity(vault, content_key)`; a subscriber post has no content key
+    and seals to `period_identity(vault, tier, period)` instead, which is what its words already
+    use, so one `Subscription` opens the picture and the sentence under it.
   */
-  const gated =
+  const gated: AssetGate | null =
     post.access.kind === 'paid'
-      ? { vaultId: post.vaultId, contentKey: post.access.contentKey }
-      : null;
+      ? { kind: 'unlock', vaultId: post.vaultId, contentKey: post.access.contentKey }
+      : post.access.kind === 'subscribers'
+        ? {
+            kind: 'period',
+            vaultId: post.vaultId,
+            /*
+              Tier 0, and the period the POST was published in — never `periodOf(now)`.
+
+              Media is uploaded after its post exists, sometimes much later, and a key sealed to the
+              month of the upload would be unopenable by exactly the subscribers the post was
+              written for. `createdAtMs` is the same instant the body was sealed against, so the
+              picture and the words land on one identity.
+
+              Tier 0 because `seal_approve_subscription` compares `subscription.tier >= tier`, so
+              tier 0 is readable by every subscriber at any tier — which is what "subscribers only"
+              means in the product today.
+            */
+            tier: 0n,
+            period: periodOf(BigInt(post.createdAtMs)),
+          }
+        : null;
   const stored = await storeAsset({
     postId,
     label: file.name,
