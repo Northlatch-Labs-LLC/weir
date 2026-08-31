@@ -43,7 +43,7 @@
  * These statements are single-line string literals containing escapes.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -269,15 +269,78 @@ describe('the duplication stays removed', () => {
   it('lib/identity.ts builds no statement of its own', () => {
     // A `case 'x': return \`…\`` in this file means the server has started formatting statements
     // again beside the module it imports them from — the defect, returning by the door it left by.
-    expect(read('lib/identity.ts')).not.toMatch(/case '[a-z-]+':\s*\n\s*return `/);
+    expect(STATEMENT_SWITCH.test(read('lib/identity.ts'))).toBe(false);
   });
 
-  it('packages/agent builds no statement of its own', () => {
-    // The 244-line hand copy that started this. It is a re-export now; if a switch reappears there,
-    // an agent and this server can disagree again about bytes nobody compares at runtime.
-    const agent = read('../agent/src/statements.ts');
-    expect(agent).not.toMatch(/case '[a-z-]+':\s*\n\s*return `/);
-    expect(agent).toMatch(/export \{[^}]*statementFor[^}]*\} from '@projectx-social\/sdk'/s);
+  /**
+   * A statement-formatting switch: `case 'x':` followed by a returned template literal.
+   *
+   * Built with `RegExp` rather than written as a literal because the pattern ends in a backtick,
+   * and a backtick inside a regex literal is legal JavaScript that esbuild's lexer rejects in some
+   * positions. One definition, used by both assertions below.
+   */
+  const STATEMENT_SWITCH = new RegExp("case '[a-z-]+':\\s*\\n\\s*return `");
+
+  /*
+    Asserted across every package rather than by naming one.
+
+    This used to read `../agent/src/statements.ts` directly. That named the package the 244-line
+    hand copy actually lived in, and it was right about that package and blind to every other one —
+    a seventh package growing a switch of its own would not have been noticed, and the check broke
+    outright the moment the agent package was not present in the tree being tested.
+
+    Walking each package's own `src` directory fixes both. The SDK is excluded because it is where the one
+    implementation belongs; every other package is asserted to have none, whether or not it exists
+    yet.
+  */
+  const statementSwitches = (): string[] => {
+    const offenders: string[] = [];
+    const packages = join(root, '..');
+    for (const pkg of readdirSync(packages, { withFileTypes: true })) {
+      if (!pkg.isDirectory() || pkg.name === 'sdk') continue;
+      const src = join(packages, pkg.name, 'src');
+      let files: string[];
+      try {
+        files = readdirSync(src, { recursive: true, encoding: 'utf8' });
+      } catch {
+        continue; // no src/ in this package
+      }
+      for (const file of files) {
+        if (!file.endsWith('.ts') && !file.endsWith('.tsx')) continue;
+        const full = join(src, file);
+        let body: string;
+        try {
+          body = readFileSync(full, 'utf8');
+        } catch {
+          continue; // a directory entry, not a file
+        }
+        if (STATEMENT_SWITCH.test(body)) {
+          offenders.push(`packages/${pkg.name}/src/${file}`);
+        }
+      }
+    }
+    return offenders;
+  };
+
+  it('no package outside the SDK formats a statement of its own', () => {
+    // Named in the failure, so it says which package returned by the door it left by.
+    expect(statementSwitches()).toEqual([]);
+  });
+
+  it('packages/agent re-exports the builder, when that package is present', () => {
+    /*
+      The 244-line hand copy that started this. It is a re-export now.
+
+      Conditional on the file existing because this suite runs in trees where the agent package has
+      not been added yet, and a hard read there fails with ENOENT — reporting a missing package as
+      a drift defect. The assertion above is the one that holds unconditionally; this one adds that
+      the replacement is a re-export rather than merely not-a-switch.
+    */
+    const path = join(root, '..', 'agent', 'src', 'statements.ts');
+    if (!existsSync(path)) return;
+    expect(readFileSync(path, 'utf8')).toMatch(
+      /export \{[^}]*statementFor[^}]*\} from '@projectx-social\/sdk'/s,
+    );
   });
 });
 
