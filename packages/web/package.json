@@ -17,7 +17,7 @@
     "@mysten/seal": "1.4.6",
     "@mysten/sui": "2.27.1",
     "@mysten/suins": "^1.2.18",
-    "@mysten/wallet-standard": "0.21.19",
+    "@mysten/wallet-standard": "0.21.20",
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
