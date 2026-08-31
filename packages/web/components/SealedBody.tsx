@@ -24,16 +24,11 @@
 
 import { useEffect, useState } from 'react';
 import { SealClient, SessionKey } from '@mysten/seal';
-import {
-  createClient,
-  periodIdentity,
-  unlockIdentity,
-  type ProjectXSocialConfig,
-} from '@projectx-social/sdk';
+import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
 import { PostBody } from '@/components/PostBody';
-import { openBlob, sha256Hex } from '@/lib/seal-open';
+import { approvalFor, openBlob, sha256Hex } from '@/lib/seal-open';
 
 export interface SealedBodyRef {
   blobId: string;
@@ -157,43 +152,36 @@ export function SealedBody({
           verifyKeyServers: true,
         });
 
-        const { Transaction } = await import('@mysten/sui/transactions');
-        const tx = new Transaction();
-
         /*
-          The identity comes from the SDK's derivations, never rebuilt here.
+          Built by `approvalFor`, not here.
 
-          A hand-rolled identity with the tag and the vault the wrong way round produces the right
-          length and the wrong key, and the key server refuses it in a way that reads exactly like
-          having no entitlement — a failure that costs an afternoon and blames the product.
-
-          The `tier` and `period` arguments are also *bound* to the identity: the contract asserts
-          `id == period_identity(vault, tier, period)`, so naming a period one did not pay for
-          cannot pass by disagreeing with the bytes.
+          `lib/seal-open.ts` already owns the mapping from an entitlement to the transaction the key
+          servers dry-run, and `SealedMedia` has used it since the sealed path existed. Hand-rolling
+          a second copy in this component is precisely what the estate's own rule forbids — never
+          re-derive what another module builds — and the failure mode is not a compile error: an
+          identity with the tag and the vault the wrong way round is the right length and the wrong
+          bytes, and the key server refuses it in a way that reads exactly like having no
+          entitlement. That mistake has already cost this desk an afternoon once.
         */
-        if (approver.kind === 'unlock') {
-          if (contentKey === undefined) {
-            throw new Error('this post is unlock-gated but carries no content key');
-          }
-          const identity = unlockIdentity(vaultId, new TextEncoder().encode(contentKey));
-          tx.moveCall({
-            target: `${config.latestPackageId}::entitlement::seal_approve_unlock`,
-            arguments: [tx.pure.vector('u8', Array.from(identity)), tx.object(approver.objectId)],
-          });
-        } else {
-          const tier = BigInt(approver.tier);
-          const period = BigInt(approver.period);
-          const identity = periodIdentity(vaultId, tier, period);
-          tx.moveCall({
-            target: `${config.latestPackageId}::entitlement::seal_approve_subscription`,
-            arguments: [
-              tx.pure.vector('u8', Array.from(identity)),
-              tx.pure.u64(tier),
-              tx.pure.u64(period),
-              tx.object(approver.objectId),
-            ],
-          });
-        }
+        const tx = approvalFor(
+          config,
+          approver.kind === 'unlock'
+            ? (() => {
+                if (contentKey === undefined) {
+                  throw new Error('this post is unlock-gated but carries no content key');
+                }
+                return { kind: 'unlock' as const, vaultId, contentKey, unlockId: approver.objectId };
+              })()
+            : {
+                kind: 'subscription' as const,
+                vaultId,
+                // `bigint`, never `number`: both are `u64`, and a rounded period builds a valid
+                // approval for the wrong month.
+                tier: BigInt(approver.tier),
+                period: BigInt(approver.period),
+                subscriptionId: approver.objectId,
+              },
+        );
         tx.setSender(signer.address);
         const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
 
