@@ -14,13 +14,13 @@
     "seal:migrate": "tsx --tsconfig tsconfig.scripts.json --env-file=.env.local scripts/seal-migrate-keys.ts"
   },
   "dependencies": {
-    "@mysten/seal": "1.4.4",
-    "@mysten/sui": "2.26.2",
+    "@mysten/seal": "1.4.5",
+    "@mysten/sui": "2.27.0",
     "@mysten/suins": "^1.2.18",
-    "@mysten/wallet-standard": "0.21.18",
-    "@noble/ciphers": "2.3.0",
-    "@noble/curves": "2.3.0",
-    "@noble/hashes": "2.3.0",
+    "@mysten/wallet-standard": "0.21.19",
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
     "@projectx-social/sdk": "workspace:*",
     "@types/pg": "8.23.1",
     "jose": "^6.2.10",
@@ -33,10 +33,10 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
-    "happy-dom": "^20.11.6",
+    "happy-dom": "^20.11.12",
     "tailwindcss": "^4"
   }
 }
