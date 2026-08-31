@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { createClient, readCreatorVault } from '@projectx-social/sdk';
+import { createClient, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
 import {
   addPost,
   findProfile,
@@ -174,6 +174,58 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    /*
+      The check the comment at the top of this file has always promised, and which was never here.
+
+      `creator::unlock` reads the price from `vault.content_prices` and aborts with
+      `EContentNotForSale` when the key has none. So a post stored as paid whose key was never
+      priced on chain publishes cleanly, renders a buy button, and aborts for every buyer with
+      `MoveAbort 12` — a failure the creator never sees and the buyer cannot interpret.
+
+      It is not hypothetical: it happened on 2026-08-31, publishing through this route.
+
+      Three outcomes, deliberately distinct, following `studio/content-price` which reasons the
+      same way: unreadable means conclude nothing, absent means it was never priced, and a
+      disagreement means the store would describe a price the contract will not honour.
+    */
+    const priced = await readContentPrice(
+      createClient(config.value),
+      vault.value.contentPricesTableId,
+      body.contentKey,
+    );
+
+    if (!priced.ok) {
+      // 503, never 409. The chain being unreachable is not evidence the key is unpriced, and
+      // refusing as though it were would tell a creator to re-price content that is already sold.
+      return NextResponse.json(
+        { error: `could not read the price for this content: ${priced.failure.detail}`,
+          kind: priced.failure.kind },
+        { status: 503 },
+      );
+    }
+
+    if (priced.value === null) {
+      return NextResponse.json(
+        { error:
+            `"${body.contentKey}" has no price on this vault, so nothing could buy it. ` +
+            `Set the content price on chain first, then publish.` },
+        { status: 409 },
+      );
+    }
+
+    if (priced.value.toString() !== String(body.price)) {
+      // The buy button would quote one number and the contract would charge another. The chain is
+      // the authority, so this is refused rather than silently corrected — a creator who meant to
+      // change the price should change it on chain, not discover it moved by publishing.
+      return NextResponse.json(
+        { error:
+            `this post claims a price of ${body.price}, but the vault prices ` +
+            `"${body.contentKey}" at ${priced.value.toString()}.` },
+        { status: 409 },
+      );
+    }
+
     postAccess = { kind: 'paid', price: body.price, contentKey: body.contentKey };
   } else {
     return NextResponse.json({ error: `unknown access "${access}"` }, { status: 400 });
