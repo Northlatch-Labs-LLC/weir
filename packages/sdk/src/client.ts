@@ -244,15 +244,103 @@ export async function simulate(
     const bytes = await transaction.build({ client });
     const result = await client.simulateTransaction({ transaction: bytes });
 
-    const effects = (result as { transaction?: { effects?: { status?: unknown } } }).transaction
-      ?.effects;
-    const status = effects?.status as { success?: boolean; error?: string } | undefined;
+    /*
+      The status lives at `Transaction.status` — capital T, and NO `effects` in the path.
 
-    if (status?.success === true) {
+      This read was `transaction.effects.status`, which is the JSON-RPC shape and is not what the
+      gRPC client returns. It therefore resolved to `undefined` on every call, and `undefined` is
+      not `true`, so **every simulation reported `wouldSucceed: false` for a transaction that
+      would have succeeded.** The daemon hit this in production — every harvest was journalled as
+      a failed simulation, nothing was ever submitted, and the process exited 0 looking healthy.
+      It was fixed there on 2026-08-30 and left wrong here, in the package third parties import.
+
+      Measured against mainnet on `@mysten/sui` 2.27.1, not read from documentation:
+
+        sim.Transaction.status          -> {"success":true,"error":null}
+        sim.Transaction.effects.status  -> undefined
+        sim.transaction.effects.status  -> undefined
+
+      The JSON-RPC path is kept as a fallback rather than deleted: it costs one `??` and it is the
+      shape an older node still speaks.
+    */
+    /*
+      Read defensively, because optional chaining does not do what it looks like it does here.
+
+      `shape.Transaction?.status` guards `Transaction` being **undefined**. It does not guard
+      `Transaction` being literally `null` — `null?.status` is fine, but a node that answers
+      `{"Transaction": null}` and a reader that then indexes further would throw a TypeError
+      *inside* the `try`, and this function would return `fail('transport', …)`. That is the wrong
+      answer twice over: nothing is retryable about it, and `transport` tells the caller to retry
+      something that will reproduce for ever.
+
+      So each level is checked for being an object before it is indexed. The cost is four lines;
+      the alternative is a permanent condition wearing a transient's name.
+    */
+    type SimStatus = { success?: boolean; error?: string | null };
+    const isObject = (v: unknown): v is Record<string, unknown> =>
+      typeof v === 'object' && v !== null;
+
+    const envelope: Record<string, unknown> = isObject(result) ? result : {};
+
+    /*
+      A FAILED simulation does not arrive under `Transaction`. It arrives under
+      `FailedTransaction`, and reading only the success envelope makes every genuine abort look
+      like a shape mismatch. From `@mysten/sui` 2.27.1 `src/grpc/core.ts:1597`:
+
+          return status.success
+            ? { $kind: 'Transaction',       Transaction: result }
+            : { $kind: 'FailedTransaction', FailedTransaction: result };
+
+      Missing this branch fails CLOSED — nothing is signed, which is the property that matters —
+      but it answers an abort with "this is a client/server shape mismatch, not a rejected
+      transaction", which is exactly backwards and sends the reader looking for a library bug
+      instead of at their own transaction. The decoded abort was unreachable.
+    */
+    const grpc = isObject(envelope['Transaction'])
+      ? envelope['Transaction']
+      : isObject(envelope['FailedTransaction'])
+        ? envelope['FailedTransaction']
+        : undefined;
+
+    const legacy = isObject(envelope['transaction']) ? envelope['transaction'] : undefined;
+    const legacyEffects = legacy !== undefined && isObject(legacy['effects']) ? legacy['effects'] : undefined;
+
+    const grpcStatus = grpc !== undefined && isObject(grpc['status']) ? (grpc['status'] as SimStatus) : undefined;
+    const legacyStatus =
+      legacyEffects !== undefined && isObject(legacyEffects['status'])
+        ? (legacyEffects['status'] as SimStatus)
+        : undefined;
+
+    const status = grpcStatus ?? legacyStatus;
+
+    /*
+      An unrecognised shape REFUSES, and must keep refusing.
+
+      Treating "no status found" as permission to sign is how a client library's rename turns into
+      money moving with no simulation behind it — the exact gate this function exists to be. It is
+      `malformed` rather than `transport` because retrying reproduces it exactly.
+    */
+    if (status === undefined) {
+      return fail(
+        'malformed',
+        'simulateTransaction',
+        'the simulation response carried no status field, so it could not be shown to have ' +
+          'succeeded. Nothing was submitted. This is a client/server shape mismatch, not a ' +
+          'rejected transaction.',
+      );
+    }
+
+    if (status.success === true) {
       return ok({ wouldSucceed: true, status: 'success' });
     }
 
-    const raw = status?.error ?? JSON.stringify(status ?? {});
+    /*
+      `status.error` is a STRUCTURED object over gRPC, not a string. Passing it to `decodeAbort`
+      stringifies it to `[object Object]`, which parses to module `unknown` and code `-1` — an
+      abort reported as unrecognisable when the node named it precisely. Serialise it first, and
+      keep the serialised form as the raw text so nothing is lost on the way to the reader.
+    */
+    const raw = typeof status.error === 'string' ? status.error : JSON.stringify(status.error ?? status);
     return ok({ wouldSucceed: false, status: raw, abort: decodeAbort(raw) });
   } catch (error) {
     return fail('transport', 'simulateTransaction', classify(error, 'simulate').detail);

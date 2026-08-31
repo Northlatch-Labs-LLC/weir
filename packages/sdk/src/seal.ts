@@ -181,22 +181,42 @@ export function sealPackageId(config: ProjectXSocialConfig): string {
 }
 
 /**
- * An entitlement object, declared as the immutable reference the contract takes.
+ * An entitlement object, named for the approval transaction.
  *
- * `tx.object(id)` leaves mutability unknown, and the transaction builder resolves that by reading
- * the function's signature from chain — an extra round trip, on every approval, for an answer the
- * Move signature already gives us here: `seal_approve_unlock(id, unlock: &Unlock, ...)` and
- * `seal_approve_subscription(..., subscription: &Subscription, ...)` both take a shared reference
- * and neither mutates.
+ * # `mutable` was here, and it made every approval unbuildable
  *
- * Saying so removes the lookup. It is also the honest declaration: an approval that asked for a
- * mutable reference to a reader's soulbound entitlement would be asking for more than it needs, on
- * a transaction handed to key servers we do not run.
+ * This function used to declare `mutable: false`, reasoning that the Move signature already says
+ * the reference is shared and immutable — `seal_approve_unlock(id, unlock: &Unlock, ...)` and
+ * `seal_approve_subscription(..., subscription: &Subscription, ...)` neither of which mutates — so
+ * saying so would save the builder a round trip to read the signature from chain.
+ *
+ * The reasoning is right about Move and wrong about the SDK. **`mutable` is a SHARED-object
+ * property**, and an `Unlock` or `Subscription` is *owned* — soulbound to its holder. `@mysten/sui`
+ * refuses the combination outright, in `transactions/TransactionData.ts`:
+ *
+ * ```
+ * // Objects with shared object properties should not resolve to owned objects
+ * original.mutable != null ||
+ * ```
+ *
+ * Note `!= null`: it is the PRESENCE of the key that offends, not its value. `mutable: true` fails
+ * identically. Measured against real mainnet objects on `@mysten/sui` 2.27.1 — a real `Unlock`
+ * failed with *"Input at index 1 did not match unresolved object"*, a real `Subscription` at index
+ * 3, and plain `tx.object(id)` built a 207-byte transaction. The clause is present in 2.24.0,
+ * 2.26.2, 2.27.0 and 2.27.1, so nothing regressed: **this has never worked.**
+ *
+ * It went unnoticed because the only end-to-end Seal proofs were run by hand with transactions
+ * built another way. Every caller that goes through `approvalFor` and then `tx.build({ client })`
+ * — `SealedBody.tsx` and `SealedMedia.tsx`, the readers a paying subscriber actually uses — could
+ * not build an approval at all.
+ *
+ * So the object is named plainly and the builder resolves its ownership. That is one extra read per
+ * approval, which is the correct price for a transaction that is built rather than one that throws.
  */
 function entitlementRef(objectId: string) {
   return {
     $kind: 'UnresolvedObject' as const,
-    UnresolvedObject: { objectId: normalizeSuiObjectId(objectId), mutable: false },
+    UnresolvedObject: { objectId: normalizeSuiObjectId(objectId) },
   };
 }
 
