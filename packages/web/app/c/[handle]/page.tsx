@@ -10,7 +10,7 @@ import { createClient, fold, readCreatorVault, readDecimals } from '@projectx-so
 import { countFollowers, findProfile, isFollowing, listPosts, visiblePost, type Profile } from '@/lib/content';
 import { checkHandle } from '@/lib/accounts';
 import { reverseName } from '@/lib/names';
-import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
+import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
 import { siteConfig, explorerUrl, shortId, readVaults } from '@/lib/chain';
 import { readVault } from '@/lib/stake';
@@ -345,7 +345,11 @@ export default async function CreatorPage({
   });
 
   const profilePosts: DesignFeedPost[] = posts.map((post) => ({
-    post: visiblePost(post, canRead(post, entitlements)),
+    post: visiblePost(
+      post,
+      canRead(post, entitlements),
+      sealApprover(post, entitlements),
+    ),
     price:
       post.access.kind === 'paid' && coinDecimals !== null
         ? `${formatUnits(BigInt(post.access.price), coinDecimals)}${coinSymbol === '' ? '' : ` ${coinSymbol}`}`

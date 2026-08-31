@@ -1,7 +1,13 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { rateLimit } from '@/lib/rate-limit';
 import { readAsset, isValidAssetId } from '@/lib/media';
-import { canRead, NO_ENTITLEMENTS, readEntitlements, unlockKey } from '@/lib/entitlement';
+import {
+  canRead,
+  subscriptionForPeriod,
+  NO_ENTITLEMENTS,
+  readEntitlements,
+  unlockKey,
+} from '@/lib/entitlement';
 import { provenReaderFor } from '@/lib/read-session';
 import { findAsset, findPost } from '@/lib/content';
 import { fold } from '@projectx-social/sdk';
@@ -148,32 +154,66 @@ export async function GET(
       Which entitlement was accepted, named for the browser.
 
       `canRead` above proved the reader holds one; the key servers will demand to be shown *which*,
-      because `seal_approve_unlock` takes `&Unlock` by reference and a reader cannot present an
-      object they have not identified. That identification is a search over the reader's owned
-      objects, and it already happened — `readEntitlements` decoded every `Unlock` a moment ago to
-      answer the yes-or-no question. Sending the id costs nothing and saves the tab from repeating
-      the walk.
+      because `seal_approve_unlock` takes `&Unlock` and `seal_approve_subscription` takes
+      `&Subscription`, both by reference, and a reader cannot present an object they have not
+      identified. That identification is a search over the reader's owned objects, and it already
+      happened — `readEntitlements` decoded them a moment ago to answer the yes-or-no question.
+      Sending the id costs nothing and saves the tab from repeating the walk.
 
-      Only paid media reaches here sealed: `studio/upload` seals against `unlock_identity` and
-      leaves subscriber media unsealed, so `access.kind` is `paid` on this line. It is read rather
-      than assumed, and a sealed asset that is somehow not paid gets no descriptor instead of a
-      fabricated one — the browser then reports that it could not be opened, which is true, rather
-      than presenting a wrong object to a key server and reading the abort back as a paywall.
+      A sealed asset whose descriptor cannot be built gets **no descriptor** rather than a
+      fabricated one. The browser then reports that it could not be opened, which is true, instead
+      of presenting a wrong object to a key server and reading the abort back as a paywall.
     */
-    const unlockId =
-      post.access.kind === 'paid'
-        ? entitlements.unlockIds?.get(unlockKey(post.vaultId, post.access.contentKey))
-        : undefined;
+    const descriptor = ((): Record<string, string> => {
+      if (post.access.kind === 'paid') {
+        const unlockId = entitlements.unlockIds?.get(
+          unlockKey(post.vaultId, post.access.contentKey),
+        );
+        return unlockId === undefined
+          ? {}
+          : {
+              'x-seal-entitlement': 'unlock',
+              'x-seal-vault': post.vaultId,
+              'x-seal-object': unlockId,
+              'x-seal-content-key': post.access.contentKey,
+            };
+      }
 
-    const descriptor: Record<string, string> =
-      unlockId === undefined || post.access.kind !== 'paid'
-        ? {}
-        : {
-            'x-seal-entitlement': 'unlock',
-            'x-seal-vault': post.vaultId,
-            'x-seal-object': unlockId,
-            'x-seal-content-key': post.access.contentKey,
-          };
+      /*
+        Subscriber media, sealed to the period its post was published in.
+
+        The tier and period are read from the ASSET, not recomputed. They are what the key was
+        actually sealed to, and `periodOf(now)` drifts away from them the moment a month passes —
+        a mismatch that would produce a valid-looking approval for the wrong identity and fail as if
+        the reader had never subscribed. An older asset carrying no period was sealed before this
+        existed, or is not sealed at all; either way there is nothing honest to send.
+      */
+      const sealed = record.encryption;
+      if (
+        post.access.kind === 'subscribers'
+        && sealed?.scheme === 'seal'
+        && sealed.tier !== undefined
+        && sealed.period !== undefined
+      ) {
+        const held = subscriptionForPeriod(
+          entitlements,
+          post.vaultId,
+          BigInt(sealed.tier),
+          BigInt(sealed.period),
+        );
+        return held === null
+          ? {}
+          : {
+              'x-seal-entitlement': 'subscription',
+              'x-seal-vault': post.vaultId,
+              'x-seal-object': held.objectId,
+              'x-seal-tier': sealed.tier,
+              'x-seal-period': sealed.period,
+            };
+      }
+
+      return {};
+    })();
 
     return new Response(ciphertext as unknown as BodyInit, {
       headers: {

@@ -39,7 +39,7 @@ These Creator Terms apply to anyone who opens a creator page, publishes gated co
 
 4.2 **Rights and responsibility.** You represent that you own or have all necessary rights in Your Content, including any music, images, footage, or likenesses of other people it contains, and that publishing it does not infringe anyone's rights or violate any law.
 
-4.3 **Gated content is encrypted; you hold the responsibility.** Bodies of gated posts are encrypted client-side with Seal. Northlatch cannot read them and does not pre-screen them. You are fully responsible for what they contain.
+4.3 **What is encrypted, exactly.** The words and media of a **paid** post are encrypted before they leave the publishing device and stored on Walrus as ciphertext, sealed with Seal to an identity only a holder of the corresponding on-chain Unlock can open. The words of a **subscriber-only** post are encrypted the same way, sealed to the creator-period they were published in, and open only to a holder of a Subscription that paid for that period. Northlatch does not hold either key and cannot read that content. **The media attached to a subscriber-only post is not encrypted**, and it is stored on Walrus, which is public storage: our servers withhold its location from readers who are not entitled, but the file itself is not protected by cryptography and Northlatch can read it. **Free posts are not encrypted** and Northlatch can read them. Northlatch does not pre-screen any post. You are fully responsible for what they contain.
 
 4.4 **Permanence.** Post bodies and media are written to Walrus and **cannot be deleted by Northlatch** (Terms of Service, Section 5.4). Deleting on Weir delists and stops serving; it does not erase the blob. Publish accordingly.
 

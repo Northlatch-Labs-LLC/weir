@@ -20,7 +20,7 @@ import {
   visiblePost,
 } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
-import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
+import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
 import { DesignHome, type DesignFeedPost } from '@/components/design/Home';
 import { readEntityTypes } from '@/components/EntityType';
@@ -191,7 +191,11 @@ export async function FeedView({
         );
 
   const designFeed: DesignFeedPost[] = posts.map((post) => ({
-    post: visiblePost(post, canRead(post, entitlements)),
+    post: visiblePost(
+      post,
+      canRead(post, entitlements),
+      sealApprover(post, entitlements),
+    ),
     price:
       post.access.kind === 'paid'
         ? priceOf(

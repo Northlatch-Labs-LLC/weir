@@ -21,6 +21,13 @@ import 'server-only';
  */
 
 import { db, normaliseAddress } from './db';
+/*
+  Type-only, and circular on purpose: `entitlement.ts` imports `Post` from here to write `canRead`.
+  A value import either way round would be a real cycle; a type import is erased entirely by the
+  compiler, and the alternative — restating the approver's shape here — is a second definition of
+  one contract that would drift the first time an argument was added to a `seal_approve_*` call.
+*/
+import type { SealApprover } from './entitlement';
 import type { AssetEncryption } from './media';
 
 export interface Post {
@@ -30,8 +37,37 @@ export interface Post {
   createdAtMs: number;
   title: string;
   preview: string;
-  /** Withheld until the reader holds an entitlement — see `visiblePost`. */
+  /**
+   * Withheld until the reader holds an entitlement — see `visiblePost`.
+   *
+   * Empty for a gated post published after bodies became sealed: there is no plaintext to
+   * withhold, because the words live on Walrus as ciphertext and `sealedBody` names them.
+   */
   body: string;
+  /**
+   * A gated body's ciphertext, when there is one.
+   *
+   * Present only for paid posts sealed at publish. Every field is public — a Walrus blob id, a
+   * GCM nonce and a Seal-wrapped key open nothing without a threshold of key servers first
+   * executing `entitlement::seal_approve_unlock` for a reader who holds the `Unlock`.
+   */
+  sealedBody?: {
+    blobId: string;
+    endEpoch: number;
+    nonce: string;
+    sealWrappedKey: string;
+    sha256: string;
+    /**
+     * The tier and period this body was sealed to, for a subscriber post.
+     *
+     * Absent on a paid post, whose identity is built from the content key it already carries.
+     * Present on a subscriber post because `seal_approve_subscription` takes both as arguments and
+     * neither can be recovered from anything else here — the period is the one the post was
+     * published in, not the one the reader is in now.
+     */
+    tier?: string;
+    period?: string;
+  };
   access: PostAccess;
   /** Attached media, by asset id. Ids only — never paths and never URLs. */
   assetIds?: string[];
@@ -157,6 +193,13 @@ interface PostRow {
   preview: string;
   body: string;
   access_kind: string;
+  body_blob_id: string | null;
+  body_end_epoch: string | number | null;
+  body_nonce: string | null;
+  body_seal_wrapped_key: string | null;
+  body_sha256: string | null;
+  body_tier: string | number | null;
+  body_period: string | number | null;
   price: string | null;
   content_key: string | null;
   asset_ids: string[] | null;
@@ -179,6 +222,36 @@ function toPost(row: PostRow): Post {
     title: row.title,
     preview: row.preview,
     body: row.body,
+    /*
+      Carried back only when every part is present. The database constraint already refuses a
+      half-written sealed body, so this is belt and braces — but a partial record here would
+      become a reader staring at a spinner over a blob that can never open, and the honest
+      response to that is to behave as though there is no sealed body at all.
+    */
+    ...(row.body_blob_id !== null && row.body_nonce !== null
+        && row.body_seal_wrapped_key !== null && row.body_sha256 !== null
+      ? {
+          sealedBody: {
+            blobId: row.body_blob_id,
+            endEpoch: Number(row.body_end_epoch ?? 0),
+            nonce: row.body_nonce,
+            sealWrappedKey: row.body_seal_wrapped_key,
+            sha256: row.body_sha256,
+            /*
+              Strings, all the way to the browser.
+
+              These are `u64` in Move and `bigint` in Postgres. Round-tripping them through a
+              JavaScript `number` is lossless for every value anyone will ever see and lossy
+              eventually, and the failure is silent: an identity built from a rounded period is the
+              right length and the wrong bytes, and the key server refuses it in a way that reads
+              exactly like having no subscription.
+            */
+            ...(row.body_tier !== null && row.body_period !== null
+              ? { tier: String(row.body_tier), period: String(row.body_period) }
+              : {}),
+          },
+        }
+      : {}),
     access,
     ...(assetIds.length > 0 ? { assetIds } : {}),
   };
@@ -193,6 +266,8 @@ function toPost(row: PostRow): Post {
 const POST_SELECT = `
   SELECT p.id, p.vault_id, p.author_handle, p.created_at_ms, p.title, p.preview, p.body,
          p.access_kind, p.price, p.content_key,
+         p.body_blob_id, p.body_end_epoch, p.body_nonce, p.body_seal_wrapped_key, p.body_sha256,
+         p.body_tier, p.body_period,
          COALESCE(array_agg(a.id ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '{}') AS asset_ids
   FROM posts p
   LEFT JOIN assets a ON a.post_id = p.id
@@ -345,11 +420,25 @@ export async function addPost(post: Post): Promise<void> {
   const paid = post.access.kind === 'paid' ? post.access : null;
   await db().query(
     `INSERT INTO posts (id, vault_id, author_handle, created_at_ms, title, preview, body,
-                        access_kind, price, content_key)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                        access_kind, price, content_key,
+                        body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256,
+                        body_tier, body_period)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     [
       post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
-      post.body, post.access.kind, paid?.price ?? null, paid?.contentKey ?? null,
+      /*
+        The plaintext column is written EMPTY for a sealed body, not left to carry the words.
+
+        Storing both would defeat the whole exercise: the claim is that the platform cannot read a
+        gated body, and a copy in Postgres is precisely the thing that claim denies. The ciphertext
+        on Walrus is the only copy.
+      */
+      post.sealedBody === undefined ? post.body : '',
+      post.access.kind, paid?.price ?? null, paid?.contentKey ?? null,
+      post.sealedBody?.blobId ?? null, post.sealedBody?.endEpoch ?? null,
+      post.sealedBody?.nonce ?? null, post.sealedBody?.sealWrappedKey ?? null,
+      post.sealedBody?.sha256 ?? null,
+      post.sealedBody?.tier ?? null, post.sealedBody?.period ?? null,
     ],
   );
 }
@@ -367,8 +456,9 @@ export async function attachAsset(record: AssetRecord): Promise<boolean> {
   */
   const { rowCount } = await db().query(
     `INSERT INTO assets (id, post_id, content_type, bytes, label, sha256,
-                         blob_id, end_epoch, enc_key, enc_nonce, enc_scheme, seal_wrapped_key)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                         blob_id, end_epoch, enc_key, enc_nonce, enc_scheme, seal_wrapped_key,
+                         seal_tier, seal_period)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
      WHERE EXISTS (SELECT 1 FROM posts WHERE id = $2)`,
     [
       record.id, record.postId, record.contentType, record.bytes, record.label, record.sha256,
@@ -377,6 +467,8 @@ export async function attachAsset(record: AssetRecord): Promise<boolean> {
       encryption?.nonce ?? null,
       encryption?.scheme ?? null,
       encryption?.scheme === 'seal' ? encryption.wrappedKey : null,
+      encryption?.scheme === 'seal' ? (encryption.tier ?? null) : null,
+      encryption?.scheme === 'seal' ? (encryption.period ?? null) : null,
     ],
   );
   return (rowCount ?? 0) > 0;
@@ -389,6 +481,7 @@ export async function findAsset(assetId: string): Promise<AssetRecord | null> {
     blob_id: string | null; end_epoch: string | null;
     enc_key: string | null; enc_nonce: string | null;
     enc_scheme: string | null; seal_wrapped_key: string | null;
+    seal_tier: string | number | null; seal_period: string | number | null;
   }>('SELECT * FROM assets WHERE id = $1', [assetId]);
 
   const row = rows[0];
@@ -430,12 +523,24 @@ function readEncryption(row: {
   enc_nonce: string | null;
   enc_scheme: string | null;
   seal_wrapped_key: string | null;
+  seal_tier?: string | number | null;
+  seal_period?: string | number | null;
 }): AssetEncryption | null {
   if (row.enc_scheme === 'platform' && row.enc_key !== null && row.enc_nonce !== null) {
     return { scheme: 'platform', key: row.enc_key, nonce: row.enc_nonce };
   }
   if (row.enc_scheme === 'seal' && row.seal_wrapped_key !== null && row.enc_nonce !== null) {
-    return { scheme: 'seal', wrappedKey: row.seal_wrapped_key, nonce: row.enc_nonce };
+    return {
+      scheme: 'seal',
+      wrappedKey: row.seal_wrapped_key,
+      nonce: row.enc_nonce,
+      // Strings, because they are `u64` and a `number` would round one silently into an identity
+      // that is the right length and the wrong bytes.
+      ...(row.seal_tier !== null && row.seal_tier !== undefined
+        && row.seal_period !== null && row.seal_period !== undefined
+        ? { tier: String(row.seal_tier), period: String(row.seal_period) }
+        : {}),
+    };
   }
   /*
     A row written before 019 and not yet backfilled: a key and a nonce, but no scheme.
@@ -709,9 +814,18 @@ export async function messagesTo(address: string): Promise<Message[]> {
   return rows.map(toMessage);
 }
 
-export interface VisiblePost extends Omit<Post, 'body' | 'assetIds'> {
+export interface VisiblePost extends Omit<Post, 'body' | 'assetIds' | 'sealedBody'> {
   body?: string;
   assetIds?: string[];
+  /** Present only for an entitled reader of a post whose body was sealed at publish. */
+  sealedBody?: Post['sealedBody'];
+  /**
+   * The entitlement object the browser names to the key server, with its arguments.
+   *
+   * Built by `sealApprover`, never here: which object opens a post is the same question `canRead`
+   * answers yes-or-no, and there is one implementation of it.
+   */
+  approver?: SealApprover;
   locked: boolean;
   unlockWith: 'subscribe' | 'purchase' | null;
 }
@@ -724,7 +838,20 @@ export interface VisiblePost extends Omit<Post, 'body' | 'assetIds'> {
  * `body` is omitted rather than blanked: a client that receives no field cannot render one by
  * mistake, where an empty string can be rendered as an empty post.
  */
-export function visiblePost(post: Post, entitled: boolean): VisiblePost {
+export function visiblePost(
+  post: Post,
+  entitled: boolean,
+  /**
+   * The entitlement object this reader would present for this post, from `sealApprover`.
+   *
+   * The key server needs it named — `seal_approve_unlock` takes `&Unlock` and
+   * `seal_approve_subscription` takes `&Subscription` — and finding which of a reader's objects
+   * matches means decoding every one they own, which `readEntitlements` has already done to answer
+   * `entitled`. Naming it grants nothing: the key server re-executes the policy with the reader as
+   * sender, so an object they do not own aborts.
+   */
+  approver?: SealApprover,
+): VisiblePost {
   const base = {
     id: post.id, vaultId: post.vaultId, authorHandle: post.authorHandle,
     createdAtMs: post.createdAtMs, title: post.title, preview: post.preview, access: post.access,
@@ -734,6 +861,17 @@ export function visiblePost(post: Post, entitled: boolean): VisiblePost {
     return {
       ...base,
       body: post.body,
+      /*
+        The sealed body travels with the visible post, and only to an entitled reader.
+
+        Every field in it is public — a Walrus blob id, a nonce and a wrapped key open nothing on
+        their own. It is withheld from a locked post anyway, for the same reason the media route
+        withholds ciphertext: releasing blob ids and wrapped keys to anyone who asks puts a
+        creator's catalogue on the open internet in an enumerable form, and defence in depth costs
+        nothing here.
+      */
+      ...(post.sealedBody === undefined ? {} : { sealedBody: post.sealedBody }),
+      ...(approver === undefined ? {} : { approver }),
       ...(post.assetIds === undefined ? {} : { assetIds: post.assetIds }),
       locked: false,
       unlockWith: null,

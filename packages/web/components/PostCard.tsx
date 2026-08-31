@@ -7,6 +7,47 @@ import { Comments } from './Comments';
 import { PostActions } from '@/components/PostActions';
 import { EntityType, type Entity } from '@/components/EntityType';
 import { SealedMedia } from '@/components/SealedMedia';
+import { SealedBody } from '@/components/SealedBody';
+
+/**
+ * What kind of post this is — never what the reader may do with it.
+ *
+ * A paid post stays amber after it is unlocked, and a subscriber post stays green after the reader
+ * subscribes. The colour is the post's category, so it does not change under someone the moment
+ * they pay; only the word inside does.
+ */
+function badgeClass(post: VisiblePost): string {
+  switch (post.access.kind) {
+    case 'paid':
+      return 'pill paid';
+    case 'subscribers':
+      return 'pill subs';
+    default:
+      return 'pill free';
+  }
+}
+
+/**
+ * The price first, then this reader's standing in one word.
+ *
+ * `price` is the formatted amount the caller looked up on chain; it is `undefined` when nobody
+ * looked or the lookup failed, and the label degrades to bare "Locked" rather than inventing a
+ * figure. Naming the state without naming the cost tells a reader they cannot read this and not
+ * what it would take to — so the amount rides along wherever there is one.
+ */
+function badgeLabel(post: VisiblePost, price?: string): string {
+  switch (post.access.kind) {
+    case 'paid':
+      // "Unlocked", not "Purchased": the reader may hold this `Unlock` because it was gifted, and
+      // the badge should not assert how they came by it.
+      if (!post.locked) return 'Unlocked';
+      return price === undefined ? 'Locked' : `Locked · ${price}`;
+    case 'subscribers':
+      return post.locked ? 'Subscribers only' : 'Subscribers';
+    default:
+      return 'Free';
+  }
+}
 
 /**
  * One post.
@@ -63,28 +104,21 @@ export function PostCard({
             })}
           </div>
         </div>
-        {post.locked ? (
-          <span className={post.unlockWith === 'subscribe' ? 'pill subs' : 'pill paid'}>
-            {/*
-              The price stays beside "Locked" where there is one. Naming the state without naming
-              the cost tells a reader they cannot read this and not what it would take to.
-            */}
-            {post.unlockWith === 'subscribe'
-              ? 'Subscribers only'
-              : price === undefined
-                ? 'Locked'
-                : `Locked · ${price}`}
-          </span>
-        ) : (
-          /*
-            "Free" rather than "Open".
+        {/*
+          The badge names what the post IS, then what it is to this reader.
 
-            Open described the permission — anyone may read it. Free describes the price, which is
-            what a reader is actually comparing against the two beside it: Locked costs money and
-            Subscribers only costs a subscription. All three now answer the same question.
-          */
-          <span className="pill free">Free</span>
-        )}
+          It used to be `post.locked ? … : 'Free'`, which read the reader's relationship to the post
+          and printed it as the post's price. A buyer who had just paid for a post therefore saw it
+          labelled **Free** the moment their `Unlock` landed — the paywall announcing, on the screen
+          they reached by paying, that the thing they bought costs nothing. `access.kind` is the
+          post's own property and is carried on every `VisiblePost` including locked ones, so the
+          price is now read from the post and only the second word changes with entitlement.
+
+          "Free" survives for `public` only, and still means the price rather than the permission:
+          it is compared against `Locked · 2 SUI` and `Subscribers only` beside it, and all three
+          answer the same question.
+        */}
+        <span className={badgeClass(post)}>{badgeLabel(post, price)}</span>
       </div>
 
       <h3>{post.title}</h3>
@@ -130,7 +164,31 @@ export function PostCard({
         the same height. `PostBody` is the only part of this card that crosses the client boundary;
         the unlock button, the comments and the gated media all stay on the server.
       */}
-      {post.body !== undefined && <PostBody body={post.body} preview={post.preview} />}
+      {/*
+        Two shapes, because there are two truths.
+
+        A public post's words are in `body` and render directly. A gated post's are ciphertext on
+        Walrus — the server has no plaintext to hand down, so `SealedBody` fetches the blob and opens
+        it in the reader's own tab, against their `Unlock` if they bought the post or against their
+        `Subscription` if they subscribe. Rendering `post.body` for a sealed post would print an
+        empty string, which is how a paywall becomes a blank page.
+
+        The condition is `sealedBody !== undefined` first and access kind second, in that order, so
+        gated posts published before sealing — whose words really are still in `body` — keep taking
+        the direct path instead of rendering a spinner over a blob that does not exist.
+      */}
+      {post.sealedBody !== undefined && post.access.kind !== 'public' ? (
+        <SealedBody
+          sealed={post.sealedBody}
+          preview={post.preview}
+          vaultId={post.vaultId}
+          {...(post.access.kind === 'paid' ? { contentKey: post.access.contentKey } : {})}
+          {...(post.approver === undefined ? {} : { approver: post.approver })}
+        />
+      ) : (
+        post.body !== undefined && post.body !== '' &&
+          <PostBody body={post.body} preview={post.preview} />
+      )}
 
       {post.locked && (
         <div className="locked">

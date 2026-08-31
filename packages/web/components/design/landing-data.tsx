@@ -104,7 +104,7 @@ const PATHS: readonly DesignPath[] = [
     kicker: 'Posts',
     icon: <Icon name="doc" size={15} />,
     title: 'They buy access',
-    body: "A subscription, or a one-time unlock. The body is encrypted with Seal and stored on Walrus; the key releases against an object in the buyer's wallet, never against a row in our database.",
+    body: "A subscription, or a one-time unlock. A paid post's words and media are encrypted with Seal and stored on Walrus; the key releases against an object in the buyer's wallet, never against a row in our database. A subscriber post's words are sealed to the month they were published, so a lapsed subscription keeps what it paid for and opens nothing after; its media is still gated by this server.",
     cta: 'See the feed',
     href: '/',
   },

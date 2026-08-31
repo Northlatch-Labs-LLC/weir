@@ -76,6 +76,9 @@ export const SEAL_HEADERS = {
   vault: 'x-seal-vault',
   entitlementObject: 'x-seal-object',
   contentKey: 'x-seal-content-key',
+  /** Both `u64`, sent as decimal strings. A subscription descriptor carries them; an unlock does not. */
+  tier: 'x-seal-tier',
+  period: 'x-seal-period',
 } as const;
 
 /**
@@ -199,14 +202,30 @@ function readDescriptor(headers: Headers): Entitlement | undefined {
     return { kind: 'unlock', vaultId, contentKey, unlockId: objectId };
   }
 
-  /*
-    Only `unlock` is emitted today, because only paid media is sealed — a subscriber asset is bound
-    to `period_identity(vault, tier, period)`, which fixes the key to the month of publication, and
-    that decision is open rather than made. Rejecting the other value is not a placeholder for it:
-    when subscriber sealing lands, the period comes from the route that knows it, and until then
-    guessing one here would build an approval for the wrong month and fail as if the reader were not
-    subscribed.
-  */
+  if (kind === 'subscription') {
+    const tier = headers.get(SEAL_HEADERS.tier);
+    const period = headers.get(SEAL_HEADERS.period);
+    if (tier === null || period === null) {
+      throw new Error('a subscription entitlement arrived without the tier and period it covers');
+    }
+    /*
+      Parsed as `bigint`, never as `number`.
+
+      Both are `u64` on chain. A `Number` round-trip is lossless for every value anyone will see and
+      lossy eventually, and the failure is silent: an identity built from a rounded period is the
+      right length and the wrong bytes, so the key server refuses it in a way that reads exactly
+      like the reader having no subscription. `BigInt()` throws on anything that is not an integer,
+      which is the behaviour worth having on a header a proxy could mangle.
+    */
+    return {
+      kind: 'subscription',
+      vaultId,
+      tier: BigInt(tier),
+      period: BigInt(period),
+      subscriptionId: objectId,
+    };
+  }
+
   throw new Error(`this build cannot open media entitled by "${kind}"`);
 }
 

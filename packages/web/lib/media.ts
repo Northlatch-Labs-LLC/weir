@@ -39,7 +39,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fail, ok, type Reading } from '@projectx-social/sdk';
 import { decryptBlob, encryptBlob } from './blob-crypto';
 import { grantUpload, type StorageTier } from './publisher-token';
-import { sealUnlockKey } from './seal';
+import { sealPeriodKey, sealUnlockKey } from './seal';
 import { readBlob, storeBlob } from './walrus';
 
 export interface Asset {
@@ -97,11 +97,29 @@ export type AssetEncryption =
       /** The Seal `EncryptedObject` wrapping the 32-byte key, base64. Safe to publish. */
       wrappedKey: string;
       /**
+       * The creator-period this key was sealed to, for subscriber media. Both, or neither.
+       *
+       * Absent on paid media, whose identity is built from the content key its post already
+       * carries. Decimal strings because they are `u64` on chain and reach a browser as headers.
+       */
+      tier?: string;
+      period?: string;
+      /**
        * The same 12 bytes as before. The nonce is not secret and does not move with the key — the
        * blob is unchanged, so what opens it is unchanged apart from who can produce the key.
        */
       nonce: string;
     };
+
+/**
+ * Which `seal_approve_*` releases this asset's key.
+ *
+ * Named for the Move function rather than for the post's access level, matching `BodyGate` in
+ * `body-storage.ts`: the caller knows about posts, this module knows about gates.
+ */
+export type AssetGate =
+  | { kind: 'unlock'; vaultId: string; contentKey: string }
+  | { kind: 'period'; vaultId: string; tier: bigint; period: bigint };
 
 /** Only these are served. An upload whose bytes are anything else is refused. */
 const ALLOWED: ReadonlyArray<{ type: string; magic: readonly number[] }> = [
@@ -161,11 +179,11 @@ export async function storeAsset(input: {
    * know *what the key is released against*, and the honest place to say so is here — the caller
    * has the post and knows; this module would have to guess.
    *
-   * Kept separate from `tier` on purpose, as the boolean was. They happen to align today (free
-   * posts are ephemeral, paid ones durable), and conflating them would mean that changing the free
-   * tier's lease length silently changed whether paid content was encrypted.
+   * Kept separate from `tier` on purpose, as the boolean was. They happen to align today (open
+   * posts are ephemeral, gated ones durable), and conflating them would mean that changing the open
+   * tier's lease length silently changed whether gated content was encrypted.
    */
-  gated: { vaultId: string; contentKey: string } | null;
+  gated: AssetGate | null;
 }): Promise<Reading<StoredAsset>> {
   const source = 'media store';
 
@@ -196,11 +214,16 @@ export async function storeAsset(input: {
   */
   let custody: AssetEncryption | null = null;
   if (input.gated !== null && encrypted !== null) {
-    const wrapped = await sealUnlockKey({
-      vaultId: input.gated.vaultId,
-      contentKey: input.gated.contentKey,
-      key: encrypted.key,
-    });
+    const gate = input.gated;
+    const wrapped =
+      gate.kind === 'unlock'
+        ? await sealUnlockKey({ vaultId: gate.vaultId, contentKey: gate.contentKey, key: encrypted.key })
+        : await sealPeriodKey({
+            vaultId: gate.vaultId,
+            tier: gate.tier,
+            period: gate.period,
+            key: encrypted.key,
+          });
     if (!wrapped.ok) return wrapped;
     /*
       `encrypted.key` is not carried past this point.
@@ -210,7 +233,22 @@ export async function storeAsset(input: {
       claim in Creator Terms §4.3 structural rather than procedural: not "we choose not to store the
       key", but "the value that would be stored is not in scope by the time a row is built".
     */
-    custody = { scheme: 'seal', wrappedKey: wrapped.value.wrappedKey, nonce: encrypted.nonce };
+    custody = {
+      scheme: 'seal',
+      wrappedKey: wrapped.value.wrappedKey,
+      nonce: encrypted.nonce,
+      /*
+        Recorded on the asset, not looked up from its post.
+
+        `seal_approve_subscription` takes `tier` and `period` as arguments, so a reader has to be
+        told both — and an asset must be able to say what opens it without depending on a column its
+        post may never have had. A subscriber post published before body sealing has plaintext words
+        and no recorded period; its media should still open.
+      */
+      ...(gate.kind === 'period'
+        ? { tier: gate.tier.toString(), period: gate.period.toString() }
+        : {}),
+    };
   }
 
   const grant = await grantUpload({ owner: input.owner, size: outgoing.length, tier: input.tier });
