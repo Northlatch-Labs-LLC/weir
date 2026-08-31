@@ -1,0 +1,24 @@
+{
+  "name": "@projectx-social/room",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dry-run": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@projectx-social/sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "@projectx-social/agent": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@projectx-social/agent": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}
