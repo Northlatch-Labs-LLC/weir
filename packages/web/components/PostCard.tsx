@@ -7,6 +7,7 @@ import { Comments } from './Comments';
 import { PostActions } from '@/components/PostActions';
 import { EntityType, type Entity } from '@/components/EntityType';
 import { SealedMedia } from '@/components/SealedMedia';
+import { SealedBody } from '@/components/SealedBody';
 
 /**
  * One post.
@@ -130,7 +131,26 @@ export function PostCard({
         the same height. `PostBody` is the only part of this card that crosses the client boundary;
         the unlock button, the comments and the gated media all stay on the server.
       */}
-      {post.body !== undefined && <PostBody body={post.body} preview={post.preview} />}
+      {/*
+        Two shapes, because there are two truths.
+
+        A free or subscriber post's words are in `body` and render directly. A paid post's words are
+        ciphertext on Walrus — the server has no plaintext to hand down, so `SealedBody` fetches the
+        blob and opens it in the reader's own tab against their `Unlock`. Rendering `post.body` for a
+        sealed post would print an empty string, which is how a paywall becomes a blank page.
+      */}
+      {post.sealedBody !== undefined && post.access.kind === 'paid' ? (
+        <SealedBody
+          sealed={post.sealedBody}
+          preview={post.preview}
+          vaultId={post.vaultId}
+          contentKey={post.access.contentKey}
+          unlockId={post.unlockId}
+        />
+      ) : (
+        post.body !== undefined && post.body !== '' &&
+          <PostBody body={post.body} preview={post.preview} />
+      )}
 
       {post.locked && (
         <div className="locked">

@@ -30,8 +30,27 @@ export interface Post {
   createdAtMs: number;
   title: string;
   preview: string;
-  /** Withheld until the reader holds an entitlement — see `visiblePost`. */
+  /**
+   * Withheld until the reader holds an entitlement — see `visiblePost`.
+   *
+   * Empty for a gated post published after bodies became sealed: there is no plaintext to
+   * withhold, because the words live on Walrus as ciphertext and `sealedBody` names them.
+   */
   body: string;
+  /**
+   * A gated body's ciphertext, when there is one.
+   *
+   * Present only for paid posts sealed at publish. Every field is public — a Walrus blob id, a
+   * GCM nonce and a Seal-wrapped key open nothing without a threshold of key servers first
+   * executing `entitlement::seal_approve_unlock` for a reader who holds the `Unlock`.
+   */
+  sealedBody?: {
+    blobId: string;
+    endEpoch: number;
+    nonce: string;
+    sealWrappedKey: string;
+    sha256: string;
+  };
   access: PostAccess;
   /** Attached media, by asset id. Ids only — never paths and never URLs. */
   assetIds?: string[];
@@ -157,6 +176,11 @@ interface PostRow {
   preview: string;
   body: string;
   access_kind: string;
+  body_blob_id: string | null;
+  body_end_epoch: string | number | null;
+  body_nonce: string | null;
+  body_seal_wrapped_key: string | null;
+  body_sha256: string | null;
   price: string | null;
   content_key: string | null;
   asset_ids: string[] | null;
@@ -179,6 +203,24 @@ function toPost(row: PostRow): Post {
     title: row.title,
     preview: row.preview,
     body: row.body,
+    /*
+      Carried back only when every part is present. The database constraint already refuses a
+      half-written sealed body, so this is belt and braces — but a partial record here would
+      become a reader staring at a spinner over a blob that can never open, and the honest
+      response to that is to behave as though there is no sealed body at all.
+    */
+    ...(row.body_blob_id !== null && row.body_nonce !== null
+        && row.body_seal_wrapped_key !== null && row.body_sha256 !== null
+      ? {
+          sealedBody: {
+            blobId: row.body_blob_id,
+            endEpoch: Number(row.body_end_epoch ?? 0),
+            nonce: row.body_nonce,
+            sealWrappedKey: row.body_seal_wrapped_key,
+            sha256: row.body_sha256,
+          },
+        }
+      : {}),
     access,
     ...(assetIds.length > 0 ? { assetIds } : {}),
   };
@@ -193,6 +235,7 @@ function toPost(row: PostRow): Post {
 const POST_SELECT = `
   SELECT p.id, p.vault_id, p.author_handle, p.created_at_ms, p.title, p.preview, p.body,
          p.access_kind, p.price, p.content_key,
+         p.body_blob_id, p.body_end_epoch, p.body_nonce, p.body_seal_wrapped_key, p.body_sha256,
          COALESCE(array_agg(a.id ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '{}') AS asset_ids
   FROM posts p
   LEFT JOIN assets a ON a.post_id = p.id
@@ -345,11 +388,23 @@ export async function addPost(post: Post): Promise<void> {
   const paid = post.access.kind === 'paid' ? post.access : null;
   await db().query(
     `INSERT INTO posts (id, vault_id, author_handle, created_at_ms, title, preview, body,
-                        access_kind, price, content_key)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                        access_kind, price, content_key,
+                        body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
     [
       post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
-      post.body, post.access.kind, paid?.price ?? null, paid?.contentKey ?? null,
+      /*
+        The plaintext column is written EMPTY for a sealed body, not left to carry the words.
+
+        Storing both would defeat the whole exercise: the claim is that the platform cannot read a
+        gated body, and a copy in Postgres is precisely the thing that claim denies. The ciphertext
+        on Walrus is the only copy.
+      */
+      post.sealedBody === undefined ? post.body : '',
+      post.access.kind, paid?.price ?? null, paid?.contentKey ?? null,
+      post.sealedBody?.blobId ?? null, post.sealedBody?.endEpoch ?? null,
+      post.sealedBody?.nonce ?? null, post.sealedBody?.sealWrappedKey ?? null,
+      post.sealedBody?.sha256 ?? null,
     ],
   );
 }
@@ -709,9 +764,13 @@ export async function messagesTo(address: string): Promise<Message[]> {
   return rows.map(toMessage);
 }
 
-export interface VisiblePost extends Omit<Post, 'body' | 'assetIds'> {
+export interface VisiblePost extends Omit<Post, 'body' | 'assetIds' | 'sealedBody'> {
   body?: string;
   assetIds?: string[];
+  /** Present only for an entitled reader of a post whose body was sealed at publish. */
+  sealedBody?: Post['sealedBody'];
+  /** The reader's own `Unlock` object, so the browser can name it to the key server. */
+  unlockId?: string;
   locked: boolean;
   unlockWith: 'subscribe' | 'purchase' | null;
 }
@@ -724,7 +783,19 @@ export interface VisiblePost extends Omit<Post, 'body' | 'assetIds'> {
  * `body` is omitted rather than blanked: a client that receives no field cannot render one by
  * mistake, where an empty string can be rendered as an empty post.
  */
-export function visiblePost(post: Post, entitled: boolean): VisiblePost {
+export function visiblePost(
+  post: Post,
+  entitled: boolean,
+  /**
+   * The reader's own `Unlock` for this post, when they hold one.
+   *
+   * The key server needs the object named — `seal_approve_unlock` takes `&Unlock` — and finding
+   * which of a reader's unlocks matches means decoding every one they own, which `readEntitlements`
+   * has already done to answer `entitled`. Naming it grants nothing: the key server re-executes the
+   * policy with the reader as sender, so an object they do not own aborts.
+   */
+  unlockId?: string,
+): VisiblePost {
   const base = {
     id: post.id, vaultId: post.vaultId, authorHandle: post.authorHandle,
     createdAtMs: post.createdAtMs, title: post.title, preview: post.preview, access: post.access,
@@ -734,6 +805,17 @@ export function visiblePost(post: Post, entitled: boolean): VisiblePost {
     return {
       ...base,
       body: post.body,
+      /*
+        The sealed body travels with the visible post, and only to an entitled reader.
+
+        Every field in it is public — a Walrus blob id, a nonce and a wrapped key open nothing on
+        their own. It is withheld from a locked post anyway, for the same reason the media route
+        withholds ciphertext: releasing blob ids and wrapped keys to anyone who asks puts a
+        creator's catalogue on the open internet in an enumerable form, and defence in depth costs
+        nothing here.
+      */
+      ...(post.sealedBody === undefined ? {} : { sealedBody: post.sealedBody }),
+      ...(unlockId === undefined ? {} : { unlockId }),
       ...(post.assetIds === undefined ? {} : { assetIds: post.assetIds }),
       locked: false,
       unlockWith: null,

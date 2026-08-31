@@ -12,6 +12,7 @@ import {
   type PostAccess,
 } from '@/lib/content';
 import { siteConfig } from '@/lib/chain';
+import { storeBody } from '@/lib/body-storage';
 import { verifyAction } from '@/lib/identity';
 
 export const dynamic = 'force-dynamic';
@@ -231,8 +232,45 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `unknown access "${access}"` }, { status: 400 });
   }
 
+  const postId = `p${Date.now().toString(36)}`;
+
+  /*
+    A paid body is sealed before it is stored, and the plaintext never reaches a column.
+
+    Creator Terms §4.3 has said since the first commit that bodies of gated posts are encrypted and
+    that Northlatch cannot read them. Until this, that was false: the body was a `text` column and
+    two of them were read out of it in a single query on 2026-08-31. The media beside them was
+    genuinely sealed; the words were not, which is the wrong half of a paid post to protect.
+
+    Sealed to the same `unlock_identity(vault, contentKey)` the media uses, deliberately. One
+    `Unlock` opens the post's words and its images together — a reader who paid does not acquire
+    the picture and separately fail to acquire the sentence under it — and no new Move function is
+    needed, because `seal_approve_unlock` is already deployed.
+
+    Subscriber bodies are NOT sealed here. They need `period_identity`, and SEAL.md sets out why
+    the period cannot simply be dropped: a Seal key is permanent, so one identity per tier would
+    mean a single month's subscription buying the archive in perpetuity. That is a separate change.
+  */
+  let sealedBody: Awaited<ReturnType<typeof storeBody>> | null = null;
+  if (postAccess.kind === 'paid') {
+    sealedBody = await storeBody({
+      body: text,
+      vaultId: profile.vaultId,
+      contentKey: postAccess.contentKey,
+      owner: vault.value.owner,
+    });
+    if (!sealedBody.ok) {
+      // Nothing is written. A paid post whose body failed to seal must not fall back to storing
+      // the words in the clear — that is the exact state this change exists to end.
+      return NextResponse.json(
+        { error: `the body could not be sealed: ${sealedBody.failure.detail}` },
+        { status: 503 },
+      );
+    }
+  }
+
   const post = {
-    id: `p${Date.now().toString(36)}`,
+    id: postId,
     vaultId: profile.vaultId,
     authorHandle: handle,
     createdAtMs: Date.now(),
@@ -240,6 +278,7 @@ export async function POST(request: Request) {
     preview,
     body: text,
     access: postAccess,
+    ...(sealedBody?.ok ? { sealedBody: sealedBody.value } : {}),
   };
 
   await addPost(post);

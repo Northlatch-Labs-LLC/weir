@@ -98,11 +98,41 @@ function sealSettingsOnce(): Promise<SealSettings> {
 /** How long a signed session lasts before the reader is asked again. Ten minutes of reading. */
 const SESSION_TTL_MIN = 10;
 
+/**
+ * The settling window, and why a refusal is not always a refusal.
+ *
+ * A key server checks the policy by simulating `seal_approve_unlock` against a fullnode. A
+ * freshly-created `Unlock` is not indexed there for a few seconds, and the server maps that
+ * `NotFound` to a refusal. So the sequence a buyer actually performs — pay, then open the post —
+ * has a real window in which the reader who just paid is told they have no access.
+ *
+ * SEAL.md called this out on 21 August, before any of this was built: it "must not surface as
+ * 'you do not have access', which is both wrong and alarming on a screen the buyer reached by
+ * paying." This component shipped without the retry and the Master met it within a minute of
+ * buying, exactly as predicted.
+ *
+ * Bounded, not indefinite: four attempts over roughly fifteen seconds. A genuine refusal — the
+ * reader really has no entitlement — costs those seconds and then says so plainly. Retrying
+ * forever would turn a correct "no" into a spinner that never resolves.
+ */
+const SETTLING_ATTEMPTS = 4;
+const SETTLING_BACKOFF_MS = [1500, 3500, 6000];
+
+/** A refusal that may simply be the chain catching up, rather than a reader without entitlement. */
+function looksLikeSettling(error: unknown): boolean {
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i.test(text);
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 type State =
   | { phase: 'loading' }
   | { phase: 'ready'; url: string }
   /** Sealed, and nobody is signed in to open it. A prompt, not a failure. */
   | { phase: 'needs-signer' }
+  /** The purchase is real and the chain has not caught up. Not a refusal — see the retry above. */
+  | { phase: 'settling' }
   | { phase: 'failed'; reason: string };
 
 export function SealedMedia({
@@ -223,17 +253,42 @@ export function SealedMedia({
           verifyKeyServers: true,
         });
 
+        /*
+          The seam `lib/seal-open.ts` describes, filled in — and wrapped in the settling retry.
+
+          This is the only place in the browser that reaches `@mysten/seal`'s network path, so it
+          is the only place that can tell the difference between "this reader has nothing" and
+          "the chain has not caught up with what they just bought". Both arrive as the same
+          `NoAccessError`, which is why the distinction has to be made by patience rather than by
+          reading the error.
+        */
+        const recoverKey = async ({ wrappedKey, approvalBytes }: {
+          wrappedKey: Uint8Array; approvalBytes: Uint8Array;
+        }) => {
+          let last: unknown;
+          for (let attempt = 0; attempt < SETTLING_ATTEMPTS; attempt += 1) {
+            try {
+              return new Uint8Array(
+                await seal.decrypt({ data: wrappedKey, sessionKey, txBytes: approvalBytes }),
+              );
+            } catch (error) {
+              last = error;
+              if (cancelled || !looksLikeSettling(error)) throw error;
+              const backoff = SETTLING_BACKOFF_MS[attempt];
+              if (backoff === undefined) break;
+              if (!cancelled) setState({ phase: 'settling' });
+              await wait(backoff);
+            }
+          }
+          throw last;
+        };
+
         const opened = await openSealedMedia({
           config,
           media,
           entitlement: media.entitlement,
           client: suiClient,
-          // The seam `lib/seal-open.ts` describes, filled in. This is the only place in the browser
-          // that reaches `@mysten/seal`'s network path.
-          recoverKey: async ({ wrappedKey, approvalBytes }) =>
-            new Uint8Array(
-              await seal.decrypt({ data: wrappedKey, sessionKey, txBytes: approvalBytes }),
-            ),
+          recoverKey,
         });
 
         publish(opened.bytes, opened.contentType);
@@ -287,7 +342,11 @@ export function SealedMedia({
       </span>
       {state.phase !== 'loading' && (
         <span className="post-media__note">
-          {state.phase === 'needs-signer' ? 'Sign in to view this' : state.reason}
+          {state.phase === 'needs-signer'
+            ? 'Sign in to view this'
+            : state.phase === 'settling'
+              ? 'Your purchase is still settling on chain — opening this shortly'
+              : state.reason}
         </span>
       )}
     </span>
