@@ -96,6 +96,17 @@ const ALWAYS_OPEN = [
   '/legal',
   '/opengraph-image',
   '/security',
+  /*
+    `/agents` is open for the same reason `/security` is, and one more.
+
+    The reader is an operator deciding whether to point a program at us. They have no
+    account and are not asking for one — they are checking whether the ids, the fee and the
+    endpoints are what our manifest claims. Redirecting that reader to a waiting list
+    answers a question they did not ask, and the manifest at `/.well-known/` — which is
+    already open — points at this page as its human-readable companion. Opening one and
+    gating the other would publish a document whose own reference 307s.
+  */
+  '/agents',
   '/.well-known/',
 ];
 

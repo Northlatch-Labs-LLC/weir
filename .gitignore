@@ -16,6 +16,12 @@ sui-contracts/build/
 packages/web/.next/
 # Verification builds go here so they cannot overwrite what `next dev` is serving.
 packages/web/.next-verify/
+# And the dev server's own directory, for the same reason in the other direction: a `next
+# build` into `.next` leaves a production route manifest there, and a later `next dev`
+# reading it serves a stale set of routes — a page added after that build 404s while its
+# file sits on disk. Measured: /agents returned 404 with app/agents/page.tsx present and
+# compiling, because .next/build-manifest.json listed only the routes of the earlier build.
+packages/web/.next-dev/
 packages/web/next-env.d.ts
 
 # TypeScript's incremental build cache. Generated, and it was tracked for 126 commits — every run

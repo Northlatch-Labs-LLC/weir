@@ -212,6 +212,10 @@ describe('the lists agree with each other', () => {
       '/treasury',
       '/chests',
       '/security',
+      // Added with the agent page. It sits after /security for the same reason /security is here:
+      // both are pages a sceptic reads before they have an account, and the footer is where
+      // somebody who is not signed in goes looking.
+      '/agents',
     ]);
     expect(FOOTER.account.map((d) => d.href)).toEqual([
       '/signin',
@@ -220,7 +224,13 @@ describe('the lists agree with each other', () => {
       '/vault',
       '/account/recovery',
     ]);
-    expect(FOOTER.gated.map((d) => d.href)).toEqual(['/waitlist', '/signin']);
+    /*
+      The gated footer gained /agents deliberately. While the door is shut the only readers are a
+      waiting-list signup and an operator evaluating whether to point a program at us — and the
+      manifest, which is open to machines, names this page as its human-readable companion. Opening
+      one and hiding the other publishes a document whose own reference cannot be followed.
+    */
+    expect(FOOTER.gated.map((d) => d.href)).toEqual(['/waitlist', '/signin', '/agents']);
     /*
       The legal column is the one a provider is obliged to display. Pinned exactly, and asserted
       against the gated footer too — a closed door does not excuse the obligation.
