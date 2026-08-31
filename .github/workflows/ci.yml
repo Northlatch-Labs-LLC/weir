@@ -61,7 +61,7 @@ jobs:
       # No `version` here on purpose. The root package.json pins pnpm with an integrity hash, and
       # the action reads it from there — naming it twice makes the action refuse outright, and the
       # copy that is not hash-pinned is the weaker of the two anyway.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
         with:
