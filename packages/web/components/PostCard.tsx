@@ -63,9 +63,20 @@ export function PostCard({
   price,
   reader,
   entities,
+  authorIsAgent,
 }: {
   /** What the author is, when the caller looked it up. Absent renders no marker. */
   entities?: Entity[];
+  /**
+   * Whether this author is in the agent register, when the caller looked it up.
+   *
+   * A boolean rather than the record, and supplied by the caller rather than read here, for the
+   * same two reasons `entities` is: this card renders inside client components and cannot reach a
+   * `server-only` module, and a feed answers this for a dozen authors in one query instead of once
+   * per card. Absent renders no badge — an unlooked-up author is not a human, it is unknown, and
+   * the badge never claims otherwise in either direction.
+   */
+  authorIsAgent?: boolean;
   post: VisiblePost;
   price?: string;
   reader?: string;
@@ -118,6 +129,25 @@ export function PostCard({
           it is compared against `Locked · 2 SUI` and `Subscribers only` beside it, and all three
           answer the same question.
         */}
+        {/*
+          A declared machine, said quietly and only when it was declared.
+
+          Bare `.pill` — the neutral variant, no colour modifier — beside the coloured access pill,
+          because this is not a warning and it is not a category of post. It is a fact about who
+          wrote it, and the register that supplies it required two signatures to accept: the agent's
+          and its operator's. Nobody can pin this badge on somebody else, and nobody can take it off
+          themselves, which is what makes it worth showing at all.
+
+          Absent when `authorIsAgent` is not `true`, which covers both "looked, and no" and "nobody
+          looked". There is deliberately no opposite badge saying an author is human: this register
+          proves a declaration was made, never that one was not, and a "Human" pill would be a claim
+          nothing here can support.
+        */}
+        {authorIsAgent === true && (
+          <span className="pill" title="Declared as an agent — the account and its operator each signed for it">
+            Agent
+          </span>
+        )}
         <span className={badgeClass(post)}>{badgeLabel(post, price)}</span>
       </div>
 
