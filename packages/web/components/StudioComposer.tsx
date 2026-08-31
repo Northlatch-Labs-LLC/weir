@@ -32,6 +32,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatUnits } from '@/lib/units';
+import { machineContentKey, machineKeyProblem } from '@/lib/machine-pricing';
 import { retentionDays } from '@/lib/storage-retention';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -131,6 +132,28 @@ export function StudioComposer() {
   const [keyPrice, setKeyPrice] = useState<
     { name: 'unknown' } | { name: 'checking' } | { name: 'known'; price: bigint | null } | { name: 'unreadable' }
   >({ name: 'unknown' });
+  /**
+   * The same four states, for the machine edition of the key being typed.
+   *
+   * Held separately rather than as a field on `keyPrice`, because the two reads can end
+   * differently — the human key is priced and the machine key's read failed — and a single state
+   * would have to pick one of those to report.
+   */
+  const [machineKeyPrice, setMachineKeyPrice] = useState<
+    { name: 'unknown' } | { name: 'checking' } | { name: 'known'; price: bigint | null } | { name: 'unreadable' }
+  >({ name: 'unknown' });
+  /** What a machine buyer pays. Empty means the creator has not offered a machine edition. */
+  const [machinePrice, setMachinePrice] = useState('');
+  /**
+   * The machine edition's pricing transaction, kept out of `stage` deliberately.
+   *
+   * `needsPricing` below reads `stage.name !== 'priced'` to decide whether a paid post may be
+   * published at all. Reusing `stage` for the machine transaction would mean that pricing the
+   * machine edition *first* marks the post publishable while its human key still has no price on
+   * the vault — which puts a buy button on the feed that aborts with `EContentNotForSale` every
+   * time, the exact failure this composer was built to prevent.
+   */
+  const [machineStage, setMachineStage] = useState<Stage>({ name: 'idle' });
 
   /*
     The load that was missing. A failure is kept distinct from an empty result: telling a creator
@@ -196,12 +219,21 @@ export function StudioComposer() {
   */
   useEffect(() => {
     const key = contentKey.trim();
-    if (access !== 'paid' || target === null || key === '') {
+    if (access !== 'paid' || target === null || key === '' || machineKeyProblem(key) !== null) {
+      /*
+        A key carrying the reserved marker is not asked about.
+
+        The route refuses it with a 400, and a 400 arriving in the `!response.ok` branch below would
+        be reported as `unreadable` — "we could not read the chain" — for a key the chain was never
+        asked about. The reservation is stated under the field instead, by `reservedKey`.
+      */
       setKeyPrice({ name: 'unknown' });
+      setMachineKeyPrice({ name: 'unknown' });
       return;
     }
 
     setKeyPrice({ name: 'checking' });
+    setMachineKeyPrice({ name: 'checking' });
     const controller = new AbortController();
     const timer = setTimeout(() => {
       void (async () => {
@@ -213,18 +245,36 @@ export function StudioComposer() {
           );
           if (!response.ok) {
             setKeyPrice({ name: 'unreadable' });
+            setMachineKeyPrice({ name: 'unreadable' });
             return;
           }
-          const body = (await response.json()) as { price?: string | null };
+          const body = (await response.json()) as {
+            price?: string | null;
+            machine?: { state?: string; price?: string | null };
+          };
           setKeyPrice({
             name: 'known',
             price: body.price == null ? null : BigInt(body.price),
           });
+          /*
+            `unreadable` unless the route said otherwise, and an absent `machine` block counts as
+            unreadable rather than unpriced. An older deployment of this endpoint answers without
+            one, and reading a missing field as "no price" would tell a creator their machine
+            edition is free at the moment we cannot see it.
+          */
+          setMachineKeyPrice(
+            body.machine?.state === 'priced' && body.machine.price != null
+              ? { name: 'known', price: BigInt(body.machine.price) }
+              : body.machine?.state === 'unpriced'
+                ? { name: 'known', price: null }
+                : { name: 'unreadable' },
+          );
         } catch (error) {
           // An abort is this effect being replaced, not a failure. Reporting it as one would flash
           // "could not read" on every keystroke.
           if (!(error instanceof Error) || error.name !== 'AbortError') {
             setKeyPrice({ name: 'unreadable' });
+            setMachineKeyPrice({ name: 'unreadable' });
           }
         }
       })();
@@ -236,19 +286,32 @@ export function StudioComposer() {
     };
   }, [access, contentKey, target]);
 
-  async function priceOnChain() {
+  /**
+   * Put one content key up for sale on the vault.
+   *
+   * Parameterised by key, amount and where to report, so that the human edition and the machine
+   * edition go through the *same* `set_content_price` call with the same simulation, the same
+   * signature path and the same failure handling. A second copy of this function for the machine
+   * edition is how the two would end up disagreeing about what a `no-creator-cap` answer means.
+   */
+  async function priceKeyOnChain(input: {
+    key: string;
+    amount: string;
+    report: (stage: Stage) => void;
+  }) {
+    const { key, amount, report } = input;
     if (signer === null || target === null) return;
-    const minor = toMinor(price);
+    const minor = toMinor(amount);
     if (minor === null) {
-      setStage({ name: 'failed', message: 'Price must be a decimal with up to 6 places.' });
+      report({ name: 'failed', message: 'Price must be a decimal with up to 6 places.' });
       return;
     }
-    if (contentKey.trim() === '') {
-      setStage({ name: 'failed', message: 'A paid post needs a content key.' });
+    if (key === '') {
+      report({ name: 'failed', message: 'A paid post needs a content key.' });
       return;
     }
 
-    setStage({ name: 'pricing' });
+    report({ name: 'pricing' });
     try {
       const response = await fetch('/api/studio/price', {
         method: 'POST',
@@ -257,7 +320,7 @@ export function StudioComposer() {
           sender: signer.address,
           vaultId: target.vaultId,
           coinType: target.coinType,
-          contentKey: contentKey.trim(),
+          contentKey: key,
           price: minor.toString(),
         }),
       });
@@ -267,19 +330,19 @@ export function StudioComposer() {
         error?: string;
       };
       if (body.blocked === 'no-creator-cap') {
-        setStage({
+        report({
           name: 'failed',
           message: 'This wallet does not hold a CreatorCap, so it cannot price content.',
         });
         return;
       }
       if (body.quote === undefined) {
-        setStage({ name: 'failed', message: body.error ?? 'pricing simulation failed' });
+        report({ name: 'failed', message: body.error ?? 'pricing simulation failed' });
         return;
       }
-      setStage({ name: 'priced', digest: await signAndSubmit(body.quote.bytes) });
+      report({ name: 'priced', digest: await signAndSubmit(body.quote.bytes) });
     } catch (error) {
-      setStage({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
+      report({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -406,6 +469,9 @@ export function StudioComposer() {
       setPreview('');
       setText('');
       setContentKey('');
+      // The machine edition belongs to the key that was just published under, not to the next post.
+      setMachinePrice('');
+      setMachineStage({ name: 'idle' });
       setImage(null);
     } catch (error) {
       setStage({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
@@ -440,6 +506,29 @@ export function StudioComposer() {
     button that aborts.
   */
   const needsPricing = access === 'paid' && stage.name !== 'priced' && onChainPrice === null;
+
+  /*
+    The machine edition of the key being typed, and why the creator is shown it rather than asked
+    for it.
+
+    A second price for machine buyers needs no second post and no Move change: a paywall is keyed by
+    `content_key`, so a second key on the same vault is a second price, a second `Unlock` and a
+    second Seal identity over the same words. What it must never be is a key the creator invents,
+    because two hand-typed keys drift, and a machine edition whose key is one character off the one
+    the post was sealed under sells an `Unlock` that opens nothing. It is derived — see
+    `lib/machine-pricing.ts` for the rule and for why it cannot collide with a chosen key.
+
+    `reservedKey` is the other half of that: a creator who types the marker themselves is told, at
+    the field, before any transaction.
+  */
+  const reservedKey = access === 'paid' && contentKey.trim() !== ''
+    ? machineKeyProblem(contentKey)
+    : null;
+  const derivedMachineKey = (() => {
+    const derived = machineContentKey(contentKey);
+    return derived.ok ? derived.value : null;
+  })();
+  const machineOnChainPrice = machineKeyPrice.name === 'known' ? machineKeyPrice.price : null;
   const canPublish =
     blockers.length === 0 && !needsPricing && signer !== null && target !== null;
 
@@ -659,6 +748,90 @@ export function StudioComposer() {
           </div>
         )}
 
+        {access === 'paid' && reservedKey !== null && (
+          <div className="note warn">
+            <span className="lbl">Reserved key</span>
+            <p>{reservedKey}</p>
+          </div>
+        )}
+
+        {/*
+          The machine edition. A second price on the same post, sold under a second content key.
+
+          Shown as its own block rather than a second column beside the human price, because it is
+          optional and independent: a creator can publish with no machine edition at all, price it
+          later, price it higher or lower, and unprice it with `unprice_content` without touching
+          what people pay. The key is displayed and not editable — it is derived, and a hand-typed
+          one would sell an Unlock for an identity nothing was sealed to.
+        */}
+        {access === 'paid' && reservedKey === null && derivedMachineKey !== null && (
+          <div className="note">
+            <span className="lbl">Machine edition — optional</span>
+            <p>
+              The same words, sold to agents under a second key on the same vault. It is a separate
+              price, a separate purchase and a separate key: a machine buyer&rsquo;s Unlock does not
+              open the human edition and a reader&rsquo;s does not open this one. Leave the price
+              empty to offer no machine edition.
+            </p>
+            <p className="mono" style={{ fontSize: 13 }}>{derivedMachineKey}</p>
+            {machineKeyPrice.name === 'checking' && (
+              <p className="unmeasured">Reading the vault…</p>
+            )}
+            {machineKeyPrice.name === 'unreadable' && (
+              <p className="unmeasured">
+                This edition&rsquo;s price could not be read, so whether it is already on sale is
+                unknown. Not the same as it being unpriced.
+              </p>
+            )}
+            {machineKeyPrice.name === 'known' && machineOnChainPrice !== null && (
+              <p className="enc-status">
+                <span className="enc-tag">on sale</span> machines already pay{' '}
+                {formatUnits(machineOnChainPrice, 6)} USDC for this key — pricing it again replaces
+                that, and every Unlock already sold stays valid
+              </p>
+            )}
+            {machineKeyPrice.name === 'known' && machineOnChainPrice === null && (
+              <p className="enc-status">
+                <span className="enc-tag off">not offered</span> nothing is sold to machines under
+                this key yet
+              </p>
+            )}
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
+              <div>
+                <label className="k" htmlFor="mpr">MACHINE PRICE · USDC</label>
+                <input
+                  id="mpr"
+                  className="field"
+                  value={machinePrice}
+                  onChange={(e) => setMachinePrice(e.target.value)}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={machineStage.name === 'pricing' || machinePrice.trim() === ''}
+                  onClick={() =>
+                    void priceKeyOnChain({
+                      key: derivedMachineKey,
+                      amount: machinePrice,
+                      report: setMachineStage,
+                    })
+                  }
+                >
+                  {machineStage.name === 'pricing' ? 'Pricing…' : 'Price the machine edition'}
+                </button>
+              </div>
+            </div>
+            {machineStage.name === 'priced' && (
+              <p className="mono" style={{ fontSize: 13 }}>{machineStage.digest}</p>
+            )}
+            {machineStage.name === 'failed' && (
+              <p className="unmeasured">{machineStage.message}</p>
+            )}
+          </div>
+        )}
+
         {needsPricing && (
           <div className="note warn">
             <span className="lbl">Price it on chain first</span>
@@ -683,7 +856,13 @@ export function StudioComposer() {
               className="btn ghost"
               type="button"
               disabled={stage.name === 'pricing'}
-              onClick={() => void priceOnChain()}
+              onClick={() =>
+                void priceKeyOnChain({
+                  key: contentKey.trim(),
+                  amount: price,
+                  report: setStage,
+                })
+              }
             >
               {stage.name === 'pricing' ? 'Pricing…' : 'Price on chain'}
             </button>
