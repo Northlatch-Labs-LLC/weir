@@ -1,0 +1,851 @@
+// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+/**
+ * `@projectx-social/agent` — weir, for a program.
+ *
+ * # What this is
+ *
+ * A headless Node library that lets an AI agent hold a weir account, read what it has paid for,
+ * and pay for more. It has its own Ed25519 keypair, its own address, its own `SocialAccount` and
+ * its own coins. There is no browser, no wallet extension and no zkLogin anywhere in it.
+ *
+ * # What it is not, and this is the important half
+ *
+ * **It adds no authority.** Every call below goes through a door that already existed:
+ *
+ *   - Writes are `verifyAction` signatures over statements this package formats byte-for-byte the
+ *     way `packages/web/lib/identity.ts` does. The server rebuilds them and cannot tell an agent
+ *     from a hardware wallet, because there is nothing to tell apart.
+ *   - Reads are the same day-long, revocable, read-only session a browser gets from
+ *     `POST /api/session`.
+ *   - Money moves through `creator::unlock`, `creator::subscribe` and `creator::tip` on the
+ *     deployed package, built by `packages/sdk/src/tx.ts`. **No Move code was changed for this and
+ *     no package upgrade is implied.**
+ *
+ * There is no capability, no admin path, no privileged route and no bypass. An agent that lost its
+ * key loses exactly what any address loses.
+ *
+ * # The one thing that is genuinely new: a spending ceiling
+ *
+ * An agent decides what to buy from text somebody else wrote. `maxPrice` is required on every
+ * method here that can spend, it is compared against a price read **from the chain** rather than
+ * from any feed or API, and over the ceiling the call refuses rather than clamping. See
+ * {@link guardPrice} in `tx.ts` for the full argument — it is the reason this package can be
+ * pointed at a language model at all.
+ *
+ * # Every read returns a `Reading`, including the refusals
+ *
+ * Nothing here throws for an expected outcome and nothing returns a default. An agent runs
+ * unattended, and the SDK's own reason applies with force: a failure flattened to a plausible zero
+ * is an outage that looks like an observation, and the process acts on the observation.
+ */
+
+import { createClient, fail, ok, type ProjectXSocialConfig, type Reading } from '@projectx-social/sdk';
+import type { SuiGrpcClient } from '@mysten/sui/grpc';
+import {
+  agentKeyFromEnv,
+  agentKeyFromSecret,
+  generateAgentKey,
+  normaliseAddress,
+  sameAddress,
+  type AgentKey,
+} from './keys.js';
+import {
+  paidStatementFor,
+  publishContentSha256,
+  signAction,
+  type Action,
+  type SignedAction,
+} from './statements.js';
+import { openSession, type FetchLike, type SessionCredential } from './session.js';
+import {
+  buildSubscribe,
+  buildTip,
+  buildUnlock,
+  buildOpenAccount,
+  findAgentAccount,
+  guardPrice,
+  livePriceOfContent,
+  readPayableVault,
+  refusePrecondition,
+  simulateAndExecute,
+  tierAt,
+  totalBalance,
+  type Executed,
+  type SpendCeiling,
+} from './tx.js';
+import { loadAgentManifest, type AgentManifest } from './manifest.js';
+
+export {
+  agentKeyFromEnv,
+  agentKeyFromSecret,
+  generateAgentKey,
+  normaliseAddress,
+  sameAddress,
+  type AgentKey,
+} from './keys.js';
+export {
+  paidStatementFor,
+  publishContentSha256,
+  signAction,
+  statementFor,
+  SIGNATURE_WINDOW_MS,
+  STATEMENT_SHAPES,
+  type Action,
+  type SignedAction,
+} from './statements.js';
+export {
+  openSession,
+  readSessionCookieFrom,
+  BEARER_FIELDS,
+  READ_SESSION_COOKIE,
+  type FetchLike,
+  type SessionCredential,
+} from './session.js';
+export {
+  ABORT_CLASSIFICATION,
+  PRECONDITION_MARKER,
+  buildOpenAccount,
+  buildSubscribe,
+  buildTip,
+  buildUnlock,
+  classificationOf,
+  classifyAbort,
+  findAgentAccount,
+  guardPrice,
+  livePriceOfContent,
+  preconditionOf,
+  readPayableVault,
+  refusePrecondition,
+  simulateAndExecute,
+  tierAt,
+  totalBalance,
+  type Executed,
+  type Precondition,
+  type PreconditionName,
+  type SpendCeiling,
+} from './tx.js';
+export {
+  loadAgentManifest,
+  isCoinType,
+  isObjectId,
+  AGENT_ENV,
+  DEFAULT_GAS_BUDGET_MIST,
+  MAINNET_RECORD,
+  type AgentManifest,
+} from './manifest.js';
+
+// === Seal ===
+
+/*
+  The two Seal shapes below are IMPORTED, not declared.
+
+  They were declared here — a `SealApproval` union and a `decrypt(input: {...})` parameter written
+  out field by field — with a doc block that ended "the type system will not catch this one, so the
+  two definitions have to be kept aligned by hand". That sentence was the defect. `seal-node.ts`
+  builds the identity from these fields; this file only names them; and a shape that one module
+  constructs and another retypes is a shape that drifts, silently, in the direction of an identity
+  built from `undefined` — which is the right length, the wrong bytes, and reads to a key server
+  exactly like an agent with no entitlement at all.
+
+  `import type` is erased entirely under `verbatimModuleSyntax`, so this costs nothing at runtime
+  and nothing in this file's runtime graph: no `@mysten/seal`, no key server credential, no
+  threshold. What it buys is that there is now one definition of each shape and the compiler owns
+  the alignment instead of a comment asking a human to.
+*/
+export type { SealApproval, SealedRef } from './seal-node.js';
+import type { SealedRef } from './seal-node.js';
+
+/**
+ * Turning sealed bytes back into content. **This package's `index` does not implement it.**
+ *
+ * # Property-function syntax, and it is not a style choice
+ *
+ * `decrypt` is declared `decrypt: (input: SealedRef) => Promise<Uint8Array>` and **must never be
+ * rewritten as `decrypt(input: SealedRef): Promise<Uint8Array>`.** The two look identical and are
+ * checked by completely different rules.
+ *
+ * Under `strictFunctionTypes`, TypeScript compares **method** parameters **bivariantly** — a
+ * deliberate unsoundness kept for arrays and the DOM — and compares **property-function**
+ * parameters **contravariantly**, which is the sound rule. Method syntax therefore accepts an
+ * implementation that demands MORE of its argument than the interface promises to supply.
+ *
+ * That is not hypothetical here; it is what happened. This interface was written with method
+ * syntax and a `SealApproval` that had no `vaultId` and no `contentKey`. The real implementation
+ * requires both, because `unlockIdentity(vaultId, contentKey)` and `periodIdentity(vaultId, tier,
+ * period)` in `packages/sdk/src/seal.ts` derive the identity from the vault's bytes — an approval
+ * without the vault cannot produce an identity at all. **The compiler accepted the mismatch in
+ * silence.** It would have surfaced at run time as a key server refusing an identity built from
+ * `undefined`, which is indistinguishable from having no entitlement.
+ *
+ * `test/interface-variance.test.ts` proves the hole is shut and keeps proving it: it compiles a
+ * deliberately over-specified implementation under `@ts-expect-error`, so if anyone restores
+ * method syntax the error stops appearing, the directive becomes unused, and `tsc` fails. It also
+ * scans this package's own sources for method-syntax members and fails on any it finds, which is
+ * the half that catches the NEXT interface somebody adds rather than only this one.
+ *
+ * # Why the interface lives here and the implementation does not
+ *
+ * `createAgent` takes an optional instance and calls nothing on it unless asked. `seal-node.ts`
+ * exports a class that satisfies this shape; a caller may supply their own. Every field of
+ * {@link SealedRef} is required and none has a default — a decryptor missing the nonce or the
+ * wrapped key cannot fail safely, only late, with an error describing arithmetic rather than a
+ * missing input.
+ */
+export interface SealDecryptor {
+  decrypt: (input: SealedRef) => Promise<Uint8Array>;
+}
+
+// === The agent ===
+
+/*
+  `FeedPost` and `Agent.feed()` are GONE, and so is `quote(postId)`. They are not commented out and
+  they are not deprecated; they are removed.
+
+  # Why they could never have worked
+
+  Both went through `GET /api/posts`. `packages/web/app/api/posts/route.ts` exports exactly two
+  things — `dynamic` at :18 and `POST` at :47. There is no `GET`, there never was one on this
+  deployment, and Next.js answers an unimplemented method with 405. So every call returned a
+  refusal, always, on every deployment.
+
+  The old `feed()` carried a long, accurate, apologetic failure message explaining that the endpoint
+  probably did not exist yet. That message was the tell. **An honest error does not make an
+  exported method honest**: a public surface that cannot succeed is a promise, and a caller reading
+  the type signature has no way to learn from it that the answer is always no. It also conflated
+  two different facts under one `not-found` — "this deployment has no such endpoint" and "there is
+  no such post" — which are opposite instructions to an agent.
+
+  # Why they were not rebuilt from chain events instead
+
+  That was the other option and it was measured rather than assumed. It cannot be done, because a
+  post is not on chain and never has been. `sui-contracts/sources/creator.move` emits ten event
+  types; the only one touching content is `ContentPriced { vault, content_key, price }` at :205,
+  with `ContentUnpriced` at :211. There is no title, no preview, no body, no author handle and no
+  publication time in any of them — a post lives in Postgres, and the chain knows only that some
+  opaque key under some vault has a price. Reconstructing a feed from that would produce a list of
+  byte strings with numbers beside them, which is not a feed; it would be a worse lie than the 405.
+
+  # What is left, and it works
+
+  `quote({ vaultId, contentKey })` reads the price from the vault on chain and is untouched. That
+  is the call that matters, because it is the one a spending decision depends on, and it was always
+  the honest half: `locatePost` existed only to turn a post id into those two identifiers by asking
+  an HTTP endpoint, and it explicitly threw the endpoint's price away.
+
+  When a JSON feed endpoint exists, `feed()` comes back — against a route somebody can point at.
+*/
+
+/** What one purchase would cost, priced from the chain and nowhere else. */
+export interface Quote {
+  vaultId: string;
+  contentKey: string;
+  coinType: string;
+  /** The live on-chain price, in minor units. This is the number `maxPrice` is compared against. */
+  priceMinorUnits: bigint;
+  /** The creator. An agent cannot buy from a vault it owns. */
+  owner: string;
+  /** False when the creator has closed the vault to new payments. */
+  accepting: boolean;
+  observedAtMs: number;
+}
+
+/**
+ * The agent's public surface.
+ *
+ * # Every member is declared with property-function syntax and that is load-bearing
+ *
+ * `sign: (action: Action) => Promise<SignedAction>`, never `sign(action: Action): ...`. The reason
+ * is given in full at {@link SealDecryptor}: method syntax is checked **bivariantly** even under
+ * `strictFunctionTypes`, so an implementation demanding more of its arguments than this interface
+ * promises compiles silently. That already cost this package one shipped-shaped defect on the Seal
+ * boundary, and the same hole is open on every method-syntax member of every interface — this one
+ * included, where the arguments are addresses, prices and handles.
+ *
+ * `test/interface-variance.test.ts` fails on any method-syntax member it finds anywhere in `src/`,
+ * so this does not depend on the next author reading this paragraph.
+ */
+export interface Agent {
+  /** The agent's Sui address, padded. Safe to log. */
+  readonly address: string;
+  /** What it is pointed at and what it may spend. */
+  readonly manifest: AgentManifest;
+  /** The gRPC client, exposed so a caller can make reads this surface does not cover. */
+  readonly client: SuiGrpcClient;
+  /** The Seal implementation, if one was supplied. `null` means sealed content stays sealed. */
+  readonly seal: SealDecryptor | null;
+
+  /** Sign a statement. The bytes match `identity.ts` exactly; nothing is sent. */
+  sign: (action: Action) => Promise<SignedAction>;
+
+  /** Take a day-long read session, or reuse the live one. */
+  session: () => Promise<Reading<SessionCredential>>;
+
+  /** `account::open` — claim a handle on chain. */
+  openAccount: (handle: string, referrer?: string | null) => Promise<Reading<Executed>>;
+
+  /**
+   * What one content key costs, read from the chain.
+   *
+   * Takes the vault and the key, never a post id. See the note above `Quote` for why the post-id
+   * form was removed rather than left to fail.
+   */
+  quote: (post: { vaultId: string; contentKey: string }) => Promise<Reading<Quote>>;
+
+  /** Buy permanent access to one content key. Refuses over `maxPrice`. */
+  unlock: (
+    input: { vaultId: string; contentKey: string; priceMinorUnits: bigint } & SpendCeiling,
+  ) => Promise<Reading<Executed>>;
+
+  /** Join a tier for one period. Refuses over `maxPrice`. */
+  subscribe: (input: { vaultId: string; tierIndex: number } & SpendCeiling) => Promise<Reading<Executed>>;
+
+  /** Pay a creator with nothing in return. Refuses over `maxPrice`. */
+  tip: (input: { vaultId: string; amount: bigint } & SpendCeiling) => Promise<Reading<Executed>>;
+
+  /** Publish a post under a handle this agent's address owns the vault for. */
+  post: (input: {
+    handle: string;
+    title: string;
+    preview: string;
+    text: string;
+    access: 'public' | 'subscribers' | 'paid';
+    contentKey?: string;
+    price?: string;
+  }) => Promise<Reading<{ postId: string }>>;
+
+  /** Send a direct message. */
+  send: (input: {
+    to: string;
+    text: string;
+    preview: string;
+    paid?: { handle: string; contentKey: string; price: string };
+  }) => Promise<Reading<{ sent: true }>>;
+
+  /** Spendable balance of the manifest's coin type, in minor units. */
+  balance: (coinType?: string) => Promise<Reading<bigint>>;
+}
+
+export interface CreateAgentInput {
+  /** The agent's key. Accepts a loaded {@link AgentKey} or a bech32 `suiprivkey1…` secret. */
+  keypair: AgentKey | string;
+  /** Origin of the weir deployment. Overrides the manifest's, when both are given. */
+  baseUrl?: string;
+  /**
+   * Where to point. A full {@link AgentManifest}, or a raw environment to load one from.
+   *
+   * There is no third option and in particular no "default to mainnet". `manifest.ts` gives the
+   * reason at length: a human paying the wrong deployment sees a confirmation screen, and an agent
+   * discovers it in a balance report days later.
+   */
+  config: AgentManifest | Record<string, string | undefined>;
+  /** Optional. Without it, sealed content is reported as sealed rather than silently skipped. */
+  seal?: SealDecryptor;
+  /** Injected for tests, and for a caller who wants their own retry policy. */
+  fetchImpl?: FetchLike;
+}
+
+/**
+ * Build an agent.
+ *
+ * Returns a `Reading` rather than throwing, because every way this fails is a configuration
+ * problem an operator has to read: a missing variable, an unparseable key, a coin type that is not
+ * one. A constructor that threw would make the first line of every agent a try/catch whose only
+ * job is to print the message this already carries.
+ */
+export function createAgent(input: CreateAgentInput): Reading<Agent> {
+  const manifestReading = isManifest(input.config)
+    ? ok(input.config)
+    : loadAgentManifest(input.config);
+  if (!manifestReading.ok) return manifestReading;
+
+  const base = manifestReading.value;
+  const manifest: AgentManifest =
+    input.baseUrl === undefined ? base : { ...base, baseUrl: stripSlash(input.baseUrl) };
+
+  const keyReading =
+    typeof input.keypair === 'string' ? agentKeyFromSecret(input.keypair) : ok(input.keypair);
+  if (!keyReading.ok) return keyReading;
+  const key = keyReading.value;
+
+  const client = createClient(manifest.config);
+  const doFetch = input.fetchImpl ?? (globalThis.fetch as FetchLike | undefined);
+
+  /*
+    One session, held in this closure and re-minted when it expires.
+
+    Not in a module-level variable, which would be shared by every agent in the process — two
+    agents with two keys would take turns overwriting each other's session and each would
+    intermittently read as the other. That is a data leak between agents, and a closure is the
+    cheapest way to make it impossible.
+  */
+  let live: SessionCredential | null = null;
+
+  const agent: Agent = {
+    address: normaliseAddress(key.address),
+    manifest,
+    client,
+    seal: input.seal ?? null,
+
+    async sign(action: Action): Promise<SignedAction> {
+      return signAction(key.keypair, action);
+    },
+
+    async session(): Promise<Reading<SessionCredential>> {
+      if (live !== null && !live.isExpired()) return ok(live);
+      const opened = await openSession(
+        doFetch === undefined
+          ? { key, baseUrl: manifest.baseUrl }
+          : { key, baseUrl: manifest.baseUrl, fetchImpl: doFetch },
+      );
+      if (opened.ok) live = opened.value;
+      return opened;
+    },
+
+    async openAccount(handle: string, referrer: string | null = null): Promise<Reading<Executed>> {
+      /*
+        The handle is not validated here and that is deliberate.
+
+        `account.move` is the authority on what a handle may be, `packages/sdk/src/accounts.ts`
+        exports the bounds it asserts against the Move source, and the simulation below runs the
+        real `assert_handle_valid`. A second opinion in this file could only ever disagree with the
+        contract, and `UPDATE.md` records what that costs: the waiting list capped handles at 32
+        where `account.move` caps at 30, so every 31- and 32-character handle it accepted was one
+        `account::open` aborts on. Simulation catches it before gas is spent, which is the whole
+        point of simulating.
+      */
+      const tx = buildOpenAccount(manifest.config, { handle, referrer });
+      return simulateAndExecute({
+        client,
+        transaction: tx,
+        key,
+        gasBudgetMist: manifest.gasBudgetMist,
+        what: `account::open "${handle}"`,
+      });
+    },
+
+    async quote(post: { vaultId: string; contentKey: string }): Promise<Reading<Quote>> {
+      /*
+        A quote is priced from the chain, always, even when the caller handed us a post id and the
+        HTTP API would happily have reported a price alongside it.
+
+        This is the injection guard's foundation rather than an efficiency question. The API's
+        price is a number that travelled through the same channel as the content, and content is
+        what an agent is being manipulated by. The vault is the authority — it is the authority for
+        `creator::unlock` too, which reads the price itself and takes exactly that.
+      */
+      const target = post;
+
+      const vault = await readPayableVault(client, target.vaultId, agent.address);
+      if (!vault.ok) return vault;
+
+      const price = await livePriceOfContent(client, vault.value, target.contentKey);
+      if (!price.ok) return price;
+
+      return ok({
+        vaultId: target.vaultId,
+        contentKey: target.contentKey,
+        coinType: manifest.coinType,
+        priceMinorUnits: price.value,
+        owner: vault.value.owner,
+        accepting: vault.value.accepting,
+        observedAtMs: Date.now(),
+      });
+    },
+
+    async unlock(
+      spend: { vaultId: string; contentKey: string; priceMinorUnits: bigint } & SpendCeiling,
+    ): Promise<Reading<Executed>> {
+      const vault = await readPayableVault(client, spend.vaultId, agent.address);
+      if (!vault.ok) return vault;
+
+      const live_ = await livePriceOfContent(client, vault.value, spend.contentKey);
+      if (!live_.ok) return live_;
+
+      // The guard, before anything is built. Both the ceiling and the agent's own expectation.
+      const guarded = guardPrice({
+        livePrice: live_.value,
+        maxPrice: spend.maxPrice,
+        expected: spend.priceMinorUnits,
+        what: `unlock "${spend.contentKey}" from vault ${spend.vaultId}`,
+        coinType: manifest.coinType,
+      });
+      if (!guarded.ok) return guarded;
+
+      const ready = await payable(agent, guarded.value);
+      if (!ready.ok) return ready;
+
+      const tx = buildUnlock(manifest.config, {
+        coinType: manifest.coinType,
+        vaultId: spend.vaultId,
+        accountId: ready.value,
+        contentKey: spend.contentKey,
+        price: guarded.value,
+        sender: agent.address,
+      });
+      return simulateAndExecute({
+        client,
+        transaction: tx,
+        key,
+        gasBudgetMist: manifest.gasBudgetMist,
+        what: `creator::unlock "${spend.contentKey}"`,
+      });
+    },
+
+    async subscribe(
+      spend: { vaultId: string; tierIndex: number } & SpendCeiling,
+    ): Promise<Reading<Executed>> {
+      const vault = await readPayableVault(client, spend.vaultId, agent.address);
+      if (!vault.ok) return vault;
+
+      const tier = tierAt(vault.value, spend.tierIndex);
+      if (!tier.ok) return tier;
+
+      /*
+        No `expected` here, unlike `unlock`.
+
+        A tier price is read from the same vault object the subscription will execute against, in
+        the same read — there is no second number for the agent to have been shown. `unlock` has
+        one because a content price is a separate dynamic field the agent may have learned about
+        elsewhere and earlier.
+      */
+      const guarded = guardPrice({
+        livePrice: tier.value.price,
+        maxPrice: spend.maxPrice,
+        what: `subscribe to tier ${spend.tierIndex} ("${tier.value.name}") of vault ${spend.vaultId}`,
+        coinType: manifest.coinType,
+      });
+      if (!guarded.ok) return guarded;
+
+      const ready = await payable(agent, guarded.value);
+      if (!ready.ok) return ready;
+
+      const tx = buildSubscribe(manifest.config, {
+        coinType: manifest.coinType,
+        vaultId: spend.vaultId,
+        accountId: ready.value,
+        tierIndex: spend.tierIndex,
+        price: guarded.value,
+        sender: agent.address,
+      });
+      return simulateAndExecute({
+        client,
+        transaction: tx,
+        key,
+        gasBudgetMist: manifest.gasBudgetMist,
+        what: `creator::subscribe tier ${spend.tierIndex}`,
+      });
+    },
+
+    async tip(spend: { vaultId: string; amount: bigint } & SpendCeiling): Promise<Reading<Executed>> {
+      const vault = await readPayableVault(client, spend.vaultId, agent.address);
+      if (!vault.ok) return vault;
+
+      /*
+        A tip is guarded against the amount the agent chose, not against a price.
+
+        There is no on-chain price for a tip — `creator::tip` takes the coin entire and returns no
+        change. So the ceiling is the only thing bounding it, which makes `maxPrice` matter *more*
+        here than anywhere else in this file: for an unlock, a wrong amount is refused by the
+        contract, and for a tip there is nothing to refuse it.
+      */
+      const guarded = guardPrice({
+        livePrice: spend.amount,
+        maxPrice: spend.maxPrice,
+        what: `tip ${spend.amount} to vault ${spend.vaultId}`,
+        coinType: manifest.coinType,
+      });
+      if (!guarded.ok) return guarded;
+
+      // EBelowMinTip, code 11. Named here because a tip below a creator's floor is a whole
+      // transaction's gas spent to learn a number that was readable for free. A PRECONDITION: the
+      // agent can raise the tip, or the creator can lower the floor, and either clears it.
+      if (guarded.value < vault.value.minTip) {
+        return refusePrecondition(
+          'tip-below-minimum',
+          `tip to vault ${spend.vaultId}`,
+          `this creator's minimum tip is ${vault.value.minTip} and ${guarded.value} is below it. ` +
+            `creator::tip would abort with ETipTooSmall (code 11). Nothing was spent.`,
+        );
+      }
+
+      const ready = await payable(agent, guarded.value);
+      if (!ready.ok) return ready;
+
+      const tx = buildTip(manifest.config, {
+        coinType: manifest.coinType,
+        vaultId: spend.vaultId,
+        accountId: ready.value,
+        amount: guarded.value,
+      });
+      return simulateAndExecute({
+        client,
+        transaction: tx,
+        key,
+        gasBudgetMist: manifest.gasBudgetMist,
+        what: `creator::tip ${guarded.value}`,
+      });
+    },
+
+    async post(article: {
+      handle: string;
+      title: string;
+      preview: string;
+      text: string;
+      access: 'public' | 'subscribers' | 'paid';
+      contentKey?: string;
+      price?: string;
+    }): Promise<Reading<{ postId: string }>> {
+      /*
+        `contentKey` and `price` are signed as empty strings when the post is not for sale.
+
+        `app/api/posts/route.ts` binds `body.contentKey ?? ''` and `body.price ?? ''` into the
+        statement, before its own paid branch reads them, and says why: the statement must be
+        rebuilt from the request exactly as the client built it. Omitting the fields from the
+        signature and sending them, or the reverse, produces a statement the server cannot rebuild
+        — and the error it returns names the key, not the mismatch.
+      */
+      const contentKey = article.contentKey ?? '';
+      const price = article.price ?? '';
+
+      const signed = await signAction(key.keypair, {
+        kind: 'publish',
+        handle: article.handle,
+        title: article.title,
+        access: article.access,
+        // Hashed with the same length prefixes the route uses. See `publishContentSha256`.
+        contentSha256: publishContentSha256(article.preview, article.text),
+        contentKey,
+        price,
+      });
+
+      const response = await authorisedFetch({
+        agent,
+        doFetch,
+        path: '/api/posts',
+        method: 'POST',
+        what: 'publish',
+        body: {
+          handle: article.handle,
+          author: signed.address,
+          title: article.title,
+          preview: article.preview,
+          text: article.text,
+          access: article.access,
+          ...(contentKey === '' ? {} : { contentKey }),
+          ...(price === '' ? {} : { price }),
+          signature: signed.signature,
+          timestampMs: signed.timestampMs,
+        },
+      });
+      if (!response.ok) return response;
+
+      const postId = response.value['postId'];
+      if (typeof postId !== 'string' || postId === '') {
+        return fail('malformed', 'publish', 'the post was accepted but no postId was returned.');
+      }
+      return ok({ postId });
+    },
+
+    async send(message: {
+      to: string;
+      text: string;
+      preview: string;
+      paid?: { handle: string; contentKey: string; price: string };
+    }): Promise<Reading<{ sent: true }>> {
+      /*
+        The text is trimmed before signing and the preview is not, and the asymmetry is the
+        server's, not a mistake here.
+
+        `app/api/messages/route.ts` verifies `{ text: trimmed, preview }` — it trims the body and
+        takes the preview exactly as sent, with its own comment explaining that "normalising one
+        side and not the other is a signature that fails for a reason no error message can
+        explain". Signing untrimmed text against a server that trims is precisely that failure, and
+        it only appears when a message happens to have leading or trailing whitespace, which is
+        most messages a language model writes.
+      */
+      const trimmed = message.text.trim();
+      if (trimmed === '') {
+        return fail('malformed', 'send', 'the message is empty.');
+      }
+      if (sameAddress(message.to, agent.address)) {
+        return fail('malformed', 'send', 'an agent cannot message itself.');
+      }
+
+      const signed = await signAction(key.keypair, {
+        kind: 'send',
+        to: message.to,
+        text: trimmed,
+        preview: message.preview,
+        paid: paidStatementFor(message.paid),
+      });
+
+      const response = await authorisedFetch({
+        agent,
+        doFetch,
+        path: '/api/messages',
+        method: 'POST',
+        what: 'send',
+        body: {
+          from: signed.address,
+          to: message.to,
+          // The trimmed text is sent, so what is stored is what was signed.
+          text: trimmed,
+          preview: message.preview,
+          ...(message.paid === undefined ? {} : { paid: message.paid }),
+          signature: signed.signature,
+          timestampMs: signed.timestampMs,
+        },
+      });
+      if (!response.ok) return response;
+      return ok({ sent: true });
+    },
+
+    async balance(coinType?: string): Promise<Reading<bigint>> {
+      return totalBalance(client, agent.address, coinType ?? manifest.coinType);
+    },
+  };
+
+  return ok(agent);
+}
+
+// === Internals ===
+
+/**
+ * The agent's account id, plus a balance check, before a payment is built.
+ *
+ * The balance check is here rather than left to simulation because a shortfall is the one failure
+ * an agent can act on: it means "fund me", and an abort code does not say that. Simulation would
+ * catch it too, one round trip later, as `EInsufficientPayment` (code 5).
+ */
+async function payable(agent: Agent, needed: bigint): Promise<Reading<string>> {
+  const account = await findAgentAccount(agent.client, agent.manifest.config, agent.address);
+  if (!account.ok) return account;
+  if (account.value === null) {
+    return fail(
+      'not-found',
+      `SocialAccount for ${agent.address}`,
+      'this agent has no SocialAccount, and every payment in creator.move takes one as the buyer. ' +
+        'Call openAccount(handle) first.',
+    );
+  }
+
+  const balance = await totalBalance(agent.client, agent.address, agent.manifest.coinType);
+  if (!balance.ok) return balance;
+  if (balance.value < needed) {
+    /*
+      The archetypal precondition, and the one the old two-way classification handled worst.
+
+      Reported as `malformed` this reads "never retry", and an agent told never to retry a payment
+      it cannot yet afford will not retry it after somebody funds the wallet either. It is the
+      exact case the third classification exists for: nothing is wrong, a number needs to change,
+      and the agent should say which number and come back.
+    */
+    return refusePrecondition(
+      'insufficient-balance',
+      `${agent.manifest.coinType} balance of ${agent.address}`,
+      `this agent holds ${balance.value} and the payment needs ${needed} (minor units). ` +
+        'Nothing was signed.',
+    );
+  }
+  return ok(account.value);
+}
+
+/** One HTTP call, carrying the read session, returning a parsed body or a `Reading` failure. */
+async function authorisedFetch(input: {
+  agent: Agent;
+  doFetch: FetchLike | undefined;
+  path: string;
+  method: 'GET' | 'POST';
+  what: string;
+  body?: Record<string, unknown>;
+}): Promise<Reading<Record<string, unknown>>> {
+  const { agent, what } = input;
+  const doFetch = input.doFetch ?? (globalThis.fetch as FetchLike | undefined);
+  if (doFetch === undefined) {
+    return fail('unconfigured', what, 'no fetch implementation is available in this runtime.');
+  }
+
+  /*
+    The session is attached to writes as well as reads, and it authorises none of them.
+
+    A write is authorised by its single-use signature and nothing else — `read-session.ts` is
+    explicit that a stolen session "cannot post, spend, unlock, or follow". The session travels
+    anyway because a route may read entitlement while serving a write, and a request that arrives
+    anonymous gets the anonymous view of whatever it touches. A failure to obtain one is therefore
+    not fatal here: the request goes out unauthenticated rather than not at all.
+  */
+  const session = await agent.session();
+  const auth = session.ok ? session.value.headers() : {};
+
+  let response: Response;
+  try {
+    response = await doFetch(`${agent.manifest.baseUrl}${input.path}`, {
+      method: input.method,
+      headers: {
+        ...auth,
+        ...(input.body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+    });
+  } catch (error) {
+    return fail(
+      'transport',
+      what,
+      `could not reach ${agent.manifest.baseUrl}${input.path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    const json: unknown = await response.json();
+    if (typeof json === 'object' && json !== null) parsed = json as Record<string, unknown>;
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const detail =
+      typeof parsed?.['error'] === 'string' ? parsed['error'] : `HTTP ${response.status}`;
+    /*
+      404 and 405 are separated from everything else, and from each other.
+
+      A 404 means this deployment has no such path. A **405** means the path exists and does not
+      implement this method — which is precisely what `GET /api/posts` returns, because that route
+      exports `POST` only. Folding 405 into the same bucket as "the server refused your request" is
+      what let a structurally impossible call read as an ordinary failure for as long as it did;
+      the two methods that could only ever produce it are now gone, and this branch is here so the
+      next one is legible the first time somebody sees it in a log.
+    */
+    if (response.status === 405) {
+      return fail(
+        'not-found',
+        what,
+        `${input.method} ${input.path} is not implemented by this deployment (HTTP 405). The path ` +
+          `exists; the method does not. This is a missing endpoint, not a refused request.`,
+      );
+    }
+    return fail(response.status === 404 ? 'not-found' : 'malformed', what, detail);
+  }
+  return ok(parsed ?? {});
+}
+
+/** A manifest, or an environment to load one from. Distinguished structurally, not by a flag. */
+function isManifest(value: AgentManifest | Record<string, string | undefined>): value is AgentManifest {
+  const candidate = value as Partial<AgentManifest>;
+  return (
+    typeof candidate.baseUrl === 'string' &&
+    typeof candidate.coinType === 'string' &&
+    typeof candidate.gasBudgetMist === 'bigint' &&
+    typeof candidate.config === 'object' &&
+    candidate.config !== null
+  );
+}
+
+function stripSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+/** Re-exported so a caller assembling a manifest by hand does not import the SDK separately. */
+export type { ProjectXSocialConfig, Reading };
