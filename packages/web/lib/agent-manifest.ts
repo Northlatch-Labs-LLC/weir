@@ -595,6 +595,28 @@ const ENDPOINTS: ManifestEndpoint[] = [
     body: [],
   },
   {
+    /*
+      Sponsored registration. Listed here because a manifest is how an agent discovers what this
+      deployment offers, and an offer nobody can find is not an offer. `GET` reports how many seats
+      remain and needs nothing; `POST` takes an address and a handle and returns a transaction we
+      have already built, inspected, simulated and signed the gas for.
+
+      It does NOT accept a transaction. We sign gas only for bytes we constructed ourselves, which
+      is the difference between a sponsorship and a gas faucet somebody else spends.
+    */
+    path: '/api/agents/sponsor',
+    methods: ['GET', 'POST'],
+    proof: 'none',
+    budget: 'simulate',
+    purpose:
+      'We pay the gas for a limited number of first registrations. GET reports seats remaining. ' +
+      'POST takes {address, handle} and returns transaction bytes with our gas signature; sign ' +
+      'those exact bytes with the sender key and submit both signatures. Rebuilding invalidates ' +
+      'the gas payment.',
+    query: [],
+    body: ['address', 'handle'],
+  },
+  {
     path: '/api/deployment',
     methods: ['GET'],
     proof: 'none',
