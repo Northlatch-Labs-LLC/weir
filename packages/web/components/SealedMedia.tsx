@@ -51,7 +51,7 @@ import { SealClient, SessionKey } from '@mysten/seal';
 import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
-import { openSealedMedia, readMediaResponse } from '@/lib/seal-open';
+import { isSettling, openSealedMedia, readMediaResponse } from '@/lib/seal-open';
 
 /**
  * A key server, as a browser is allowed to know it.
@@ -118,11 +118,20 @@ const SESSION_TTL_MIN = 10;
 const SETTLING_ATTEMPTS = 4;
 const SETTLING_BACKOFF_MS = [1500, 3500, 6000];
 
-/** A refusal that may simply be the chain catching up, rather than a reader without entitlement. */
-function looksLikeSettling(error: unknown): boolean {
-  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
-  return /NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i.test(text);
-}
+/*
+  The predicate lives in `lib/seal-open.ts` now, and matches on `instanceof` rather than on text.
+
+  What was here matched `` `${error.name} ${error.message}` `` against a regex. Measured against
+  `@mysten/seal` 1.4.6: **every error in that library reports `error.name === "Error"`** — the
+  classes are anonymous expressions and never assign `name` — so the name half matched nothing and
+  each class had to be recognised by its prose. `NoAccessError` survived on "does not have access".
+  `InvalidParameterError` did not: its message says the object "has not yet **seen**" where the
+  regex looked for "not yet **exist**".
+
+  That is the freshly-minted `Unlock` case — the one this retry exists for — so the retry never
+  fired on it, and a reader who had just paid was told they had no access. Exactly the failure
+  `SEAL.md` predicted on 21 August.
+*/
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -273,7 +282,7 @@ export function SealedMedia({
               );
             } catch (error) {
               last = error;
-              if (cancelled || !looksLikeSettling(error)) throw error;
+              if (cancelled || !isSettling(error)) throw error;
               const backoff = SETTLING_BACKOFF_MS[attempt];
               if (backoff === undefined) break;
               if (!cancelled) setState({ phase: 'settling' });

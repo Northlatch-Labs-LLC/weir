@@ -26,6 +26,61 @@
  * this file produces is trusted by anybody else — the ciphertext is public, the wrapped key is
  * public, and the plaintext never leaves the tab.
  *
+ * # Unavailable is not denied, and they used to leave here by the same door
+ *
+ * Everything below the key-recovery seam used to throw, and every throw arrived at the caller as
+ * one `Error` with whatever text the failure happened to carry. So a reader whose key server
+ * committee was down, or slow, or misconfigured by us, was shown the same tile as a reader who
+ * genuinely has not bought the post. **That is the worst available answer.** It is false, it is
+ * alarming on a screen somebody reached by paying, and it routes them to support with a billing
+ * question during what is actually our outage — while nothing pages the people who could fix it.
+ *
+ * `SEAL.md` said this on 21 August, before any of it was built: a refusal that is not a refusal
+ * "must not surface as 'you do not have access', which is both wrong and alarming on a screen the
+ * buyer reached by paying." `components/SealedMedia.tsx` acted on half of it, with the settling
+ * retry for a freshly-minted `Unlock` the fullnode has not indexed yet. This file now carries the
+ * other half: the two are told apart by what threw, and the answer is classified rather than
+ * printed.
+ *
+ * {@link classifySealFailure} is that classification, and {@link SealOpenError} is how it reaches a
+ * caller that only reads `error.message`.
+ *
+ * # Why the classification is `instanceof` and not a regular expression
+ *
+ * Because the strings lie, measured rather than assumed. `@mysten/seal` 1.4.6 declares its whole
+ * error hierarchy as anonymous class expressions — `var NoAccessError = class extends SealAPIError
+ * {}` — and never assigns `name`. So **`error.name` is the string `"Error"` for every one of
+ * them**, including the refusal. Anything that matches on `name` matches nothing; anything that
+ * matches on `message` is matching English prose from another package's source, which changes
+ * without a major version and without anybody here noticing.
+ *
+ * It is not a hypothetical. `SealedMedia.tsx`'s `looksLikeSettling` tests
+ * `` `${error.name} ${error.message}` `` against `/NoAccess|does not have access|InvalidParameter|…/`.
+ * `NoAccessError` matches — through its *message*, "User does not have access to one or more of the
+ * requested keys", not through the alternative that was written for it. `InvalidParameterError`
+ * matches nothing at all: its name is `"Error"` and its message is "PTB contains an invalid
+ * parameter, possibly a newly created object that the FN has not yet seen". That is precisely the
+ * settling case the retry was written for, and the retry does not fire on it.
+ *
+ * Seal's own `toMajorityError` uses `error.constructor.name`, which does resolve — an anonymous
+ * class expression assigned to a `var` takes the variable's name. That is what this file would use
+ * if `instanceof` were unavailable, and it is noted here rather than used because a bundler that
+ * mangles class names would silently turn every refusal into an outage.
+ *
+ * # What the SDK's `FailureKind` is missing, named rather than overloaded
+ *
+ * `packages/sdk/src/reading.ts` enumerates `transport`, `timeout`, `malformed`, `unconfigured`,
+ * `not-found` and `budget-exhausted`. **None of them means "we asked, we were understood, and the
+ * answer was no."** `not-found` is the nearest and is wrong in the direction that matters: the
+ * thing exists, is readable by the people entitled to it, and the caller is not one of them.
+ * Reporting a paywall as a 404 is how "you have not bought this" becomes "this is gone".
+ *
+ * So `denied` is the member that union is missing. It is not added here, because
+ * `packages/sdk/src/reading.ts` is not this file's to change and a seventh kind is a decision about
+ * every reader in the SDK rather than about media. {@link SealOpenFailure} carries its own kind and
+ * maps to a `FailureKind` only where an honest one exists — `null` where it does not, which is the
+ * whole of the gap, written down.
+ *
  * # The split in this file
  *
  * Everything that is arithmetic — parsing the response, unwrapping AES-GCM, verifying the hash — is
@@ -38,11 +93,31 @@ import {
   approvalBytes,
   approveSubscription,
   approveUnlock,
+  classify,
   periodIdentity,
   unlockIdentity,
+  type FailureKind,
   type ProjectXSocialConfig,
 } from '@projectx-social/sdk';
 import type { Transaction } from '@mysten/sui/transactions';
+/*
+  Imported as VALUES, not as types, and that is the whole point.
+
+  `instanceof` needs the constructor at run time. A `import type` here would compile, erase, and
+  leave every check against `undefined` — which throws at the first failure, inside the handler for
+  a failure. See this file's header for why the alternative, matching on `name` or `message`, does
+  not work against this package at all.
+*/
+import {
+  DecryptionError,
+  ExpiredSessionKeyError,
+  InvalidCiphertextError,
+  InvalidParameterError,
+  InvalidSessionKeySignatureError,
+  InvalidUserSignatureError,
+  NoAccessError,
+  SealAPIError,
+} from '@mysten/seal';
 
 /** GCM's authentication tag, appended to the ciphertext by `blob-crypto.ts`. */
 const TAG_BYTES = 16;
@@ -314,6 +389,300 @@ export function approvalFor(
       });
 }
 
+/* ------------------------------------------------------------------------------------------------
+   Telling a refusal from an outage.
+   ------------------------------------------------------------------------------------------------ */
+
+/**
+ * The four answers, and the four different things a product should do about them.
+ *
+ * `denied` — the contract was consulted and said no. Terminal, correct, and the only one of these
+ *   a reader should ever be told in the words "you do not have access". Not an alarm: it is the
+ *   paywall doing its job, and a deployment with no denials is a deployment with no paywall.
+ * `unauthenticated` — the reader's `SessionKey` is missing, expired or badly signed. Terminal until
+ *   they sign again, at which point it resolves. Neither a refusal nor an outage, and folding it
+ *   into either would be a lie in a different direction: into `denied` and a reader who owns the
+ *   post is told they do not; into `unavailable` and a page fires for something no operator can fix.
+ * `unavailable` — the key servers, the fullnode or the network did not answer, or answered with a
+ *   fault of ours. Retryable, and **the one that must alarm**. Every member of this class is a
+ *   thing an operator can act on, and none of them is the reader's fault.
+ * `corrupt` — bytes arrived and are not the bytes that were uploaded: a failed GCM tag, a wrapped
+ *   key that will not parse, a hash that does not match. Terminal, alarms, and never retried —
+ *   retrying returns the same bytes, and rendering them anyway is the failure the hash exists to
+ *   prevent.
+ */
+export type SealOpenFailureKind = 'denied' | 'unauthenticated' | 'unavailable' | 'corrupt';
+
+export interface SealOpenFailure {
+  kind: SealOpenFailureKind;
+  /**
+   * What a route serving this on the reader's behalf should answer with.
+   *
+   * 403 for `denied` and 503 for `unavailable` are the two the brief for this work named, and they
+   * are the pair that were previously indistinguishable. 401 for `unauthenticated` because the
+   * remedy is a fresh signature, which is what that code asks for. 502 for `corrupt` because the
+   * fault is in what an upstream returned, and a 500 would blame this application for bytes it
+   * never held the key to.
+   */
+  httpStatus: 403 | 401 | 503 | 502;
+  /** Whether an identical retry could succeed without the reader doing anything. */
+  retryable: boolean;
+  /** Whether an operator should be woken. True for exactly the classes an operator can fix. */
+  alarm: boolean;
+  /** For the reader. Says what happened to them, and never accuses them of not having paid. */
+  reason: string;
+  /** For the operator and the log. The underlying text, unmodified — never a guess at what it meant. */
+  detail: string;
+  /**
+   * Which class threw, by `constructor.name`.
+   *
+   * Recorded rather than matched on: it is what Seal's own `toMajorityError` groups by, so it is the
+   * string an operator will see in Seal's own diagnostics, and having it here makes our log and
+   * theirs joinable. `'unknown'` when the thrown value is not an object with a constructor.
+   */
+  cause: string;
+  /**
+   * The nearest `FailureKind` from `packages/sdk/src/reading.ts`, or `null` when there is none.
+   *
+   * `null` is not laziness and it is not "we did not look". It is the gap named in this file's
+   * header: that union has no member meaning a refusal, and `denied` and `unauthenticated` are both
+   * refusals. Writing `not-found` there would make a paywall indistinguishable from a deleted post
+   * in every log line and every dashboard that groups by kind.
+   */
+  readingKind: FailureKind | null;
+}
+
+/**
+ * The vocabulary a reader is shown, in one place.
+ *
+ * Held as a constant rather than inlined so that the sentence a paying reader sees during our
+ * outage is reviewable as a sentence, by somebody who is not reading a `switch`.
+ */
+const REASONS: Record<SealOpenFailureKind, string> = {
+  denied: 'this is not unlocked for you',
+  unauthenticated: 'your reading session has expired — sign again to open this',
+  unavailable:
+    'this could not be opened right now. The key servers that hold the key did not answer; ' +
+    'this is not about what you own, and it is worth trying again shortly',
+  corrupt: 'this file did not arrive intact, so it was not shown',
+};
+
+function failure(
+  kind: SealOpenFailureKind,
+  cause: string,
+  detail: string,
+  overrides: Partial<SealOpenFailure> = {},
+): SealOpenFailure {
+  const base: Record<SealOpenFailureKind, Omit<SealOpenFailure, 'cause' | 'detail'>> = {
+    denied: {
+      kind: 'denied',
+      httpStatus: 403,
+      retryable: false,
+      alarm: false,
+      reason: REASONS.denied,
+      readingKind: null,
+    },
+    unauthenticated: {
+      kind: 'unauthenticated',
+      httpStatus: 401,
+      retryable: false,
+      alarm: false,
+      reason: REASONS.unauthenticated,
+      readingKind: null,
+    },
+    unavailable: {
+      kind: 'unavailable',
+      httpStatus: 503,
+      retryable: true,
+      alarm: true,
+      reason: REASONS.unavailable,
+      readingKind: 'transport',
+    },
+    corrupt: {
+      kind: 'corrupt',
+      httpStatus: 502,
+      retryable: false,
+      alarm: true,
+      reason: REASONS.corrupt,
+      readingKind: 'malformed',
+    },
+  };
+  return { ...base[kind], cause, detail, ...overrides };
+}
+
+/**
+ * The `corrupt` verdict, for the two failures that do not come from Seal at all.
+ *
+ * WebCrypto's tag check and this file's own hash comparison both mean "the bytes are wrong", and
+ * neither throws anything {@link classifySealFailure} could recognise — its honest default for an
+ * unrecognised throw is `unavailable`, which for these two would ask an operator to wait for a
+ * network that is working perfectly.
+ */
+function corruptFailure(cause: string, detail: string): SealOpenFailure {
+  return failure('corrupt', cause, detail);
+}
+
+/** `constructor.name`, defensively. See {@link SealOpenFailure.cause}. */
+function causeOf(error: unknown): string {
+  if (typeof error !== 'object' || error === null) return 'unknown';
+  const name = (error as { constructor?: { name?: unknown } }).constructor?.name;
+  return typeof name === 'string' && name !== '' ? name : 'unknown';
+}
+
+function detailOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Decide which of the four a thrown value is.
+ *
+ * # Every branch, and why it is where it is
+ *
+ * **`denied`** is one class and one status: `NoAccessError`, which the key server returns when it
+ * executed `seal_approve_*` with the reader as sender and the Move code aborted. That is the
+ * contract's answer, arrived at without our participation, and it is the only thing in this
+ * function entitled to tell a reader they have not paid. A bare `SealAPIError` carrying HTTP 403 is
+ * admitted alongside it, because a 403 from a key server is that same answer in the transport's
+ * vocabulary.
+ *
+ * **`unauthenticated`** is the three session classes. `ExpiredSessionKeyError` is the ordinary one
+ * — sessions are ten minutes and readers linger. `InvalidUserSignatureError` and
+ * `InvalidSessionKeySignatureError` mean the signature over the session message did not verify,
+ * which is a wallet or a stale session rather than an entitlement, and telling that reader they do
+ * not own the post would be wrong about the one thing they can see is true.
+ *
+ * **`unavailable`** is everything else, and it is deliberately the default rather than a list.
+ * That direction is chosen on purpose: an unrecognised failure classified as an outage produces a
+ * page for an operator who then discovers it was something else, while an unrecognised failure
+ * classified as a refusal produces a paying reader told they have not paid and nobody told anything
+ * at all. One of those errors is recoverable by a human; the other is a customer we lose quietly.
+ *
+ * It is worth naming what falls in here rather than leaving it to the default, because several are
+ * *our* faults wearing the key server's clothes: `UnsupportedPackageIdError` means a permissioned
+ * committee has not been configured for our package, `InvalidPTBError` and `InvalidPackageError`
+ * mean we built the approval wrong, `InvalidKeyServerObjectIdError` means the committee list points
+ * at something that is not a key server, and the SDK-version classes mean our dependency has aged
+ * out. **Not one of those is the reader's fault, and every one of them would previously have read
+ * to that reader as a paywall.**
+ *
+ * **`corrupt`** is `InvalidCiphertextError` and `DecryptionError` — the bytes, not the permission.
+ *
+ * # `instanceof`, and the one place it cannot reach
+ *
+ * A `SealClient` in another realm — a worker, an iframe, a second copy of the package in the
+ * bundle — throws instances that fail `instanceof` against the classes imported here. The fallback
+ * is `unavailable`, per the default above, which is the safe direction. It is not papered over with
+ * a `constructor.name` comparison: that would quietly re-introduce string matching for the exact
+ * case where the strings are least trustworthy.
+ */
+export function classifySealFailure(error: unknown): SealOpenFailure {
+  const cause = causeOf(error);
+  const detail = detailOf(error);
+
+  if (error instanceof NoAccessError) return failure('denied', cause, detail);
+
+  if (
+    error instanceof ExpiredSessionKeyError ||
+    error instanceof InvalidUserSignatureError ||
+    error instanceof InvalidSessionKeySignatureError
+  ) {
+    return failure('unauthenticated', cause, detail);
+  }
+
+  if (error instanceof InvalidCiphertextError || error instanceof DecryptionError) {
+    return failure('corrupt', cause, detail);
+  }
+
+  if (error instanceof SealAPIError) {
+    // A key server that answered in HTTP but not in Seal's vocabulary. 403 is the contract's no
+    // arriving as a status code; everything else here is an outage or a fault of ours.
+    if (error.status === 403) return failure('denied', cause, detail);
+    return failure('unavailable', cause, detail, {
+      readingKind: error.status === 408 || error.status === 504 ? 'timeout' : 'transport',
+    });
+  }
+
+  // A deadline, an `AbortSignal`, or a fetch that never completed. Classified by the SDK's own
+  // `classify`, which is conservative in the same direction and already knows the words a gRPC or
+  // fetch timeout uses.
+  const readingKind = classify(error, 'Seal key server committee').kind;
+  return failure('unavailable', cause, detail, {
+    readingKind: readingKind === 'timeout' ? 'timeout' : 'transport',
+  });
+}
+
+/**
+ * A failure with its classification attached, thrown where an `Error` is what a caller catches.
+ *
+ * # Why this throws rather than returning a union
+ *
+ * `openSealedMedia` already threw, and `components/SealedMedia.tsx` already catches and renders
+ * `error.message`. Turning the return type into a `Reading`-style union would be the tidier shape
+ * and would require that component to change in the same breath — so the fix would land in two
+ * places at once, in a file this change does not own, and a reader whose committee is down would
+ * keep seeing the paywall until the second half arrived.
+ *
+ * Throwing this instead fixes the defect where it is: the message a caller renders without knowing
+ * anything about this type is now the right sentence for the right class of failure. A caller that
+ * wants to do better — a 503 with `retry-after` instead of a 403, an alarm, a retry — reads
+ * `.failure` and gets the whole decision.
+ *
+ * `cause` is set to the original error so nothing is lost. That is the standard `Error` option, and
+ * it means a log that walks the chain still reaches Seal's own class and its `requestId`.
+ */
+/**
+ * A refusal that is the chain catching up, not a reader without entitlement.
+ *
+ * # Why this is not `looksLikeSettling`'s regex, and why that regex never worked
+ *
+ * `SealedMedia.tsx` matched on `` `${error.name} ${error.message}` `` against
+ * `/NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i`. **Measured against
+ * `@mysten/seal` 1.4.6, every error in that library reports `error.name === "Error"`** — the
+ * hierarchy is declared as anonymous class expressions (`var NoAccessError = class extends
+ * SealAPIError {}`) and `name` is never assigned. So the name half of that string matched nothing,
+ * ever, and each class had to be caught by its message text instead.
+ *
+ * `NoAccessError` survived on "does not have access". **`InvalidParameterError` did not.** Its
+ * message is *"PTB contains an invalid parameter, possibly a newly created object that the FN has
+ * not yet seen"* — the regex looks for "not yet **exist**". One word apart, and it is the exact
+ * error a freshly-minted `Unlock` produces while the fullnode is still indexing it.
+ *
+ * Which means the retry did not fire on the one case it was written for: **a reader who has just
+ * paid, told they have no access.** `SEAL.md` predicted this failure on 21 August and the retry was
+ * added to prevent it; the predicate silently excluded it.
+ *
+ * So: `instanceof`, which is the only thing `@mysten/seal` gives us that is reliable. Structural
+ * matching on a library's prose is a test of its release notes.
+ */
+export function isSettling(error: unknown): boolean {
+  // The FN has not indexed a just-created object yet. The entitlement is real; the node is behind.
+  if (error instanceof InvalidParameterError) return true;
+
+  /*
+    A genuine "no" *and* the shape a settling `Unlock` takes when the server maps a `NotFound` to a
+    refusal. Retrying it is bounded — four attempts, ~15 seconds — so a reader who truly has no
+    entitlement pays those seconds and is then told plainly. The alternative is telling a buyer
+    they did not buy.
+  */
+  if (error instanceof NoAccessError) return true;
+
+  // Any transport-shaped failure: the committee was unreachable, not the reader unentitled.
+  return classifySealFailure(error).kind === 'unavailable';
+}
+
+export class SealOpenError extends Error {
+  readonly failure: SealOpenFailure;
+
+  constructor(failureRecord: SealOpenFailure, cause?: unknown) {
+    super(failureRecord.reason, cause === undefined ? undefined : { cause });
+    // Assigned, because an anonymous-subclass `name` is exactly the trap this file documents in its
+    // header. A caught `SealOpenError` must be identifiable without `instanceof` for the benefit of
+    // logs, even though nothing in this codebase identifies it that way.
+    this.name = 'SealOpenError';
+    this.failure = failureRecord;
+  }
+}
+
 /**
  * The one step that needs the network, behind a seam.
  *
@@ -348,28 +717,59 @@ export async function openSealedMedia(input: {
   client: Parameters<typeof approvalBytes>[1];
   recoverKey: RecoverKey;
 }): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const approval = await approvalBytes(
-    approvalFor(input.config, input.entitlement),
-    input.client,
-  );
+  /*
+    Building the approval reads the reader's owned entitlement object from a fullnode, so it fails
+    for network reasons as readily as the key servers do — and it fails BEFORE any key server is
+    asked. Classified here rather than left to the catch below so that an unreachable fullnode is
+    never reported as a committee problem, which is the wrong page for the wrong team.
+  */
+  let approval: Uint8Array;
+  try {
+    approval = await approvalBytes(approvalFor(input.config, input.entitlement), input.client);
+  } catch (error) {
+    throw new SealOpenError(classifySealFailure(error), error);
+  }
 
-  const key = await input.recoverKey({
-    wrappedKey: input.media.wrappedKey,
-    approvalBytes: approval,
-  });
+  let key: Uint8Array;
+  try {
+    key = await input.recoverKey({
+      wrappedKey: input.media.wrappedKey,
+      approvalBytes: approval,
+    });
+  } catch (error) {
+    throw new SealOpenError(classifySealFailure(error), error);
+  }
 
-  const bytes = await openBlob({
-    ciphertext: input.media.ciphertext,
-    key,
-    nonce: input.media.nonce,
-  });
+  let bytes: Uint8Array;
+  try {
+    bytes = await openBlob({
+      ciphertext: input.media.ciphertext,
+      key,
+      nonce: input.media.nonce,
+    });
+  } catch (error) {
+    /*
+      A failed GCM tag, or a key of the wrong length. Neither is a permission question: the
+      committee released a key and the bytes did not open under it, so either the bytes or the key
+      are wrong, and no amount of entitlement changes that. Stated as `corrupt` rather than run
+      through `classifySealFailure`, because what threw here is WebCrypto rather than Seal and the
+      classifier's honest default for an unrecognised throw is `unavailable` — which would ask an
+      operator to wait for a network that is working.
+    */
+    throw new SealOpenError(corruptFailure(causeOf(error), detailOf(error)), error);
+  }
 
   const digest = await sha256Hex(bytes);
   if (digest !== input.media.sha256) {
     // Not returned with a warning. Bytes that are not what the creator uploaded are not the
     // creator's work, and rendering them under a content type we chose is the failure the hash
     // exists to prevent.
-    throw new Error('the bytes returned do not match the hash recorded at upload');
+    throw new SealOpenError(
+      corruptFailure(
+        'hash-mismatch',
+        `expected sha256 ${input.media.sha256}, opened bytes hash to ${digest}`,
+      ),
+    );
   }
 
   return { bytes, contentType: input.media.contentType };
