@@ -72,7 +72,32 @@ export const config = {
   figure on it is read from chain state that is public regardless of the gate, and it makes the
   ownership argument checkable — which is what the waiting list is asking to be believed.
 */
-const ALWAYS_OPEN = ['/waitlist', '/signin', '/auth/callback', '/api/', '/legal', '/opengraph-image', '/security'];
+/*
+  `/.well-known/` is here for a fifth reason, and it is the only entry whose reader is not a person.
+
+  `/.well-known/weir-agent.json` is the agent manifest: the document from which a machine learns
+  our package ids, the exact statement it must sign, and which endpoints exist. Without this entry
+  the proxy answered 307 to `/waitlist` — **a discovery document that cannot be discovered**, and a
+  redirect an HTTP client reads as "this endpoint returns HTML", not as "come back later".
+
+  It is safe to open on the same reasoning as `/security`: nothing in the response assumes anything
+  about who is reading. Every value in it is already public — ids that appear in every event on
+  chain, statement shapes that any signed request reveals, endpoint paths already in the bundle —
+  and knowing them grants nothing, because every write still needs a fresh single-use signature.
+
+  The matcher above exempts static assets by extension, and `.json` is deliberately NOT in that
+  list, so this route is reached by the proxy rather than skipped by it. This entry is the fix.
+*/
+const ALWAYS_OPEN = [
+  '/waitlist',
+  '/signin',
+  '/auth/callback',
+  '/api/',
+  '/legal',
+  '/opengraph-image',
+  '/security',
+  '/.well-known/',
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

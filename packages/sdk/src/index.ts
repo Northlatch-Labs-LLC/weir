@@ -133,3 +133,21 @@ export {
   readContentPrice,
   CREATOR_VAULT_BCS_FIELDS,
 } from './creator.js';
+
+/*
+  The signed-statement format.
+
+  Exported from the SDK rather than from the web app because three different processes must produce
+  identical bytes: the Next server that verifies, the browser that signs, and a headless agent that
+  signs without a browser at all. It lived in `packages/web/lib/identity.ts` and was hand-copied
+  into `packages/agent`; the copies drifted, and this is the removal of the duplicate rather than a
+  better test for it. `verifyAction` stayed behind — it spends rows in `used_signatures` and reads
+  `siteConfig()`, neither of which belongs in a package a browser imports.
+*/
+export {
+  type Action,
+  statementFor,
+  isSingleUse,
+  SIGNATURE_WINDOW_MS,
+  STATEMENT_SHAPES,
+} from './statements.js';

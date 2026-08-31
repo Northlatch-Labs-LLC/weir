@@ -28,15 +28,21 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import {
+  InvalidCiphertextError,
+  InvalidParameterError,
+  NoAccessError,
+} from '@mysten/seal';
 import { webcrypto } from 'node:crypto';
 import {
+  SEAL_HEADERS,
   approvalFor,
   identityFor,
+  isSettling,
   openBlob,
   openSealedMedia,
   readMediaResponse,
   sha256Hex,
-  SEAL_HEADERS,
   type Entitlement,
 } from '../lib/seal-open';
 import { encryptBlob } from '../lib/blob-crypto';
@@ -72,10 +78,57 @@ const VAULT = `0x${'ab'.repeat(32)}`;
  * resolver — the same code path a real client takes. Substituting a plugin here would test the
  * substitute.
  */
+/**
+ * The Move signatures of the two approve functions, as the resolver reads them from chain.
+ *
+ * Needed since `entitlementRef` stopped declaring `mutable`. That key was illegal — it is a
+ * *shared*-object property and an entitlement is owned, so `@mysten/sui` refused every approval it
+ * appeared on. With it gone the builder does what it always should have: reads the function's
+ * signature and learns the reference is immutable from the contract itself.
+ *
+ * The trailing `&TxContext` is present because the real signature has it and `isTxContext` drops it
+ * — a stub that omitted it would leave the resolver one parameter short of the call's arguments and
+ * throw "Incorrect number of arguments", which is a fixture bug that reads exactly like a real one.
+ */
+const APPROVE_SIGNATURES: Record<string, { reference: string | null; body: unknown }[]> = {
+  seal_approve_unlock: [
+    { reference: null, body: { $kind: 'vector', vector: { $kind: 'u8' } } },
+    {
+      reference: 'immutable',
+      body: { $kind: 'datatype', datatype: { typeName: `${CONFIG.latestPackageId}::entitlement::Unlock`, typeParameters: [] } },
+    },
+    {
+      reference: 'immutable',
+      body: { $kind: 'datatype', datatype: { typeName: '0x2::tx_context::TxContext', typeParameters: [] } },
+    },
+  ],
+  seal_approve_subscription: [
+    { reference: null, body: { $kind: 'vector', vector: { $kind: 'u8' } } },
+    { reference: null, body: { $kind: 'u64' } },
+    { reference: null, body: { $kind: 'u64' } },
+    {
+      reference: 'immutable',
+      body: {
+        $kind: 'datatype',
+        datatype: { typeName: `${CONFIG.latestPackageId}::entitlement::Subscription`, typeParameters: [] },
+      },
+    },
+    {
+      reference: 'immutable',
+      body: { $kind: 'datatype', datatype: { typeName: '0x2::tx_context::TxContext', typeParameters: [] } },
+    },
+  ],
+};
+
 function objectResolvingClient(objects: Record<string, { version: string; digest: string }>) {
   return {
     core: {
       resolveTransactionPlugin: () => undefined,
+      getMoveFunction: ({ name }: { packageId: string; moduleName: string; name: string }) => {
+        const parameters = APPROVE_SIGNATURES[name];
+        if (parameters === undefined) throw new Error(`the test did not stub the signature of ${name}`);
+        return { function: { parameters } };
+      },
       getObjects: ({ objectIds }: { objectIds: string[] }) => ({
         objects: objectIds.map((objectId) => {
           const known = objects[objectId];
@@ -155,11 +208,20 @@ describe('a reader who is not entitled cannot open the ciphertext', () => {
         media,
         entitlement: UNLOCK,
         client: objectResolvingClient({ [UNLOCK.unlockId]: STUB_REF }),
-        // What a real key server does for a reader with no entitlement: it declines. The SDK
-        // surfaces this as NoAccessError after a threshold cannot be met.
-        recoverKey: () => Promise.reject(new Error('NoAccessError: threshold not met')),
+        /*
+          What a real key server does for a reader with no entitlement: it declines, and the SDK
+          surfaces `NoAccessError` once a threshold cannot be met.
+
+          The REAL class, not an `Error` whose text happens to say so. That substitution used to be
+          harmless and is not any more: `lib/seal-open.ts` now classifies by `instanceof`, because
+          `@mysten/seal` declares these as anonymous class expressions and never assigns `name`, so
+          the `.name` of a genuine refusal is the string "Error". A fake built from a message would
+          be classified `unavailable` here — correctly, since an unrecognised throw is treated as an
+          outage — and this test would then be asserting a refusal it had not produced.
+        */
+        recoverKey: () => Promise.reject(new NoAccessError('req-1')),
       }),
-    ).rejects.toThrow(/NoAccessError/);
+    ).rejects.toMatchObject({ failure: { kind: 'denied', httpStatus: 403, alarm: false } });
   });
 
   it('cannot brute a key out of the ciphertext by guessing', async () => {
@@ -227,7 +289,15 @@ describe('a reader who is not entitled cannot open the ciphertext', () => {
         client: objectResolvingClient({ [UNLOCK.unlockId]: STUB_REF }),
         recoverKey: () => Promise.resolve(new Uint8Array(Buffer.from(blob.key, 'base64'))),
       }),
-    ).rejects.toThrow(/do not match the hash/);
+      /*
+        Asserted on the classification rather than on the sentence. The message a reader is shown
+        for this is deliberately not "the hashes do not match" — that is an operator's sentence —
+        and pinning the test to it would pin the reader-facing copy to a diagnostic. `corrupt`
+        carries the whole decision: terminal, alarming, and never a statement about entitlement.
+      */
+    ).rejects.toMatchObject({
+      failure: { kind: 'corrupt', httpStatus: 502, retryable: false, cause: 'hash-mismatch' },
+    });
   });
 });
 
@@ -482,5 +552,51 @@ describe('the entitlement descriptor a sealed response carries', () => {
         }),
       ),
     ).rejects.toThrow(/cannot open media entitled by "bearer-token"/);
+  });
+});
+
+describe('the settling retry fires on the error it was written for', () => {
+  /*
+    The regression this pins, measured on `@mysten/seal` 1.4.6:
+
+      new NoAccessError('x').name          === 'Error'
+      new InvalidParameterError('x').name  === 'Error'
+
+    Every class in that library is an anonymous class expression and never assigns `name`. The old
+    predicate matched `` `${error.name} ${error.message}` `` against
+    /NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i — so the name half
+    matched nothing and each class had to be recognised by its prose.
+
+    `InvalidParameterError`'s real message is "PTB contains an invalid parameter, possibly a newly
+    created object that the FN has not yet seen". The regex looked for "not yet exist". One word,
+    and it is the exact error a just-minted `Unlock` produces while the fullnode indexes it — so a
+    reader who had paid seconds earlier was told they had no access, which is the precise failure
+    the retry was added to prevent.
+  */
+  it('recognises a settling Unlock, which the text predicate did not', () => {
+    const settling = new InvalidParameterError(
+      'PTB contains an invalid parameter, possibly a newly created object that the FN has not yet seen',
+    );
+    expect(isSettling(settling)).toBe(true);
+
+    // The predicate that shipped, reproduced exactly, to show it says no.
+    const old = (e: unknown) =>
+      /NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i.test(
+        e instanceof Error ? `${e.name} ${e.message}` : String(e),
+      );
+    expect(old(settling)).toBe(false);
+  });
+
+  it('reports name "Error" for every seal class, which is why matching on it failed', () => {
+    expect(new InvalidParameterError('x').name).toBe('Error');
+    expect(new NoAccessError('x').name).toBe('Error');
+  });
+
+  it('still retries a refusal that may be the chain catching up, and bounded', () => {
+    expect(isSettling(new NoAccessError('no access'))).toBe(true);
+  });
+
+  it('does not retry a corrupt ciphertext, which no amount of waiting fixes', () => {
+    expect(isSettling(new InvalidCiphertextError('bad'))).toBe(false);
   });
 });

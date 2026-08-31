@@ -24,6 +24,14 @@ export const dynamic = 'force-dynamic';
  *
  * The proof now happens once, here, and what leaves is a cookie rather than an assertion.
  *
+ * # What leaves is also a token, for callers that are not browsers
+ *
+ * The response carries `{address, expiresAtMs, token}` alongside the `Set-Cookie`. It is the same
+ * token, the same row and the same day; `lib/read-session.ts` accepts it as `Authorization: Bearer`
+ * and states what that does and does not change. `GET` and `DELETE` below take it too, through
+ * `provenReaderFor`, so a machine can ask who it is proved to be and can sign itself out — an agent
+ * that cannot revoke its own session is an agent whose only remedy for a leak is waiting a day.
+ *
  * # Ordering is the security argument
  *
  * `verifyAction` first, `mintReadSession` second, and nothing between them. `mintReadSession`
@@ -67,8 +75,24 @@ export async function POST(request: Request) {
 
   const session = await mintReadSession(address);
 
+  /*
+    The token goes out twice: in `Set-Cookie`, and in the body.
+
+    The cookie is for browsers and is untouched — same attributes, same lifetime, same `HttpOnly`.
+    The body is for callers that are not browsers. A program holding a key has no cookie jar it
+    wants to keep and nothing that attaches one for it, so without this it would have to parse
+    `Set-Cookie` and replay the value: reimplementing a browser to obtain a credential we just
+    minted for it. `lib/read-session.ts` accepts the same token as `Authorization: Bearer`.
+
+    What this costs, stated rather than implied. `HttpOnly` still stops script reading the *stored*
+    cookie, but script that runs during this exchange can now read the response. Cross-site
+    scripting on this origin could already act as the reader through the ambient cookie; it can now
+    also carry a token away and use it for a day from somewhere else. A narrow window, genuinely
+    widened, and the mitigation is unchanged and elsewhere: this grants reads only, of what the
+    address already owns on chain, and `DELETE /api/session` withdraws every session at once.
+  */
   return NextResponse.json(
-    { address, expiresAtMs: session.expiresAtMs },
+    { address, expiresAtMs: session.expiresAtMs, token: session.token },
     {
       headers: {
         'set-cookie': readSessionCookie({
@@ -76,8 +100,9 @@ export async function POST(request: Request) {
           expiresAtMs: session.expiresAtMs,
           secure: isSecure(request),
         }),
-        // Never cached. The body names an address and the header carries a bearer token; a shared
-        // cache holding either would serve one reader's session to the next.
+        // Never cached, and now for two reasons rather than one: the header carries a bearer token,
+        // the body names an address, and the body carries that same token. A shared cache holding
+        // this response would serve one reader's session to the next.
         'cache-control': 'no-store',
       },
     },
