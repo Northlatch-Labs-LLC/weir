@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { computeZkLoginAddressFromSeed, genAddressSeed } from '@mysten/sui/zklogin';
@@ -37,8 +37,17 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as Record<string, unknown>;
 
+  /*
+    `nonce` is deliberately NOT required, and is not read at all.
+
+    The browser used to send it and the server used to compare the JWT's nonce against it — a
+    comparison between a value and a copy of itself, supplied by the same request. The nonce is
+    now derived from the three commitment fields below. Leaving the field required would keep a
+    security-shaped input on this route that decides nothing, which is how the original mistake
+    reads to anybody auditing it.
+  */
   // Named individually so the message says which one is missing, rather than "bad request".
-  const required = ['jwt', 'nonce', 'extendedEphemeralPublicKey', 'jwtRandomness'] as const;
+  const required = ['jwt', 'extendedEphemeralPublicKey', 'jwtRandomness'] as const;
   const missing = required.filter((key) => typeof body[key] !== 'string' || body[key] === '');
   if (missing.length > 0) {
     return NextResponse.json({ error: `missing: ${missing.join(', ')}` }, { status: 400 });
@@ -61,7 +70,14 @@ export async function POST(request: Request) {
   const claims = await verifyGoogleIdToken({
     jwt: body['jwt'] as string,
     clientId: config.value.googleClientId,
-    expectedNonce: body['nonce'] as string,
+    // The nonce is derived from these three, not taken from the request. A token issued for a
+    // different sign-in carries a nonce that commits to a different ephemeral key, and no longer
+    // verifies here however it is presented.
+    commitment: {
+      extendedEphemeralPublicKey: body['extendedEphemeralPublicKey'] as string,
+      maxEpoch,
+      jwtRandomness: body['jwtRandomness'] as string,
+    },
   });
   if (!claims.ok) {
     return NextResponse.json(

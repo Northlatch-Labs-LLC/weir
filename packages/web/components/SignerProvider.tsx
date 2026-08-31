@@ -775,10 +775,24 @@ export function SignerProvider({ children }: { children: ReactNode }) {
   const exportRecovery = useCallback(async (): Promise<RecoveryDetails | null> => {
     if (zkSession === null) return null;
 
+    /*
+      The commitment goes with the token, not the nonce.
+
+      The server derives the nonce from these three and compares it to the one Google signed. It
+      cannot be sent the nonce itself: a value the caller supplies cannot prove anything about the
+      caller. The ephemeral secret never leaves this browser — only the public half is sent, which
+      is already public in every zkLogin signature this account produces.
+    */
+    const ephemeral = Ed25519Keypair.fromSecretKey(zkSession.ephemeralSecretKey);
     const response = await fetch('/api/zklogin/export', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jwt: zkSession.jwt, nonce: zkSession.nonce }),
+      body: JSON.stringify({
+        jwt: zkSession.jwt,
+        extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeral.getPublicKey()),
+        maxEpoch: zkSession.maxEpoch,
+        jwtRandomness: zkSession.jwtRandomness,
+      }),
     });
     const body = (await response.json()) as Partial<RecoveryDetails> & { error?: string };
 
@@ -838,9 +852,15 @@ export async function completeGoogleSignIn(idToken: string): Promise<ActiveSessi
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       jwt: idToken,
-      // Sent so the server can assert Google echoed back *this* session's nonce. A token from
-      // another sign-in verifies perfectly against Google's keys and must still be refused.
-      nonce: stored.nonce,
+      /*
+        The nonce is not sent, deliberately.
+
+        A token from another sign-in verifies perfectly against Google's keys and must still be
+        refused — that was always the intent of this field, and sending the nonce could never
+        achieve it, because the server was comparing Google's nonce against our copy of the same
+        value. The server now derives it from the three fields below, which is the only form of
+        this check that a caller cannot satisfy by echoing.
+      */
       extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeral.getPublicKey()),
       maxEpoch: stored.maxEpoch,
       jwtRandomness: stored.jwtRandomness,
