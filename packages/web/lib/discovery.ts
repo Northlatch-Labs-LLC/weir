@@ -144,9 +144,36 @@ export interface Discovery {
  * type yet, and a search box that demands input before showing anything is a dead end on the page
  * most likely to be a person's first.
  */
+/**
+ * Below this, a trigram index cannot help and every search is a sequential scan.
+ *
+ * The five GIN indexes behind this function all use `gin_trgm_ops`, which decomposes a string into
+ * three-character sequences. `pg_trgm` extracts NO trigrams from a one- or two-character pattern,
+ * so `ILIKE '%ab%'` has nothing to look up: Postgres cannot use the index and reads the whole
+ * table, on five columns across two tables, on a route open to anyone with no account.
+ *
+ * The result is also useless. Two characters match a large fraction of any real corpus, so the
+ * caller pays for a full scan to receive noise — and `MAX_RESULTS` truncates it, so they do not
+ * even get all of the noise they paid for.
+ *
+ * Refused rather than clamped: a short query is a person still typing, and answering it with the
+ * whole directory would look like a result. The EMPTY query is different and stays a directory,
+ * which is what this module already says it is.
+ */
+const MIN_SEARCH_CHARS = 3;
+
 export async function discover(query: string): Promise<Reading<Discovery>> {
   const q = query.trim();
   const source = 'discovery';
+
+  if (q.length > 0 && q.length < MIN_SEARCH_CHARS) {
+    return fail(
+      'malformed',
+      source,
+      `a search needs at least ${MIN_SEARCH_CHARS} characters — shorter than that matches almost ` +
+        'everything and cannot use the index behind it',
+    );
+  }
 
   try {
     // `%` and `_` are wildcards in LIKE. Escaped so a search for "100%" looks for that text rather

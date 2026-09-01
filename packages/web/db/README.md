@@ -1,13 +1,31 @@
 # Database
 
-Postgres. Migrations are applied in order:
+Postgres. Migrations are the numbered files in this directory, applied by
+`scripts/migrate.mjs` — **never by hand.**
 
 ```bash
 createdb projectx_social
-psql -d projectx_social -f db/001_init.sql
-psql -d projectx_social -f db/002_e2e.sql
-psql -d projectx_social -f db/003_encrypted_is_open.sql
+node --env-file=.env.local scripts/migrate.mjs           # what would happen; changes nothing
+node --env-file=.env.local scripts/migrate.mjs --apply   # do it
 ```
+
+This file used to say `psql -d projectx_social -f db/001_init.sql`, then 002, then 003. That worked
+exactly once, on one machine, for as long as somebody remembered where they had stopped — and by
+the time the runner existed there were thirty-two files, so the instruction was three of them and
+an implied "and the rest, in order, by memory". A README that tells a new operator to apply
+migrations by hand against a live database is worse than one that says nothing.
+
+The runner is not a convenience. It enforces four things a person cannot:
+
+- **In filename order, once each.** A file already recorded in `schema_migrations` is skipped by
+  name, so the same file cannot be applied twice or missed.
+- **Each in its own transaction.** A file that fails leaves nothing behind and is not recorded, so
+  the next run retries exactly it.
+- **Checksums.** The sha256 of every applied file is stored. If a file that was already applied has
+  since changed on disk, the run STOPS before doing anything — the database and the repository
+  disagree about what was run, and continuing would bury that.
+- **Dry run by default.** `--apply` is required to write. A tool that migrates because you typed
+  its name is a tool that migrates when you meant to look.
 
 `PROJECTX_DATABASE_URL` must be set — there is no default, because a default connection string is
 how a deployment silently writes to the wrong database, or to a developer's, which is worse because
