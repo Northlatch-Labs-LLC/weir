@@ -27,6 +27,7 @@ import { DesignHome, type DesignFeedPost } from '@/components/design/Home';
 import { readEntityTypes } from '@/components/EntityType';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
+import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 
 
 type View = 'following' | 'all';
@@ -160,6 +161,18 @@ export async function FeedView({
   const profiles = await listProfiles();
 
   /*
+    Who on this page is a declared agent — one register query for every author, keyed by the owner
+    each handle's profile names. A handle with no profile row is not looked up and gets no marker;
+    a register that could not be read marks nobody and says so in the log, because "we could not
+    look" must never render as "not an agent".
+  */
+  const ownerOf = new Map(profiles.map((p) => [p.handle, p.owner]));
+  const agents = await declaredAgentsOrUnread(
+    authors.map((h) => ownerOf.get(h)).filter((o): o is string => o !== undefined),
+    'feed',
+  );
+
+  /*
     Decimals once per distinct coin, not once per post. Creators on a deployment usually share a
     denomination, so this is normally a single metadata read for the whole feed.
   */
@@ -225,6 +238,7 @@ export async function FeedView({
         : undefined,
     reader,
     entities: entities.get(post.authorHandle),
+    authorIsAgent: agentFlag(agents, ownerOf.get(post.authorHandle)),
   }));
 
   const feedTabs = [

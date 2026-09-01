@@ -238,7 +238,7 @@ export function DesignCreator({
                   </div>
                   <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
                     {(profilePosts ?? []).map((post, i) => (<Fragment key={i}>
-                      <PostCard post={post.post} price={post.price} reader={post.reader} entities={post.entities} />
+                      <PostCard post={post.post} price={post.price} reader={post.reader} entities={post.entities} authorIsAgent={post.authorIsAgent} />
                     </Fragment>))}
                   </div>
                 </section>

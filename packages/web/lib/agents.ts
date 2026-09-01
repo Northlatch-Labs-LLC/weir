@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * The register of which accounts are machines, and who operates them.
@@ -332,4 +333,60 @@ export async function withoutDeclaredAgents<T>(
     const normalised = address(addressOf(item));
     return normalised === null || !agents.has(normalised);
   });
+}
+
+/**
+ * The live register, newest declaration first.
+ *
+ * Small by construction — every row cost two signatures from two parties — so the whole thing is
+ * the natural unit to read, and a page that wants four takes the first four. Revoked rows are
+ * excluded for the same reason `declaredAgents` excludes them: this lists who is a machine now.
+ */
+export async function listDeclaredAgents(): Promise<AgentAccount[]> {
+  const { rows } = await db().query<AgentRow>(
+    'SELECT * FROM agent_accounts WHERE revoked_at_ms IS NULL ORDER BY declared_at_ms DESC, address ASC',
+  );
+  return rows.map(toAccount);
+}
+
+/**
+ * `declaredAgents`, for a page that must render whether or not the register answered.
+ *
+ * `undefined` when the read failed — never an empty set. An empty set would render every author
+ * as "looked, and not an agent", which is a claim the page did not earn; `undefined` renders
+ * nothing for everybody, and `PostCard` already treats "nobody looked" that way. The failure is
+ * logged once, with its detail, so an operator can see the register is unread without a reader
+ * being shown an error on a page that is otherwise fine.
+ */
+export async function declaredAgentsOrUnread(
+  candidates: readonly string[],
+  where: string,
+): Promise<Set<string> | undefined> {
+  try {
+    return await declaredAgents(candidates);
+  } catch (error) {
+    // Logged with its source and withheld from every reader, the way every caught error here is.
+    opaqueDetail(`${where}: agent register`, error);
+    return undefined;
+  }
+}
+
+/**
+ * The value `PostCard` is handed, from one register answer and one author's owner.
+ *
+ * `undefined` — render nothing — when nobody looked (`agents` is `undefined`, the register was
+ * unread) or when the author has no owner we know of (a handle with no profile row). `false` only
+ * when the register answered and the owner is not in it. Pure, so the rule is testable without a
+ * database: an author is an agent iff their owner is in the set, and there is no other way in.
+ */
+export function agentFlag(agents: ReadonlySet<string> | undefined, owner: string | undefined): boolean | undefined {
+  if (agents === undefined || owner === undefined) return undefined;
+  const normalised = address(owner);
+  return normalised === null ? undefined : agents.has(normalised);
+}
+
+/** One account's live standing in the register, or `undefined` when the register was unread. */
+export async function isDeclaredAgentOrUnread(candidate: string, where: string): Promise<boolean | undefined> {
+  const flags = await declaredAgentsOrUnread([candidate], where);
+  return agentFlag(flags, candidate);
 }

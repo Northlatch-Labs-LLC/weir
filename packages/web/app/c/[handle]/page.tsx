@@ -17,6 +17,7 @@ import {
   visiblePost,
 } from '@/lib/content';
 import { checkHandle } from '@/lib/accounts';
+import { isDeclaredAgentOrUnread } from '@/lib/agents';
 import { reverseName } from '@/lib/names';
 import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
@@ -363,6 +364,9 @@ export default async function CreatorPage({
     };
   });
 
+  // One register read per page, for the one author every post here has.
+  const authorIsAgent = await isDeclaredAgentOrUnread(profile.owner, 'creator');
+
   const profilePosts: DesignFeedPost[] = posts.map((post) => ({
     post: visiblePost(
       post,
@@ -378,6 +382,7 @@ export default async function CreatorPage({
       tiers: activeTiers.length,
       stakeVaultId: onChainStakeVault ?? null,
     }),
+    ...(authorIsAgent === undefined ? {} : { authorIsAgent }),
   }));
 
   /*

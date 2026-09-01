@@ -14,6 +14,8 @@ export interface DesignFeedPost {
   price?: string;
   reader?: string;
   entities?: Entity[];
+  /** From the declaration register, when the page looked. See `PostCard`'s prop of the same name. */
+  authorIsAgent?: boolean;
 }
 export interface DesignFeedCreator {
   displayName: string;
@@ -76,7 +78,7 @@ export function DesignHome({
                 <p className="feed-session">{sessionLabel}</p>
                 <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
                   {(feed ?? []).map((post, i) => (<Fragment key={i}>
-                    <PostCard post={post.post} price={post.price} reader={post.reader} entities={post.entities} />
+                    <PostCard post={post.post} price={post.price} reader={post.reader} entities={post.entities} authorIsAgent={post.authorIsAgent} />
                   </Fragment>))}
                   {guestWall !== undefined && (
                     <p className="feed-wall">
