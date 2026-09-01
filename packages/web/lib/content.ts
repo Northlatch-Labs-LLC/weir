@@ -907,7 +907,7 @@ export async function addMessage(message: Message): Promise<void> {
   );
 }
 
-interface MessageRow {
+export interface MessageRow {
   id: string;
   thread_id: string;
   from_addr: string;
@@ -925,14 +925,47 @@ interface MessageRow {
   envelopes: MessageEncryption['envelopes'] | null;
 }
 
+/**
+ * A paid message that cannot say what it costs is refused, not defaulted.
+ *
+ * The same defect as {@link paidAccess}, in the same file, seven hundred lines away — and it
+ * survived that fix because the fix was applied where the finding pointed rather than everywhere
+ * the shape occurred.
+ *
+ * `price ?? '0'` read a paid message with a NULL price as one costing NOTHING; `content_key ?? ''`
+ * gave it an empty key to unlock against; `vault_id ?? ''` gave it no vault to pay into. All three
+ * stand in for a state the database forbids — `001_init.sql` carries
+ * `paid_messages_need_pricing CHECK (access_kind <> 'paid' OR (price IS NOT NULL AND content_key IS
+ * NOT NULL AND vault_id IS NOT NULL))`.
+ *
+ * A direct message somebody paid to send, rendering as free, is the worse half of the pair: a post
+ * is public and its price is visible elsewhere on the page, and a message is not.
+ */
+export function paidMessageAccess(row: MessageRow): MessageAccess {
+  const missing =
+    row.price === null
+      ? 'price'
+      : row.content_key === null
+        ? 'content key'
+        : row.vault_id === null
+          ? 'vault'
+          : null;
+  if (missing !== null) {
+    throw new Error(
+      `message ${row.id} is marked paid but has no ${missing}; paid_messages_need_pricing requires ` +
+        'all three, so this row was written around its constraint',
+    );
+  }
+  return {
+    kind: 'paid',
+    price: row.price as string,
+    contentKey: row.content_key as string,
+    vaultId: row.vault_id as string,
+  };
+}
+
 function toMessage(row: MessageRow): Message {
-  const access: MessageAccess =
-    row.access_kind === 'paid'
-      ? {
-          kind: 'paid', price: row.price ?? '0',
-          contentKey: row.content_key ?? '', vaultId: row.vault_id ?? '',
-        }
-      : { kind: 'open' };
+  const access: MessageAccess = row.access_kind === 'paid' ? paidMessageAccess(row) : { kind: 'open' };
 
   /*
     `encrypted` alone does not make the payload usable, so all three parts are required before this
