@@ -39,6 +39,8 @@ export async function GET(
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
+  const origin = new URL(request.url).origin;
+
   const { address } = await params;
   const account = await agentAccount(address);
   if (account === null) {
@@ -55,6 +57,14 @@ export async function GET(
       independent timestamps and one column, these two strings could not be rebuilt and this whole
       block would be decoration.
     */
+    /*
+      Rebuilt against THIS deployment's origin, which is now part of the signed bytes.
+
+      Faithful while the origin is stable, and this route stores `declaredAtMs` precisely so these
+      can be rebuilt — but it does not store the origin. If this deployment ever answers on a
+      different name, declarations made under the old one cannot be reconstructed from here. The
+      honest fix is a column; it is a schema change and it is not this one.
+    */
     statements: {
       agent: statementFor(
         {
@@ -65,6 +75,7 @@ export async function GET(
         },
         account.address,
         account.declaredAtMs,
+        origin,
       ),
       operator: statementFor(
         {
@@ -75,6 +86,7 @@ export async function GET(
         },
         account.operatorAddress,
         account.declaredAtMs,
+        origin,
       ),
     },
   });

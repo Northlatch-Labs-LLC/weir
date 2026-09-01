@@ -100,6 +100,7 @@ export async function POST(request: Request) {
     .digest('hex');
 
   const proof = await verifyAction({
+    origin: new URL(request.url).origin,
     address: author,
     signature: typeof signature === 'string' ? signature : '',
     timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0,

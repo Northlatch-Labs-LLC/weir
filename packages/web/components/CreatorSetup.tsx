@@ -397,7 +397,7 @@ export function CreatorSetup() {
                       */
                       const timestampMs = Date.now();
                       const statement =
-                        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}` +
+                        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
                         `\naction: name vault\nvault: ${vault.vaultId}\nname: ${displayName}\nbio: ${bio}\ncoin: ${vault.coinType}`;
                       const signature = await signer.signPersonalMessage(
                         new TextEncoder().encode(statement),

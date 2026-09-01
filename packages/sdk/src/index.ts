@@ -145,6 +145,7 @@ export {
   `siteConfig()`, neither of which belongs in a package a browser imports.
 */
 export {
+  HEAD_LINES,
   type Action,
   statementFor,
   isSingleUse,

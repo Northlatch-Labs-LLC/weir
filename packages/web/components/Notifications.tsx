@@ -56,7 +56,7 @@ export function Notifications() {
     try {
       const timestampMs = Date.now();
       const signature = await signer.signPersonalMessage(new TextEncoder().encode(
-          `Weir\naddress: ${signer.address}\nissued: ${timestampMs}` +
+          `Weir\naddress: ${signer.address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
             `\naction: read\nthread with: ${signer.address}`,
         ));
 

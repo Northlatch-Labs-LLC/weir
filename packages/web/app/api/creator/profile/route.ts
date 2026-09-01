@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     authorise every later one too.
   */
   const proof = await verifyAction({
+    origin: new URL(request.url).origin,
     address: b.owner,
     signature: b.signature ?? '',
     timestampMs: b.timestampMs ?? 0,

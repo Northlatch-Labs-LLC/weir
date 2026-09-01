@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    return sendEncrypted({ from, to, signature, timestampMs, encryption });
+    return sendEncrypted({ from, to, signature, timestampMs, encryption, origin: new URL(request.url).origin });
   }
 
   const { preview, text } = body;
@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       : `${body.paid.handle}:${body.paid.contentKey}:${body.paid.price}`;
 
   const proven = await verifyAction({
+    origin: new URL(request.url).origin,
     address: from,
     signature,
     timestampMs,
@@ -209,8 +210,10 @@ async function sendEncrypted(input: {
   signature: string;
   timestampMs: number;
   encryption: MessageEncryption;
+  /** Threaded from the handler: this helper has no request to derive it from. */
+  origin: string;
 }) {
-  const { from, to, signature, timestampMs, encryption } = input;
+  const { from, to, signature, timestampMs, encryption, origin } = input;
   const { ciphertext, nonce, envelopes } = encryption;
 
   if (typeof ciphertext !== 'string' || typeof nonce !== 'string' || !Array.isArray(envelopes)) {
@@ -264,6 +267,7 @@ async function sendEncrypted(input: {
   }
 
   const proven = await verifyAction({
+    origin,
     address: from,
     signature,
     timestampMs,

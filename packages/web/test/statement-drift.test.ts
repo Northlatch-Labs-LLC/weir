@@ -236,7 +236,9 @@ describe('components/Messages.tsx', () => {
 
     expect(clientHead).toBeDefined();
     expect(serverHead).toBeDefined();
-    expect(skeleton(serverHead ?? '')).toBe(`Weir\\naddress: ${SLOT}\\nissued: ${SLOT}`);
+    expect(skeleton(serverHead ?? '')).toBe(
+      `Weir\\naddress: ${SLOT}\\nissued: ${SLOT}\\norigin: ${SLOT}`,
+    );
     // The client appends the action line as a fourth slot; the server interpolates `${head}` and
     // then writes the action inline. Same bytes, assembled differently.
     expect(skeleton(clientHead ?? '')).toBe(`${skeleton(serverHead ?? '')}\\n${SLOT}`);
@@ -365,5 +367,94 @@ describe('the drift test itself', () => {
     expect(server.size).toBeGreaterThan(10);
     for (const { kind } of copies) expect(server.get(kind)).toBeDefined();
     expect(clientStatements('components/Messages.tsx').length).toBe(4);
+  });
+});
+
+/*
+  The HEAD, which this file did not pin until now.
+
+  Everything above compares the ACTION lines and deliberately strips the head, on the reasoning that
+  "the head is built once and shared". It is not shared: `statementFor` builds one and each of nine
+  client components builds another by hand, and nothing compared them. So the one part of the
+  statement common to every signature on the site was the one part with no drift protection — and it
+  is exactly the part that changed when `origin` was bound into it.
+
+  A client that misses the change signs the old bytes. The server rebuilds the new ones, the
+  signature does not verify, and the user is told "the signature does not prove control of 0x…",
+  which points at their wallet rather than at our typo. That is the failure this file exists to
+  prevent, for the part it was not covering.
+*/
+describe('the head', () => {
+  /** Every hand-built head in the client, as a skeleton. */
+  function clientHeads(file: string): string[] {
+    return [...skeleton(read(file)).matchAll(/Weir\\naddress: [^`\n]*?(?=\\naction|`)/g)]
+      .map((m) => m[0] ?? '')
+      /*
+        The components do not agree on where the head ends: most write the head and the action as
+        separate literals, and `Messages.tsx` writes `${head}\n${action}` as one. So a trailing bare
+        slot is the action arriving inside the head match, and is removed rather than reported as a
+        drift that is not there.
+
+        Captured permissively and then compared, rather than matched against the expected head
+        directly. A regex that only matches the correct head turns a drift into "no head found",
+        which is a worse message than a diff — and an assertion that can only compare a string
+        against itself is not comparing anything.
+      */
+      .map((head) => head.replace(/\\n\{\}$/, ''));
+  }
+
+  const serverHead = (() => {
+    const source = read(STATEMENTS_SOURCE);
+    const m = /const head = `([^`]*)`/.exec(source);
+    return skeleton(m?.[1] ?? '');
+  })();
+
+  it('is built by the server with an origin in it', () => {
+    // The property, not the punctuation: without this line the bytes are portable, and a signature
+    // collected by any other deployment of this software verifies here.
+    expect(serverHead).toContain('origin: ');
+    expect(serverHead).toContain('Weir\\naddress: ');
+    expect(serverHead).toContain('issued: ');
+  });
+
+  const files = [
+    'components/Comments.tsx',
+    'components/CreatorSetup.tsx',
+    'components/FollowButton.tsx',
+    'components/JoinFlow.tsx',
+    'components/Messages.tsx',
+    'components/Notifications.tsx',
+    'components/PerksEditor.tsx',
+    'components/SessionBridge.tsx',
+    'components/StudioComposer.tsx',
+  ];
+
+  it('is built by every client component this test knows about', () => {
+    // Guards against a vacuous pass: a rename that empties this list would make every assertion
+    // below hold over nothing.
+    for (const file of files) expect(existsSync(join(root, file)), file).toBe(true);
+    expect(files.length).toBeGreaterThanOrEqual(9);
+  });
+
+  it.each(files)('%s builds the same head as the server', (file) => {
+    const heads = clientHeads(file);
+    expect(heads.length, `${file} builds no statement head this test can find`).toBeGreaterThan(0);
+    for (const head of heads) {
+      expect(head, `${file} drifted from statementFor`).toBe(serverHead);
+    }
+  });
+
+  it('no client component still signs a head without an origin', () => {
+    /*
+      The direct form of the finding. A component that kept the old two-line head would fail the
+      comparison above too, but this says why in one line rather than as a diff of two skeletons.
+    */
+    for (const file of files) {
+      for (const head of clientHeads(file)) {
+        expect(head, `${file} signs bytes that are not bound to this deployment`).toContain(
+          'origin: ',
+        );
+      }
+    }
   });
 });

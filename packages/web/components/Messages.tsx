@@ -83,7 +83,7 @@ interface Thread {
 
 /** Must match `statementFor` in lib/identity.ts exactly. */
 function stmt(action: string, address: string, ts: number): string {
-  return `Weir\naddress: ${address}\nissued: ${ts}\n${action}`;
+  return `Weir\naddress: ${address}\nissued: ${ts}\norigin: ${window.location.origin}\n${action}`;
 }
 
 function short(a: string): string {

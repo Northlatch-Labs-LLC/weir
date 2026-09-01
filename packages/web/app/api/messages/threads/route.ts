@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   // Scoped to the viewer's own inbox by signing "read thread with: self" — a statement that only
   // authorises listing, and cannot be replayed as a request to read someone else's conversation.
   const proven = await verifyAction({
+    origin: new URL(request.url).origin,
     address: viewer,
     signature,
     timestampMs,

@@ -137,7 +137,9 @@ export async function openSession(input: {
     return fail('unconfigured', source, 'no fetch implementation is available in this runtime.');
   }
 
-  const signed = await signAction(input.key.keypair, { kind: 'read-content' });
+  // The origin is the deployment this session is for: the same bytes must not open a session
+  // anywhere else.
+  const signed = await signAction(input.key.keypair, { kind: 'read-content' }, input.baseUrl);
 
   let response: Response;
   try {
