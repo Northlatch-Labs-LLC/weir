@@ -260,10 +260,13 @@ export async function FeedView({
     href: `/c/${profile.handle}${reader === undefined ? '' : `?reader=${reader}`}`,
   }));
 
+  // The icons are the partners' own marks, supplied by the owner and served from public/brand.
+  // `test/built-on-logos.test.ts` asserts every path here is a file on disk.
   const BUILT_ON = [
-    { name: 'Sui', mark: 'S', note: 'Settlement layer', href: 'https://sui.io' },
-    { name: 'Walrus', mark: 'W', note: 'Where post bodies and media live', href: 'https://www.walrus.xyz' },
-    { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app' },
+    { name: 'Sui', mark: 'S', note: 'Settlement layer', href: 'https://sui.io', logo: '/brand/built-on/sui-icon.png' },
+    { name: 'Walrus', mark: 'W', note: 'Where post bodies and media live', href: 'https://www.walrus.xyz', logo: '/brand/built-on/walrus-icon.png' },
+    { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app', logo: '/brand/built-on/seal-icon.png' },
+    { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin', logo: '/brand/built-on/zklogin-icon.png' },
   ];
 
   /*

@@ -23,9 +23,15 @@ export interface DesignFeedCreator {
 }
 export interface DesignBuiltOn {
   name: string;
+  /** The text fallback shown when no logo is supplied. Kept so a missing file degrades to letters. */
   mark: string;
   note: string;
   href: string;
+  /**
+   * The partner's own icon, served from `public/brand/built-on/`. Decorative: the name beside it is
+   * the accessible label, so the image carries an empty `alt` rather than repeating it.
+   */
+  logo?: string;
 }
 
 export function DesignHome({
@@ -104,7 +110,7 @@ export function DesignHome({
                   <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Built on</p>
                   <ul style={{ margin: '0', padding: '0', listStyle: 'none', display: 'grid', gap: '0.5rem' }}>
                     {(builtOn ?? []).map((item, i) => (<Fragment key={i}>
-                      <li style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}><span aria-hidden="true" style={{ flex: '0 0 auto', width: '1.6rem', height: '1.6rem', borderRadius: '7px', background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.95),rgba(var(--pb,9,32,42),0.95))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.28)', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.09),0 0 12px -6px rgba(var(--crest-rgb,139,227,198),0.7)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.6875rem', fontWeight: '500', letterSpacing: '0.02em', color: 'var(--crest,#8be3c6)' }}>{item.mark}</span><a href={item.href} style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{item.name}</a><span style={{ fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{item.note}</span></li>
+                      <li style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}><span aria-hidden="true" style={{ flex: '0 0 auto', width: '1.6rem', height: '1.6rem', borderRadius: '7px', background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.95),rgba(var(--pb,9,32,42),0.95))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.28)', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.09),0 0 12px -6px rgba(var(--crest-rgb,139,227,198),0.7)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.6875rem', fontWeight: '500', letterSpacing: '0.02em', color: 'var(--crest,#8be3c6)' }}>{item.logo !== undefined ? <img src={item.logo} alt="" width={20} height={20} style={{ width: '1.25rem', height: '1.25rem', objectFit: 'contain' }} /> : item.mark}</span><a href={item.href} style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{item.name}</a><span style={{ fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{item.note}</span></li>
                     </Fragment>))}
                   </ul>
                 </section>

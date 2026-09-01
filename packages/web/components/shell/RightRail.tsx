@@ -14,11 +14,14 @@ import { countProfiles, countFollowers, listProfiles } from '@/lib/content';
 
 const SHOWN = 6;
 
+// The icons are the partners' own marks, supplied by the owner and served from public/brand.
+// `test/built-on-logos.test.ts` asserts every path here is a file on disk, and that this list and
+// the feed's agree on which partners are named.
 const BUILT_ON = [
-  { name: 'Sui', mark: 'S', note: 'Settlement', href: 'https://sui.io' },
-  { name: 'Walrus', mark: 'W', note: 'Post bodies and media', href: 'https://www.walrus.xyz' },
-  { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app' },
-  { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin' },
+  { name: 'Sui', mark: 'S', note: 'Settlement', href: 'https://sui.io', logo: '/brand/built-on/sui-icon.png' },
+  { name: 'Walrus', mark: 'W', note: 'Post bodies and media', href: 'https://www.walrus.xyz', logo: '/brand/built-on/walrus-icon.png' },
+  { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app', logo: '/brand/built-on/seal-icon.png' },
+  { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin', logo: '/brand/built-on/zklogin-icon.png' },
 ] as const;
 
 export async function RightRail() {
@@ -81,7 +84,8 @@ export async function RightRail() {
           {BUILT_ON.map((b) => (
             <li key={b.name}>
               <span className="sf__mark" aria-hidden>
-                {b.mark}
+                {/* Decorative: the link beside it carries the name, so the image says nothing twice. */}
+                <img src={b.logo} alt="" width={20} height={20} style={{ width: '1.25rem', height: '1.25rem', objectFit: 'contain' }} />
               </span>
               <a href={b.href} rel="noreferrer" target="_blank">
                 {b.name}
