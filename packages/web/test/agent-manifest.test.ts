@@ -202,17 +202,29 @@ describe('the statements it publishes', () => {
       read cannot be published — this manifest is what publishes it. Exporting the FACT is still a
       different act from sharing the DECISION: nothing outside `verifyAction` may decide whether a
       signature is spent. So the fact is mirrored in the manifest and pinned to the source here. If
-      the rule there stops being "everything except read", this fails rather than the manifest
-      quietly telling agents they may batch writes on one prompt.
+      the rule there changes, this fails rather than the manifest quietly telling agents they may
+      batch writes on one prompt.
+
+      It pinned "everything except read" until the read exemption was removed. The regex reads the
+      RETURN VALUE out of the source, so a rule rewritten to always return true is matched here as
+      the literal `true` — pinning the text rather than importing the function, deliberately, since
+      importing it would compare the rule against itself.
     */
-    const body = read(STATEMENTS_SOURCE).match(
-      /function isSingleUse\(action: Action\): boolean \{\s*return ([^;]+);/,
-    )?.[1];
-    expect(body).toBe("action.kind !== 'read'");
-    expect([...REUSABLE_ACTION_KINDS]).toEqual(['read']);
+    /*
+      Comments stripped first. The rule's own doc block explains the change in prose that contains
+      the word `return`, and the first draft of this assertion matched that sentence instead of the
+      statement — reporting a paragraph where it wanted a boolean. A source-matching assertion that
+      cannot tell code from a comment about code is matched by nothing that runs.
+    */
+    const body = read(STATEMENTS_SOURCE)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+      .match(/function isSingleUse\(action: Action\): boolean \{[\s\S]*?return ([^;]+);/)?.[1];
+    expect(body).toBe('true');
+    expect([...REUSABLE_ACTION_KINDS]).toEqual([]);
 
     for (const statement of statements) {
-      expect(statement.singleUse).toBe(statement.kind !== 'read');
+      expect(statement.singleUse).toBe(true);
     }
   });
 });
