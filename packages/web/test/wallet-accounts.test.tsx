@@ -173,9 +173,23 @@ function mount(children: React.ReactNode) {
   return render(<SignerProvider>{children}</SignerProvider>);
 }
 
-/** The panel renders nothing on its first pass; `findBy*` waits for the mount effect to land. */
+/*
+  The panel renders nothing on its first pass, and the button it eventually renders is DISABLED
+  until `/api/zklogin/session` has answered — the chain to bind to comes from that answer and
+  there is nothing safe to guess before it.
+
+  So waiting for the button to EXIST is not enough, and that under-synchronisation is what made
+  this file look intermittent: it failed once in CI and passed on a re-run of the identical tree.
+  It is not intermittent. Delay the session fetch by 25ms and it fails every time — CI was simply
+  slow enough, once, to land inside a window that is always there. `findByRole` with
+  `{ hidden: false }` still matches a disabled button, so the wait has to be for `enabled`.
+*/
 async function clickWallet() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Slush' }));
+  const button = await screen.findByRole('button', { name: 'Slush' });
+  // `@testing-library/jest-dom` is not installed here (see the note at the top of this file), so
+  // this reads the property rather than using `toBeEnabled()`.
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
 }
 
 function bound(): string | null {

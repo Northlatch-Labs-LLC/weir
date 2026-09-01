@@ -166,11 +166,28 @@ export function SignIn({
             </button>
           )}
 
+          {/*
+            Disabled until the session has answered, and that is a correctness gate rather than a
+            nicety. `bindAccount` THROWS "still reading this deployment's network" when `session`
+            is null, because the chain to bind to comes from the server's configuration and there
+            is nothing safe to guess. So between first paint and that answer this button was live
+            and every click on it failed — the wallet connected, the binding did not happen, and
+            the reader was left signed out with an error naming an internal state.
+
+            The Google button above has always been gated this way (`session?.available === true`).
+            This one was not, and the asymmetry is the whole bug.
+
+            Found as an "intermittent" test: wallet-accounts.test.tsx failed once in CI and passed
+            on a re-run of the identical tree. It is not intermittent. Delaying the session fetch
+            by 25ms in that suite fails 14 of its cases every time — CI was simply slow enough,
+            once, to land inside a window that is always there.
+          */}
           {wallets.map((wallet) => (
             <button
               key={wallet.name}
               className="btn"
               type="button"
+              disabled={session === null}
               onClick={() => void connectWallet(wallet)}
             >
               {wallet.name}

@@ -125,6 +125,11 @@ export async function verifyActionDeferringSpend(
  *
  * Returns `null` for an action that is not single-use — there is no digest to claim, and the
  * caller has nothing to carry.
+ *
+ * Since #61 `isSingleUse` returns true for every action, so that `null` cannot currently occur. It
+ * stays because it is the correct answer if an exemption ever returns, but a caller must not read
+ * it as a live branch: code shaped as `if (proof.value === null) skip the spend` is a hole written
+ * against a state that does not happen, and it would be the hole that matters on the day it does.
  */
 async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promise<Reading<PendingSpend | null>> {
   const source = 'signature';
@@ -257,10 +262,24 @@ export async function spendSignature(
  * is how a cheap guard becomes the slowest statement here. Bounded, so one unlucky request does
  * not pay for every expired row ever written.
  *
- * Deliberately NOT part of `spendSignature`. A caller spending inside its own transaction would
- * otherwise drag this delete in with it, lengthening a transaction that is holding a connection
- * open for a row it has already written. Housekeeping runs on the pool, after the commit, and a
- * failure to sweep is not a failure to publish.
+ * # Two separations, and they are different arguments
+ *
+ * NOT part of `spendSignature`, because a caller spending inside its own transaction would drag
+ * this delete in with it — lengthening a transaction that is holding a connection open for a row
+ * it has already written. Housekeeping runs on the pool, after the commit.
+ *
+ * NOT inside the claim's `try`, because a sweep that failed AFTER a successful insert used to be
+ * reported as "could not record this signature, so it was not accepted". That sentence was false
+ * in exactly the case it was most likely to be read: the signature HAD been recorded, `rowCount`
+ * was 1, and it was spent. The caller was told to sign again, and the statement they had just
+ * spent sat in the table doing nothing for anyone. (#75.)
+ *
+ * A failed sweep is housekeeping that did not happen. It is not a rejection and it must not be
+ * able to produce one — the conclusion `rememberQuote` in `lib/checkout.ts` already reached in its
+ * own words: the caller is mid-request and a bookkeeping error is not their problem.
+ *
+ * Swallowed rather than logged-and-swallowed for the same reason it is swallowed there: the next
+ * request tries again, and the table's growth is bounded by every other caller's sweep.
  */
 export async function sweepUsedSignatures(): Promise<void> {
   try {
@@ -269,7 +288,7 @@ export async function sweepUsedSignatures(): Promise<void> {
        WHERE digest IN (SELECT digest FROM used_signatures WHERE expires_at_ms < $1 LIMIT 500)`,
       [Date.now()],
     );
-  } catch (error) {
-    void opaqueDetail('signature', error);
+  } catch {
+    // See above. A signature that is recorded stays accepted.
   }
 }
