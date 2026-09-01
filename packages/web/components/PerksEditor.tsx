@@ -31,7 +31,7 @@ function statement(
   */
   const yesNo = supportersFirst ? 'yes' : 'no';
   return (
-    `Weir\naddress: ${address}\nissued: ${timestampMs}` +
+    `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
     `\naction: set perks\nhandle: ${handle}\nperks-sha256: ${perksSha256}\nsupporters-first: ${yesNo}`
   );
 }

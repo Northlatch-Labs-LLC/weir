@@ -387,7 +387,9 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
     seal: input.seal ?? null,
 
     async sign(action: Action): Promise<SignedAction> {
-      return signAction(key.keypair, action);
+      // Bound to the deployment this agent was opened against. An agent that talks to two services
+      // must sign for each separately, which is the property this argument exists to enforce.
+      return signAction(key.keypair, action, manifest.baseUrl);
     },
 
     async session(): Promise<Reading<SessionCredential>> {
@@ -616,7 +618,7 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
         contentSha256: publishContentSha256(article.preview, article.text),
         contentKey,
         price,
-      });
+      }, manifest.baseUrl);
 
       const response = await authorisedFetch({
         agent,
@@ -677,7 +679,7 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
         text: trimmed,
         preview: message.preview,
         paid: paidStatementFor(message.paid),
-      });
+      }, manifest.baseUrl);
 
       const response = await authorisedFetch({
         agent,

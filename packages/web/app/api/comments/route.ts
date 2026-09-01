@@ -108,6 +108,7 @@ export async function POST(request: Request) {
   // The statement is rebuilt here from the trimmed text that will actually be stored, so a
   // signature cannot authorise one comment while a different one is written.
   const proven = await verifyAction({
+    origin: new URL(request.url).origin,
     address: author,
     signature,
     timestampMs,

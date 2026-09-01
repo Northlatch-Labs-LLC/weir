@@ -28,6 +28,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fail, ok, type PlatformState, type ProjectXSocialConfig, type SealConfig } from '@projectx-social/sdk';
+
+/** The deployment the published statements are bound to. */
+const ORIGIN = 'https://weir.social';
 import {
   AGENT_MANIFEST_PATH,
   AGENT_MANIFEST_VERSION,
@@ -117,7 +120,7 @@ function sourceTemplates(): Map<string, string> {
 }
 
 describe('the statements it publishes', () => {
-  const statements = statementCatalogue();
+  const statements = statementCatalogue(ORIGIN);
 
   it('covers every action the verifier knows about, and invents none', () => {
     /*
@@ -153,7 +156,12 @@ describe('the statements it publishes', () => {
       newlines are written back to escapes before comparing.
     */
     const templates = sourceTemplates();
-    const head = 'Weir\naddress: {address}\nissued: {issuedAtMs}';
+    /*
+      The head now carries the origin, which is published as a real value rather than a slot: an
+      agent cannot build valid bytes from a placeholder, and a statement it cannot build is a
+      statement it cannot sign.
+    */
+    const head = `Weir\naddress: {address}\nissued: {issuedAtMs}\norigin: ${ORIGIN}`;
 
     for (const statement of statements) {
       const published = statement.statement

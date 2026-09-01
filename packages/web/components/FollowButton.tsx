@@ -16,7 +16,7 @@ import { SignInPrompt } from '@/components/SignInPrompt';
 /** Must match `statementFor` in lib/identity.ts exactly. */
 function statement(handle: string, following: boolean, address: string, timestampMs: number): string {
   return (
-    `Weir\naddress: ${address}\nissued: ${timestampMs}` +
+    `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
     `\naction: ${following ? 'follow' : 'unfollow'}\ncreator: ${handle}`
   );
 }

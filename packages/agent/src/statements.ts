@@ -88,10 +88,19 @@ export interface SignedAction {
 export async function signAction(
   keypair: Ed25519Keypair,
   action: Action,
+  /**
+   * The deployment these bytes are for, e.g. `https://weir.social`.
+   *
+   * Part of the signed statement, so bytes signed for one deployment do not verify against another.
+   * Required and not defaulted: a default would be a guess about which service an agent is talking
+   * to, and a wrong guess produces a signature that fails to verify with a message pointing at the
+   * key rather than at the origin.
+   */
+  origin: string,
   timestampMs: number = Date.now(),
 ): Promise<SignedAction> {
   const address = keypair.toSuiAddress();
-  const statement = statementFor(action, address, timestampMs);
+  const statement = statementFor(action, address, timestampMs, origin);
   // UTF-8, which is what `new TextEncoder()` produces on the server side of the same comparison.
   // Any other encoding of a non-ASCII post title is a signature that verifies against nothing.
   const { signature } = await keypair.signPersonalMessage(new TextEncoder().encode(statement));

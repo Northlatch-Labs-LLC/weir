@@ -526,7 +526,7 @@ export function planFanOut(input: {
       ciphertextChars: payload.ciphertext.length,
       ciphertextSha256,
       envelopeRecipients: recipients,
-      statement: sendEncryptedStatement({ from, to, ciphertextSha256, issuedAtMs }),
+      statement: sendEncryptedStatement({ from, to, ciphertextSha256, issuedAtMs, origin }),
       issuedAtMs,
       encryption: payload,
     });
@@ -569,11 +569,14 @@ export function sendEncryptedStatement(input: {
   to: string;
   ciphertextSha256: string;
   issuedAtMs: number;
+  /** The deployment these bytes are for. Part of the signed statement; see `statementFor`. */
+  origin: string;
 }): string {
   return statementFor(
     { kind: 'send-encrypted', to: input.to, ciphertextSha256: input.ciphertextSha256 },
     input.from,
     input.issuedAtMs,
+    input.origin,
   );
 }
 

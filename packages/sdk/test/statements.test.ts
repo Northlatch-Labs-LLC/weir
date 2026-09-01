@@ -33,7 +33,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
+import { HEAD_LINES,
   isSingleUse,
   statementFor,
   SIGNATURE_WINDOW_MS,
@@ -43,6 +43,8 @@ import {
 
 /** The address and issue time every golden vector was captured with. Changing either is a rewrite. */
 const ADDRESS = `0x${'ab'.repeat(32)}`;
+/** The deployment the bytes are bound to. Portable statements were the defect. */
+const ORIGIN = 'https://weir.social';
 const AT = 1_756_600_000_000;
 
 /**
@@ -50,23 +52,23 @@ const AT = 1_756_600_000_000;
  * current implementation — that would make this file assert that the code equals itself.
  */
 const GOLDEN: Readonly<Record<string, string>> = {
-  "comment": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: comment\npost: pmtgxlqay\ntext: a comment — with an em dash",
-  "follow(true)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: follow\ncreator: atlas",
-  "follow(false)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: unfollow\ncreator: atlas",
-  "send": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: send\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\ntext: hello\npreview: hel\npaid: atlas:key-1:10000",
-  "send(free)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: send\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\ntext: hello\npreview: hel\npaid: ",
-  "send-encrypted": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: send encrypted\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\nciphertext-sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "read": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: read\nthread with: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
-  "onramp": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: fund wallet\nwallet: 0xabababababababababababababababababababababababababababababababab\nnetwork: mainnet\norigin: https://weir.social",
-  "read-content": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: read content",
-  "publish": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: publish\ncreator: atlas\naccess: paid\ntitle: Sealed on Walrus\ncontent-sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nkey: sealed-on-walrus-001\nprice: 10000",
-  "name-vault": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: name vault\nvault: 0x1111111111111111111111111111111111111111111111111111111111111111\nname: Atlas\nbio: Documentary notes.\ncoin: 0x2::sui::SUI",
-  "set-profile": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: set profile\nhandle: atlas\nname: Atlas",
-  "set-perks(true)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: set perks\nhandle: atlas\nperks-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsupporters-first: yes",
-  "set-perks(false)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: set perks\nhandle: atlas\nperks-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsupporters-first: no",
-  "declare-agent": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: declare agent\noperated by: 0x2222222222222222222222222222222222222222222222222222222222222222\nmodel: claude-opus-5\npurpose: publishes notes",
-  "declare-operator": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: declare operator\noperating: 0x3333333333333333333333333333333333333333333333333333333333333333\nmodel: claude-opus-5\npurpose: publishes notes",
-  "upload": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: upload\npost: pmtgxlqay\nfile-sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "comment": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: comment\npost: pmtgxlqay\ntext: a comment — with an em dash",
+  "follow(true)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: follow\ncreator: atlas",
+  "follow(false)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: unfollow\ncreator: atlas",
+  "send": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: send\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\ntext: hello\npreview: hel\npaid: atlas:key-1:10000",
+  "send(free)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: send\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\ntext: hello\npreview: hel\npaid: ",
+  "send-encrypted": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: send encrypted\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\nciphertext-sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "read": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: read\nthread with: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "onramp": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: fund wallet\nwallet: 0xabababababababababababababababababababababababababababababababab\nnetwork: mainnet\norigin: https://weir.social",
+  "read-content": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: read content",
+  "publish": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: publish\ncreator: atlas\naccess: paid\ntitle: Sealed on Walrus\ncontent-sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nkey: sealed-on-walrus-001\nprice: 10000",
+  "name-vault": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: name vault\nvault: 0x1111111111111111111111111111111111111111111111111111111111111111\nname: Atlas\nbio: Documentary notes.\ncoin: 0x2::sui::SUI",
+  "set-profile": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set profile\nhandle: atlas\nname: Atlas",
+  "set-perks(true)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set perks\nhandle: atlas\nperks-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsupporters-first: yes",
+  "set-perks(false)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set perks\nhandle: atlas\nperks-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsupporters-first: no",
+  "declare-agent": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: declare agent\noperated by: 0x2222222222222222222222222222222222222222222222222222222222222222\nmodel: claude-opus-5\npurpose: publishes notes",
+  "declare-operator": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: declare operator\noperating: 0x3333333333333333333333333333333333333333333333333333333333333333\nmodel: claude-opus-5\npurpose: publishes notes",
+  "upload": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: upload\npost: pmtgxlqay\nfile-sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 };
 
 /**
@@ -140,7 +142,7 @@ const CASES: ReadonlyArray<readonly [string, Action]> = [
 
 describe('statementFor still builds the bytes it built before the hoist', () => {
   it.each(CASES)('%s', (label, action) => {
-    expect(statementFor(action, ADDRESS, AT)).toBe(GOLDEN[label]);
+    expect(statementFor(action, ADDRESS, AT, ORIGIN)).toBe(GOLDEN[label]);
   });
 
   it('pins every case, and no vector goes unused', () => {
@@ -180,10 +182,10 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
   it('would notice a single changed byte', () => {
     // A comparison that passes against anything looks identical to one that works. One space
     // removed from one field must fail, or none of the above means what it says.
-    const real = statementFor({ kind: 'read', other: 'x' }, ADDRESS, AT);
+    const real = statementFor({ kind: 'read', other: 'x' }, ADDRESS, AT, ORIGIN);
     expect(real.replace('thread with: ', 'thread with:')).not.toBe(real);
     expect(GOLDEN['read']).not.toBe(
-      statementFor({ kind: 'read', other: `0x${'cd'.repeat(32)}` }, ADDRESS, AT + 1),
+      statementFor({ kind: 'read', other: `0x${'cd'.repeat(32)}` }, ADDRESS, AT + 1, ORIGIN),
     );
   });
 });
@@ -218,7 +220,7 @@ describe('STATEMENT_SHAPES', () => {
       first action line, or a variant merge that loses one.
     */
     for (const [, action] of CASES) {
-      const lines = statementFor(action, ADDRESS, AT).split('\n').slice(3);
+      const lines = statementFor(action, ADDRESS, AT, ORIGIN).split('\n').slice(HEAD_LINES);
       const shape = STATEMENT_SHAPES[action.kind];
       for (const line of lines) {
         expect(shape.some((s) => line === s || line.startsWith(s))).toBe(true);

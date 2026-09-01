@@ -24,6 +24,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 
+/** The deployment these bytes are bound to. Portable statements were the defect. */
+const ORIGIN = 'https://weir.social';
+
 const identity = await vi.importActual<typeof import('../lib/identity')>('../lib/identity');
 const { statementFor } = identity;
 
@@ -46,7 +49,7 @@ const verifyAction = vi.fn(
     action: Parameters<typeof statementFor>[0];
   }) => {
     const message = new TextEncoder().encode(
-      statementFor(input.action, input.address, input.timestampMs),
+      statementFor(input.action, input.address, input.timestampMs, ORIGIN),
     );
     try {
       await verifyPersonalMessageSignature(message, input.signature, { address: input.address });
@@ -106,7 +109,7 @@ const PURPOSE = 'Publishes protocol measurements and answers questions about the
 /** Sign the agent's half: "I am operated by {operator}". */
 async function signAsAgent(operatorAddress: string, timestampMs: number, model = MODEL, purpose = PURPOSE) {
   const message = new TextEncoder().encode(
-    statementFor({ kind: 'declare-agent', operator: operatorAddress, model, purpose }, AGENT, timestampMs),
+    statementFor({ kind: 'declare-agent', operator: operatorAddress, model, purpose }, AGENT, timestampMs, ORIGIN),
   );
   return (await agent.signPersonalMessage(message)).signature;
 }
@@ -114,7 +117,7 @@ async function signAsAgent(operatorAddress: string, timestampMs: number, model =
 /** Sign the operator's half: "I operate {agent}". */
 async function signAsOperator(agentAddress: string, timestampMs: number, model = MODEL, purpose = PURPOSE) {
   const message = new TextEncoder().encode(
-    statementFor({ kind: 'declare-operator', agent: agentAddress, model, purpose }, OPERATOR, timestampMs),
+    statementFor({ kind: 'declare-operator', agent: agentAddress, model, purpose }, OPERATOR, timestampMs, ORIGIN),
   );
   return (await operator.signPersonalMessage(message)).signature;
 }
@@ -156,25 +159,25 @@ describe('the bytes each party signs', () => {
     // Pinned literally. These strings are a wire format between two independently written signers
     // and this server; a stray space here fails every declaration with an error naming the wallet.
     expect(
-      statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: PURPOSE }, AGENT, AT),
+      statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: PURPOSE }, AGENT, AT, ORIGIN),
     ).toBe(
-      `Weir\naddress: ${AGENT}\nissued: ${AT}\naction: declare agent\noperated by: ${OPERATOR}\nmodel: ${MODEL}\npurpose: ${PURPOSE}`,
+      `Weir\naddress: ${AGENT}\nissued: ${AT}\norigin: ${ORIGIN}\naction: declare agent\noperated by: ${OPERATOR}\nmodel: ${MODEL}\npurpose: ${PURPOSE}`,
     );
   });
 
   it('has the operator say what they operate', () => {
     expect(
-      statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, OPERATOR, AT),
+      statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, OPERATOR, AT, ORIGIN),
     ).toBe(
-      `Weir\naddress: ${OPERATOR}\nissued: ${AT}\naction: declare operator\noperating: ${AGENT}\nmodel: ${MODEL}\npurpose: ${PURPOSE}`,
+      `Weir\naddress: ${OPERATOR}\nissued: ${AT}\norigin: ${ORIGIN}\naction: declare operator\noperating: ${AGENT}\nmodel: ${MODEL}\npurpose: ${PURPOSE}`,
     );
   });
 
   it('binds both addresses into both halves', () => {
     // The signer's own address arrives in the shared head, the counterparty's in the body. Both
     // halves therefore name both parties, which is what stops either being re-pointed.
-    const a = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: PURPOSE }, AGENT, AT);
-    const o = statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, OPERATOR, AT);
+    const a = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: PURPOSE }, AGENT, AT, ORIGIN);
+    const o = statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, OPERATOR, AT, ORIGIN);
     for (const statement of [a, o]) {
       expect(statement).toContain(AGENT);
       expect(statement).toContain(OPERATOR);
@@ -184,8 +187,8 @@ describe('the bytes each party signs', () => {
   it('cannot be confused with each other', () => {
     // Different verb and different head. Otherwise one keypair signing once would produce bytes
     // that satisfy both halves, and the pair would be one assertion counted twice.
-    const a = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: PURPOSE }, AGENT, AT);
-    const o = statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, OPERATOR, AT);
+    const a = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: PURPOSE }, AGENT, AT, ORIGIN);
+    const o = statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, OPERATOR, AT, ORIGIN);
     expect(a).not.toBe(o);
     expect(a).toContain('action: declare agent');
     expect(o).toContain('action: declare operator');
@@ -308,7 +311,7 @@ describe('a signature re-pointed at somebody else', () => {
     */
     const timestampMs = Date.now();
     const impostorHalf = new TextEncoder().encode(
-      statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, IMPOSTOR, timestampMs),
+      statementFor({ kind: 'declare-operator', agent: AGENT, model: MODEL, purpose: PURPOSE }, IMPOSTOR, timestampMs, ORIGIN),
     );
     const response = await POST(
       declare({
@@ -414,17 +417,11 @@ describe('the statement format cannot be split from inside a field', () => {
     // readings — which is why the refusal above is a correctness fix and not tidiness.
     const at = 1_756_600_000_000;
     // Declared as model "claude-opus-5\npurpose: b", purpose "c" …
-    const oneReading = statementFor(
-      { kind: 'declare-agent', operator: OPERATOR, model: `${MODEL}\npurpose: b`, purpose: 'c' },
-      AGENT,
-      at,
-    );
+    const oneReading = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: `${MODEL}\npurpose: b`, purpose: 'c' },
+      AGENT, at, ORIGIN);
     // … and as model "claude-opus-5", purpose "b\npurpose: c". Two different declarations.
-    const anotherReading = statementFor(
-      { kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: `b\npurpose: c` },
-      AGENT,
-      at,
-    );
+    const anotherReading = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: MODEL, purpose: `b\npurpose: c` },
+      AGENT, at, ORIGIN);
     // One signature, two meanings. Which is why neither shape is allowed through.
     expect(oneReading).toBe(anotherReading);
   });
@@ -451,7 +448,7 @@ describe('the record certifies itself', () => {
     };
     agentAccount.mockResolvedValue(filed);
 
-    const response = await GET(new Request(`http://localhost/api/agents/${AGENT}`), {
+    const response = await GET(new Request(`${ORIGIN}/api/agents/${AGENT}`), {
       params: Promise.resolve({ address: AGENT }),
     });
     expect(response.status).toBe(200);

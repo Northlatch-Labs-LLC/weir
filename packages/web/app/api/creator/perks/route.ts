@@ -103,6 +103,7 @@ export async function POST(request: Request) {
   );
 
   const proof = await verifyAction({
+    origin: new URL(request.url).origin,
     address,
     signature: body.signature ?? '',
     timestampMs: body.timestampMs ?? 0,

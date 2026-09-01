@@ -24,7 +24,7 @@ interface Comment {
 /** Must match `statementFor` in lib/identity.ts exactly, or the signature will not verify. */
 function statement(postId: string, text: string, address: string, timestampMs: number): string {
   return (
-    `Weir\naddress: ${address}\nissued: ${timestampMs}` +
+    `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
     `\naction: comment\npost: ${postId}\ntext: ${text}`
   );
 }

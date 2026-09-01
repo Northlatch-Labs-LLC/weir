@@ -75,6 +75,7 @@ export async function POST(request: Request) {
     text, so a caller cannot sign one statement and submit another.
   */
   const byAgent = await verifyAction({
+    origin: new URL(request.url).origin,
     address: declaration.address,
     signature: declaration.agentSignature,
     timestampMs: declaration.timestampMs,
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
     who has not agreed to answer for it, which is the exact claim this register refuses to carry.
   */
   const byOperator = await verifyAction({
+    origin: new URL(request.url).origin,
     address: declaration.operatorAddress,
     signature: declaration.operatorSignature,
     timestampMs: declaration.timestampMs,

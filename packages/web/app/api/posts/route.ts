@@ -139,6 +139,7 @@ export async function POST(request: Request) {
     and enforces the freshness window.
   */
   const proof = await verifyAction({
+    origin: new URL(request.url).origin,
     address: author,
     signature: signature ?? '',
     timestampMs: timestampMs ?? 0,

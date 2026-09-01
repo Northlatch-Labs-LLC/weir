@@ -24,6 +24,9 @@ import { createHash } from 'node:crypto';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { describe, expect, it } from 'vitest';
 
+/** The deployment these bytes are bound to. Portable statements were the defect. */
+const ORIGIN = 'https://weir.social';
+
 import {
   generateAgentKey,
   paidStatementFor,
@@ -38,18 +41,18 @@ const AT = 1_756_600_000_000;
 
 describe('statement bytes and the signature over them', () => {
   it('formats a read-content statement exactly as the server rebuilds it', () => {
-    expect(statementFor({ kind: 'read-content' }, key.address, AT)).toBe(
-      `Weir\naddress: ${key.address}\nissued: ${AT}\naction: read content`,
+    expect(statementFor({ kind: 'read-content' }, key.address, AT, ORIGIN)).toBe(
+      `Weir\naddress: ${key.address}\nissued: ${AT}\norigin: ${ORIGIN}\naction: read content`,
     );
   });
 
   it('signAction signs the statement it reports', async () => {
-    const signed = await signAction(key.keypair, { kind: 'read-content' }, AT);
-    expect(signed.statement).toBe(statementFor({ kind: 'read-content' }, key.address, AT));
+    const signed = await signAction(key.keypair, { kind: 'read-content' }, ORIGIN, AT);
+    expect(signed.statement).toBe(statementFor({ kind: 'read-content' }, key.address, AT, ORIGIN));
   });
 
   it('the server-side verification call accepts it', async () => {
-    const signed = await signAction(key.keypair, { kind: 'read-content' }, AT);
+    const signed = await signAction(key.keypair, { kind: 'read-content' }, ORIGIN, AT);
     // This is the exact call `verifyAction` in packages/web/lib/identity.ts makes. The point of
     // this package is that the server cannot tell an agent from a hardware wallet, and there is
     // nothing to tell apart only if this call is the one that passes.
@@ -62,7 +65,7 @@ describe('statement bytes and the signature over them', () => {
   });
 
   it('one extra byte in the statement is rejected', async () => {
-    const signed = await signAction(key.keypair, { kind: 'read-content' }, AT);
+    const signed = await signAction(key.keypair, { kind: 'read-content' }, ORIGIN, AT);
     // Proves the binding is real rather than incidental: if a trailing space verified, the
     // signature would not be over the statement at all.
     await expect(
@@ -102,15 +105,15 @@ describe('every action kind produces a statement', () => {
   ] as const;
 
   it.each(actions.map((a, i) => [`${i}:${a.kind}`, a] as const))('%s', (_name, action) => {
-    const statement = statementFor(action as unknown as Action, '0x1', 1);
-    expect(statement.startsWith('Weir\naddress: 0x1\nissued: 1\naction: ')).toBe(true);
+    const statement = statementFor(action as unknown as Action, '0x1', 1, ORIGIN);
+    expect(statement.startsWith(`Weir\naddress: 0x1\nissued: 1\norigin: ${ORIGIN}\naction: `)).toBe(true);
   });
 
   it('follow and unfollow are different statements', () => {
     // If they were not, one signature would authorise both directions, and a captured follow could
     // be replayed as an unfollow.
-    expect(statementFor({ kind: 'follow', handle: 'a', following: true }, '0x1', 1)).not.toBe(
-      statementFor({ kind: 'follow', handle: 'a', following: false }, '0x1', 1),
+    expect(statementFor({ kind: 'follow', handle: 'a', following: true }, '0x1', 1, ORIGIN)).not.toBe(
+      statementFor({ kind: 'follow', handle: 'a', following: false }, '0x1', 1, ORIGIN),
     );
   });
 });
