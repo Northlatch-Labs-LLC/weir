@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Media storage, on Walrus.
@@ -358,7 +359,7 @@ export async function readAsset(
       // GCM refused it. Either the stored key is wrong for this blob or the bytes were altered —
       // both mean we have nothing to serve, and neither is a thing to paper over with a partial
       // response.
-      return fail('malformed', source, error instanceof Error ? error.message : String(error));
+      return fail('malformed', source, opaqueDetail(source, error));
     }
   }
 

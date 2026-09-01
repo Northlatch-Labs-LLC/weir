@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Blob storage on Walrus.
@@ -279,7 +280,7 @@ export async function storeBlob(
       alreadyExisted: created === undefined,
     });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 
@@ -310,6 +311,6 @@ export async function readBlob(blobId: string): Promise<Reading<Uint8Array>> {
 
     return ok(new Uint8Array(await response.arrayBuffer()));
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }

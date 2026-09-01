@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * The stake leg.
@@ -229,7 +230,7 @@ export async function findStakeCaps(
     // has not opened a support vault. Distinct from the failure branch above.
     return ok(caps);
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 

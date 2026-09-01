@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Proving who someone is, without a transaction.
@@ -129,7 +130,7 @@ export async function verifyAction(input: {
       'malformed',
       source,
       `the signature does not prove control of ${input.address}: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }
@@ -185,7 +186,7 @@ export async function verifyAction(input: {
       'transport',
       source,
       `could not record this signature, so it was not accepted: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }

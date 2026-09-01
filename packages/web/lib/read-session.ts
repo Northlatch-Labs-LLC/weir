@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Proving who is *reading*, not just who is claiming to.
@@ -241,7 +242,7 @@ export async function readerFromToken(token: string | null): Promise<Reading<str
       'transport',
       source,
       `this session could not be read, so the reader could not be identified: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }

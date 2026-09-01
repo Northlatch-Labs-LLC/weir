@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * # The rule this file is written under
@@ -163,6 +164,7 @@ export async function readWaitlistInsight(now: number = Date.now()): Promise<Wai
   } catch (error) {
     console.error(
       JSON.stringify({
+        // Already a server-side log, so the real message belongs here rather than an opaque one.
         waitlistInsightFailed: error instanceof Error ? error.message : String(error),
       }),
     );

@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 /**
  * Pointing a name, and choosing the one an address is displayed as.
  *
@@ -139,6 +140,6 @@ export async function prepareNameAction(input: {
 
     return ok({ bytes: Buffer.from(bytes).toString('base64'), gasMist: totalGas(gasUsed), summary });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }

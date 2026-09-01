@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Sponsored account creation — we pay the gas for the first N agents to claim a handle.
@@ -402,7 +403,7 @@ export async function reserveSeat(input: {
 
     return ok({ seat: rows[0]!.seat, address, handle });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 
@@ -473,7 +474,7 @@ export async function confirmClaimsFromChain(input: {
     }
     return ok(confirmed);
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 
@@ -487,7 +488,7 @@ export async function seatsRemaining(nowMs: number): Promise<Reading<number>> {
     const used = Number(rows[0]?.n ?? '0');
     return ok(Math.max(0, SPONSORSHIP_SEATS - used));
   } catch (error) {
-    return fail('transport', 'sponsored registration', error instanceof Error ? error.message : String(error));
+    return fail('transport', 'sponsored registration', opaqueDetail('sponsored registration', error));
   }
 }
 
@@ -563,7 +564,7 @@ export async function sponsorAccountOpen(input: {
       gasBudgetMist: SPONSORED_GAS_BUDGET_MIST.toString(),
     });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 
@@ -647,7 +648,7 @@ export async function sponsorVaultOpen(input: {
       gasBudgetMist: SPONSORED_VAULT_GAS_BUDGET_MIST.toString(),
     });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 
@@ -757,7 +758,7 @@ export async function claimVaultSlot(input: {
         'two callers took the last sponsored vault slot at once and this one lost the race.',
       );
     }
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 
@@ -770,7 +771,7 @@ export async function vaultSlotsLeft(): Promise<Reading<number>> {
     );
     return ok(Math.max(0, SPONSORED_VAULT_SLOTS - (rows[0]?.n ?? 0)));
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 

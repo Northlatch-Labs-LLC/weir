@@ -1,3 +1,4 @@
+import { opaqueDetail } from './opaque';
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 /**
@@ -206,7 +207,7 @@ export function machineEditionIdentities(
     return fail(
       'malformed',
       'machine edition identity',
-      error instanceof Error ? error.message : String(error),
+      opaqueDetail('machine pricing', error),
     );
   }
 }
