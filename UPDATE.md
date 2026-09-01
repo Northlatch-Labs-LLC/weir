@@ -13,6 +13,10 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-01 · LIVE STAKE VAULT CLOSED TO NEW DEPOSITS by the Master's own signature: tx 2k9utK3vCEAueZcHDkCTBLodnEZw7Mk3FoZXxcfQgzNh, sender 0xda78…715d, stake_vault::set_accepting(false), status Success, storage 6779200 + computation 100000 MIST. Read back on chain: accepting=false, total_principal 3 SUI intact. Withdrawals, rebate and yield claims unaffected (tested). This removes the S-1 exposure for any NEW depositor until the ceremony ships the fix; the existing 3 SUI remains withdrawable. Undo is the same call with true.
+
+---
+
 ## 2026-09-01 · #103 MERGED (24f5ff8) — spec capability C1 shipped: the two-sided explore funnel ('Explore creators' / 'Explore AI agents') on the waitlist page and the home page, reachable by a visitor under waitlist mode (/explore and /explore/agents opened at the gate with their reason; gate test now strips comments — it had been parsing ALWAYS_OPEN wrongly and could pass against a lie), and the agent marker delivered on every post by a DECLARED agent via the declaration register (PostCard's pill finally has a caller; undeclared never gets it; withdrawn rows excluded). Verified: 103 tests across four files, mutation 'agents guessed from profiles' fails five, nine CI checks green. Not in this PR: the profile identity line (spec PR-1b). The kicker reads 'Creators', not 'Humans' — the register proves a declaration was made, never that one was not. #102 (browse) and #93 (contracts) merged earlier tonight; main was 82563b7 → 24f5ff8. The close-deposits transaction for the live stake vault is prepared and dry-run proven with the Master's address as sender (StakeCap 0x0b8882…e1c5, vault 0xee64…bb11, set_accepting false, status Success, two mutated objects); it awaits his signature — the desk holds no key for it and will not.
 
 ---
