@@ -274,6 +274,43 @@ export interface SimulationStatus {
  * "no status" is not permission to sign.
  */
 export function simulationStatus(result: unknown): SimulationStatus | undefined {
+  const { grpc, legacyEffects } = simulationEnvelope(result);
+  const isObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null;
+  const grpcStatus =
+    grpc !== undefined && isObject(grpc['status']) ? (grpc['status'] as SimulationStatus) : undefined;
+  const legacyStatus =
+    legacyEffects !== undefined && isObject(legacyEffects['status'])
+      ? (legacyEffects['status'] as SimulationStatus)
+      : undefined;
+  return grpcStatus ?? legacyStatus;
+}
+
+/**
+ * The two envelopes a simulation can arrive in, unwrapped once.
+ *
+ * # Why this is exported rather than kept inside `simulationStatus`
+ *
+ * A caller that needs the status ALSO needs `effects.gasUsed` and `balanceChanges` off the same
+ * response, and until this existed the only way to reach them was to unwrap the envelope again by
+ * hand. Sixteen places in `packages/web` did exactly that, every one of them as
+ * `sim.Transaction` followed by `result?.effects?.status ?? result?.status` — which reads the
+ * SUCCESS envelope only, so a genuine abort produced `undefined` and was reported as
+ * "no status returned" rather than as the reason the chain gave.
+ *
+ * Handing back the unwrapped envelope is what makes the duplication unnecessary. A caller reads
+ * the status through `simulationStatus` and everything else through `grpc`, and neither of them
+ * needs to know that `FailedTransaction` exists.
+ *
+ * `legacyEffects` is the JSON-RPC shape, kept because a deployment may still be answering it. Note
+ * that `grpc.effects.status` is NOT a path — see the note above `simulationStatus`: on the gRPC
+ * shape it is always `undefined`, and reading it first means running on a fallback while the code
+ * says otherwise.
+ */
+export function simulationEnvelope(result: unknown): {
+  grpc: Record<string, unknown> | undefined;
+  legacyEffects: Record<string, unknown> | undefined;
+} {
   const isObject = (v: unknown): v is Record<string, unknown> =>
     typeof v === 'object' && v !== null;
   const envelope: Record<string, unknown> = isObject(result) ? result : {};
@@ -285,13 +322,7 @@ export function simulationStatus(result: unknown): SimulationStatus | undefined 
   const legacy = isObject(envelope['transaction']) ? envelope['transaction'] : undefined;
   const legacyEffects =
     legacy !== undefined && isObject(legacy['effects']) ? legacy['effects'] : undefined;
-  const grpcStatus =
-    grpc !== undefined && isObject(grpc['status']) ? (grpc['status'] as SimulationStatus) : undefined;
-  const legacyStatus =
-    legacyEffects !== undefined && isObject(legacyEffects['status'])
-      ? (legacyEffects['status'] as SimulationStatus)
-      : undefined;
-  return grpcStatus ?? legacyStatus;
+  return { grpc, legacyEffects };
 }
 
 export async function simulate(

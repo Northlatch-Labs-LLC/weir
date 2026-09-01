@@ -40,7 +40,13 @@ import 'server-only';
 
 import { Transaction } from '@mysten/sui/transactions';
 import { SuinsClient, SuinsTransaction, mainPackage } from '@mysten/suins';
-import { createClient, fail, type Reading } from '@projectx-social/sdk';
+import {
+  createClient,
+  fail,
+  simulationEnvelope,
+  simulationStatus,
+  type Reading,
+} from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { namesConfig, readRegistrar } from '@/lib/verification';
 
@@ -270,8 +276,9 @@ export async function prepareNamePurchase(input: {
       include: { effects: true, balanceChanges: true },
     });
 
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail(
         'malformed',

@@ -54,6 +54,8 @@ import {
   tx as txBuilders,
   type ProjectXSocialConfig,
   type Reading,
+  simulationEnvelope,
+  simulationStatus,
 } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 
@@ -543,8 +545,9 @@ export async function sponsorAccountOpen(input: {
       transaction: bytes,
       include: { effects: true },
     })) as { Transaction?: { status?: { success?: boolean; error?: string | null }; effects?: { status?: { success?: boolean; error?: string | null } } } };
-    const result = sim.Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as typeof sim.Transaction;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail(
         'malformed',
@@ -635,7 +638,7 @@ export async function sponsorVaultOpen(input: {
     const sim = (await client.simulateTransaction({ transaction: bytes, include: { effects: true } })) as {
       Transaction?: { status?: { success?: boolean; error?: string | null }; effects?: { status?: { success?: boolean; error?: string | null } } };
     };
-    const status = sim.Transaction?.effects?.status ?? sim.Transaction?.status;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, `the vault would not open, so no gas was paid: ${status?.error ?? 'no status returned'}`);
     }

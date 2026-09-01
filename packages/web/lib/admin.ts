@@ -24,7 +24,15 @@ import { rememberQuote } from './checkout';
  * the platform this deployment is configured for, and a mismatch is not an administrator.
  */
 
-import { createClient, fail, ok, readCreatorVault, type Reading } from '@projectx-social/sdk';
+import {
+  createClient,
+  fail,
+  ok,
+  readCreatorVault,
+  simulationEnvelope,
+  simulationStatus,
+  type Reading,
+} from '@projectx-social/sdk';
 import { Transaction } from '@mysten/sui/transactions';
 import { bcs } from '@mysten/sui/bcs';
 import { siteConfig, readProtocol, type ProtocolSnapshot } from '@/lib/chain';
@@ -387,8 +395,9 @@ export async function prepareAdminAction(input: {
       include: { effects: true },
     });
 
-    const result = (sim as { Transaction?: SimulatedAdminTx }).Transaction;
-    const status2 = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedAdminTx | undefined;
+    const status2 = simulationStatus(sim);
     if (status2?.success !== true) {
       return fail('malformed', source, describeAdminAbort(status2?.error ?? 'no status returned'));
     }
