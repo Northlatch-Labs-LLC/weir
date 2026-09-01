@@ -55,8 +55,18 @@ const BPS_DENOMINATOR: u64 = 10_000;
 /// their subscribers rather than on themselves.
 const MAX_TIERS: u64 = 16;
 
-/// One day, in milliseconds. The floor on a subscription period — a period of a few seconds turns
-/// renewal into a griefing tool and makes the price list meaningless.
+/// Thirty days, in milliseconds, and exactly one Seal content period.
+///
+/// The floor on a subscription period. A period of a few seconds would turn renewal into a
+/// griefing tool and make the price list meaningless, but that is no longer the binding reason:
+/// `entitlement` releases access in fixed 30-day quanta, so a term shorter than one quantum
+/// cannot be expressed by the access rule at all. See `EPeriodNotWholeSealPeriods` for what that
+/// mismatch cost before the two were tied together, and `the_tier_floor_is_exactly_one_seal_period`
+/// for the drift test that now fails if they part company again.
+///
+/// This doc said "one day" until 2026-09-01. The constant had been raised to thirty and the
+/// sentence above it had not, which is the kind of comment that survives review precisely because
+/// nobody re-reads a line that is not in the diff.
 const MIN_PERIOD_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
 /// Roughly ten years. The ceiling on a period, so a fat-fingered value cannot sell a
@@ -114,6 +124,16 @@ const ENotUpgraded: u64 = 17;
 /// whole next 30-day period — thirty days of content for one day of payment — while the same tier
 /// bought at any other time released nothing at all. The two models now agree by construction.
 const EPeriodNotWholeSealPeriods: u64 = 18;
+
+/// A tier priced out of order against its neighbours.
+///
+/// `entitlement::seal_approve_subscription` ranks access by `subscription.tier`, which is the
+/// INDEX into `tiers`. Nothing tied that index to the price until 2026-09-01, so a cheap tier
+/// added or repriced after the expensive ones outranked them and its subscribers could derive keys
+/// for content they had not bought. Seal keys cannot be revoked, so there was no way back.
+/// Enforced by `add_tier` and `update_tier` alike; the second was the one that made it reachable
+/// by an ordinary repricing rather than only at launch.
+const ETierPriceNotAscending: u64 = 19;
 
 // === Types ===
 
@@ -351,6 +371,24 @@ public fun open_vault<T>(
 
 // === Creator configuration ===
 
+/// Add a tier. It must cost more than the one before it.
+///
+/// # Why price and rank cannot be separated
+///
+/// `entitlement::seal_approve_subscription` decides access with `subscription.tier >= tier`, and
+/// `subscription.tier` is this vector's INDEX. The index is therefore the rank, and nothing here
+/// tied the rank to the price until 2026-09-01.
+///
+/// A creator launching Basic at index 0 and VIP at index 1 and then adding a cheap Trial got it at
+/// index 2, outranking both — and every Trial subscriber could derive VIP keys. Permanently, since
+/// a Seal key cannot be revoked, and invisibly, since nothing in the flow said anything was wrong.
+/// The creator had no way to see it coming and no way to undo it afterwards.
+///
+/// Strictly increasing rather than non-decreasing: two tiers at the same price would rank against
+/// each other, and which one won would be an accident of the order they were created in.
+///
+/// Retired tiers still count. They keep their index so existing subscribers keep a valid `tier`,
+/// which means they keep their rank, which means they must keep their place in the ordering.
 public fun add_tier<T>(
     vault: &mut CreatorVault<T>,
     cap: &CreatorCap,
@@ -365,6 +403,10 @@ public fun add_tier<T>(
     assert!(price > 0, EZeroPrice);
     assert!(period_ms >= MIN_PERIOD_MS && period_ms <= MAX_PERIOD_MS, EBadPeriod);
     assert!(period_ms % entitlement::seal_period_ms() == 0, EPeriodNotWholeSealPeriods);
+    let n = vault.tiers.length();
+    if (n > 0) {
+        assert!(price > vault.tiers[n - 1].price, ETierPriceNotAscending);
+    };
 
     vault.tiers.push_back(Tier { name, price, period_ms, active: true });
     event::emit(TiersUpdated { vault: object::id(vault), tier_count: vault.tiers.length() });
@@ -386,10 +428,21 @@ public fun update_tier<T>(
 ) {
     assert_version(vault);
     assert_cap(vault, cap);
-    assert!(index < vault.tiers.length(), ENoSuchTier);
+    let n = vault.tiers.length();
+    assert!(index < n, ENoSuchTier);
     assert!(price > 0, EZeroPrice);
     assert!(period_ms >= MIN_PERIOD_MS && period_ms <= MAX_PERIOD_MS, EBadPeriod);
     assert!(period_ms % entitlement::seal_period_ms() == 0, EPeriodNotWholeSealPeriods);
+    // The ordering `add_tier` establishes has to survive a reprice. Inverting two prices here
+    // would silently swap the ranks of everybody already subscribed to them — the same defect as
+    // an out-of-order `add_tier`, reached from the other direction and easier to do by accident,
+    // because repricing a tier reads like a pricing decision rather than an access one.
+    if (index > 0) {
+        assert!(price > vault.tiers[index - 1].price, ETierPriceNotAscending);
+    };
+    if (index + 1 < n) {
+        assert!(price < vault.tiers[index + 1].price, ETierPriceNotAscending);
+    };
 
     let tier = &mut vault.tiers[index];
     tier.price = price;
@@ -733,6 +786,37 @@ public fun claim_platform_fees<T>(
 /// Bring a vault created under an older schema up to the current `VERSION`.
 public fun migrate<T>(vault: &mut CreatorVault<T>, cap: &CreatorCap) {
     assert_cap(vault, cap);
+    assert!(vault.version < VERSION, ENotUpgraded);
+    vault.version = VERSION;
+}
+
+/// The same migration, reachable by the platform when the creator's cap is not.
+///
+/// # Why a second door is necessary rather than tidy
+///
+/// `CreatorCap` has `store`, so it can be transferred, sold, or simply lost, and `migrate` above
+/// was the only way to advance a vault's stored version. Every entry point in this module begins
+/// with `assert_version` — including `claim_earnings` and `claim_platform_fees`. So the moment a
+/// new version ships, a creator who has lost their cap can no longer reach their own earnings
+/// through the current package, AND the platform can no longer reach its commission from that
+/// vault, because both claims run through the same version gate on the same object.
+///
+/// `stake_vault::migrate_as_platform` exists for exactly this reason and its comment says so. The
+/// creator vault — which is where the subscription and content money actually sits — never got the
+/// same door. That asymmetry is the whole finding.
+///
+/// This grants the platform nothing else. Version is the only field it touches; earnings, fees,
+/// tiers, prices and the fee snapshot are all out of reach, and the version it migrates to is the
+/// same one the creator's own `migrate` would have reached. It is deliberately not gated on
+/// `assert_version`, because a vault already at the current version is the one case where there is
+/// nothing to do — `ENotUpgraded` names that rather than silently succeeding.
+public fun migrate_as_platform<T>(
+    vault: &mut CreatorVault<T>,
+    platform: &Platform,
+    cap: &PlatformCap,
+) {
+    assert!(vault.platform == object::id(platform), EWrongPlatform);
+    assert!(cap.cap_platform_id() == vault.platform, EWrongPlatform);
     assert!(vault.version < VERSION, ENotUpgraded);
     vault.version = VERSION;
 }

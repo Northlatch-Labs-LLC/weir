@@ -748,3 +748,442 @@ fun a_second_claim_in_the_same_state_takes_nothing() {
     };
     sc.end();
 }
+
+// === Freshness markers must follow principal out ===
+//
+// `deposit` writes two markers — `Fresh{who}` and `FreshTotal` — recording money that arrived
+// inside the current harvest window and has therefore not earned yet. Until 2026-09-01 `withdraw`
+// reduced the principal and left both markers where they were, and the three tests below are the
+// three ways that one omission was reachable. None of them needs an attacker; the first is what an
+// ordinary depositor does by changing their mind.
+
+/// Returns what came back, so a test can assert the amount rather than assume it —
+/// `withdraw_exact` above asserts it internally and is used where that is all a test needs.
+fun withdraw_returning(sc: &mut Scenario, who: address, amount: u64): u64 {
+    sc.next_tx(who);
+    let mut v = sc.take_shared<StakeVault>();
+    let mut state = sc.take_shared<SuiSystemState>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let out = sv::withdraw(&mut v, &acct, amount, &mut state, sc.ctx());
+    let got = out.value();
+    coin::burn_for_testing(out);
+    sc.return_to_sender(acct);
+    ts::return_shared(state);
+    ts::return_shared(v);
+    got
+}
+
+#[test]
+/// The one that costs a depositor their money.
+///
+/// Deposit, then take part of it back before the next harvest. The stale `Fresh` marker was folded
+/// into `rebate_debt` at the next settle, and `accrue_on`'s `entitled - rebate_debt` then
+/// underflowed. Every route out of a position runs that line — `deposit`, `withdraw` and
+/// `claim_rebate` — so the remaining principal was unreachable from then on, permanently, with no
+/// administrative rescue anywhere in the module.
+fun a_partial_withdrawal_inside_one_window_does_not_strand_the_rest() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    // Somebody else earning, so the accumulator actually moves. With a single depositor it stays
+    // at zero and the defect is not armed — which is why it survived the original suite.
+    deposit(&mut sc, FAN2, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::claimable_rebate(&v, FAN2) > 0, 0); // the precondition is real
+        ts::return_shared(v);
+    };
+
+    // Deposit and change your mind, inside the same window.
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    assert!(withdraw_returning(&mut sc, FAN, 10 * SUI_1) == 10 * SUI_1, 1);
+
+    // The marker must have come down with the principal: 90 SUI is FAN2's 100 minus FAN's 40 fresh
+    // — FAN's remaining 40 all arrived this window and none of it is eligible yet.
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == 40 * SUI_1, 2);
+        assert!(sv::eligible_total(&v) == 100 * SUI_1, 3);
+        ts::return_shared(v);
+    };
+
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // The line under test. Before the fix this aborted with an arithmetic error and every retry
+    // aborted the same way.
+    assert!(withdraw_returning(&mut sc, FAN, 40 * SUI_1) == 40 * SUI_1, 4);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == 0, 5);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// The one that costs everybody else theirs.
+///
+/// A round trip in a single window — deposit and withdraw the same amount, cost: gas — left
+/// `FreshTotal` claiming money the vault no longer held. `eligible_total` is the denominator the
+/// rebate is divided by, so it fell below the principal actually earning and `acc_rebate_per_unit`
+/// grew past anything `rebate_pool` could pay. Honest depositors' claims then aborted on the
+/// balance check and never recovered, because the accumulator only ever increases.
+fun a_round_trip_cannot_inflate_the_accumulator() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // In and straight back out, same window.
+    deposit(&mut sc, FAN2, 100 * SUI_1);
+    assert!(withdraw_returning(&mut sc, FAN2, 100 * SUI_1) == 100 * SUI_1, 0);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN2) == 0, 1);
+        // The whole finding. This read 0 before the fix, because a stale `FreshTotal` of 100
+        // covered the entire vault.
+        assert!(sv::eligible_total(&v) == 100 * SUI_1, 2);
+        ts::return_shared(v);
+    };
+
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // The rebate must still be payable out of the pool that was funded for it. An inflated
+    // accumulator shows up here as a claim larger than the pool, which aborts.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let due = sv::claimable_rebate(&v, FAN);
+        assert!(due > 0, 3);
+        assert!(due <= sv::rebate_pool_value(&v), 4);
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(out.value() == due, 5);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// And the fix must not become a gift.
+///
+/// A withdrawal comes out of MATURED principal first, so the marker only shrinks once what remains
+/// cannot cover it. The other order would let anyone deposit and immediately withdraw the same
+/// amount of older principal, and the new money would start earning as though it had sat through a
+/// harvest. Here 100 is mature and 50 is fresh; withdrawing 50 must leave the 50 fresh still
+/// ineligible, not convert it.
+fun a_withdrawal_comes_out_of_matured_principal_first() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    assert!(withdraw_returning(&mut sc, FAN, 50 * SUI_1) == 50 * SUI_1, 0);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == 100 * SUI_1, 1);
+        // 100 principal, 50 of it still fresh. Not 100, which is what taking from the fresh side
+        // first would have produced.
+        assert!(sv::eligible_total(&v) == 50 * SUI_1, 2);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// A withdrawal that has to unwind must be paid for the rebate its own principal funded.
+///
+/// `withdraw` binds `acc = vault.acc_rebate_per_unit` before the unwind loop, and every
+/// `credit_proceeds` inside that loop can raise the same field — the unwind realises staking
+/// rewards, and `eligible_total` still counts the withdrawer's principal while it does, because
+/// `vault.total_principal` is not reduced until afterwards. Until 2026-09-01 the re-baseline at the
+/// end used the stale binding, so the withdrawer's principal sat in the denominator that funded the
+/// increment and their debt was reset as though it had never happened. The difference stayed in
+/// `rebate_pool` with no claimant.
+///
+/// FAN2 stays in so the accumulator has somewhere to go and the pool has a second claimant; what
+/// is asserted is that FAN's share is not left behind.
+fun an_unwinding_withdrawal_is_paid_the_rebate_it_funded() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    deposit(&mut sc, FAN2, 100 * SUI_1);
+
+    // Run the ladder to convergence so the buffer cannot cover the withdrawal on its own, and
+    // through a maturity so there is realised yield and a non-zero accumulator. The bound is the
+    // ladder's own depth rather than a number, so a depth change moves this with it.
+    let mut i = 0;
+    while (i < 4 * (ladder::ladder_depth() + 1)) {
+        harvest(&mut sc);
+        gtu::advance_epoch_with_reward_amounts(0, 400, &mut sc);
+        i = i + 1;
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::staked_principal(&v) > 0, 0);
+        // The precondition the test exists for: the buffer alone cannot pay FAN out, so `withdraw`
+        // must unwind, and the unwind is what moves the accumulator mid-function.
+        assert!(sv::liquid_value(&v) < 100 * SUI_1, 1);
+        assert!(sv::claimable_rebate(&v, FAN) > 0, 6); // the rebate is live before we start
+        ts::return_shared(v);
+    };
+
+    // FAN exits in full. The unwind this forces realises yield, and part of that yield is FAN's.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::withdraw(&mut v, &acct, 100 * SUI_1, &mut state, sc.ctx());
+        assert!(out.value() == 100 * SUI_1, 2);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+
+    // THE ASSERTION, and it is an equality rather than a threshold on purpose.
+    //
+    // FAN and FAN2 deposited the same amount at the same moment and were eligible together for
+    // every harvest since, including the increment FAN's own unwind produced — `eligible_total`
+    // still counted FAN's principal when `credit_proceeds` divided by it. So their two shares are
+    // the same number. A stale accumulator does not make FAN's claim zero, which is why a
+    // `fan_due > 0` check passes against the defect and proves nothing; it makes FAN's claim
+    // strictly SMALLER than FAN2's by exactly the increment FAN was not credited for, and leaves
+    // that difference in `rebate_pool` with nobody able to claim it.
+    let fan_due;
+    let fan2_due;
+    let pool;
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        fan_due = sv::claimable_rebate(&v, FAN);
+        fan2_due = sv::claimable_rebate(&v, FAN2);
+        pool = sv::rebate_pool_value(&v);
+        ts::return_shared(v);
+    };
+    assert!(pool > 0, 3);
+    assert!(fan_due > 0, 4);
+    assert!(fan_due == fan2_due, 5);
+
+    // And the pool must actually empty. What is left after both claims is integer-division dust,
+    // not a share somebody was owed — the defect left FAN's whole missing increment sitting here.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(out.value() == fan_due, 7);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        coin::burn_for_testing(out);
+        // Under a thousand MIST against a pool measured in millions: rounding, not a share.
+        assert!(sv::rebate_pool_value(&v) < 1_000, 8);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// A harvest that realises nothing must not age anybody's money.
+///
+/// `harvest` is permissionless by design — an absent creator must not be able to stall the vault —
+/// and `vault.harvests` is the maturity clock. Until 2026-09-01 the counter incremented on every
+/// call regardless of whether the call realised any yield, so the two together let anyone deposit
+/// and then mature their own deposit on the spot for the price of gas. That defeats
+/// `a_deposit_does_not_earn_the_harvest_it_walks_into` by the cheapest route there is: deposit
+/// straight after a real harvest, call `harvest` again while nothing has matured so it realises
+/// zero, and arrive at the next real harvest already eligible for yield that accrued before the
+/// money existed in the vault.
+fun a_harvest_that_realises_nothing_matures_nothing() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    // An honest depositor, staked and earning.
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    let harvests_before;
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        harvests_before = sv::harvests(&v);
+        ts::return_shared(v);
+    };
+
+    // The attacker arrives with ten times the honest stake, then pays gas to age it. Nothing has
+    // matured since the harvest above, so these calls realise zero.
+    deposit(&mut sc, FAN2, 500 * SUI_1);
+    harvest(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        // The counter did not move, so the marker written by the deposit is still current.
+        assert!(sv::harvests(&v) == harvests_before, 0);
+        assert!(sv::eligible_total(&v) == 50 * SUI_1, 1);
+        ts::return_shared(v);
+    };
+
+    // The next REAL harvest. The attacker must take nothing from it, exactly as if they had not
+    // called `harvest` at all.
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::harvests(&v) == harvests_before + 1, 2);
+        assert!(sv::claimable_rebate(&v, FAN2) == 0, 3); // the whole finding
+        assert!(sv::claimable_rebate(&v, FAN) > 0, 4);
+        ts::return_shared(v);
+    };
+
+    // And the money still matures on its own once a real harvest has passed under it — the fix
+    // must delay the attacker, not confiscate from them.
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::claimable_rebate(&v, FAN2) > 0, 5);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// The pause promise, tested rather than trusted.
+///
+/// `platform.move` states it without qualification: "No pause switch in this package can block a
+/// claim, a withdrawal, or an entitlement read." That is a claim in prose, and prose cannot be
+/// mutation-tested — a guard could be added to any of these paths tomorrow and nothing would fail.
+/// So every switch in the package is thrown at once and every stake-side money path out is
+/// exercised against them.
+///
+/// Withdrawals and claims must all succeed. Deposits must NOT — that is the pause working, and
+/// asserting it here is what stops this test from passing because the switches do nothing.
+fun no_pause_can_block_a_withdrawal_or_a_claim() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // Every switch this package has, all on at once.
+    sc.next_tx(ADMIN);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        platform::set_creation_paused(&mut p, &cap, true);
+        platform::set_payments_paused(&mut p, &cap, true);
+        sc.return_to_sender(cap);
+        ts::return_shared(p);
+    };
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::set_accepting(&mut v, &cap, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    // The depositor's rebate.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let due = sv::claimable_rebate(&v, FAN);
+        assert!(due > 0, 0);
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(out.value() == due, 1);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+
+    // The creator's yield.
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        let amt = sv::creator_yield_value(&v);
+        let out = sv::claim_creator_yield(&mut v, &cap, amt, sc.ctx());
+        assert!(out.value() == amt, 2);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    // The platform's own yield, claimed while the platform's own switches are on.
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        let amt = sv::platform_yield_value(&v);
+        let out = sv::claim_platform_yield(&mut v, &cap, amt, sc.ctx());
+        assert!(out.value() == amt, 3);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+
+    // And the principal, in full, with everything paused and every unit of it delegated.
+    assert!(withdraw_returning(&mut sc, FAN, 100 * SUI_1) == 100 * SUI_1, 4);
+
+    // The other side of the boundary. Without this, a test that pauses nothing would also pass.
+    sc.next_tx(ADMIN);
+    {
+        let p = sc.take_shared<Platform>();
+        assert!(platform::payments_paused(&p), 5);
+        assert!(platform::creation_paused(&p), 6);
+        ts::return_shared(p);
+    };
+
+    sc.end();
+}

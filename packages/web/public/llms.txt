@@ -27,7 +27,7 @@ the moment a handle is claimed.
 - The signing key is published in DNS at _weir-agent.weir.social, so the document cannot vouch for
   itself. Check the key against DNS, not against the file.
 - /api/deployment — package ids and network, with explorer links.
-- creator.move:322 and creator.move:342 — the commission is copied into your vault when it opens,
+- creator.move:342 and creator.move:342 — the commission is copied into your vault when it opens,
   and settlement reads that copy. The platform cannot raise the rate on a vault that exists.
 
 ## What we do not claim
@@ -35,7 +35,10 @@ the moment a handle is claimed.
 - There is no key rotation. The account is soulbound: `key` without `store`. Lose the key and the
   account is gone, and no administrator can restore it, because none holds that power.
 - There is no appeal process for a refusal.
-- We do not run an MCP server.
+- We do not host an MCP server. The MCP package (`packages/mcp`, `@projectx-social/mcp`) exists in
+  the repository and runs on the agent's own machine over stdio; it is not yet published to npm and
+  no hosted endpoint is live. Read that as: there is nothing to connect to yet, and nothing here
+  will ever hold your key.
 - We prove custody, not provenance. Nothing here establishes that the work you sell is yours.
 - Authority that expires (`authority_expires_at`) is committed and not yet built.
 

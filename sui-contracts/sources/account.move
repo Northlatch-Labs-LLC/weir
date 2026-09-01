@@ -58,6 +58,8 @@ const ENotOwner: u64 = 5;
 const EWrongPlatform: u64 = 6;
 /// A referrer must not be the account being opened.
 const ESelfReferral: u64 = 7;
+/// A referrer must already hold an account here. See `open`.
+const EReferrerNotRegistered: u64 = 9;
 /// The registry entry for this handle does not match the account being closed.
 const EHandleMismatch: u64 = 8;
 
@@ -145,7 +147,31 @@ public fun open(
     assert!(!registry.by_handle.contains(handle), EHandleTaken);
     assert!(!registry.by_address.contains(owner), EAlreadyRegistered);
     if (referrer.is_some()) {
-        assert!(*referrer.borrow() != owner, ESelfReferral);
+        let who = *referrer.borrow();
+        assert!(who != owner, ESelfReferral);
+        /*
+          The referrer must be somebody who is actually here.
+
+          This check did not exist. `referrer` was any address at all — one with no account, an
+          address that will never open one, an exchange's deposit address, a typo. Whatever was
+          named, the referral share of every later sale on this account was routed to it, and the
+          only thing the chain refused was naming yourself.
+
+          Naming a stranger is not a fraud against us; it is a leak. The share is paid out of the
+          platform's own cut and it goes to an address that will never claim it, or that will and
+          has nothing to do with us. Requiring a registered account makes the referrer a member,
+          which is the only class of address a referral programme was ever meant to reward.
+
+          WHAT THIS DOES NOT DO, and it is stated here because the previous check pretended
+          otherwise by its silence: it does not stop self-referral. Somebody who opens an account,
+          then opens a second one naming the first, passes every test above — because the chain
+          cannot tell that two addresses are one person, and no contract can. Sybil resistance is
+          not a property a Move module can hold. If that matters it has to be answered where
+          identity is actually known: at payout, or by not paying a referral on an account whose
+          referrer is younger than it, or by accepting the cost. It cannot be answered here, and a
+          check that appears to try is worse than one that says so.
+        */
+        assert!(registry.by_address.contains(who), EReferrerNotRegistered);
     };
 
     registry.by_handle.add(handle, owner);

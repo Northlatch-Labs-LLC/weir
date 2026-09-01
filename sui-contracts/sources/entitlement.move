@@ -146,6 +146,27 @@ public(package) fun new_subscription(
 /// Extends from whichever is later: now, or the current expiry. Renewing early therefore adds a
 /// full period rather than resetting the clock and discarding the time already paid for — the
 /// opposite behaviour silently confiscates whatever remained.
+///
+/// # A renewal after a lapse restarts the term
+///
+/// `seal_approve_subscription` grants a period when `started_at_ms <= period_start <
+/// expires_at_ms`. That is one contiguous window, and it is the only shape this struct can hold —
+/// a Move upgrade cannot add a field, so there is nowhere to record a set of paid intervals with
+/// a gap in it.
+///
+/// Until 2026-09-01 `extend` moved only the far end of that window. Subscribe in January, stop
+/// paying, come back eleven months later and pay for one month, and the window became the whole
+/// eleven months: every period in the gap satisfied both bounds. One month's price bought a year
+/// of back catalogue, and because a Seal key once derived cannot be revoked, the creator had no
+/// way to undo it.
+///
+/// So a renewal that arrives after the subscription has actually lapsed moves the near end too.
+/// The subscriber keeps every key they already derived — nothing is taken back, because nothing
+/// can be — but they cannot derive new keys for periods they did not pay for, including the ones
+/// before the gap. That is deliberately the under-granting direction, the same one
+/// `seal_approve_subscription` already chose for the same reason: over-granting a permanent key is
+/// irreversible, and under-granting has a remedy the creator already has, which is to sell the
+/// missing periods as `Unlock`s.
 public(package) fun extend(
     subscription: &mut Subscription,
     price_paid: u64,
@@ -153,8 +174,10 @@ public(package) fun extend(
     clock: &Clock,
 ) {
     let now = clock.timestamp_ms();
+    let lapsed = now > subscription.expires_at_ms;
     let base = if (subscription.expires_at_ms > now) { subscription.expires_at_ms } else { now };
 
+    if (lapsed) { subscription.started_at_ms = now };
     subscription.expires_at_ms = base + period_ms;
     subscription.price_paid = price_paid;
     subscription.renewals = subscription.renewals + 1;
@@ -426,6 +449,19 @@ public fun mint_subscription_for_testing(
     ctx: &mut TxContext,
 ) {
     new_subscription(vault, subscriber, tier, 0, period_ms, clock, ctx)
+}
+
+#[test_only]
+/// `extend` is `public(package)`, so the lapse rule can only be exercised from another module
+/// through a seam. It calls the real function rather than restating it, so a change to the rule
+/// moves the test with it instead of leaving the test asserting a copy.
+public fun extend_for_testing(
+    subscription: &mut Subscription,
+    price_paid: u64,
+    period_ms: u64,
+    clock: &Clock,
+) {
+    extend(subscription, price_paid, period_ms, clock)
 }
 
 #[test_only]

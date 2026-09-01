@@ -292,7 +292,6 @@ public fun open(
 
 // === Depositor accounting ===
 
-/// Bring a position's accrued rebate up to date. Must be called before principal changes.
 /// Rebate eligibility for principal deposited since the last harvest.
 ///
 /// # The defect this closes
@@ -310,12 +309,30 @@ public fun open(
 /// Eligibility advances on the harvest counter rather than on the depositor doing something, so a
 /// depositor who deposits and waits still earns. `at_harvest` no longer matching `vault.harvests`
 /// *is* maturity — nothing has to sweep.
+///
+/// And the counter itself only advances when the harvest realised yield or staked a rung. It used
+/// to advance on every call, and `harvest` is permissionless, so anyone could mature their own
+/// deposit on the spot for the price of gas — which is this same defect reached one step earlier.
+/// See the gate in `harvest`.
 public struct FreshEntry has copy, drop, store {
     at_harvest: u64,
     amount: u64,
-    /// `Σ amount_i * acc_i / ACC_SCALE` over the deposits in this window. Added to the position's
-    /// debt when the money matures, so it earns from harvests after its deposit and not before.
-    /// Without this the newly-eligible principal would be credited the whole accumulator history.
+    /// `Σ amount_i * acc_i / ACC_SCALE` over the deposits in this window.
+    ///
+    /// **NOTHING READS THIS.** It is written by `note_fresh` and rescaled by `shrink_fresh`, and
+    /// no payout, debt or balance is derived from it anywhere in the module. The doc here used to
+    /// say it was "added to the position's debt when the money matures", which is not what
+    /// happens: `settle_fresh` baselines matured principal at `acc_at(at_harvest + 1)` — the
+    /// accumulator as it stood after the harvest the money sat out — and `claimable_rebate`
+    /// mirrors that. Those are the correct baseline and `AccAt` documents why.
+    ///
+    /// It stays because it cannot leave. A Move upgrade cannot change the layout of a struct that
+    /// is already stored, and live vaults hold `FreshEntry` values written by the deployed
+    /// package. Removing the field would make those entries undeserialisable.
+    ///
+    /// So it is dead weight with a warning on it. **Do not "fix" `settle_fresh` to add it.** That
+    /// would apply the baseline twice and under-pay every matured deposit, and the wrong comment
+    /// above was an invitation to do exactly that.
     debt_delta: u128,
 }
 public struct Fresh has copy, drop, store { who: address }
@@ -369,6 +386,58 @@ fun settle_fresh(vault: &mut StakeVault, who: address) {
     position.rebate_debt = position.rebate_debt + owed_from;
 }
 
+/// Reduce the freshness markers when principal leaves, so a marker can never exceed the principal
+/// it describes.
+///
+/// A withdrawal comes out of MATURED principal first: the marker only shrinks once what remains
+/// cannot cover it. The other order would be a gift — deposit, then immediately withdraw the same
+/// amount of older principal, and money that had not yet sat through a harvest would start earning
+/// as though it had.
+///
+/// Until 2026-09-01 `withdraw` reduced `position.principal` and `vault.total_principal` and left
+/// both markers at their pre-withdrawal amounts. Three things followed from that one omission, and
+/// none of them needed an attacker:
+///
+///   - The next `settle_fresh` folded the stale, larger amount into `rebate_debt`, and
+///     `accrue_on`'s `entitled - rebate_debt` then underflowed and aborted. Every way out of a
+///     position — `deposit`, `withdraw`, `claim_rebate` — runs that line, so a depositor who took
+///     part of their money back inside one harvest window could never reach the rest.
+///   - `eligible_total` fell below the principal actually earning, so `acc_rebate_per_unit` grew
+///     past anything `rebate_pool` could pay and every OTHER depositor's claim aborted with it.
+///   - When the stale total covered the whole vault, `eligible_total` returned zero and `harvest`
+///     sent the entire depositor rebate to the creator while the module still documented it as the
+///     depositors'.
+///
+/// `FreshTotal` is cut by exactly the amount the per-address marker was cut by, so the total stays
+/// the sum of its parts rather than being independently clamped into disagreement with them.
+fun shrink_fresh(vault: &mut StakeVault, who: address, principal_after: u64) {
+    if (!df::exists(&vault.id, Fresh { who })) return;
+    let e = *df::borrow<Fresh, FreshEntry>(&vault.id, Fresh { who });
+    // A marker from an earlier harvest belongs to `settle_fresh`, which every caller of this
+    // function has already run, so whatever is still here was written during the current harvest.
+    if (e.at_harvest != vault.harvests) return;
+    if (e.amount <= principal_after) return;
+
+    let cut = e.amount - principal_after;
+    // `e.amount > principal_after` above, so `e.amount` is non-zero and this division is safe.
+    let kept_debt = (e.debt_delta * (principal_after as u128)) / (e.amount as u128);
+    *df::borrow_mut<Fresh, FreshEntry>(&mut vault.id, Fresh { who }) = FreshEntry {
+        at_harvest: e.at_harvest,
+        amount: principal_after,
+        debt_delta: kept_debt,
+    };
+
+    if (!df::exists(&vault.id, FreshTotal {})) return;
+    let t = *df::borrow<FreshTotal, FreshEntry>(&vault.id, FreshTotal {});
+    if (t.at_harvest != vault.harvests) return;
+    // Saturating rather than wrapping. The two markers are kept in step by construction and this
+    // branch should be unreachable; if it ever is not, a vault that under-reports fresh principal
+    // stays usable and one that underflows a u64 to 18 quintillion does not.
+    let left = if (t.amount > cut) t.amount - cut else 0;
+    *df::borrow_mut<FreshTotal, FreshEntry>(&mut vault.id, FreshTotal {}) =
+        FreshEntry { at_harvest: t.at_harvest, amount: left, debt_delta: 0 };
+}
+
 fun note_fresh(vault: &mut StakeVault, who: address, amount: u64, acc: u128) {
     let h = vault.harvests;
     let add_debt = ((amount as u128) * acc) / ACC_SCALE;
@@ -409,14 +478,54 @@ public fun eligible_total(vault: &StakeVault): u64 {
     if (f >= vault.total_principal) 0 else vault.total_principal - f
 }
 
-fun accrue_on(position: &mut Position, acc: u128, eligible: u64) {
+/// Emitted when `accrue_on` found `rebate_debt` ahead of the entitlement it is subtracted from.
+///
+/// This should never be seen. It exists so that the clamp in `accrue_on` cannot be a silent one:
+/// the position keeps working and the depositor keeps their principal, and the discrepancy is on
+/// chain with the numbers attached rather than absorbed into a rebate that quietly stops growing.
+public struct RebateAccountingAnomaly has copy, drop {
+    vault: ID,
+    depositor: address,
+    /// How far `rebate_debt` stood ahead of the entitlement. The size is the diagnosis: a few units
+    /// is a rounding path nobody has found yet, a large number is a stale marker.
+    shortfall: u128,
+}
+
+fun report_anomaly(vault: &StakeVault, who: address, shortfall: u128) {
+    if (shortfall == 0) return;
+    event::emit(RebateAccountingAnomaly {
+        vault: object::id(vault),
+        depositor: who,
+        shortfall,
+    });
+}
+
+/// Returns the shortfall — how far `rebate_debt` stood ahead of `entitled`. Zero is the only
+/// value this should ever return.
+fun accrue_on(position: &mut Position, acc: u128, eligible: u64): u128 {
     let entitled = ((eligible as u128) * acc) / ACC_SCALE;
-    // `acc` only ever increases and `rebate_debt` was set from the same principal, so this cannot
-    // underflow — provided `resync_debt` follows every principal change, which is why the two are
-    // never called separately.
-    let owed = entitled - position.rebate_debt;
+    // `acc` only ever increases and `rebate_debt` was set from the same principal, so `entitled`
+    // should never be the smaller of the two — provided `resync_debt` follows every principal
+    // change, which is why the two are never called separately.
+    //
+    // It is not asserted, and that is deliberate. Every route out of a position runs this line:
+    // `deposit`, `withdraw` and `claim_rebate` all call it before doing anything else. An abort
+    // here does not fail one rebate calculation, it makes the position permanently unreachable and
+    // takes the principal with it — and this module's one promise is that principal is redeemable
+    // at any time. Between breaking that promise and paying no further rebate for one accounting
+    // step, the second is the recoverable failure, so the shortfall is clamped and REPORTED rather
+    // than aborted. `RebateAccountingAnomaly` should never be emitted; if it ever is, it names the
+    // position and the two numbers, on chain, while the depositor keeps their money.
+    //
+    // The condition was reachable until 2026-09-01: `withdraw` left the freshness markers at their
+    // pre-withdrawal amounts, and the next `settle_fresh` folded the stale, larger amount into
+    // `rebate_debt`. See `shrink_fresh`, which closes it at the source. This is the second line of
+    // defence, not the fix.
+    let shortfall = if (entitled < position.rebate_debt) position.rebate_debt - entitled else 0;
+    let owed = if (shortfall > 0) 0 else entitled - position.rebate_debt;
     position.pending = position.pending + (owed as u64);
     position.rebate_debt = entitled;
+    shortfall
 }
 
 /// Re-baseline a position after its principal changed.
@@ -461,11 +570,13 @@ public fun deposit(
     };
     settle_fresh(vault, who);
     let eligible = eligible_of(vault, who);
-    {
+    let shortfall = {
         let position = vault.positions.borrow_mut(who);
-        accrue_on(position, acc, eligible);
+        let a = accrue_on(position, acc, eligible);
         position.principal = position.principal + amount;
+        a
     };
+    report_anomaly(vault, who, shortfall);
     // The deposit raises principal and `fresh` by the same amount, so eligibility is unchanged —
     // which is the whole point, and why the debt below is the same number it already was.
     note_fresh(vault, who, amount, acc);
@@ -511,11 +622,13 @@ public fun withdraw(
     let acc = vault.acc_rebate_per_unit;
     settle_fresh(vault, who);
     let eligible = eligible_of(vault, who);
-    {
+    let shortfall = {
         let position = vault.positions.borrow_mut(who);
-        accrue_on(position, acc, eligible);
+        let a = accrue_on(position, acc, eligible);
         assert!(position.principal >= amount, EInsufficientPrincipal);
+        a
     };
+    report_anomaly(vault, who, shortfall);
 
     // Raise liquidity if the buffer is short. Bounded by the tranche count, which
     // `stake_ladder::MAX_TRANCHES` caps, so this loop cannot run away.
@@ -532,14 +645,42 @@ public fun withdraw(
         credit_proceeds(vault, proceeds, principal);
     };
 
-    {
+    // The accumulator, RE-READ. `acc` above was bound before the loop, and every `credit_proceeds`
+    // inside it can raise `vault.acc_rebate_per_unit` — the unwind realises staking rewards, and
+    // `eligible_total` still counts this position's principal while it does, because
+    // `vault.total_principal` is not reduced until further down.
+    //
+    // Until 2026-09-01 the re-baseline below used the stale `acc`, so the withdrawer's principal
+    // sat in the denominator that funded the increment and their debt was reset as though the
+    // increment had never happened. They were paid nothing for it and could not recover it by
+    // re-depositing, because a new deposit is fresh and accrues nothing. The difference stayed in
+    // `rebate_pool` with no claimant: it is a leak and never a theft — the error is always an
+    // under-credit, the sum of all claims stays below what was funded, and `rebate_pool` and
+    // `creator_yield` are separate balances so nobody else receives it either.
+    //
+    // Accruing again on the pre-reduction `eligible` is the fix rather than merely passing the
+    // fresh value to `resync_debt_on`: the second pays the withdrawer for the share their principal
+    // actually funded, the first would only stop the debt being wrong afterwards. `eligible` is
+    // still valid here — the unwind touches balances and the accumulator, never a position, a
+    // freshness marker or `vault.harvests`.
+    let acc_now = vault.acc_rebate_per_unit;
+    let shortfall_after = {
+        let position = vault.positions.borrow_mut(who);
+        accrue_on(position, acc_now, eligible)
+    };
+    report_anomaly(vault, who, shortfall_after);
+
+    let principal_left = {
         let position = vault.positions.borrow_mut(who);
         position.principal = position.principal - amount;
+        position.principal
     };
+    // Before `eligible_of`, which reads the marker this corrects.
+    shrink_fresh(vault, who, principal_left);
     let eligible_after = eligible_of(vault, who);
     let principal_after = {
         let position = vault.positions.borrow_mut(who);
-        resync_debt_on(position, acc, eligible_after);
+        resync_debt_on(position, acc_now, eligible_after);
         position.principal
     };
 
@@ -575,10 +716,14 @@ public fun claim_rebate(
     let acc = vault.acc_rebate_per_unit;
     settle_fresh(vault, who);
     let eligible = eligible_of(vault, who);
-    let position = vault.positions.borrow_mut(who);
-    accrue_on(position, acc, eligible);
-    let amount = position.pending;
-    position.pending = 0;
+    let (shortfall, amount) = {
+        let position = vault.positions.borrow_mut(who);
+        let a = accrue_on(position, acc, eligible);
+        let pending = position.pending;
+        position.pending = 0;
+        (a, pending)
+    };
+    report_anomaly(vault, who, shortfall);
 
     assert!(vault.rebate_pool.value() >= amount, EInsufficientBalance);
 
@@ -608,11 +753,15 @@ fun credit_proceeds(vault: &mut StakeVault, mut proceeds: Balance<SUI>, principa
 
     vault.platform_yield.join(proceeds.split(platform_cut));
 
-    // A rebate with nobody to pay it goes to the creator rather than being stranded in a pool no
-    // accumulator can distribute. `total_principal` is zero only if every depositor has exited,
-    // in which case there is no one whose deposit earned it.
     // Divide by principal that was actually delegated when this yield accrued, not by everything
     // sitting in the vault. They differ by exactly the deposits made since the last harvest.
+    //
+    // A rebate with nobody to pay it goes to the creator rather than being stranded in a pool no
+    // accumulator can distribute. The condition is `eligible == 0`, NOT `total_principal == 0` —
+    // an earlier comment here said the latter, and they are different: a vault whose every deposit
+    // arrived inside this harvest window has principal and no eligible principal, and the yield
+    // genuinely was not earned by it. What must never happen is `eligible` reading zero while
+    // principal WAS delegated, which is what a stale `FreshTotal` caused before `shrink_fresh`.
     let eligible = eligible_total(vault);
     if (rebate_cut > 0 && eligible > 0) {
         vault.rebate_pool.join(proceeds.split(rebate_cut));
@@ -665,15 +814,49 @@ public fun harvest(
         ctx,
     );
 
-    vault.harvests = vault.harvests + 1;
-    record_acc_at(vault);
+    let gross_yield = (vault.creator_yield.value() - creator_before)
+        + (vault.platform_yield.value() - platform_before)
+        + (vault.rebate_pool.value() - rebate_before);
+
+    // The counter advances only when the harvest realised something, and that is the whole point
+    // of it rather than a tidiness.
+    //
+    // `vault.harvests` is the maturity clock: `fresh_of` and `eligible_total` treat a marker whose
+    // `at_harvest` no longer equals it as matured. `harvest` is permissionless, deliberately — an
+    // absent creator must not be able to stall the vault. Until 2026-09-01 the counter incremented
+    // on every call, so a harvest that realised nothing still aged fresh money, and the two
+    // together meant anyone could deposit and then pay gas to mature their own deposit on the spot.
+    //
+    // That defeats `a_deposit_does_not_earn_the_harvest_it_walks_into` exactly, by the cheapest
+    // route available: deposit immediately after a real harvest, call `harvest` again while no
+    // tranche has matured so it realises zero, and walk into the next real harvest already
+    // eligible for yield that accrued before the money arrived.
+    //
+    // The gate is realised yield OR a rung actually staked, and the second half is not optional.
+    // Gating on yield alone was tried and is wrong: the FIRST harvest over a new vault stakes the
+    // deposit and realises nothing, so the counter would never move, the depositor would still be
+    // fresh when the harvest that matures their own tranche arrives, `eligible_total` would read
+    // zero and the entire rebate would go to the creator. Five tests said so. The counter is not a
+    // yield counter; it is "the vault has moved this money on", and staking a rung is the other
+    // way that happens.
+    //
+    // `stake_one_rung` allows at most one rung per epoch and declines rather than aborting, so a
+    // second call in the same epoch stakes nothing and realises nothing and is now inert — which
+    // is precisely the free extra call the attack depended on.
+    //
+    // Stated rather than hidden: a depositor who arrives in an epoch where no rung has been staked
+    // yet can still call `harvest` and have their own money staked and their marker aged by it.
+    // That is not the attack — it is what an honest first harvest does for every depositor — and
+    // `a_late_depositor_does_not_share_earlier_yield` pins the property that actually matters.
+    if (gross_yield > 0 || principal_restaked > 0) {
+        vault.harvests = vault.harvests + 1;
+        record_acc_at(vault);
+    };
     assert_solvent(vault);
 
     event::emit(Harvested {
         vault: object::id(vault),
-        gross_yield: (vault.creator_yield.value() - creator_before)
-            + (vault.platform_yield.value() - platform_before)
-            + (vault.rebate_pool.value() - rebate_before),
+        gross_yield,
         creator_cut: vault.creator_yield.value() - creator_before,
         platform_cut: vault.platform_yield.value() - platform_before,
         rebate_cut: vault.rebate_pool.value() - rebate_before,

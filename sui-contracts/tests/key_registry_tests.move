@@ -226,9 +226,21 @@ fun publishing_touches_only_the_sender() {
 }
 
 #[test]
-fun publishing_after_a_revoke_starts_over() {
-    // The entry is removed, so the count starts again. Worth pinning: a reader who kept the old
-    // version would otherwise see 1 and think nothing had happened since.
+fun publishing_after_a_revoke_continues_the_count() {
+    /*
+      This test asserted the opposite until 2026-09-01, and its own comment explained the danger it
+      was pinning in place:
+
+          "The entry is removed, so the count starts again. Worth pinning: a reader who kept the old
+           version would otherwise see 1 and think nothing had happened since."
+
+      That reader is the whole problem. A revoke is what somebody does when their key has been
+      COMPROMISED, and the next thing they do is publish a fresh one. Restarting at 1 meant every
+      correspondent holding version 3 was shown a number that looked older than what they already
+      had, at the one moment they most needed to be told the key had changed.
+
+      The version is now a high-water mark that survives the revoke. It only ever goes up.
+    */
     let mut sc = setup();
     publish_as(&mut sc, ALICE, key_a(), 1_000);
 
@@ -236,6 +248,8 @@ fun publishing_after_a_revoke_starts_over() {
     {
         let mut registry = sc.take_shared<KeyRegistry>();
         key_registry::revoke(&mut registry, sc.ctx());
+        // The mark outlives the row it came from — that is the entire fix.
+        assert!(key_registry::high_water(&registry, ALICE) == 1, 0);
         ts::return_shared(registry);
     };
 
@@ -243,8 +257,64 @@ fun publishing_after_a_revoke_starts_over() {
     sc.next_tx(ALICE);
     {
         let registry = sc.take_shared<KeyRegistry>();
-        assert!(key_registry::version_of(&registry, ALICE) == 1, 0);
-        assert!(key_registry::key_of(&registry, ALICE) == key_b(), 1);
+        assert!(key_registry::version_of(&registry, ALICE) == 2, 1);
+        assert!(key_registry::key_of(&registry, ALICE) == key_b(), 2);
+        ts::return_shared(registry);
+    };
+    sc.end();
+}
+
+#[test]
+fun a_version_never_goes_backwards_across_several_revokes() {
+    /*
+      The converse half. One revoke could be satisfied by any rule that happens to add one; this
+      walks the count through three of them and asserts it is monotonic the whole way, so a fix
+      that reset to a constant or reused a stale mark cannot pass.
+    */
+    let mut sc = setup();
+    publish_as(&mut sc, ALICE, key_a(), 1_000);
+    publish_as(&mut sc, ALICE, key_b(), 2_000);
+
+    let mut seen = 0u64;
+    let mut round = 0u64;
+    while (round < 3) {
+        sc.next_tx(ALICE);
+        {
+            let registry = sc.take_shared<KeyRegistry>();
+            let v = key_registry::version_of(&registry, ALICE);
+            assert!(v > seen, 0);
+            seen = v;
+            ts::return_shared(registry);
+        };
+        sc.next_tx(ALICE);
+        {
+            let mut registry = sc.take_shared<KeyRegistry>();
+            key_registry::revoke(&mut registry, sc.ctx());
+            ts::return_shared(registry);
+        };
+        publish_as(&mut sc, ALICE, if (round % 2 == 0) key_b() else key_a(), 5_000 + round);
+        round = round + 1;
+    };
+
+    sc.next_tx(ALICE);
+    {
+        let registry = sc.take_shared<KeyRegistry>();
+        assert!(key_registry::version_of(&registry, ALICE) > seen, 1);
+        ts::return_shared(registry);
+    };
+    sc.end();
+}
+
+#[test]
+fun a_first_publisher_still_starts_at_one() {
+    // The other converse half: the fix must not push every new address past 1.
+    let mut sc = setup();
+    publish_as(&mut sc, BOB, key_a(), 1_000);
+    sc.next_tx(BOB);
+    {
+        let registry = sc.take_shared<KeyRegistry>();
+        assert!(key_registry::version_of(&registry, BOB) == 1, 0);
+        assert!(key_registry::high_water(&registry, BOB) == 1, 1);
         ts::return_shared(registry);
     };
     sc.end();

@@ -34,6 +34,7 @@
 module projectx_social::key_registry;
 
 use sui::clock::Clock;
+use sui::dynamic_field as df;
 use sui::event;
 use sui::table::{Self, Table};
 
@@ -137,12 +138,27 @@ public fun publish(
             existing.version = existing.version + 1;
         };
         existing.updated_at_ms = now;
-        existing.version
+        let version = existing.version;
+        // Kept level with the table on every rotation, not only at revoke, so the mark is never
+        // behind the row it is meant to outlive.
+        remember_high_water(registry, owner, version);
+        version
     } else {
+        /*
+          Not 1. The next version after everything this address has ever published.
+
+          A first-time publisher has no high-water mark and gets 1, exactly as before. A publisher
+          returning after a revoke continues from where they stopped, so the number a client watches
+          only ever goes up. It has to: the person republishing after a revoke is the person whose
+          key was compromised, and a version that looked older than the one already cached would tell
+          every correspondent to keep using the key the attacker holds.
+        */
+        let version = next_version_for(registry, owner);
         registry
             .keys
-            .add(owner, PublishedKey { x25519_public, version: 1, updated_at_ms: now });
-        1
+            .add(owner, PublishedKey { x25519_public, version, updated_at_ms: now });
+        remember_high_water(registry, owner, version);
+        version
     };
 
     event::emit(KeyPublished { owner, x25519_public, version, updated_at_ms: now });
@@ -158,7 +174,57 @@ public fun revoke(registry: &mut KeyRegistry, ctx: &TxContext) {
     let owner = ctx.sender();
     assert!(registry.keys.contains(owner), ENoKey);
     let PublishedKey { x25519_public: _, version, updated_at_ms: _ } = registry.keys.remove(owner);
+    /*
+      Remember the version this address reached, BEFORE the row is gone.
+
+      Without this the count restarts at 1 on the next publish, and the number a client uses to
+      notice a key change goes BACKWARDS at the one moment it must not: the person revoking is the
+      person whose key was compromised, and the very next thing they do is publish a new one.
+      A client holding version 3 would be shown version 1 and could not tell it was newer.
+
+      A dynamic field rather than a second column, because `KeyRegistry` is a shared object already
+      live on chain and a Move upgrade cannot add a field to an existing struct. This adds a value
+      beside it instead, which an upgrade CAN do.
+    */
+    remember_high_water(registry, owner, version);
     event::emit(KeyRevoked { owner, version });
+}
+
+/// The highest version an address has ever reached, kept across a revoke.
+///
+/// Its own type rather than a bare address so the field cannot collide with any other dynamic field
+/// on this object, now or in a later upgrade.
+public struct HighWater has copy, drop, store { owner: address }
+
+fun remember_high_water(registry: &mut KeyRegistry, owner: address, version: u64) {
+    if (df::exists(&registry.id, HighWater { owner })) {
+        let slot: &mut u64 = df::borrow_mut(&mut registry.id, HighWater { owner });
+        // Never lowered. A future path that revoked an older row must not walk the mark back.
+        if (version > *slot) *slot = version;
+    } else {
+        df::add(&mut registry.id, HighWater { owner }, version);
+    }
+}
+
+/// What the next version for this address must be, whether or not a row exists today.
+fun next_version_for(registry: &KeyRegistry, owner: address): u64 {
+    if (df::exists(&registry.id, HighWater { owner })) {
+        *df::borrow<HighWater, u64>(&registry.id, HighWater { owner }) + 1
+    } else {
+        1
+    }
+}
+
+/// The highest version this address has ever published. `0` if it has never published one.
+///
+/// Public so a client can ask the chain directly rather than inferring it from events, which is the
+/// same reason the table is the authority and the events are a convenience.
+public fun high_water(registry: &KeyRegistry, owner: address): u64 {
+    if (df::exists(&registry.id, HighWater { owner })) {
+        *df::borrow<HighWater, u64>(&registry.id, HighWater { owner })
+    } else {
+        0
+    }
 }
 
 // === Validation ===
