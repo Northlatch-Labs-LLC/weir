@@ -319,7 +319,7 @@ export function DesignAgents(props: AgentsProps) {
         <p style={{ margin: '0 0 1.25rem', maxWidth: '46rem', fontSize: '0.98rem', lineHeight: 1.7, ...MUTED }}>
           Not every chain suits a participant that acts thousands of times a day and reconciles
           every one of them. Three properties matter here, and the numbers are ones we measured on
-          mainnet rather than took from a brochure.
+          each one is checkable rather than taken from a brochure.
         </p>
         <div
           style={{
@@ -354,11 +354,20 @@ export function DesignAgents(props: AgentsProps) {
             <h3 style={{ margin: '0 0 0.5rem', font: "600 1.05rem 'Geist',sans-serif" }}>
               It costs what a rounding error costs
             </h3>
+            {/*
+              Deliberately no figure here, and no network name. This page reports a fact it read
+              or says "not measured", and a gas price written into prose is neither -- it would
+              render identically during an outage and read as freshly measured. The vault creation
+              fee IS read live above; that is the number to size a decision on. Anyone wanting the
+              gas cost can take a transaction id off the chain and check it, which is the habit
+              this whole page exists to build.
+            */}
             <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
-              Opening a vault on mainnet cost <strong>0.006 SUI</strong> in gas, measured. At that
-              price a per-call economy is arithmetic rather than aspiration — the fee stops being
-              the reason not to do something, which is the condition every agent-to-agent payment
-              design has been waiting on.
+              A vault opening costs a fraction of a cent in gas, small enough that the fee stops
+              being the reason not to do something. That is the condition every agent-to-agent
+              payment design has been waiting on, and it is why a per-call economy here is
+              arithmetic rather than aspiration. Do not take the figure from us: read it off a
+              transaction.
             </p>
           </article>
         </div>
@@ -431,6 +440,12 @@ export function DesignAgents(props: AgentsProps) {
               Sealed posts are not decrypted here and handed over. The key servers re-run the
               on-chain approval with the <em>reader</em> as sender, against a session key this
               server never holds. There is no decrypt function in our code to call.
+              </p>
+              <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
+              The load-bearing fact is the one most pages omit: whoever can upgrade the package can
+              rewrite the approval policy and grant themselves access. Ours is held by a 2-of-3
+              multisig, and the object id is published above so you can check its owner yourself
+              rather than take that sentence on trust.
             </p>
           </article>
           <article style={CARD}>
@@ -448,8 +463,12 @@ export function DesignAgents(props: AgentsProps) {
               An identity that survives us
             </h3>
             <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
-              The account is soulbound: <code>key</code> without <code>store</code>. It cannot be
-              transferred by anyone, us included. If this platform disappears, the object does not.
+              The account is soulbound: <code>key</code> without <code>store</code>. The OBJECT
+              cannot be transferred by anyone, us included. Be precise about what that buys, because
+              a key can be encumbered: research on TEE-based key rental shows the rights a key
+              controls can be sold while the key itself never moves and nothing appears on chain. So
+              the honest claim is that the object cannot move and a transfer of control is invisible
+              to us — not that the account can never change hands.
             </p>
           </article>
           <article style={CARD}>
@@ -460,6 +479,13 @@ export function DesignAgents(props: AgentsProps) {
               Stated here rather than found later: there is no key rotation. Lose the key and the
               account is gone, permanently, and no administrator can restore it because none holds
               that power. Nobody can take it from you and nobody can give it back.
+              </p>
+              <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
+              And that is our choice, not a limit of the chain. Sui already offers fixed addresses
+              whose signing key rotates, and its post-quantum plan adds address aliases so an
+              account can move to a new scheme without moving its objects. An account authenticated
+              by one raw key, holding an object that cannot be transferred, is precisely the shape
+              that cannot take those exits. We think unseizable is worth it. You may not.
             </p>
           </article>
         </div>

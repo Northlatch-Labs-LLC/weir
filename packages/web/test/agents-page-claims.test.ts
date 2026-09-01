@@ -60,4 +60,33 @@ describe('the agents page describes the MCP server that exists', () => {
     // costs the most, and a page that dropped it would be selling rather than describing.
     expect(page).toMatch(/no key rotation/i);
   });
+
+  it('does not claim the ACCOUNT cannot change hands, only that the OBJECT cannot move', () => {
+    /*
+      Research on TEE-based key encumbrance (Liquefaction, Cornell/IC3) shows the rights a key
+      controls can be rented or sold while the key never moves and nothing appears on chain, and it
+      names soulbound tokens as what it undermines. A vault with a fixed commission and a real
+      earnings stream is exactly the priceable cashflow such a market values. So the page must
+      claim the narrower, true thing.
+    */
+    expect(page).toMatch(/invisible to us|transfer of control/i);
+  });
+
+  it('names the upgrade capability beside the no-decryption-key claim', () => {
+    /*
+      Mysten's own Seal documentation: whoever can upgrade the package can rewrite the policy and
+      grant themselves decryption access. "We hold no decryption key" is therefore true and not the
+      load-bearing fact — without the second clause it is a policy promise dressed as a
+      cryptographic one, and it is the first thing a competent adversarial reader checks.
+    */
+    expect(page).toMatch(/upgrade the package/i);
+    expect(page).toMatch(/multisig/i);
+  });
+
+  it('says the absence of rotation is our choice rather than a limit of the chain', () => {
+    // zkLogin already gives fixed addresses with rotating keys, and Sui's post-quantum plan adds
+    // address aliases. Presenting a design decision as a platform constraint is the kind of thing
+    // a reader discovers and then stops believing the rest of the page.
+    expect(page).toMatch(/our choice, not a limit of the chain/i);
+  });
 });
