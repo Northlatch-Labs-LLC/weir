@@ -149,17 +149,67 @@ export async function redeemAccessCode(raw: string, now = Date.now()): Promise<R
   const code = normaliseCode(raw);
   if (code === null) return { ok: false, reason: 'malformed' };
 
-  const spent = await db().query<{ expires_at_ms: string | null }>(
-    `UPDATE access_codes SET uses = uses + 1
-     WHERE code = $1
-       AND revoked_at_ms IS NULL
-       AND (expires_at_ms IS NULL OR expires_at_ms > $2)
-       AND uses < max_uses
-     RETURNING expires_at_ms`,
-    [code, now],
-  );
+  /*
+    The spend and the pass are ONE edit, and they were two statements.
 
-  const row = spent.rows[0];
+    The `UPDATE` is correct on its own: `AND uses < max_uses` in the `WHERE` makes the spend atomic,
+    so two callers racing for the last use cannot both take it. What was wrong is what happened
+    after it. The update committed, and the pass was inserted by a separate statement — so an
+    instance frozen or killed between them left a use permanently consumed from a code with a hard
+    ceiling, and no pass to show for it. There is no compensating delete and nothing reconciles it.
+
+    On a single-use code handed to one person, that is that person locked out for good, by a failure
+    that had nothing to do with them.
+
+    One transaction, following `setPerks`, which is the only other place in this application that
+    needed two writes to be one edit. The sweep below stays outside it: housekeeping that fails is
+    not a redemption that fails.
+  */
+  const client = await db().connect();
+  let row: { expires_at_ms: string | null } | undefined;
+  let token: string | undefined;
+  let expiresAtMs = 0;
+
+  try {
+    await client.query('BEGIN');
+
+    const spent = await client.query<{ expires_at_ms: string | null }>(
+      `UPDATE access_codes SET uses = uses + 1
+       WHERE code = $1
+         AND revoked_at_ms IS NULL
+         AND (expires_at_ms IS NULL OR expires_at_ms > $2)
+         AND uses < max_uses
+       RETURNING expires_at_ms`,
+      [code, now],
+    );
+    row = spent.rows[0];
+
+    if (row !== undefined) {
+      token = randomBytes(32).toString('base64url');
+      const codeExpiry = row.expires_at_ms === null ? Infinity : Number(row.expires_at_ms);
+      expiresAtMs = Math.min(now + ACCESS_PASS_TTL_MS, codeExpiry);
+
+      await client.query(
+        `INSERT INTO access_passes (digest, code, created_at_ms, expires_at_ms) VALUES ($1, $2, $3, $4)`,
+        [digestOf(token), code, now, expiresAtMs],
+      );
+      await client.query('COMMIT');
+    } else {
+      // Nothing was spent, so there is nothing to commit. Rolling back rather than committing an
+      // empty transaction keeps the two outcomes visibly different.
+      await client.query('ROLLBACK');
+    }
+  } catch (error) {
+    /*
+      The spend is undone with it. That is the point: a redemption that could not issue a pass must
+      not have cost the caller a use, and before this it did.
+    */
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+
   if (row === undefined) {
     const why = await db().query<Pick<CodeRow, 'revoked_at_ms' | 'expires_at_ms' | 'uses' | 'max_uses'>>(
       `SELECT revoked_at_ms, expires_at_ms, uses, max_uses FROM access_codes WHERE code = $1`,
@@ -172,20 +222,21 @@ export async function redeemAccessCode(raw: string, now = Date.now()): Promise<R
     return { ok: false, reason: 'exhausted' };
   }
 
-  const token = randomBytes(32).toString('base64url');
-  const codeExpiry = row.expires_at_ms === null ? Infinity : Number(row.expires_at_ms);
-  const expiresAtMs = Math.min(now + ACCESS_PASS_TTL_MS, codeExpiry);
-
-  await db().query(
-    `INSERT INTO access_passes (digest, code, created_at_ms, expires_at_ms) VALUES ($1, $2, $3, $4)`,
-    [digestOf(token), code, now, expiresAtMs],
-  );
-  // Opportunistic, bounded sweep — this application has no cron. See `mintReadSession`.
+  // Opportunistic, bounded sweep — this application has no cron. See `mintReadSession`. Outside the
+  // transaction on purpose: housekeeping that fails is not a redemption that fails.
   await db().query(
     `DELETE FROM access_passes
      WHERE digest IN (SELECT digest FROM access_passes WHERE expires_at_ms <= $1 LIMIT 500)`,
     [now],
   );
+
+  /*
+    `token` is set exactly when `row` is, inside the transaction above, and the branch that leaves
+    `row` undefined has already returned. The compiler cannot see that, so it is asserted here
+    rather than defaulted — a default would invent a pass token, which is the one value in this
+    function that must never be invented.
+  */
+  if (token === undefined) throw new Error('a redemption committed without minting a pass');
 
   return { ok: true, token, expiresAtMs };
 }
