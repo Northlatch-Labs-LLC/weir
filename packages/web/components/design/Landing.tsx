@@ -15,6 +15,7 @@
  */
 
 import { Fragment, useRef, type ReactNode } from 'react';
+import { ExploreFunnel, type FunnelSides } from '@/components/design/ExploreFunnel';
 import { useReveals, useWeirLine } from '@/components/design/use-weir-line';
 
 /** A figure in the "On chain, right now" band, carrying its own honest-state styling. */
@@ -46,8 +47,11 @@ export function DesignLanding({
   mechanism,
   paths,
   steps,
+  funnel = null,
 }: {
   signedIn: boolean;
+  /** The two-sided funnel, read on the server; `null` renders none. See `ExploreFunnel`. */
+  funnel?: FunnelSides | null;
   myHandle: string | null;
   /** The live platform fee, already formatted — "2.9%", or "a platform fee" when unread. */
   feeLabel: string;
@@ -132,6 +136,12 @@ export function DesignLanding({
                 </Fragment>))}
               </div>
             </section>
+
+            {funnel !== null && (
+              <div data-reveal style={{ maxWidth: '72rem', marginInline: 'auto', padding: '0 1.5rem 4rem' }}>
+                <ExploreFunnel sides={funnel} />
+              </div>
+            )}
 
             <section data-reveal aria-labelledby="figures-title" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '0 1.5rem 4rem' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.75rem' }}>

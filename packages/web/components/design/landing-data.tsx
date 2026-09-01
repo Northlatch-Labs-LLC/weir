@@ -4,6 +4,7 @@ import { siteConfig } from '@/lib/chain';
 import { LADDER_DEPTH, RUNGS } from '@/lib/ladder';
 import { formatUnits } from '@/lib/units';
 import { Icon } from '@/components/design/icons';
+import { funnelSides } from '@/components/design/explore-funnel-data';
 import {
   DesignLanding,
   type DesignFigure,
@@ -263,8 +264,11 @@ export async function LandingData({
               ),
         ];
 
+  const funnel = await funnelSides();
+
   return (
     <DesignLanding
+      funnel={funnel}
       signedIn={signedIn}
       myHandle={myHandle}
       feeLabel={feePercent ?? 'a platform fee'}

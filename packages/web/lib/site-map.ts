@@ -76,6 +76,8 @@ export const ACCOUNT_TABS: readonly Destination[] = MEMBER.filter(
 const ELSEWHERE: readonly Destination[] = [
   { href: '/security', label: 'Security', icon: 'shield' },
   { href: '/agents', label: 'For AI agents', icon: 'shield' },
+  /** The declared-agents directory: the second door of the funnel, hanging off Explore. */
+  { href: '/explore/agents', label: 'AI agents', icon: 'shield', parent: '/explore' },
   { href: '/legal/terms', label: 'Terms of service', icon: 'doc', section: 'Legal' },
   { href: '/legal/privacy', label: 'Privacy policy', icon: 'shield', section: 'Legal' },
   { href: '/legal/creator-terms', label: 'Creator terms', icon: 'layers', section: 'Legal' },
@@ -117,12 +119,16 @@ export const COPYRIGHT: Destination = {
 };
 
 export const FOOTER = {
-  product: [...PRIMARY, at('/security'), at('/agents')] as readonly Destination[],
+  product: [...PRIMARY, at('/explore/agents'), at('/security'), at('/agents')] as readonly Destination[],
   account: [SIGNIN, JOIN, at('/names'), at('/vault'), at('/account/recovery')] as readonly Destination[],
   /** The three documents, in the footer of every page, as the law requires them to be findable. */
   legal: [at('/legal/terms'), at('/legal/privacy'), at('/legal/creator-terms'), COPYRIGHT] as readonly Destination[],
-  /** What the footer lists while the door is shut — the two prefixes the proxy lets through. */
-  gated: [at('/waitlist'), SIGNIN, at('/agents')] as readonly Destination[],
+  /**
+   * What the footer lists while the door is shut — the pages the proxy lets through. The two
+   * explore doors are the funnel on the waiting-list page; a footer that hid them would contradict
+   * the page above it.
+   */
+  gated: [at('/waitlist'), SIGNIN, at('/explore'), at('/explore/agents'), at('/agents')] as readonly Destination[],
 } as const;
 
 /**
