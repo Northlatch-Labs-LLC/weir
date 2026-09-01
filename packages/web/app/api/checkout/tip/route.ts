@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { findProfileByVault } from '@/lib/content';
 import { prepareTip, type SubscribeBlocker, type TipQuote } from '@/lib/checkout';
@@ -8,7 +8,7 @@ import { prepareTip, type SubscribeBlocker, type TipQuote } from '@/lib/checkout
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const b = (await request.json()) as {

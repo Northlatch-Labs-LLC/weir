@@ -280,13 +280,26 @@ describe('the endpoints it publishes', () => {
     }
   });
 
+  /*
+    A budget may be spent directly, or through a named guard that spends it and nothing else.
+
+    `simulate` is spent by `simulateLimit`, which runs the per-process Map and then a durable
+    Postgres bucket — because those routes each build a transaction and call a fullnode we pay for,
+    and a per-instance ceiling is not a ceiling on that. The manifest's claim is unchanged and still
+    true: the endpoint spends the `simulate` budget. Only the function that spends it moved.
+
+    Stated as a mapping rather than as an `||` in the assertion, so a future guard has to be
+    declared here to count — which is the same review a new budget would get.
+  */
+  const SPENT_BY: Partial<Record<string, string>> = { simulate: 'simulateLimit(' };
+
   it('names the rate-limit budget the route actually spends', () => {
     for (const endpoint of endpoints) {
       const source = read(fileFor(endpoint.path));
-      expect([endpoint.path, source.includes(`rateLimit(request, '${endpoint.budget}')`)]).toEqual([
-        endpoint.path,
-        true,
-      ]);
+      const direct = source.includes(`rateLimit(request, '${endpoint.budget}')`);
+      const guard = SPENT_BY[endpoint.budget];
+      const viaGuard = guard !== undefined && source.includes(guard);
+      expect([endpoint.path, direct || viaGuard]).toEqual([endpoint.path, true]);
     }
   });
 

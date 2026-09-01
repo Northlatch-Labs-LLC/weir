@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { isSuiId } from '@/lib/db';
 import { fold } from '@projectx-social/sdk';
 import { prepareOpenAccount, type CheckoutQuote } from '@/lib/checkout';
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * Submission goes through `/api/checkout/submit`, which returns the bytes unchanged.
  */
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json()) as {

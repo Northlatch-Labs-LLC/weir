@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { submitSigned } from '@/lib/checkout';
 
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * simulated and what the wallet displayed — there is no path here that constructs something new.
  */
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json()) as { bytes?: string; signature?: string };
