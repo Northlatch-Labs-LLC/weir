@@ -55,8 +55,18 @@ const BPS_DENOMINATOR: u64 = 10_000;
 /// their subscribers rather than on themselves.
 const MAX_TIERS: u64 = 16;
 
-/// One day, in milliseconds. The floor on a subscription period — a period of a few seconds turns
-/// renewal into a griefing tool and makes the price list meaningless.
+/// Thirty days, in milliseconds, and exactly one Seal content period.
+///
+/// The floor on a subscription period. A period of a few seconds would turn renewal into a
+/// griefing tool and make the price list meaningless, but that is no longer the binding reason:
+/// `entitlement` releases access in fixed 30-day quanta, so a term shorter than one quantum
+/// cannot be expressed by the access rule at all. See `EPeriodNotWholeSealPeriods` for what that
+/// mismatch cost before the two were tied together, and `the_tier_floor_is_exactly_one_seal_period`
+/// for the drift test that now fails if they part company again.
+///
+/// This doc said "one day" until 2026-09-01. The constant had been raised to thirty and the
+/// sentence above it had not, which is the kind of comment that survives review precisely because
+/// nobody re-reads a line that is not in the diff.
 const MIN_PERIOD_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
 /// Roughly ten years. The ceiling on a period, so a fat-fingered value cannot sell a
@@ -776,6 +786,37 @@ public fun claim_platform_fees<T>(
 /// Bring a vault created under an older schema up to the current `VERSION`.
 public fun migrate<T>(vault: &mut CreatorVault<T>, cap: &CreatorCap) {
     assert_cap(vault, cap);
+    assert!(vault.version < VERSION, ENotUpgraded);
+    vault.version = VERSION;
+}
+
+/// The same migration, reachable by the platform when the creator's cap is not.
+///
+/// # Why a second door is necessary rather than tidy
+///
+/// `CreatorCap` has `store`, so it can be transferred, sold, or simply lost, and `migrate` above
+/// was the only way to advance a vault's stored version. Every entry point in this module begins
+/// with `assert_version` — including `claim_earnings` and `claim_platform_fees`. So the moment a
+/// new version ships, a creator who has lost their cap can no longer reach their own earnings
+/// through the current package, AND the platform can no longer reach its commission from that
+/// vault, because both claims run through the same version gate on the same object.
+///
+/// `stake_vault::migrate_as_platform` exists for exactly this reason and its comment says so. The
+/// creator vault — which is where the subscription and content money actually sits — never got the
+/// same door. That asymmetry is the whole finding.
+///
+/// This grants the platform nothing else. Version is the only field it touches; earnings, fees,
+/// tiers, prices and the fee snapshot are all out of reach, and the version it migrates to is the
+/// same one the creator's own `migrate` would have reached. It is deliberately not gated on
+/// `assert_version`, because a vault already at the current version is the one case where there is
+/// nothing to do — `ENotUpgraded` names that rather than silently succeeding.
+public fun migrate_as_platform<T>(
+    vault: &mut CreatorVault<T>,
+    platform: &Platform,
+    cap: &PlatformCap,
+) {
+    assert!(vault.platform == object::id(platform), EWrongPlatform);
+    assert!(cap.cap_platform_id() == vault.platform, EWrongPlatform);
     assert!(vault.version < VERSION, ENotUpgraded);
     vault.version = VERSION;
 }

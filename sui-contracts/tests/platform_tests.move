@@ -75,11 +75,16 @@ fun fees_can_be_set_up_to_the_compiled_ceilings() {
             &cap,
             platform::max_platform_fee_bps(),
             platform::max_referral_share_bps(),
-            5_000_000_000,
+            platform::max_creation_fee_mist(),
         );
         assert!(platform::fee_bps(&platform) == 3_000, 0);
         assert!(platform::referral_share_bps(&platform) == 5_000, 1);
-        assert!(platform::creation_fee_mist(&platform) == 5_000_000_000, 2);
+        // The third value was the only one with no ceiling until 2026-09-01. It is now pinned
+        // from below here and from above in the test that follows the other two.
+        assert!(
+            platform::creation_fee_mist(&platform) == platform::max_creation_fee_mist(),
+            2,
+        );
 
         sc.return_to_sender(cap);
         ts::return_shared(platform);
@@ -98,6 +103,27 @@ fun one_basis_point_above_the_fee_ceiling_is_refused() {
         let mut platform = sc.take_shared<Platform>();
         let cap = sc.take_from_sender<PlatformCap>();
         platform::set_fees(&mut platform, &cap, platform::max_platform_fee_bps() + 1, 0, 0);
+        sc.return_to_sender(cap);
+        ts::return_shared(platform);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::platform::EFeeAboveCeiling)]
+/// The creation fee is the third value `set_fees` writes and was the only one with no bound, while
+/// the comment above the two ceilings gave the reason that applies to all three. It cannot take
+/// anyone's money, but `collect_creation_fee` runs on every `account::open` and every
+/// `creator::open_vault`, so a large enough number closes the platform to new accounts and new
+/// vaults — with no error saying why, and nothing on an explorer that looks like anything but a
+/// number.
+fun one_mist_above_the_creation_fee_ceiling_is_refused() {
+    let mut sc = setup();
+    sc.next_tx(ADMIN);
+    {
+        let mut platform = sc.take_shared<Platform>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        platform::set_fees(&mut platform, &cap, 0, 0, platform::max_creation_fee_mist() + 1);
         sc.return_to_sender(cap);
         ts::return_shared(platform);
     };

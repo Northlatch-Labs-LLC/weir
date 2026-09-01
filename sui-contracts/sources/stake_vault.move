@@ -292,7 +292,6 @@ public fun open(
 
 // === Depositor accounting ===
 
-/// Bring a position's accrued rebate up to date. Must be called before principal changes.
 /// Rebate eligibility for principal deposited since the last harvest.
 ///
 /// # The defect this closes
@@ -310,6 +309,11 @@ public fun open(
 /// Eligibility advances on the harvest counter rather than on the depositor doing something, so a
 /// depositor who deposits and waits still earns. `at_harvest` no longer matching `vault.harvests`
 /// *is* maturity — nothing has to sweep.
+///
+/// And the counter itself only advances when the harvest realised yield or staked a rung. It used
+/// to advance on every call, and `harvest` is permissionless, so anyone could mature their own
+/// deposit on the spot for the price of gas — which is this same defect reached one step earlier.
+/// See the gate in `harvest`.
 public struct FreshEntry has copy, drop, store {
     at_harvest: u64,
     amount: u64,
@@ -810,15 +814,49 @@ public fun harvest(
         ctx,
     );
 
-    vault.harvests = vault.harvests + 1;
-    record_acc_at(vault);
+    let gross_yield = (vault.creator_yield.value() - creator_before)
+        + (vault.platform_yield.value() - platform_before)
+        + (vault.rebate_pool.value() - rebate_before);
+
+    // The counter advances only when the harvest realised something, and that is the whole point
+    // of it rather than a tidiness.
+    //
+    // `vault.harvests` is the maturity clock: `fresh_of` and `eligible_total` treat a marker whose
+    // `at_harvest` no longer equals it as matured. `harvest` is permissionless, deliberately — an
+    // absent creator must not be able to stall the vault. Until 2026-09-01 the counter incremented
+    // on every call, so a harvest that realised nothing still aged fresh money, and the two
+    // together meant anyone could deposit and then pay gas to mature their own deposit on the spot.
+    //
+    // That defeats `a_deposit_does_not_earn_the_harvest_it_walks_into` exactly, by the cheapest
+    // route available: deposit immediately after a real harvest, call `harvest` again while no
+    // tranche has matured so it realises zero, and walk into the next real harvest already
+    // eligible for yield that accrued before the money arrived.
+    //
+    // The gate is realised yield OR a rung actually staked, and the second half is not optional.
+    // Gating on yield alone was tried and is wrong: the FIRST harvest over a new vault stakes the
+    // deposit and realises nothing, so the counter would never move, the depositor would still be
+    // fresh when the harvest that matures their own tranche arrives, `eligible_total` would read
+    // zero and the entire rebate would go to the creator. Five tests said so. The counter is not a
+    // yield counter; it is "the vault has moved this money on", and staking a rung is the other
+    // way that happens.
+    //
+    // `stake_one_rung` allows at most one rung per epoch and declines rather than aborting, so a
+    // second call in the same epoch stakes nothing and realises nothing and is now inert — which
+    // is precisely the free extra call the attack depended on.
+    //
+    // Stated rather than hidden: a depositor who arrives in an epoch where no rung has been staked
+    // yet can still call `harvest` and have their own money staked and their marker aged by it.
+    // That is not the attack — it is what an honest first harvest does for every depositor — and
+    // `a_late_depositor_does_not_share_earlier_yield` pins the property that actually matters.
+    if (gross_yield > 0 || principal_restaked > 0) {
+        vault.harvests = vault.harvests + 1;
+        record_acc_at(vault);
+    };
     assert_solvent(vault);
 
     event::emit(Harvested {
         vault: object::id(vault),
-        gross_yield: (vault.creator_yield.value() - creator_before)
-            + (vault.platform_yield.value() - platform_before)
-            + (vault.rebate_pool.value() - rebate_before),
+        gross_yield,
         creator_cut: vault.creator_yield.value() - creator_before,
         platform_cut: vault.platform_yield.value() - platform_before,
         rebate_cut: vault.rebate_pool.value() - rebate_before,

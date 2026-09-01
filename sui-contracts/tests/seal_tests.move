@@ -315,6 +315,13 @@ fun subscription_refuses_content_above_its_tier() {
 }
 
 #[test]
+/// `>=` on the tier index is only safe because a higher index is a MORE EXPENSIVE tier. This test
+/// asserted the comparison for a year without saying so, and the comparison was never the defect:
+/// the ordering it relies on was not enforced anywhere until 2026-09-01, so a cheap tier added or
+/// repriced above the expensive ones passed this exact check for content it had not bought.
+/// `creator::add_tier` and `update_tier` now refuse any price that is not strictly ascending by
+/// index — see `ETierPriceNotAscending` and its tests — and that is the precondition this test
+/// stands on.
 fun a_higher_tier_reads_everything_below_it() {
     // Equality on the tier would mean upgrading silently revoked access to the content the lower
     // tier had been buying — an upgrade that takes something away.

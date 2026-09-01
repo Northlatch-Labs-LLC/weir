@@ -969,3 +969,26 @@ fun ordinary_pricing_still_works_under_the_ordering_rule() {
     clock::destroy_for_testing(clock);
     sc.end();
 }
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENotUpgraded)]
+/// `CreatorCap` has `store` — it can be transferred, sold or lost — and `migrate` was the only way
+/// to advance a creator vault's version. Every entry point begins with `assert_version`, including
+/// `claim_earnings` and `claim_platform_fees`, so a lost cap would strand BOTH the creator's
+/// earnings and the platform's own commission behind the version gate the moment a new version
+/// shipped. `stake_vault` has had this second door since it shipped and its comment says why; the
+/// vault holding the subscription money did not.
+///
+/// It cannot be exercised at the current version, so this pins the gate the way `stake_vault`'s
+/// twin does: called with nothing to migrate, it is a named refusal rather than a silent no-op.
+fun the_platform_door_refuses_a_creator_vault_already_at_version() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(ADMIN);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let platform = sc.take_shared<Platform>();
+    let cap = sc.take_from_sender<PlatformCap>();
+    creator::migrate_as_platform(&mut vault, &platform, &cap);
+    abort 0
+}

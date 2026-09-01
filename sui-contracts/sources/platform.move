@@ -49,6 +49,21 @@ const MAX_PLATFORM_FEE_BPS: u64 = 3_000;
 /// 50% — of the platform's own cut, never of the creator's. See `referral_share_bps`.
 const MAX_REFERRAL_SHARE_BPS: u64 = 5_000;
 
+/// 100 SUI. The third value `set_fees` writes, and until 2026-09-01 the only one with no bound.
+///
+/// The two above it were capped for a stated reason — a capability that can set a 100% fee can
+/// confiscate a creator's revenue — and the same argument applies here with one word changed. An
+/// unbounded creation fee cannot take anybody's money, but it can set a price nobody will pay, and
+/// `collect_creation_fee` runs on every `account::open` and every `creator::open_vault`. Set it
+/// high enough and the platform is closed: no new accounts, no new vaults, no error that says why,
+/// and nothing on an explorer that looks like a fee change rather than a number.
+///
+/// 100 SUI is far above any fee this platform would charge — it is 0 today — and far below the
+/// range where the setting becomes a switch. The bound is on the setter, so raising it costs a
+/// package upgrade and is visible on chain, which is the whole point of putting it here rather
+/// than in a runbook.
+const MAX_CREATION_FEE_MIST: u64 = 100_000_000_000;
+
 // === Errors ===
 
 /// `Platform.version` does not match the package `VERSION`. Run `migrate`.
@@ -221,6 +236,7 @@ public fun set_fees(
     assert_cap(platform, cap);
     assert!(fee_bps <= MAX_PLATFORM_FEE_BPS, EFeeAboveCeiling);
     assert!(referral_share_bps <= MAX_REFERRAL_SHARE_BPS, EFeeAboveCeiling);
+    assert!(creation_fee_mist <= MAX_CREATION_FEE_MIST, EFeeAboveCeiling);
 
     platform.fee_bps = fee_bps;
     platform.referral_share_bps = referral_share_bps;
@@ -364,6 +380,8 @@ public fun vaults_created(platform: &Platform): u64 { platform.vaults_created }
 public fun max_platform_fee_bps(): u64 { MAX_PLATFORM_FEE_BPS }
 
 public fun max_referral_share_bps(): u64 { MAX_REFERRAL_SHARE_BPS }
+
+public fun max_creation_fee_mist(): u64 { MAX_CREATION_FEE_MIST }
 
 public fun bps_denominator(): u64 { BPS_DENOMINATOR }
 
