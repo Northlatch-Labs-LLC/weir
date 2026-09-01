@@ -70,13 +70,37 @@ describe('the ceiling is on the role, where pooling cannot lose it', () => {
 
 describe('the migration runner is exempt from the ceiling', () => {
   /*
-    Asserted against the source rather than by running the runner, which is a top-level script that
-    connects on import. The assertion is structural rather than a substring: the exemption has to
-    happen INSIDE the transaction and BEFORE the migration body, or it does not protect it.
+    Asserted against the source. The property is an ORDERING — the exemption has to happen INSIDE
+    the transaction and BEFORE the migration body, or it does not protect it — and an ordering is
+    not something a substring test can see.
+
+    # Why these read a region rather than the whole file
+
+    The runner now has TWO paths. A migration carrying `-- weir:outside-a-transaction` runs with no
+    transaction at all, because `CREATE INDEX CONCURRENTLY` cannot run inside one, and that path
+    lifts the ceiling too — earlier in the file than `begin`. `indexOf` over the whole source found
+    that first occurrence and reported the exemption as happening BEFORE the transaction, which was
+    false of the path it was describing and true only of a different one.
+
+    So each assertion now names the path it is about. Both are checked; neither can borrow the
+    other's evidence.
+
+    # A note for whoever touches this next
+
+    The original reason for reading source instead of behaviour — "the runner is a top-level script
+    that connects on import" — is no longer true: its entry point is guarded, and `vi.doMock('pg')`
+    further down this same file already shows how a fake client would be injected. A test that runs
+    `main()` against one and asserts the actual query sequence would be strictly better than this,
+    and is deliberately not being written here, in a change about migrations rather than about
+    tests.
   */
+  const WRAPPED = (): string => RUNNER().slice(RUNNER().indexOf("await client.query('begin')"));
+  const UNWRAPPED = (): string =>
+    RUNNER().slice(RUNNER().indexOf('if (unwrapped) {'), RUNNER().indexOf("await client.query('begin')"));
+
   const begin = (): number => RUNNER().indexOf("await client.query('begin')");
-  const exempt = (): number => RUNNER().indexOf('set statement_timeout = 0');
-  const body = (): number => RUNNER().indexOf('await client.query(m.sql)');
+  const exempt = (): number => WRAPPED().indexOf('set statement_timeout = 0');
+  const body = (): number => WRAPPED().indexOf('await client.query(m.sql)');
 
   it('lifts the statement ceiling for migrations', () => {
     expect(exempt(), 'migrate.mjs does not lift the statement ceiling for migrations').toBeGreaterThan(-1);
@@ -86,14 +110,34 @@ describe('the migration runner is exempt from the ceiling', () => {
     // Ordering is the whole property. After the body, an index build has already been killed.
     expect(begin()).toBeGreaterThan(-1);
     expect(body()).toBeGreaterThan(-1);
-    expect(exempt()).toBeGreaterThan(begin());
+    expect(exempt()).toBeGreaterThan(-1);
     expect(exempt()).toBeLessThan(body());
   });
 
   it('lifts the lock ceiling too, for the same reason', () => {
-    const lock = RUNNER().indexOf('set lock_timeout = 0');
-    expect(lock).toBeGreaterThan(begin());
+    const lock = WRAPPED().indexOf('set lock_timeout = 0');
+    expect(lock).toBeGreaterThan(-1);
     expect(lock).toBeLessThan(body());
+  });
+
+  it('lifts both ceilings on the path that runs without a transaction as well', () => {
+    /*
+      That path exists for `CREATE INDEX CONCURRENTLY`, which is the longest-running statement any
+      migration here will ever issue. Leaving the role's ceiling in force on the one file most
+      likely to exceed it would be the exact failure this exemption was written to prevent.
+    */
+    expect(UNWRAPPED()).toContain('set statement_timeout = 0');
+    expect(UNWRAPPED()).toContain('set lock_timeout = 0');
+  });
+
+  it('puts the ceilings back after a file that ran without a transaction', () => {
+    /*
+      Set on the SESSION, not inside a transaction, so nothing takes them away at COMMIT. This
+      connection runs every later migration, and one unwrapped file would otherwise exempt all of
+      them from a limit they never asked to be exempt from.
+    */
+    expect(UNWRAPPED()).toContain('reset statement_timeout');
+    expect(UNWRAPPED()).toContain('reset lock_timeout');
   });
 });
 
