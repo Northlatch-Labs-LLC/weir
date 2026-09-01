@@ -29,6 +29,9 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { closeDatabase, testDb, useTestDatabase } from './helpers/database';
 
+/** The deployment these bytes are bound to. Portable statements were the defect. */
+const ORIGIN = 'https://weir.social';
+
 useTestDatabase();
 
 /*
@@ -54,9 +57,11 @@ const address = keypair.getPublicKey().toSuiAddress();
 
 /** Sign what the server will rebuild. A mismatch here would fail as a forgery, not as a replay. */
 async function sign(action: Parameters<typeof statementFor>[0], timestampMs: number) {
-  const message = new TextEncoder().encode(statementFor(action, address, timestampMs));
+  const message = new TextEncoder().encode(statementFor(action, address, timestampMs, ORIGIN));
   const { signature } = await keypair.signPersonalMessage(message);
-  return { address, signature, timestampMs, action };
+  // The origin is part of the signed bytes and part of what the verifier rebuilds, so the two
+  // must agree here exactly as they do in a route.
+  return { address, signature, timestampMs, action, origin: ORIGIN };
 }
 
 /*

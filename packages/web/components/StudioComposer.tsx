@@ -371,7 +371,7 @@ export function StudioComposer() {
       const fileSha256 = await sha256HexBytes(bytes);
       const timestampMs = Date.now();
       const statement =
-        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}` +
+        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
         `\naction: upload\npost: ${postId}\nfile-sha256: ${fileSha256}`;
       const signature = await signer.signPersonalMessage(new TextEncoder().encode(statement));
 
@@ -430,7 +430,7 @@ export function StudioComposer() {
       const signedKey = access === 'paid' ? contentKey.trim() : '';
       const signedPrice = access === 'paid' ? (effectivePrice?.toString() ?? '') : '';
       const statement =
-        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}` +
+        `Weir\naddress: ${signer.address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
         `\naction: publish\ncreator: ${target.handle}\naccess: ${access}\ntitle: ${title}\ncontent-sha256: ${contentSha256}\nkey: ${signedKey}\nprice: ${signedPrice}`;
       const signature = await signer.signPersonalMessage(new TextEncoder().encode(statement));
 

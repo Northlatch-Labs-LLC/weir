@@ -152,6 +152,8 @@ export function publishStatement(input: {
   title: string;
   contentSha256: string;
   issuedAtMs: number;
+  /** The deployment these bytes are for. Part of the signed statement; see `statementFor`. */
+  origin: string;
 }): string {
   return statementFor(
     {
@@ -165,6 +167,7 @@ export function publishStatement(input: {
     },
     input.author,
     input.issuedAtMs,
+    input.origin,
   );
 }
 
@@ -301,6 +304,7 @@ export function planPublish(input: {
     issuedAtMs,
     statement: publishStatement({
       author: room.publisher.toLowerCase(),
+      origin,
       handle: room.handle,
       access: 'subscribers',
       title: record.title,

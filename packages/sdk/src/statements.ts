@@ -271,7 +271,7 @@ export type Action =
    * every statement at once and invalidates signatures in flight. This is the shape the rest
    * should take when they are rotated deliberately; it is not a reason to leave them unbound now.
    */
-  | { kind: 'onramp'; walletAddress: string; network: string; origin: string };
+  | { kind: 'onramp'; walletAddress: string; network: string };
 
 /**
  * The exact bytes a client must sign.
@@ -280,8 +280,36 @@ export type Action =
  * so a signature authorises *that* comment — otherwise one signature would authorise an unlimited
  * number of them.
  */
-export function statementFor(action: Action, address: string, timestampMs: number): string {
-  const head = `Weir\naddress: ${address}\nissued: ${timestampMs}`;
+export function statementFor(
+  action: Action,
+  address: string,
+  timestampMs: number,
+  origin: string,
+): string {
+  /*
+    `origin` binds the statement to the deployment that asked for it.
+
+    Without it these bytes are portable. Every field above describes the ACTION and none describes
+    WHERE it was requested, so a signature collected by any other instance of this software — a
+    staging deployment, a preview URL, a local run, a fork — verifies identically against
+    production. `used_signatures` does not close that: the ledger is per-database, so a signature
+    spent elsewhere is unspent here. For `read-content` the prize is a day-long session for an
+    address the collector does not control.
+
+    WHAT THIS DOES NOT FIX, stated because the opposite is easy to assume: it is not a defence
+    against phishing. A hostile page writes this line itself, and a wallet signs the text it is
+    given. Binding the origin gives a careful reader something to compare against the site they are
+    actually on, and gives a wallet that displays the requesting origin something to contradict. It
+    is a mechanical fix for cross-deployment replay and a human aid against phishing, and those are
+    different strengths.
+
+    The network is deliberately NOT bound. It would have to reach the browser, and this application
+    ships no client configuration at all — a decision `app/api/seal`, `app/api/deployment` and
+    `app/api/zklogin/session` each record, each saying a `NEXT_PUBLIC_` variable would quietly
+    reverse it. Origin is the stronger discriminator anyway: two deployments on the same network
+    still differ by origin, while two origins on different networks differ by both.
+  */
+  const head = `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${origin}`;
   switch (action.kind) {
     case 'comment':
       return `${head}\naction: comment\npost: ${action.postId}\ntext: ${action.text}`;
@@ -313,7 +341,7 @@ export function statementFor(action: Action, address: string, timestampMs: numbe
     case 'upload':
       return `${head}\naction: upload\npost: ${action.postId}\nfile-sha256: ${action.fileSha256}`;
     case 'onramp':
-      return `${head}\naction: fund wallet\nwallet: ${action.walletAddress}\nnetwork: ${action.network}\norigin: ${action.origin}`;
+      return `${head}\naction: fund wallet\nwallet: ${action.walletAddress}\nnetwork: ${action.network}`;
   }
 }
 
@@ -348,8 +376,14 @@ export function isSingleUse(action: Action): boolean {
   return action.kind !== 'read';
 }
 
-/** Lines in the shared head — `Weir`, `address: …`, `issued: …` — before the action begins. */
-const HEAD_LINES = 3;
+/**
+ * Lines in the shared head — `Weir`, `address:`, `issued:`, `origin:` — before the action begins.
+ *
+ * Exported because a test was slicing the head off with a hand-written `3`, which is this number
+ * copied. When the head grew by a line that copy became silently wrong: it left `origin:` in the
+ * action lines and the assertion failed on a statement that was correct. One number, one place.
+ */
+export const HEAD_LINES = 4;
 
 /**
  * One rendering of every action kind, with every interpolated field emptied.
@@ -385,7 +419,7 @@ const SHAPE_SAMPLES: Readonly<Record<Action['kind'], readonly Action[]>> = {
   'declare-agent': [{ kind: 'declare-agent', operator: '', model: '', purpose: '' }],
   'declare-operator': [{ kind: 'declare-operator', agent: '', model: '', purpose: '' }],
   upload: [{ kind: 'upload', postId: '', fileSha256: '' }],
-  onramp: [{ kind: 'onramp', walletAddress: '', network: '', origin: '' }],
+  onramp: [{ kind: 'onramp', walletAddress: '', network: '' }],
 };
 
 /**
@@ -396,7 +430,7 @@ const SHAPE_SAMPLES: Readonly<Record<Action['kind'], readonly Action[]>> = {
  * the other. That ordering is the only reason this is worth reading.
  */
 function shapeOf(variants: readonly Action[]): readonly string[] {
-  const rendered = variants.map((action) => statementFor(action, '', 0).split('\n').slice(HEAD_LINES));
+  const rendered = variants.map((action) => statementFor(action, '', 0, '').split('\n').slice(HEAD_LINES));
   const width = Math.max(...rendered.map((lines) => lines.length));
   const out: string[] = [];
   for (let i = 0; i < width; i += 1) {

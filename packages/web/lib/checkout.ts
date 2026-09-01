@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Checkout: build a transaction, simulate it, and only then let it be signed.
@@ -101,7 +102,7 @@ async function quote(
       amountMist,
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -365,7 +366,7 @@ export async function prepareDeposit(input: {
       amountMist: amount.toString(),
     });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = opaqueDetail(source, error);
     return fail('malformed', source, describeAbort(detail));
   }
 }
@@ -447,7 +448,7 @@ export async function submitSigned(input: {
       'transport',
       source,
       `could not check whether this quote was ours, so it was not submitted: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }
@@ -471,7 +472,7 @@ export async function submitSigned(input: {
     }
     return ok(digest);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = opaqueDetail(source, error);
     return fail('transport', source, describeAbort(detail));
   }
 }
@@ -637,7 +638,7 @@ export async function prepareSubscribe(input: {
       platformReceives: split.platform.toString(),
     });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = opaqueDetail(source, error);
     return fail('malformed', source, describeAbort(detail));
   }
 }
@@ -762,7 +763,7 @@ export async function prepareTip(input: {
       platformReceives: split.platform.toString(),
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -875,7 +876,7 @@ export async function prepareUnlock(input: {
       platformReceives: split.platform.toString(),
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -955,7 +956,7 @@ export async function prepareSetContentPrice(input: {
       amountMist: price.toString(),
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -1036,7 +1037,7 @@ export async function prepareOpenAccount(input: {
       amountMist: '0',
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -1101,7 +1102,7 @@ export async function prepareKeyPublish(input: {
       amountMist: '0',
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -1208,7 +1209,7 @@ export async function prepareOpenVault(input: {
       amountMist: input.creationFeeMist,
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -1332,7 +1333,7 @@ export async function prepareAddTier(input: {
       amountMist: input.price,
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 
@@ -1408,7 +1409,7 @@ export async function prepareClaimEarnings(input: {
       amountMist: amount.toString(),
     });
   } catch (error) {
-    return fail('malformed', source, describeAbort(error instanceof Error ? error.message : String(error)));
+    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
 }
 

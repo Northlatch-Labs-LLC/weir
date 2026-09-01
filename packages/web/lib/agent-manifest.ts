@@ -550,7 +550,6 @@ const SAMPLES: Record<Action['kind'], Array<{ variant: string; action: Action }>
         kind: 'onramp',
         walletAddress: '{walletAddress}',
         network: '{network}',
-        origin: '{origin}',
       },
     },
   ],
@@ -563,7 +562,12 @@ const SAMPLES: Record<Action['kind'], Array<{ variant: string; action: Action }>
  * diff them. `Object.entries` order is insertion order for string keys, which is stable but is a
  * property of how this file happens to be written rather than something a reader should rely on.
  */
-export function statementCatalogue(): ManifestStatement[] {
+/**
+ * @param origin the deployment these statements are bound to. Published rather than templated: an
+ * agent cannot construct valid bytes from a `{origin}` placeholder, and a statement it cannot build
+ * is a statement it cannot sign.
+ */
+export function statementCatalogue(origin: string): ManifestStatement[] {
   const out: ManifestStatement[] = [];
   for (const [kind, samples] of Object.entries(SAMPLES) as Array<
     [Action['kind'], Array<{ variant: string; action: Action }>]
@@ -573,7 +577,7 @@ export function statementCatalogue(): ManifestStatement[] {
         kind,
         variant,
         singleUse: !REUSABLE_ACTION_KINDS.includes(kind),
-        statement: statementFor(action, '{address}', ISSUED_AT_SENTINEL).replaceAll(
+        statement: statementFor(action, '{address}', ISSUED_AT_SENTINEL, origin).replaceAll(
           String(ISSUED_AT_SENTINEL),
           '{issuedAtMs}',
         ),
@@ -938,7 +942,7 @@ const NULL_CONVENTION =
  * a shape somebody's agent will parse, and none of them should need a fullnode to test.
  */
 export function manifestFrom(input: ManifestInputs): AgentManifest {
-  const statements = statementCatalogue();
+  const statements = statementCatalogue(input.origin);
   /*
     The head is cut from a real statement rather than written out again. Every case in
     `statementFor` is `${head}\naction: …`, so the text before the first `\naction:` *is* the head —

@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Every open stake vault, indexed by the creator who owns it.
@@ -131,7 +132,7 @@ export async function readPools(): Promise<Reading<PoolIndex>> {
     return fail(
       'transport',
       'stake vault objects',
-      `the vault index could not be built: ${error instanceof Error ? error.message : String(error)}`,
+      opaqueDetail('building the vault index', error),
     );
   }
 

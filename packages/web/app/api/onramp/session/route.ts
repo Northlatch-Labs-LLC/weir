@@ -111,6 +111,7 @@ export async function POST(request: Request) {
   }
 
   const proven = await verifyAction({
+    origin: new URL(request.url).origin,
     address: walletAddress,
     signature,
     timestampMs,
@@ -118,7 +119,6 @@ export async function POST(request: Request) {
       kind: 'onramp',
       walletAddress,
       network: config.value.network,
-      origin: new URL(request.url).origin,
     },
   });
   if (!proven.ok) {

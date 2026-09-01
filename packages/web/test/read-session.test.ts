@@ -154,7 +154,17 @@ describe('resolving a token to an address', () => {
 
     expect(reading.ok).toBe(false);
     expect(!reading.ok && reading.failure.kind).toBe('transport');
-    expect(!reading.ok && reading.failure.detail).toContain('connection terminated');
+    /*
+      The detail must NOT carry the driver's message.
+
+      This assertion used to require that it did — `toContain('connection terminated')` — which made
+      a leak into a guarantee: `pg` exceptions name tables, columns, constraints, hosts and ports,
+      and twenty-four routes return `failure.detail` verbatim to anonymous callers. The property
+      this test exists for is the KIND, which is what lets a caller answer 503 rather than 403; the
+      driver's text was never part of that and is now in the log instead.
+    */
+    expect(!reading.ok && reading.failure.detail).not.toContain('connection terminated');
+    expect(!reading.ok && reading.failure.detail).toContain('logs');
   });
 
   it('does not throw when the database cannot be reached', async () => {

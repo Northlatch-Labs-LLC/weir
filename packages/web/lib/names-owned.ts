@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 /**
  * The .sui names an address holds, and where each one points.
  *
@@ -160,6 +161,6 @@ export async function readOwnedNames(owner: string): Promise<Reading<OwnedNames>
     names.sort((a, b) => a.name.localeCompare(b.name));
     return ok({ names, unconfirmed, truncated });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }

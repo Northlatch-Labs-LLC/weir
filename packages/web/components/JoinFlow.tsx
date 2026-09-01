@@ -280,7 +280,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
         */
         const profileName = '';
         const profileStatement =
-          `Weir\naddress: ${signer.address}\nissued: ${profileTimestampMs}` +
+          `Weir\naddress: ${signer.address}\nissued: ${profileTimestampMs}\norigin: ${window.location.origin}` +
           `\naction: set profile\nhandle: ${handle.trim()}\nname: ${profileName}`;
 
         void signer

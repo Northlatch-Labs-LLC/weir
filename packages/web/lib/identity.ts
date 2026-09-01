@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Proving who someone is, without a transaction.
@@ -82,6 +83,20 @@ export async function verifyAction(input: {
   signature: string;
   timestampMs: number;
   action: Action;
+  /**
+   * The origin this deployment answers on, from the request rather than from configuration.
+   *
+   * Part of the signed bytes, so a signature collected by another instance of this software — a
+   * staging deployment, a preview URL, a local run, a fork — no longer verifies here. It was
+   * portable before: every field described the action and none described where it was asked for,
+   * and `used_signatures` does not close that because the ledger is per-database, so a signature
+   * spent elsewhere arrives here unspent.
+   *
+   * Required rather than optional. An optional origin defaulting to something would verify the old
+   * portable bytes on the day somebody forgot to pass it, which is the whole defect restored by a
+   * default.
+   */
+  origin: string;
 }): Promise<Reading<true>> {
   const source = 'signature';
   const age = Date.now() - input.timestampMs;
@@ -100,7 +115,7 @@ export async function verifyAction(input: {
   if (!config.ok) return config;
 
   const message = new TextEncoder().encode(
-    statementFor(input.action, input.address, input.timestampMs),
+    statementFor(input.action, input.address, input.timestampMs, input.origin),
   );
 
   try {
@@ -115,7 +130,7 @@ export async function verifyAction(input: {
       'malformed',
       source,
       `the signature does not prove control of ${input.address}: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }
@@ -171,7 +186,7 @@ export async function verifyAction(input: {
       'transport',
       source,
       `could not record this signature, so it was not accepted: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }

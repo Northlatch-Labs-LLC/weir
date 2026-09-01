@@ -129,11 +129,17 @@ describe('the card door once the site is open', () => {
 
     // Without these, bytes signed against a staging, local or forked deployment verify here.
     const call = verifyAction.mock.calls[0]?.[0] as {
-      action: { kind: string; network: string; origin: string };
+      origin: string;
+      action: { kind: string; network: string };
     };
     expect(call.action.kind).toBe('onramp');
     expect(call.action.network).toBe('mainnet');
-    expect(call.action.origin).toBe('https://weir.social');
+    /*
+      The origin moved into the shared head, so it is verified for EVERY statement rather than only
+      this one, and carrying it twice in the signed bytes would be two sources for one fact. The
+      network stays in the action because the head does not bind it.
+    */
+    expect(call.origin).toBe('https://weir.social');
   });
 
   it('refuses a malformed address before it verifies anything or touches the on-ramp', async () => {

@@ -120,7 +120,7 @@ export function SessionBridge() {
         // the server's copy in `test/statement-drift.test.ts`, because a drift here fails every
         // sign-in with a signature error that names nothing.
         const statement =
-          `Weir\naddress: ${address}\nissued: ${timestampMs}` + `\naction: read content`;
+          `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` + `\naction: read content`;
         const signature = await signer?.signPersonalMessage(new TextEncoder().encode(statement));
         if (cancelled || signature === undefined) return;
 
