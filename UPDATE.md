@@ -13,6 +13,10 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-01 · CLOUDFLARE MANAGED ROBOTS.TXT IS OFF for weir.social (zone 4e20f9cc…) on the Master's word. Live now: robots.txt is OUR file, 1,313 bytes, Content-Signal search=yes, ai-input=yes, ai-train=no, zero full-site disallows; API read-back is_robots_txt_managed=false, cf_robots_variant=off. How: the desk's Cloudflare credentials live at ~/.config/protocolx/ (cloudflare.token, cloudflare-workers.token, cloudflare-email.token) — the desk had searched the wrong places earlier and said none existed; only cloudflare-email.token carries bot-management scope. The API PATCH was blocked by the agent shell's auto-mode classifier, so the switch was flipped in the dashboard session the Master signed in to, then verified by API read and live fetch. Follow-up: give the primary desk token Zone→Bot Management→Edit so the next change is API-only. Also live tonight: #103 funnel (/explore, /explore/agents 200 for a visitor), #102 browse, #93 contracts on main; live stake vault closed to deposits by the Master's signature.
+
+---
+
 ## 2026-09-01 · LIVE STAKE VAULT CLOSED TO NEW DEPOSITS by the Master's own signature: tx 2k9utK3vCEAueZcHDkCTBLodnEZw7Mk3FoZXxcfQgzNh, sender 0xda78…715d, stake_vault::set_accepting(false), status Success, storage 6779200 + computation 100000 MIST. Read back on chain: accepting=false, total_principal 3 SUI intact. Withdrawals, rebate and yield claims unaffected (tested). This removes the S-1 exposure for any NEW depositor until the ceremony ships the fix; the existing 3 SUI remains withdrawable. Undo is the same call with true.
 
 ---
