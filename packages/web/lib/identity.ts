@@ -164,17 +164,6 @@ export async function verifyAction(input: {
       return fail('malformed', source, 'this signature has already been used — sign again');
     }
 
-    /*
-      Sweep what can no longer matter. Opportunistic rather than scheduled: this application has no
-      cron, and a table that only grows is how a cheap guard becomes the slowest statement here.
-
-      Bounded, so one unlucky request does not pay for every expired row ever written.
-    */
-    await db().query(
-      `DELETE FROM used_signatures
-       WHERE digest IN (SELECT digest FROM used_signatures WHERE expires_at_ms < $1 LIMIT 500)`,
-      [Date.now()],
-    );
   } catch (error) {
     /*
       Fails closed. A signature we could not record is a signature we cannot promise is unused, and
@@ -189,6 +178,38 @@ export async function verifyAction(input: {
         opaqueDetail(source, error)
       }`,
     );
+  }
+
+  /*
+    Sweep what can no longer matter. Opportunistic rather than scheduled: this application has no
+    cron, and a table that only grows is how a cheap guard becomes the slowest statement here.
+
+    Bounded, so one unlucky request does not pay for every expired row ever written.
+
+    ITS OWN TRY, AND THE SEPARATION IS THE POINT. This DELETE used to sit inside the try above,
+    which meant a sweep that failed AFTER a successful insert was reported as
+    "could not record this signature, so it was not accepted". That sentence was false in exactly
+    the case it was most likely to be read: the signature HAD been recorded, `rowCount` was 1, and
+    it was spent. The caller was told to sign again, and the statement they had just spent stayed
+    in the table doing nothing for anyone.
+
+    A failed sweep is housekeeping that did not happen. It is not a rejection, and it must not be
+    able to produce one — which is the same conclusion `rememberQuote` in `lib/checkout.ts:433`
+    already reached in its own words: "the caller is in the middle of being quoted a price and a
+    bookkeeping error is not their problem". The two paths disagreed, and the security-critical one
+    was the one that had it wrong.
+
+    Swallowed rather than logged-and-swallowed for the same reason it is swallowed there: the next
+    request tries again, and the table's growth is bounded by every other caller's sweep.
+  */
+  try {
+    await db().query(
+      `DELETE FROM used_signatures
+       WHERE digest IN (SELECT digest FROM used_signatures WHERE expires_at_ms < $1 LIMIT 500)`,
+      [Date.now()],
+    );
+  } catch {
+    // See above. A signature that is recorded stays accepted.
   }
 
   return ok(true);
