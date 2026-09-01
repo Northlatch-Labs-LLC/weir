@@ -115,6 +115,53 @@ describe('tick', () => {
     expect(result.value.harvested).toHaveLength(1);
   });
 
+  it('records an unreadable vault as unreadable, not as empty', async () => {
+    /*
+      It used to record `empty-vault` — which `domain/harvest.ts` defines as "the vault holds no
+      principal at all", a measured fact about a vault nobody measured.
+
+      The two point opposite ways. An empty vault is the steady state and needs nobody; an
+      unreadable one means the daemon is not seeing part of the estate. Anyone counting reasons to
+      find out how much was being missed read those failures as vaults that were fine.
+    */
+    const result = await tick(
+      ports({ vaults: { '0xbad': fail('transport', 'StakeVault 0xbad', 'connection refused') } }),
+      ['0xbad'],
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.failed[0]!.decision.reason).toBe('unreadable');
+    expect(result.value.failed[0]!.decision.reason).not.toBe('empty-vault');
+  });
+
+  it('still carries the real error alongside the reason', async () => {
+    // The reason says WHICH kind of nothing happened; the error says why. Replacing a fabricated
+    // reason with an honest one must not cost the detail that was already correct.
+    const result = await tick(
+      ports({ vaults: { '0xbad': fail('transport', 'StakeVault 0xbad', 'connection refused') } }),
+      ['0xbad'],
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.failed[0]!.error).toContain('connection refused');
+    expect(result.value.failed[0]!.error).toContain('transport');
+  });
+
+  it('still calls a genuinely empty vault empty', async () => {
+    /*
+      The converse, and the reason this is two tests rather than one. A fix that renamed every
+      no-action outcome to `unreadable` would pass the assertion above and destroy the distinction
+      it was written to protect.
+    */
+    const result = await tick(ports({}), ['0xa']);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.skipped[0]!.decision.reason).toBe('empty-vault');
+  });
+
   it('reports an unreadable vault as failed, never as skipped', async () => {
     // The distinction the whole Reading<T> design exists for. A vault we could not read is not a
     // vault with nothing to do, and collapsing the two hides an outage as healthy quiet.
