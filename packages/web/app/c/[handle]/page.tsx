@@ -7,7 +7,15 @@
  */
 
 import { createClient, fold, readCreatorVault, readDecimals } from '@projectx-social/sdk';
-import { countFollowers, findProfile, isFollowing, listPosts, visiblePost, type Profile } from '@/lib/content';
+import {
+  POSTS_PAGE,
+  countFollowers,
+  findProfile,
+  isFollowing,
+  listPosts,
+  type Profile,
+  visiblePost,
+} from '@/lib/content';
 import { checkHandle } from '@/lib/accounts';
 import { reverseName } from '@/lib/names';
 import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
@@ -101,7 +109,18 @@ export default async function CreatorPage({
       coinType: null,
     } satisfies Profile);
 
-  const posts = await listPosts({ handle });
+  /*
+    A creator's own page, bounded like everything else that reads posts.
+
+    Stated explicitly rather than left to the default, because this page has a different shape from
+    the feed: it is one creator's archive, and the number that is right for it is a property of this
+    page. `posts_author_created_idx` serves the filter and the ordering together, so the limit is
+    reached by seeking rather than by reading the archive and discarding it.
+
+    A creator past this many posts loses the tail here rather than the site losing a connection to
+    render it — the honest trade until this page carries the cursor `listPosts` already accepts.
+  */
+  const posts = await listPosts({ handle, limit: POSTS_PAGE });
   const followers = await countFollowers(handle);
   const following = await isFollowing(reader ?? null, handle);
   /*
