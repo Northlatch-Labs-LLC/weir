@@ -153,6 +153,13 @@ interface Entry {
   /** Resolves to the result the first attempt produced. Shared by every retry that joins it. */
   work: Promise<CallToolResult>;
   startedAtMs: number;
+  /**
+   * Whether `work` has finished, either way.
+   *
+   * Eviction reads this and nothing else. An entry that has not settled is the ONLY record that a
+   * call is in flight, so dropping it is dropping the guard — see {@link CallLedger.evict}.
+   */
+  settled: boolean;
 }
 
 /**
@@ -198,7 +205,24 @@ export class CallLedger {
 
     const started = this.nowMs();
     const promise = work();
-    this.entries.set(key, { work: promise, startedAtMs: started });
+    const entry: Entry = { work: promise, startedAtMs: started, settled: false };
+    /*
+      Marked from the promise itself rather than from the `await` below, so it is true no matter who
+      observes the result. A second caller joining this entry returns `existing.work` without ever
+      reaching that `await`, and if the flag were set there, an entry awaited only by a joiner would
+      stay "in flight" for ever and never be evictable.
+
+      Both branches are handled, which also means this promise's rejection is never unobserved.
+    */
+    void promise.then(
+      () => {
+        entry.settled = true;
+      },
+      () => {
+        entry.settled = true;
+      },
+    );
+    this.entries.set(key, entry);
 
     try {
       return await promise;
@@ -209,17 +233,45 @@ export class CallLedger {
     }
   }
 
-  /** Drop what has aged out, then what is oldest if the map is still over its bound. */
+  /**
+   * Drop what has aged out, then what is oldest if the map is still over its bound.
+   *
+   * # Work in flight is never evicted, by either rule
+   *
+   * `once` evicts BEFORE it looks the key up, and both rules used to delete by age and by
+   * insertion order without asking whether the call had finished. An in-flight entry is the only
+   * record that a spending call is already running — so evicting one deletes the guard itself, and
+   * the concurrent retry that arrives next finds nothing, runs the work a second time, and
+   * produces the double-buy this class exists to prevent. The ledger removed its own protection at
+   * the exact moment it was under load.
+   *
+   * The capacity rule is the reachable one. `RESULT_TTL_MS` is twenty-four hours and no call is in
+   * flight that long, but `MAX_ENTRIES` is 512 and the oldest entry under concurrent load is very
+   * plausibly still running.
+   *
+   * # The bound yields to correctness, deliberately
+   *
+   * If every entry held is in flight, the loop stops and the map is allowed over its bound. That
+   * bound exists to stop unbounded memory growth in a long-lived process; it does not exist to be
+   * enforced against the one invariant this class has. Growth past it is self-limiting — the
+   * entries settle and become evictable on the next call — while a double-buy is not.
+   */
   private evict(): void {
     const now = this.nowMs();
     for (const [key, entry] of this.entries) {
-      if (now - entry.startedAtMs > RESULT_TTL_MS) this.entries.delete(key);
+      if (entry.settled && now - entry.startedAtMs > RESULT_TTL_MS) this.entries.delete(key);
     }
     while (this.entries.size >= MAX_ENTRIES) {
-      // Map iteration is insertion-ordered, so the first key is the oldest still held.
-      const oldest = this.entries.keys().next();
-      if (oldest.done === true) break;
-      this.entries.delete(oldest.value);
+      // Map iteration is insertion-ordered, so the first SETTLED key is the oldest droppable one.
+      let dropped = false;
+      for (const [key, entry] of this.entries) {
+        if (entry.settled) {
+          this.entries.delete(key);
+          dropped = true;
+          break;
+        }
+      }
+      if (!dropped) break;
     }
   }
 }
