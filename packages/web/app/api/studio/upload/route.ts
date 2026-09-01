@@ -6,9 +6,20 @@ import { verifyAction } from '@/lib/identity';
 import { createClient, periodOf, readCreatorVault } from '@projectx-social/sdk';
 import { attachAsset, findPost, findProfile } from '@/lib/content';
 import { MAX_BYTES, storeAsset, type AssetGate } from '@/lib/media';
+import { tooLarge } from '@/lib/body-limit';
 import { siteConfig } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
+/**
+ * Slack allowed above {@link MAX_BYTES} for the multipart envelope.
+ *
+ * A multipart body carries field names, boundaries and per-part headers around the file, so a
+ * request containing a file exactly at the limit is legitimately larger than the limit. Refusing on
+ * the declared length without this would reject the largest file the route is documented to accept.
+ * Sixty-four kilobytes is far more than the envelope needs and far less than a body worth buffering.
+ */
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
 
 /**
  * Attach an image to a post.
@@ -30,6 +41,20 @@ export async function POST(request: Request) {
     The composer always sends multipart, so nothing legitimate reaches this branch; it exists so
     that anything else gets an answer that is true.
   */
+  /*
+    Refused before the body is read, not after.
+
+    The check below on `file.size` is correct and ran one line after `request.formData()` had
+    already buffered the whole thing into memory — so an oversized body was refused having already
+    been received. `Content-Length` is a claim rather than a fact, so this stops the honest mistake
+    and the lazy attack; the parsed-size check stays exactly where it is for a body that lies.
+
+    The allowance is generous on purpose: multipart carries field names, boundaries and headers
+    around the file, so a request at the byte limit is legitimately larger than the file in it.
+  */
+  const oversized = tooLarge(request, MAX_BYTES + MULTIPART_OVERHEAD_BYTES);
+  if (oversized !== null) return oversized;
+
   let form: FormData;
   try {
     form = await request.formData();
@@ -49,6 +74,44 @@ export async function POST(request: Request) {
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: `file exceeds ${MAX_BYTES} bytes` }, { status: 413 });
+  }
+
+  /*
+    The bytes, read ONCE.
+
+    They were read twice: `arrayBuffer()` for the hash and again for `storeAsset`, so an
+    eight-megabyte upload occupied sixteen megabytes of an instance that has a few. One read, held,
+    and handed to both.
+  */
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  /*
+    Prove the caller BEFORE spending anything of ours.
+
+    This route used to do a post lookup, a profile lookup and a FULLNODE READ before it checked the
+    signature, so an anonymous caller could make this deployment talk to the chain by posting a file
+    and a made-up address. Hashing has to come first — the statement binds the hash, so the server
+    cannot rebuild it without one — but nothing else does.
+
+    A signature proves control of `author` and nothing about authorship of the post; the vault check
+    below is what decides that, and it now runs for a caller who has already proved an address.
+
+    One consequence, and it is an improvement: an unauthenticated caller naming a post that does not
+    exist now gets 401 rather than 404, so this route stops answering whether a post id is real.
+  */
+  const signature = form.get('signature');
+  const timestampMs = Number(form.get('timestampMs'));
+  const fileSha256 = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
+
+  const proof = await verifyAction({
+    origin: new URL(request.url).origin,
+    address: author,
+    signature: typeof signature === 'string' ? signature : '',
+    timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0,
+    action: { kind: 'upload', postId, fileSha256 },
+  });
+  if (!proof.ok) {
+    return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
   }
 
   const post = await findPost(postId);
@@ -93,23 +156,6 @@ export async function POST(request: Request) {
     Nothing in the interface calls this route today. That makes it surface with no purpose, and a
     closed door is the right state for it until something needs to open it.
   */
-  const signature = form.get('signature');
-  const timestampMs = Number(form.get('timestampMs'));
-  const fileSha256 = createHash('sha256')
-    .update(Buffer.from(await file.arrayBuffer()))
-    .digest('hex');
-
-  const proof = await verifyAction({
-    origin: new URL(request.url).origin,
-    address: author,
-    signature: typeof signature === 'string' ? signature : '',
-    timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0,
-    action: { kind: 'upload', postId, fileSha256 },
-  });
-  if (!proof.ok) {
-    return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
-  }
-
   /*
     Storage terms follow the post's own access, and are decided here rather than accepted from the
     request. A body that could name its own tier could ask for two years of storage on a free post,
@@ -159,7 +205,7 @@ export async function POST(request: Request) {
   const stored = await storeAsset({
     postId,
     label: file.name,
-    bytes: new Uint8Array(await file.arrayBuffer()),
+    bytes,
     // Not the form's `author` field: this is the address the vault reports as owner, already
     // checked above. It decides who ends up owning the `Blob` object we are about to pay for.
     owner: vault.value.owner,
