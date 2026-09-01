@@ -50,6 +50,29 @@ export async function mapWithLimit<T, R>(
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
+  /*
+    A non-finite limit REFUSES rather than doing nothing.
+
+    Without this, `NaN` produced `Array.from({length: NaN})`, which is empty — so no worker was
+    started, `Promise.all([])` resolved immediately, and the function returned an array of holes
+    with `fn` never called once. No throw, no rejection, no signal. A caller zipping that back
+    against its input attributes empty data to every row: "a failed read is never a value", with
+    the failure arriving through the parameter instead of through the work.
+
+    Not reachable from this codebase today, because the only caller passes a constant. It is
+    reachable from the next one — this is a shared helper precisely so the bound is not reinvented,
+    and the next caller is the one who writes `Number(process.env.SOMETHING)` and gets `NaN` from a
+    typo or an unset variable. Refusing is the same decision as not catching a rejection below: a
+    programming error should not become a silent `undefined` in the middle of an array.
+
+    An out-of-range but finite limit is clamped rather than refused. Zero and negative numbers are
+    a caller asking for less than one at a time, which has an obvious correct answer; `NaN` is a
+    caller who does not know what they asked for, which does not.
+  */
+  if (!Number.isFinite(limit)) {
+    throw new RangeError(`mapWithLimit needs a finite limit, got ${String(limit)}`);
+  }
+
   if (items.length === 0) return [];
 
   const width = Math.max(1, Math.min(Math.floor(limit), items.length));

@@ -89,6 +89,24 @@ describe('bounded concurrency', () => {
     expect(called).toBe(0);
   });
 
+  it('refuses a non-finite limit instead of silently doing nothing', async () => {
+    /*
+      Measured before it was fixed: `NaN` gave `Array.from({length: NaN})`, which is empty, so no
+      worker started, `Promise.all([])` resolved at once, and the result was [undefined, undefined,
+      undefined] with `fn` never called. A caller zipping that back against its input attributes
+      empty data to every row — the same "looks like a data problem for a week" failure as
+      completion ordering, arriving through the parameter rather than through the work.
+    */
+    await expect(mapWithLimit([1, 2, 3], Number.NaN, async (n) => n)).rejects.toThrow(RangeError);
+  });
+
+  it('still clamps a finite limit that is out of range', async () => {
+    // Zero and negative are a caller asking for less than one at a time, which has an obvious
+    // correct answer. NaN is a caller who does not know what they asked for, which does not.
+    expect(await mapWithLimit([1, 2, 3], 0, async (n) => n * 10)).toEqual([10, 20, 30]);
+    expect(await mapWithLimit([1, 2, 3], -5, async (n) => n * 10)).toEqual([10, 20, 30]);
+  });
+
   it('lets a rejection through rather than leaving a hole in the array', async () => {
     /*
       Deliberate. Callers here pass functions returning a `Reading`, which cannot reject — so a
