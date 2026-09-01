@@ -1,0 +1,34 @@
+-- 033_drop_the_redundant_slot_index.sql
+--
+-- `agent_sponsored_vaults` carries two indexes on the same single column.
+--
+-- Read from production, not inferred:
+--
+--   agent_sponsored_vaults_slot_key   CREATE UNIQUE INDEX ... USING btree (slot)
+--   agent_sponsored_vaults_slot_idx   CREATE INDEX        ... USING btree (slot)
+--
+-- The unique index serves every lookup the plain one could serve, and serves them better: it
+-- answers the same range and equality questions and additionally tells the planner that at most one
+-- row can match. There is no query for which the planner would choose the plain index over it.
+--
+-- So the plain index is pure cost. It is maintained on every insert and every update of `slot`, it
+-- occupies its own pages, and it is one more thing `VACUUM` walks — in exchange for nothing.
+--
+-- # Why this is worth a migration rather than a shrug
+--
+-- Both are 16 kB today, on fifty rows. That is not the reason. A duplicate index is a claim about
+-- the schema that is not true — it says somebody decided this column needed a second access path —
+-- and the next person to read it must work out for themselves that it does not. The cost of
+-- carrying it is not the disk; it is that it is indistinguishable from a deliberate decision.
+--
+-- # Which one goes
+--
+-- The PLAIN one. The unique index is load-bearing: `slot` is what makes a sponsored vault slot
+-- unique, and the allocation is an `INSERT ... SELECT ... WHERE NOT EXISTS` over `generate_series`
+-- that races on exactly that constraint — two concurrent callers reaching for the same slot are
+-- decided by it, and the loser gets a unique violation rather than a second vault in one slot.
+-- Dropping the unique index would not be housekeeping; it would remove the guard.
+--
+-- `IF EXISTS` so this is idempotent, and the ledger records it either way.
+
+DROP INDEX IF EXISTS agent_sponsored_vaults_slot_idx;
