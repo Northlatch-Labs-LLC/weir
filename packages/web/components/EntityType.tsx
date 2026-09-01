@@ -159,7 +159,7 @@ export function entitiesOf(input: {
 export async function readEntityTypes(
   handles: readonly string[],
   deps: {
-    listProfiles: () => Promise<
+    listProfiles: (options?: { handles?: readonly string[] }) => Promise<
       ReadonlyArray<{ handle: string; vaultId: string | null; stakeVaultIds?: readonly string[] }>
     >;
     tiersOf: (vaultId: string) => Promise<number | null>;
@@ -168,8 +168,8 @@ export async function readEntityTypes(
   const found = new Map<string, Entity[]>();
   if (handles.length === 0) return found;
 
-  const wanted = new Set(handles);
-  const profiles = (await deps.listProfiles()).filter((p) => wanted.has(p.handle));
+  // Narrowed in SQL. This read every creator on the platform to keep the handles on one page.
+  const profiles = await deps.listProfiles({ handles });
 
   await Promise.all(
     profiles.map(async (profile) => {

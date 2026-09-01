@@ -191,28 +191,41 @@ export async function discover(query: string): Promise<Reading<Discovery>> {
       half only: somebody who arrived with nothing to search for was shown a list of names and no
       work. A directory of a platform whose creators publish pictures should show the pictures.
 
-      The `LEFT JOIN` is the same aggregation `listPosts` uses, for the same reason — a second query
-      per post is the N+1 that is invisible at six posts and fatal at six hundred. `FILTER` keeps a
-      post with no media as an empty array rather than a row of nulls.
+      The asset ids come from a correlated subquery, matching `listPosts`.
+
+      This used to be a `LEFT JOIN … GROUP BY`, and the comment here defended it as "the same
+      aggregation `listPosts` uses" — which stopped being true when that query was changed, and is
+      the reason this one is being changed now. The defence was also answering the wrong objection:
+      a scalar subquery is not an N+1. It is one statement, and the planner runs the subplan for the
+      rows it returns rather than once per post from the application.
+
+      What the join cost is the LIMIT. Aggregating before limiting means the group key (`p.id`) is
+      not the sort key (`created_at_ms`), so there is no plan that walks `posts_created_idx` in
+      order and stops after twenty-six groups — the whole `posts ⋈ assets` product is built and
+      sorted first, and the LIMIT bounds the rows RETURNED rather than the rows READ. On the empty
+      query, which is what a visitor arriving at /explore sends, that is the entire table to show
+      twenty-five rows.
+
+      `COALESCE(..., '{}')` keeps a post with no media as an empty array rather than a null.
     */
     const postSelect = `SELECT p.id, p.title, p.preview, p.author_handle, p.created_at_ms, p.access_kind,
-                  COALESCE(array_agg(a.id ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '{}') AS asset_ids
-             FROM posts p
-             LEFT JOIN assets a ON a.post_id = p.id`;
+                  COALESCE(
+                    (SELECT array_agg(a.id ORDER BY a.id) FROM assets a WHERE a.post_id = p.id),
+                    '{}'
+                  ) AS asset_ids
+             FROM posts p`;
 
     const postRows = q === ''
       ? await db().query<PostRow>(
           `${postSelect}
-            GROUP BY p.id
-            ORDER BY p.created_at_ms DESC
+            ORDER BY p.created_at_ms DESC, p.id DESC
             LIMIT $1`,
           [MAX_RESULTS + 1],
         )
       : await db().query<PostRow>(
           `${postSelect}
             WHERE p.title ILIKE $1 ESCAPE '\\' OR p.preview ILIKE $1 ESCAPE '\\'
-            GROUP BY p.id
-            ORDER BY p.created_at_ms DESC
+            ORDER BY p.created_at_ms DESC, p.id DESC
             LIMIT $2`,
           [pattern, MAX_RESULTS + 1],
         );
