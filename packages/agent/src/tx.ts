@@ -358,6 +358,7 @@ export const ABORT_CLASSIFICATION: Record<string, Record<number, PreconditionNam
     16: 'permanent', // EEmptyName
     17: 'permanent', // ENotUpgraded — migrate with nothing to migrate. See platform:8 above.
     18: 'permanent', // EPeriodNotWholeSealPeriods
+    19: 'permanent', // ETierPriceNotAscending — a tier must cost more than the one before it; the same call never succeeds.
   },
 };
 

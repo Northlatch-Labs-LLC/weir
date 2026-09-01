@@ -21,8 +21,13 @@ describe('llms.txt tells an agent the truth', () => {
     const creator = join(process.cwd(), '../../sui-contracts/sources/creator.move');
     expect(existsSync(creator)).toBe(true);
     const src = readFileSync(creator, 'utf8').split('\n');
-    expect(llms).toContain('creator.move:322');
-    expect(src[321]).toContain('fee_bps_snapshot');
+    // Found by content, then compared to the number llms.txt prints, so the failure message names the
+    // line that is true rather than the one that used to be. Moved 322 -> 342 on 2026-09-01 when
+    // doc blocks above it grew; the citation is a number in prose and this is the only thing that
+    // notices it drifting.
+    const line = src.findIndex((l) => l.includes('fee_bps_snapshot: platform.fee_bps()')) + 1;
+    expect(line).toBeGreaterThan(0);
+    expect(llms).toContain(`creator.move:${line}`);
   });
 
   it('states the gaps rather than only the guarantees', () => {
