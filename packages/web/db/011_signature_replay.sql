@@ -16,12 +16,27 @@
 -- change an outcome. Keeping it would grow the table forever to answer a question that is settled.
 -- `expires_at_ms` is the timestamp past which the row is dead weight, and writes sweep it.
 --
--- # Reads are deliberately NOT single-use
+-- # Reads WERE deliberately not single-use, and that was wrong
 --
--- The `read` action proves identity for fetching a thread or a notification list. Spending it would
--- demand a wallet prompt per refresh, which trains people to approve prompts without reading them —
--- a worse outcome than the replay it would prevent, since replaying a read grants exactly the
--- access the signer already had.
+-- The original note read: "The `read` action proves identity for fetching a thread or a
+-- notification list. Spending it would demand a wallet prompt per refresh, which trains people to
+-- approve prompts without reading them — a worse outcome than the replay it would prevent, since
+-- replaying a read grants exactly the access the signer already had."
+--
+-- The last clause is true of the SIGNER and false of an INTERCEPTOR, and the argument was reasoned
+-- entirely from one of the two parties. The same bytes in somebody else's hands return that
+-- address's inbox — thread list, message bodies, notification feed — for the whole ten minutes the
+-- statement stays fresh. It grants the attacker what the signer had; it grants the signer nothing
+-- new. That is the blind spot, and it is recorded here rather than only in a commit because the
+-- argument above is persuasive and the next reader deserves to meet its limit at the same time.
+--
+-- The cost it was avoiding was also not being paid. `Notifications.load()` and both read paths in
+-- `Messages.tsx` sign on every call and cache nothing, and `load()` is bound to a button rather
+-- than a timer, so no client here has ever reused a read signature. Making reads single-use costs
+-- zero additional prompts. It does mean a retried POST fails the second time — the same behaviour
+-- every write already has.
+--
+-- Reads are now spent like everything else. `isSingleUse` returns true for every kind.
 
 CREATE TABLE IF NOT EXISTS used_signatures (
   -- SHA-256 of the signature. The signature itself is never stored: it is the reusable secret, and
