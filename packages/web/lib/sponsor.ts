@@ -309,6 +309,20 @@ export async function reserveSeat(input: {
   const address = input.address.toLowerCase();
   const handle = input.handle.toLowerCase();
 
+  /*
+    An expired hold leaves its ROW behind, and the row keeps its seat.
+
+    The first version ended `ON CONFLICT DO NOTHING`. `NOT EXISTS` would correctly report the
+    expired seat as available, the insert would then collide with the stale row's UNIQUE(seat),
+    the conflict clause would swallow it, and zero rows came back — reported to the caller as "the
+    offer is fully taken" at three seats of fifty. The offer jammed permanently on the first hold
+    that ever expired, and the message said the opposite of what had happened.
+
+    So the conflict TAKES OVER the expired row instead of giving up on it. Nothing is deleted: the
+    seat is reassigned in place, and the guard on the update — unclaimed, and past its hold — is
+    what makes that safe. A claimed seat can never be taken over, because `claimed_at_ms IS NULL`
+    fails and the statement returns no row, which is the correct "this seat is gone".
+  */
   try {
     const { rows } = await db().query<{ seat: number }>(
       `
@@ -320,9 +334,29 @@ export async function reserveSeat(input: {
               WHERE a.seat = s.seat
                 AND (a.claimed_at_ms IS NOT NULL OR a.reserved_at_ms > $6)
        )
+         /*
+           This address or handle already has a row anywhere in the table: select nothing.
+
+           Without this the statement can reach the conflict clause on the PRIMARY KEY or on
+           handle, neither of which the ON CONFLICT target covers, and Postgres raises instead of
+           returning no rows — surfacing "one seat each" as a transport failure. Returning no rows
+           is correct here: the diagnostic queries below then say which of the three reasons it
+           was.
+         */
+         AND NOT EXISTS (
+             SELECT 1 FROM agent_sponsorships b
+              WHERE b.address = $1 OR b.handle = $2
+         )
        ORDER BY s.seat
        LIMIT 1
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (seat) DO UPDATE
+         SET address         = EXCLUDED.address,
+             handle          = EXCLUDED.handle,
+             gas_budget_mist = EXCLUDED.gas_budget_mist,
+             reserved_at_ms  = EXCLUDED.reserved_at_ms,
+             claimed_at_ms   = NULL
+       WHERE agent_sponsorships.claimed_at_ms IS NULL
+         AND agent_sponsorships.reserved_at_ms <= $6
       RETURNING seat
       `,
       [address, handle, input.gasBudgetMist.toString(), input.nowMs, SPONSORSHIP_SEATS, input.nowMs - SEAT_HOLD_MS],
