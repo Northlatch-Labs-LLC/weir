@@ -915,3 +915,109 @@ fun a_withdrawal_comes_out_of_matured_principal_first() {
 
     sc.end();
 }
+
+#[test]
+/// A withdrawal that has to unwind must be paid for the rebate its own principal funded.
+///
+/// `withdraw` binds `acc = vault.acc_rebate_per_unit` before the unwind loop, and every
+/// `credit_proceeds` inside that loop can raise the same field — the unwind realises staking
+/// rewards, and `eligible_total` still counts the withdrawer's principal while it does, because
+/// `vault.total_principal` is not reduced until afterwards. Until 2026-09-01 the re-baseline at the
+/// end used the stale binding, so the withdrawer's principal sat in the denominator that funded the
+/// increment and their debt was reset as though it had never happened. The difference stayed in
+/// `rebate_pool` with no claimant.
+///
+/// FAN2 stays in so the accumulator has somewhere to go and the pool has a second claimant; what
+/// is asserted is that FAN's share is not left behind.
+fun an_unwinding_withdrawal_is_paid_the_rebate_it_funded() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    deposit(&mut sc, FAN2, 100 * SUI_1);
+
+    // Run the ladder to convergence so the buffer cannot cover the withdrawal on its own, and
+    // through a maturity so there is realised yield and a non-zero accumulator. The bound is the
+    // ladder's own depth rather than a number, so a depth change moves this with it.
+    let mut i = 0;
+    while (i < 4 * (ladder::ladder_depth() + 1)) {
+        harvest(&mut sc);
+        gtu::advance_epoch_with_reward_amounts(0, 400, &mut sc);
+        i = i + 1;
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::staked_principal(&v) > 0, 0);
+        // The precondition the test exists for: the buffer alone cannot pay FAN out, so `withdraw`
+        // must unwind, and the unwind is what moves the accumulator mid-function.
+        assert!(sv::liquid_value(&v) < 100 * SUI_1, 1);
+        assert!(sv::claimable_rebate(&v, FAN) > 0, 6); // the rebate is live before we start
+        ts::return_shared(v);
+    };
+
+    // FAN exits in full. The unwind this forces realises yield, and part of that yield is FAN's.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::withdraw(&mut v, &acct, 100 * SUI_1, &mut state, sc.ctx());
+        assert!(out.value() == 100 * SUI_1, 2);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+
+    // THE ASSERTION, and it is an equality rather than a threshold on purpose.
+    //
+    // FAN and FAN2 deposited the same amount at the same moment and were eligible together for
+    // every harvest since, including the increment FAN's own unwind produced — `eligible_total`
+    // still counted FAN's principal when `credit_proceeds` divided by it. So their two shares are
+    // the same number. A stale accumulator does not make FAN's claim zero, which is why a
+    // `fan_due > 0` check passes against the defect and proves nothing; it makes FAN's claim
+    // strictly SMALLER than FAN2's by exactly the increment FAN was not credited for, and leaves
+    // that difference in `rebate_pool` with nobody able to claim it.
+    let fan_due;
+    let fan2_due;
+    let pool;
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        fan_due = sv::claimable_rebate(&v, FAN);
+        fan2_due = sv::claimable_rebate(&v, FAN2);
+        pool = sv::rebate_pool_value(&v);
+        ts::return_shared(v);
+    };
+    assert!(pool > 0, 3);
+    assert!(fan_due > 0, 4);
+    assert!(fan_due == fan2_due, 5);
+
+    // And the pool must actually empty. What is left after both claims is integer-division dust,
+    // not a share somebody was owed — the defect left FAN's whole missing increment sitting here.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(out.value() == fan_due, 7);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        coin::burn_for_testing(out);
+        // Under a thousand MIST against a pool measured in millions: rounding, not a share.
+        assert!(sv::rebate_pool_value(&v) < 1_000, 8);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}

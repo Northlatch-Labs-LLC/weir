@@ -498,3 +498,107 @@ fun the_period_arithmetic_is_exactly_this() {
     assert!(entitlement::period_of(2_592_000_000) == 1, 3);
     assert!(entitlement::period_of(2_592_000_001) == 1, 4);
 }
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::EPeriodNotPaid)]
+/// A renewal after a lapse must not hand over the months nobody paid for.
+///
+/// `seal_approve_subscription` grants a period inside `[started_at_ms, expires_at_ms)`, and until
+/// 2026-09-01 `extend` moved only the far end of that pair. Subscribe at period 10, stop, come
+/// back at period 30 and pay for one period, and the window became periods 10 to 31 — twenty
+/// unpaid periods, derivable permanently, for one period's price. Here period 20 sits squarely in
+/// the gap and must be refused.
+fun a_renewal_after_a_lapse_does_not_open_the_gap() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let mut clock = clock_at(&mut scenario, 10 * PERIOD_MS);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let mut subscription = ts::take_from_sender<Subscription>(&scenario);
+
+    // Twenty periods later, long lapsed, one period bought.
+    clock.set_for_testing(30 * PERIOD_MS);
+    entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
+
+    entitlement::approve_subscription_for_testing(
+        entitlement::period_identity(vault, 1, 20),
+        1,
+        20,
+        &subscription,
+        ts::ctx(&mut scenario),
+    );
+
+    abort 0
+}
+
+#[test]
+/// And the renewal must still buy what it paid for. The same lapse, the same renewal, asking for
+/// the period the payment actually covers — this must be granted, or the fix has simply broken
+/// renewals instead of fixing them.
+fun a_renewal_after_a_lapse_still_buys_the_period_it_paid_for() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let mut clock = clock_at(&mut scenario, 10 * PERIOD_MS);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let mut subscription = ts::take_from_sender<Subscription>(&scenario);
+
+    clock.set_for_testing(30 * PERIOD_MS);
+    entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
+
+    entitlement::approve_subscription_for_testing(
+        entitlement::period_identity(vault, 1, 30),
+        1,
+        30,
+        &subscription,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_sender(&scenario, subscription);
+    clock.destroy_for_testing();
+    ts::end(scenario);
+}
+
+#[test]
+/// An UNBROKEN renewal keeps the back catalogue. The lapse rule must fire on a gap and only on a
+/// gap — a subscriber who renews on time has paid for every period since they started and must
+/// keep being able to derive them.
+fun an_unbroken_renewal_keeps_every_period_it_paid_for() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let mut clock = clock_at(&mut scenario, 10 * PERIOD_MS);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let mut subscription = ts::take_from_sender<Subscription>(&scenario);
+
+    // Renew inside the paid term, twice, so the term runs 10 through 13 with no gap in it.
+    clock.set_for_testing(10 * PERIOD_MS + PERIOD_MS / 2);
+    entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
+    clock.set_for_testing(11 * PERIOD_MS + PERIOD_MS / 2);
+    entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
+
+    // Period 10 is the first one, bought before either renewal, and it must still be derivable.
+    entitlement::approve_subscription_for_testing(
+        entitlement::period_identity(vault, 1, 10),
+        1,
+        10,
+        &subscription,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_sender(&scenario, subscription);
+    clock.destroy_for_testing();
+    ts::end(scenario);
+}

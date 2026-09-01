@@ -313,9 +313,22 @@ public fun open(
 public struct FreshEntry has copy, drop, store {
     at_harvest: u64,
     amount: u64,
-    /// `Σ amount_i * acc_i / ACC_SCALE` over the deposits in this window. Added to the position's
-    /// debt when the money matures, so it earns from harvests after its deposit and not before.
-    /// Without this the newly-eligible principal would be credited the whole accumulator history.
+    /// `Σ amount_i * acc_i / ACC_SCALE` over the deposits in this window.
+    ///
+    /// **NOTHING READS THIS.** It is written by `note_fresh` and rescaled by `shrink_fresh`, and
+    /// no payout, debt or balance is derived from it anywhere in the module. The doc here used to
+    /// say it was "added to the position's debt when the money matures", which is not what
+    /// happens: `settle_fresh` baselines matured principal at `acc_at(at_harvest + 1)` — the
+    /// accumulator as it stood after the harvest the money sat out — and `claimable_rebate`
+    /// mirrors that. Those are the correct baseline and `AccAt` documents why.
+    ///
+    /// It stays because it cannot leave. A Move upgrade cannot change the layout of a struct that
+    /// is already stored, and live vaults hold `FreshEntry` values written by the deployed
+    /// package. Removing the field would make those entries undeserialisable.
+    ///
+    /// So it is dead weight with a warning on it. **Do not "fix" `settle_fresh` to add it.** That
+    /// would apply the baseline twice and under-pay every matured deposit, and the wrong comment
+    /// above was an invitation to do exactly that.
     debt_delta: u128,
 }
 public struct Fresh has copy, drop, store { who: address }
@@ -628,6 +641,31 @@ public fun withdraw(
         credit_proceeds(vault, proceeds, principal);
     };
 
+    // The accumulator, RE-READ. `acc` above was bound before the loop, and every `credit_proceeds`
+    // inside it can raise `vault.acc_rebate_per_unit` — the unwind realises staking rewards, and
+    // `eligible_total` still counts this position's principal while it does, because
+    // `vault.total_principal` is not reduced until further down.
+    //
+    // Until 2026-09-01 the re-baseline below used the stale `acc`, so the withdrawer's principal
+    // sat in the denominator that funded the increment and their debt was reset as though the
+    // increment had never happened. They were paid nothing for it and could not recover it by
+    // re-depositing, because a new deposit is fresh and accrues nothing. The difference stayed in
+    // `rebate_pool` with no claimant: it is a leak and never a theft — the error is always an
+    // under-credit, the sum of all claims stays below what was funded, and `rebate_pool` and
+    // `creator_yield` are separate balances so nobody else receives it either.
+    //
+    // Accruing again on the pre-reduction `eligible` is the fix rather than merely passing the
+    // fresh value to `resync_debt_on`: the second pays the withdrawer for the share their principal
+    // actually funded, the first would only stop the debt being wrong afterwards. `eligible` is
+    // still valid here — the unwind touches balances and the accumulator, never a position, a
+    // freshness marker or `vault.harvests`.
+    let acc_now = vault.acc_rebate_per_unit;
+    let shortfall_after = {
+        let position = vault.positions.borrow_mut(who);
+        accrue_on(position, acc_now, eligible)
+    };
+    report_anomaly(vault, who, shortfall_after);
+
     let principal_left = {
         let position = vault.positions.borrow_mut(who);
         position.principal = position.principal - amount;
@@ -638,7 +676,7 @@ public fun withdraw(
     let eligible_after = eligible_of(vault, who);
     let principal_after = {
         let position = vault.positions.borrow_mut(who);
-        resync_debt_on(position, acc, eligible_after);
+        resync_debt_on(position, acc_now, eligible_after);
         position.principal
     };
 

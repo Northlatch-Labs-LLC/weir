@@ -748,8 +748,11 @@ fun a_multi_period_tier_term_is_accepted() {
     {
         let mut vault = sc.take_shared<CreatorVault<USD>>();
         let cap = sc.take_from_sender<CreatorCap>();
-        creator::add_tier(&mut vault, &cap, b"Quarterly".to_string(), 3_000, 3 * MONTH_MS);
-        creator::add_tier(&mut vault, &cap, b"Annual".to_string(), 12_000, 12 * MONTH_MS);
+        // Priced above the 10_000_000 tier the fixture opens with, and above each other. This
+        // test is about the period length, but tiers are now required to ascend in price because
+        // the index is what Seal ranks access by — see `ETierPriceNotAscending`.
+        creator::add_tier(&mut vault, &cap, b"Quarterly".to_string(), 30_000_000, 3 * MONTH_MS);
+        creator::add_tier(&mut vault, &cap, b"Annual".to_string(), 120_000_000, 12 * MONTH_MS);
         sc.return_to_sender(cap);
         ts::return_shared(vault);
     };
@@ -880,6 +883,86 @@ fun a_tier_with_a_zero_price_is_refused() {
         let mut vault = sc.take_shared<CreatorVault<USD>>();
         let cap = sc.take_from_sender<CreatorCap>();
         creator::add_tier(&mut vault, &cap, b"Free".to_string(), 0, MONTH_MS);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+// === Tier rank is price rank ===
+//
+// `entitlement::seal_approve_subscription` grants access with `subscription.tier >= tier`, and
+// `subscription.tier` is the INDEX into `tiers`. The index is therefore the rank. Nothing tied the
+// rank to the price until 2026-09-01, so a cheap tier sitting at a high index outranked the
+// expensive ones below it and its subscribers could derive their keys — permanently, because a
+// Seal key cannot be revoked, and silently, because nothing in the flow said anything was wrong.
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ETierPriceNotAscending)]
+/// The launch shape of the defect: Basic, then VIP, then a cheap Trial added later that outranks
+/// both. This is the one a creator falls into by growing their pricing.
+fun a_cheaper_tier_cannot_be_added_above_an_expensive_one() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000); // index 0, "Basic"
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::add_tier(&mut vault, &cap, b"VIP".to_string(), 100_000_000, MONTH_MS);
+    // Index 2, and cheaper than both. Before the fix its subscribers outranked VIP.
+    creator::add_tier(&mut vault, &cap, b"Trial".to_string(), 1_000_000, MONTH_MS);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ETierPriceNotAscending)]
+/// The sibling, and the one that would have survived a fix confined to `add_tier`. Repricing reads
+/// like a pricing decision, so this is the easier of the two to do by accident — and it inverts the
+/// rank of everybody already subscribed to the two tiers involved.
+fun a_reprice_cannot_invert_two_tiers() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::add_tier(&mut vault, &cap, b"VIP".to_string(), 100_000_000, MONTH_MS);
+    // Lift index 0 above index 1. Every index-0 subscriber would then outrank nobody, and every
+    // index-1 subscriber would keep reading index-0's newly premium content for the old price.
+    creator::update_tier(&mut vault, &cap, 0, 500_000_000, MONTH_MS, true);
+    abort 0
+}
+
+#[test]
+/// And the rule must not block ordinary pricing work. Adding upwards, repricing inside the gap
+/// between neighbours, and retiring a tier all have to keep working — a rule that stops a creator
+/// running their business would be traded away the first time it got in the way.
+fun ordinary_pricing_still_works_under_the_ordering_rule() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+
+        creator::add_tier(&mut vault, &cap, b"Plus".to_string(), 50_000_000, MONTH_MS);
+        creator::add_tier(&mut vault, &cap, b"VIP".to_string(), 100_000_000, MONTH_MS);
+
+        // Reprice the middle tier anywhere strictly between its neighbours.
+        creator::update_tier(&mut vault, &cap, 1, 60_000_000, MONTH_MS, true);
+        assert!(creator::tier_price(&vault, 1) == 60_000_000, 0);
+
+        // Retire it. A retired tier keeps its index, so it keeps its rank and its place in the
+        // ordering — but retiring is not a repricing and must not be refused.
+        creator::update_tier(&mut vault, &cap, 1, 60_000_000, MONTH_MS, false);
+        assert!(!creator::tier_active(&vault, 1), 1);
+
+        // The top tier can still go up.
+        creator::update_tier(&mut vault, &cap, 2, 200_000_000, MONTH_MS, true);
+        assert!(creator::tier_price(&vault, 2) == 200_000_000, 2);
+
         sc.return_to_sender(cap);
         ts::return_shared(vault);
     };
