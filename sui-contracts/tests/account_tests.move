@@ -18,6 +18,8 @@ use sui::test_scenario::{Self as ts, Scenario};
 const ADMIN: address = @0xAD;
 const ALICE: address = @0xA1;
 const BOB: address = @0xB0;
+/// Never opens an account. Exists only to be named as a referrer that is not a member.
+const CAROL: address = @0xCA;
 
 fun setup(): Scenario {
     let mut sc = ts::begin(ADMIN);
@@ -140,6 +142,40 @@ fun one_address_cannot_hold_two_accounts() {
 fun an_account_cannot_refer_itself() {
     let mut sc = setup();
     open_as(&mut sc, ALICE, b"alice", option::some(ALICE));
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::EReferrerNotRegistered)]
+fun a_referrer_must_hold_an_account_here() {
+    /*
+      Until 2026-09-01 `referrer` was any address at all. An address with no account, one that will
+      never open one, an exchange deposit address, a typo — whatever was named received the referral
+      share of every later sale on this account, and the only thing refused was naming yourself.
+
+      CAROL has not opened an account in this test. That is the whole case.
+    */
+    let mut sc = setup();
+    open_as(&mut sc, ALICE, b"alice", option::some(CAROL));
+    sc.end();
+}
+
+#[test]
+fun a_registered_referrer_is_still_accepted() {
+    /*
+      The converse half. A guard that refused every referrer would pass the test above and destroy
+      the feature, so this asserts the ordinary case still works: BOB opens first, ALICE names him.
+    */
+    let mut sc = setup();
+    open_as(&mut sc, BOB, b"bob", option::none());
+    open_as(&mut sc, ALICE, b"alice", option::some(BOB));
+
+    sc.next_tx(ALICE);
+    {
+        let acct = sc.take_from_sender<SocialAccount>();
+        assert!(account::referrer(&acct) == option::some(BOB), 0);
+        sc.return_to_sender(acct);
+    };
     sc.end();
 }
 
