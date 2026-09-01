@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Finding creators and posts.
@@ -325,7 +326,7 @@ export async function discover(query: string): Promise<Reading<Discovery>> {
     return fail(
       'malformed',
       source,
-      error instanceof Error ? error.message : String(error),
+      opaqueDetail(source, error),
     );
   }
 }

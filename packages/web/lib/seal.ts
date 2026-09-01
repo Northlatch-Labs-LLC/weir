@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * Handing the media key to Seal.
@@ -187,7 +188,7 @@ async function sealTo(
       timeout. What matters far more than the kind is the ordering: this runs *before* the blob is
       paid for and stored, so a committee we cannot reach costs nothing and stores nothing.
     */
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 }
 

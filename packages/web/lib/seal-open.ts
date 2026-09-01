@@ -1,3 +1,4 @@
+import { opaqueDetail } from './opaque';
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 /**
  * Opening a sealed asset, in the browser.
@@ -530,7 +531,11 @@ function causeOf(error: unknown): string {
 }
 
 function detailOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  /*
+    Opaque to the caller, real in the log. These failures name key-server hosts and library
+    internals, and this module's readings reach a browser.
+  */
+  return opaqueDetail('opening a sealed body', error);
 }
 
 /**

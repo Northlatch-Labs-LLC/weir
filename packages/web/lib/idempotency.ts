@@ -1,3 +1,4 @@
+import { opaqueDetail } from './opaque';
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
  * A machine may retry a write without doing it twice.
@@ -273,7 +274,7 @@ export async function claimIdempotencyKey(input: {
     */
     return {
       kind: 'unavailable',
-      reason: error instanceof Error ? error.message : String(error),
+      reason: opaqueDetail('the idempotency ledger', error),
     };
   }
 }

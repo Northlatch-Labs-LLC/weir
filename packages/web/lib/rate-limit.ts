@@ -1,3 +1,4 @@
+import { opaqueDetail } from './opaque';
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 /**
  * A ceiling on how often one caller may hit an endpoint.
@@ -719,7 +720,7 @@ async function spendBucketKey(
     return {
       allowed: false,
       kind: 'unavailable',
-      reason: error instanceof Error ? error.message : String(error),
+      reason: opaqueDetail('the quota store', error),
     };
   }
 }
@@ -1049,7 +1050,7 @@ export async function tripBreaker(
     return {
       tripped: true,
       kind: 'unavailable',
-      reason: error instanceof Error ? error.message : String(error),
+      reason: opaqueDetail('the quota store', error),
     };
   }
 }

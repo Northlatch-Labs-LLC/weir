@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 /**
  * Who has tipped a creator, and how much, from the chain's own record.
  *
@@ -105,7 +106,7 @@ export const readSupporters = cache(async (vaultId: string): Promise<Reading<Sup
     }
     return ok({ totals, truncated });
   } catch (error) {
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   }
 });
 

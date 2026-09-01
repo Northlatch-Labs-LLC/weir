@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { opaqueDetail } from './opaque';
 
 /**
  * The two things zkLogin needs a server for: verifying the identity token, and deriving the salt.
@@ -243,7 +244,7 @@ export function nonceFor(commitment: NonceCommitment): Reading<string> {
       'malformed',
       source,
       `the ephemeral key, epoch and randomness do not form a nonce: ${
-        error instanceof Error ? error.message : String(error)
+        opaqueDetail(source, error)
       }`,
     );
   }
@@ -353,7 +354,7 @@ export async function verifyGoogleIdToken(input: {
     // its own issuer, and they must not become two addresses for one person.
     return ok({ iss: normaliseIssuer(iss), aud, sub, nonce });
   } catch (error) {
-    return fail('malformed', source, error instanceof Error ? error.message : String(error));
+    return fail('malformed', source, opaqueDetail(source, error));
   }
 }
 
@@ -459,7 +460,7 @@ export async function requestProof(input: {
     if (error instanceof Error && error.name === 'AbortError') {
       return fail('timeout', source, `no proof within ${timeoutMs}ms`);
     }
-    return fail('transport', source, error instanceof Error ? error.message : String(error));
+    return fail('transport', source, opaqueDetail(source, error));
   } finally {
     clearTimeout(timer);
   }
