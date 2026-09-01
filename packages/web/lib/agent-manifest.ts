@@ -219,7 +219,13 @@ export interface KeyServerState {
  * when it is not will build a batch of writes on one prompt and have every one after the first
  * refused, with a message about signatures that says nothing about batching.
  */
-export const REUSABLE_ACTION_KINDS: readonly Action['kind'][] = ['read'];
+export const REUSABLE_ACTION_KINDS: readonly Action['kind'][] = [];
+/*
+  Empty, and it is published as empty so an agent is told the truth rather than left to discover it.
+
+  `read` was here. The exemption was reasoned from the signer's side only — replaying a read grants
+  the SIGNER nothing new, and grants an INTERCEPTOR that address's inbox. See `isSingleUse`.
+*/
 
 /**
  * The number the head of every statement is built around.
