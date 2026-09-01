@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import 'server-only';
+import { mapWithLimit } from './concurrency';
 import { opaqueDetail } from './opaque';
 
 /**
@@ -54,6 +55,16 @@ const MAX_RESULTS = 25;
  * what the store knows and the page says so rather than quietly ordering by something else.
  */
 const MAX_RANKED = 20;
+/**
+ * How many chain reads this page has in flight at once.
+ *
+ * Not one, which is what the sequential loop amounted to and which made the page the sum of its
+ * round trips. Not twenty, which turns one render into a burst against a fullnode this deployment
+ * shares. Eight is enough that the ranked subset resolves in three waves rather than twenty, and
+ * few enough that a page load is not mistakable for an attack on the endpoint.
+ */
+const CHAIN_READ_CONCURRENCY = 8;
+
 
 export interface CreatorResult {
   handle: string;
@@ -252,23 +263,72 @@ export async function discover(query: string): Promise<Reading<Discovery>> {
       return value;
     }
 
+    /*
+      Every chain read this page needs, gathered before any of them is made.
+
+      This was a `for` loop with three awaits inside it: a creator vault per creator, a nested loop
+      of one read per stake vault, and a decimals lookup — all sequential, so twenty creators each
+      running two support vaults was sixty round trips one after another, and the page took as long
+      as their sum. At 150ms a read that is nine seconds to render a directory.
+
+      Nothing about the work required that order. The reads are independent of each other and only
+      the assembly below depends on all of them, so they are issued together and bounded: see
+      `mapWithLimit` for why bounded rather than all at once, against a shared fullnode.
+
+      The bound on WHICH creators are read is unchanged — `MAX_RANKED`, and for the reason the old
+      comment gave: each vault is an object read and this page already limits that cost.
+    */
+    const ranked = creators.slice(0, MAX_RANKED);
+
+    const creatorVaults = new Map<string, Awaited<ReturnType<typeof readCreatorVault>>>();
+    if (client !== null) {
+      const read = await mapWithLimit(ranked, CHAIN_READ_CONCURRENCY, (row) =>
+        readCreatorVault(client, row.vault_id),
+      );
+      ranked.forEach((row, i) => creatorVaults.set(row.vault_id, read[i]!));
+    }
+
+    /*
+      Stake vaults, flattened across the ranked creators so one bounded pass covers all of them.
+      Reading them creator by creator would keep the nested loop's shape and only move it.
+    */
+    const stakeIds = [
+      ...new Set(
+        ranked.flatMap((row) =>
+          vaultsMeasured ? (vaultsByCreator.get(row.owner.toLowerCase()) ?? []) : [],
+        ),
+      ),
+    ];
+    const stakeReads = new Map<string, Awaited<ReturnType<typeof readVault>>>();
+    const stakeValues = await mapWithLimit(stakeIds, CHAIN_READ_CONCURRENCY, (id) => readVault(id));
+    stakeIds.forEach((id, i) => stakeReads.set(id, stakeValues[i]!));
+
+    /*
+      Decimals per distinct coin, resolved before the assembly rather than inside it. `decimalsOf`
+      memoises, so the sequential version was one read per distinct coin — but it was one read
+      per coin IN SERIES with everything else in the loop.
+    */
+    await mapWithLimit(
+      [...new Set(creators.map((row) => row.coin_type).filter((c): c is string => c !== null && c !== ''))],
+      CHAIN_READ_CONCURRENCY,
+      (coinType) => decimalsOf(coinType),
+    );
+
     const results: CreatorResult[] = [];
     for (const [index, row] of creators.entries()) {
       let grossVolume: bigint | null = null;
       let subscriptionsSold: bigint | null = null;
       let tiers = 0;
 
-      if (client !== null && index < MAX_RANKED) {
-        const vault = await readCreatorVault(client, row.vault_id);
-        if (vault.ok) {
-          grossVolume = vault.value.grossVolume;
-          subscriptionsSold = vault.value.subscriptionsSold;
-          tiers = vault.value.tiers.length;
-        }
-        // A failed read leaves them null rather than zero. A creator whose vault could not be read
-        // is not a creator who has earned nothing, and sorting them to the bottom as though they
-        // had would be this page inventing a fact about somebody's business.
+      const vault = index < MAX_RANKED ? creatorVaults.get(row.vault_id) : undefined;
+      if (vault !== undefined && vault.ok) {
+        grossVolume = vault.value.grossVolume;
+        subscriptionsSold = vault.value.subscriptionsSold;
+        tiers = vault.value.tiers.length;
       }
+      // A failed read leaves them null rather than zero. A creator whose vault could not be read
+      // is not a creator who has earned nothing, and sorting them to the bottom as though they
+      // had would be this page inventing a fact about somebody's business.
 
       /*
         What supporters have staked behind them. Summed across their vaults, and only for the ranked
@@ -281,8 +341,8 @@ export async function discover(query: string): Promise<Reading<Discovery>> {
         let total = 0n;
         let allRead = true;
         for (const id of mine) {
-          const v = await readVault(id);
-          if (v.ok) total += v.value.totalPrincipalMist;
+          const v = stakeReads.get(id);
+          if (v !== undefined && v.ok) total += v.value.totalPrincipalMist;
           else allRead = false;
         }
         stakedMist = allRead ? total : null;
@@ -300,7 +360,15 @@ export async function discover(query: string): Promise<Reading<Discovery>> {
         tiers,
         stakeVaultIds: mine,
         stakedMist,
-        decimals: await decimalsOf(row.coin_type),
+        /*
+          Read from the cache the pass above filled, not awaited here. `decimalsOf` would return
+          from that cache anyway, but an `await` inside this loop is the shape the defect had — and
+          leaving one makes the next person reintroduce a round trip by putting something behind it.
+        */
+        decimals:
+          row.coin_type === null || row.coin_type === ''
+            ? null
+            : (decimalsByCoin.get(row.coin_type) ?? null),
         symbol: row.coin_type?.split('::').pop() ?? '',
       });
     }
