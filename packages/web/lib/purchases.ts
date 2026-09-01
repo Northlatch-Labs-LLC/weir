@@ -167,13 +167,6 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
       });
     }
 
-    // Content key → post title, so an unlock names what was bought. Only for posts this deployment
-    // stores; a key it does not recognise keeps its raw value rather than borrowing a title.
-    const titleOf = new Map<string, string>();
-    for (const post of profiles.length === 0 ? [] : await postsByContentKey()) {
-      titleOf.set(post.key, post.title);
-    }
-
     const unlockRecords: UnlockRecord[] = [];
     for (const object of (unlocks as { objects?: Array<{ content?: unknown }> }).objects ?? []) {
       const bytes = decodeObjectBytes(object.content, source);
@@ -187,10 +180,26 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
         vaultId,
         handle: handleOf.get(vaultId) ?? null,
         contentKey,
-        title: titleOf.get(contentKey) ?? null,
+        title: null,
         pricePaid: BigInt(u.pricePaid),
         purchasedAtMs: Number(u.purchasedAtMs),
       });
+    }
+
+    /*
+      Name the unlocks, asking only for the keys this buyer actually holds.
+
+      Previously this read every post on the platform — bodies and asset ids included — to build a
+      lookup of two columns, and it ran before the loop that decides which keys are even wanted. A
+      key with no row stays null, so an unlock for content this deployment does not store keeps its
+      raw key rather than borrowing a title.
+    */
+    if (unlockRecords.length > 0) {
+      const { titlesForContentKeys } = await import('./content');
+      const titleOf = await titlesForContentKeys(unlockRecords.map((u) => u.contentKey));
+      for (const record of unlockRecords) {
+        record.title = titleOf.get(record.contentKey) ?? null;
+      }
     }
 
     // Newest first. Subscriptions sort by when they started, not by expiry — a receipt is ordered
@@ -205,14 +214,3 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
   }
 }
 
-/** Content keys this deployment has priced, with their titles. */
-async function postsByContentKey(): Promise<Array<{ key: string; title: string }>> {
-  const { listPosts } = await import('./content');
-  return (await listPosts())
-    .filter((p) => p.access.kind === 'paid')
-    .map((p) => ({
-      key: p.access.kind === 'paid' ? p.access.contentKey : '',
-      title: p.title,
-    }))
-    .filter((p) => p.key !== '');
-}

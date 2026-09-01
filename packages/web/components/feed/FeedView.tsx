@@ -18,6 +18,7 @@ import {
   listPosts,
   listProfiles,
   visiblePost,
+  POSTS_PAGE,
 } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
 import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
@@ -100,7 +101,22 @@ export async function FeedView({
         ? 'following'
         : 'all';
 
-  const all = view === 'following' ? await listPosts({ handles: following }) : await listPosts();
+  /*
+    Bounded at the database, not in JavaScript.
+
+    A guest is shown ten posts. This used to fetch EVERY post in the table — every body, every asset
+    row — and slice ten off the front, so the cost of showing a stranger ten posts grew with the
+    whole archive. One extra row is asked for beyond what will be shown, which is all that is needed
+    to say truthfully whether there is more without counting what there is.
+  */
+  const isGuest = reader === undefined;
+  const GUEST_POSTS = 10;
+  const wanted = isGuest ? GUEST_POSTS : POSTS_PAGE;
+
+  const all =
+    view === 'following'
+      ? await listPosts({ handles: following, limit: wanted + 1 })
+      : await listPosts({ limit: wanted + 1 });
 
   /*
     What a visitor sees before signing in.
@@ -114,10 +130,13 @@ export async function FeedView({
     Locked bodies stay locked either way. This caps how much of the *public* feed is shown, nothing
     more.
   */
-  const GUEST_POSTS = 10;
-  const isGuest = reader === undefined;
-  const posts = isGuest ? all.slice(0, GUEST_POSTS) : all;
-  const withheld = isGuest ? all.length - posts.length : 0;
+  const posts = all.slice(0, wanted);
+  /*
+    Whether more exists, not how much. The extra row asked for above answers that exactly; an exact
+    total would need a second query counting rows nobody is going to read, which is the cost this
+    change exists to remove.
+  */
+  const hasMore = all.length > posts.length;
 
 
   /*
@@ -274,8 +293,8 @@ export async function FeedView({
       }
       sessionLabel={sessionLabel}
       guestWall={
-        withheld > 0
-          ? `Showing ${posts.length} of ${all.length} posts. Sign in to read the rest.`
+        isGuest && hasMore
+          ? `Showing ${posts.length} posts. Sign in to read the rest.`
           : undefined
       }
       builtOn={BUILT_ON}

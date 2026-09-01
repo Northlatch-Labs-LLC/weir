@@ -263,14 +263,28 @@ function toPost(row: PostRow): Post {
  * A left join with aggregation rather than a query per post. The N+1 shape is invisible with six
  * posts and is what makes a feed unusable at six hundred.
  */
+/*
+ * The asset ids come from a correlated subquery rather than a `LEFT JOIN … GROUP BY`.
+ *
+ * The join form aggregated before it limited. Postgres has no transform that streams
+ * `posts_created_idx` in order and stops after N groups, because the group key (`p.id`) is not the
+ * sort key (`created_at_ms`) — so a `LIMIT` bounded the rows RETURNED while the whole
+ * `posts ⋈ assets` product was still read and sorted first. A limit that does not reduce the work
+ * is not a limit.
+ *
+ * As a scalar subquery there is no aggregation barrier: the planner walks the index in order, stops
+ * at N, and runs the subquery for those N rows only. `assets_post_idx` serves it.
+ */
 const POST_SELECT = `
   SELECT p.id, p.vault_id, p.author_handle, p.created_at_ms, p.title, p.preview, p.body,
          p.access_kind, p.price, p.content_key,
          p.body_blob_id, p.body_end_epoch, p.body_nonce, p.body_seal_wrapped_key, p.body_sha256,
          p.body_tier, p.body_period,
-         COALESCE(array_agg(a.id ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '{}') AS asset_ids
+         COALESCE(
+           (SELECT array_agg(a.id ORDER BY a.id) FROM assets a WHERE a.post_id = p.id),
+           '{}'
+         ) AS asset_ids
   FROM posts p
-  LEFT JOIN assets a ON a.post_id = p.id
 `;
 
 interface ProfileRow {
@@ -387,9 +401,52 @@ export async function upsertProfile(profile: Profile): Promise<void> {
  * is exactly the wanted behaviour and is why it is written this way rather than as a dynamic
  * `IN (...)` that would have to special-case empty.
  */
+/**
+ * How many posts a caller gets when it does not say.
+ *
+ * There is a default rather than "all" because the previous behaviour WAS all: no `LIMIT` existed,
+ * so every logged-out visitor to the home feed selected every post in the table — bodies included,
+ * plus every asset row — so that the component could keep ten. At a few hundred posts that is
+ * invisible; at a few thousand it is tens of megabytes crossing the pooler, per visitor, holding one
+ * of a handful of pooled connections while it does.
+ *
+ * The number is a page, not a policy: callers that want fewer pass fewer, and callers that want
+ * more page with {@link listPosts}'s cursor rather than by asking for an unbounded read.
+ */
+export const POSTS_PAGE = 50;
+
+/** The hard stop. A caller asking for more than this gets this — an unbounded read has no caller. */
+const POSTS_MAX = 200;
+
+/** Where a page ended, so the next one can begin exactly after it. */
+export interface PostCursor {
+  createdAtMs: number;
+  id: string;
+}
+
+/**
+ * Newest first, bounded.
+ *
+ * `handles` narrows the feed to a set of creators. An **empty array means an empty feed**, not an
+ * unfiltered one — treating "follows nobody" as "show everything" is how a following feed silently
+ * stops filtering while still looking full. `= ANY($n)` over an empty array matches nothing, which
+ * is exactly the wanted behaviour and is why it is written this way rather than as a dynamic
+ * `IN (...)` that would have to special-case empty.
+ *
+ * # Keyset, not OFFSET
+ *
+ * `after` continues from the last row of the previous page by value, so the database seeks to that
+ * point in the index instead of counting past it. `OFFSET` reads and discards everything before the
+ * page, which makes deep pages progressively more expensive for no reason, and it drops or repeats
+ * rows when something is inserted between two requests. The tiebreak on `id` is what makes the
+ * cursor total: two posts written in the same millisecond would otherwise have no defined order,
+ * and a page boundary landing between them would lose one.
+ */
 export async function listPosts(options?: {
   handle?: string;
   handles?: readonly string[];
+  limit?: number;
+  after?: PostCursor;
 }): Promise<Post[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -402,17 +459,56 @@ export async function listPosts(options?: {
     params.push([...options.handles]);
     conditions.push(`p.author_handle = ANY($${params.length}::text[])`);
   }
+  if (options?.after !== undefined) {
+    // Row-value comparison, so the tiebreak is part of the seek rather than a filter applied after.
+    params.push(String(options.after.createdAtMs), options.after.id);
+    conditions.push(`(p.created_at_ms, p.id) < ($${params.length - 1}::bigint, $${params.length})`);
+  }
+
+  const asked = options?.limit ?? POSTS_PAGE;
+  const limit = Math.max(1, Math.min(Math.floor(asked), POSTS_MAX));
+  params.push(limit);
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const { rows } = await db().query<PostRow>(
-    `${POST_SELECT} ${where} GROUP BY p.id ORDER BY p.created_at_ms DESC`,
+    `${POST_SELECT} ${where} ORDER BY p.created_at_ms DESC, p.id DESC LIMIT $${params.length}`,
     params,
   );
   return rows.map(toPost);
 }
 
+/**
+ * Titles for named content keys, and nothing else.
+ *
+ * The caller here holds a handful of unlocks and wants each one named. It used to get there by
+ * reading every post in the table — bodies, asset ids and all — and keeping the two columns it
+ * needed. This asks for those two columns, for those keys.
+ *
+ * A key with no row is simply absent from the map: an unlock for content this deployment does not
+ * store keeps its raw key rather than borrowing somebody else's title.
+ */
+export async function titlesForContentKeys(
+  keys: readonly string[],
+): Promise<Map<string, string>> {
+  const wanted = [...new Set(keys.filter((key) => key !== ''))];
+  if (wanted.length === 0) return new Map();
+
+  const { rows } = await db().query<{ content_key: string; title: string }>(
+    `SELECT content_key, title FROM posts
+      WHERE access_kind = 'paid' AND content_key = ANY($1::text[])`,
+    [wanted],
+  );
+  return new Map(rows.map((row) => [row.content_key, row.title]));
+}
+
+/** The cursor that continues after `posts`, or `null` when there is nothing more to ask for. */
+export function cursorAfter(posts: readonly Post[]): PostCursor | null {
+  const last = posts.at(-1);
+  return last === undefined ? null : { createdAtMs: last.createdAtMs, id: last.id };
+}
+
 export async function findPost(postId: string): Promise<Post | null> {
-  const { rows } = await db().query<PostRow>(`${POST_SELECT} WHERE p.id = $1 GROUP BY p.id`, [postId]);
+  const { rows } = await db().query<PostRow>(`${POST_SELECT} WHERE p.id = $1`, [postId]);
   return rows[0] === undefined ? null : toPost(rows[0]);
 }
 
