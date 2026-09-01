@@ -61,7 +61,7 @@ import { db } from '@/lib/db';
   under `txBuilders` rather than exporting them individually, and reaching for the group keeps this
   file importing from the same surface every other builder in this package uses.
 */
-const { openAccount } = txBuilders;
+const { openAccount, openCreatorVault } = txBuilders;
 
 /** How many seats the offer has. The database constraint mirrors this; they are asserted equal. */
 export const SPONSORSHIP_SEATS = 50;
@@ -88,6 +88,15 @@ export const SPONSOR_KEY_ENV = 'PROJECTX_SOCIAL_SPONSOR_KEY';
  * of worst-case exposure for the whole offer.
  */
 export const SPONSORED_GAS_BUDGET_MIST = 20_000_000n;
+
+/**
+ * The ceiling for a sponsored vault open.
+ *
+ * Measured requirement was 6,119,412 MIST. 20,000,000 is a little over three times it, matching the
+ * account ceiling for the same reason: what we sign is the most that can be burned per attempt, so
+ * it is a number chosen here rather than one a simulation hands us.
+ */
+export const SPONSORED_VAULT_GAS_BUDGET_MIST = 20_000_000n;
 
 export interface SponsorIdentity {
   address: string;
@@ -165,21 +174,49 @@ function shapeOf(tx: Transaction): { kinds: string[]; targets: string[] } {
  * else while we pay for it. There is no legitimate reason for one here, so the check is an
  * equality rather than a filter.
  */
+export type SponsoredAction = 'account' | 'vault';
+
+/**
+ * The one call each action is allowed to be.
+ *
+ * Held as a map rather than a string built at the call site, so adding a sponsorable action is a
+ * deliberate edit to this table and not something that falls out of a caller passing a different
+ * string. Everything else in the transaction is still forbidden.
+ */
+const SPONSORABLE: Record<SponsoredAction, (config: ProjectXSocialConfig) => string> = {
+  account: (c) => `${c.latestPackageId}::account::open`,
+  vault: (c) => `${c.latestPackageId}::creator::open_vault`,
+};
+
 export function assertIsOnlyAccountOpen(
   tx: Transaction,
   config: ProjectXSocialConfig,
+  action: SponsoredAction = 'account',
 ): Reading<true> {
   const source = 'sponsored registration';
   const { kinds, targets } = shapeOf(tx);
-  const expected = `${config.latestPackageId}::account::open`;
+  const expected = SPONSORABLE[action](config);
 
-  if (kinds.length !== 1 || kinds[0] !== 'MoveCall') {
+  /*
+    A vault open legitimately carries a SplitCoins beside the MoveCall: `open_vault` takes a
+    `Coin<SUI>` payment, and with the creation fee at zero that is a zero-value split off the gas
+    coin. So the shape for a vault is exactly SplitCoins + MoveCall, in that order, and nothing
+    else — still an equality, just a two-command one. An account open remains exactly one MoveCall.
+
+    The split comes off `tx.gas`, which in a sponsored transaction is the SPONSOR's coin. That is
+    deliberate and safe: with the fee at zero it moves nothing, and if the fee were ever non-zero
+    this guard would have to be revisited before we sponsored a vault again, because we would then
+    be paying the fee as well as the gas. Recorded here so that change cannot be made silently.
+  */
+  const allowedKinds = action === 'vault' ? ['SplitCoins', 'MoveCall'] : ['MoveCall'];
+  if (kinds.length !== allowedKinds.length || kinds.some((k, i) => k !== allowedKinds[i])) {
     return fail(
       'malformed',
       source,
-      `a sponsored transaction must be exactly one MoveCall and nothing else; this one is [${kinds.join(', ')}]. Refusing to pay gas for it.`,
+      `a sponsored ${action} must be exactly [${allowedKinds.join(', ')}] and nothing else; this one is [${kinds.join(', ')}]. Refusing to pay gas for it.`,
     );
   }
+
   if (targets.length !== 1 || targets[0] !== expected) {
     return fail(
       'malformed',
@@ -410,6 +447,84 @@ export async function sponsorAccountOpen(input: {
       sponsorAddress: input.sponsor.address,
       seat: input.seat,
       gasBudgetMist: SPONSORED_GAS_BUDGET_MIST.toString(),
+    });
+  } catch (error) {
+    return fail('transport', source, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * Build, inspect, simulate and sponsor one `creator::open_vault`.
+ *
+ * # Why this exists, and what it cost to learn
+ *
+ * Sponsoring the account was only half a door. An agent we sponsor arrives holding nothing — that
+ * is the entire point — and then meets a second wall at the vault, because opening one costs gas
+ * even when the creation fee is zero. Measured on mainnet: 6,119,412 MIST required, against the
+ * 2,152,388 our own first agent holds. She could not open her own vault either.
+ *
+ * So "free handle, free vault" was true about fees and false about the path, and it went out
+ * publicly before anybody tested the path rather than the field. The lesson is written into the
+ * launch rule now: the condition is never "is the number zero", it is "can an agent holding
+ * nothing complete the whole thing".
+ *
+ * # The same safety argument, unchanged
+ *
+ * We build it, we inspect it, we simulate it, and only then do we sign as gas payer. Gas can only
+ * ever become gas — which is precisely why the 29 SUI creation fee could never have been
+ * sponsored this way: money handed to somebody can be kept, and a gas payment cannot.
+ *
+ * The zero-value payment coin is split off `tx.gas`, which belongs to the sponsor. At a fee of
+ * zero that moves nothing. If the fee were ever raised while this path was live we would silently
+ * begin paying it, so `assertIsOnlyAccountOpen` documents that and the caller checks the fee.
+ */
+export async function sponsorVaultOpen(input: {
+  config: ProjectXSocialConfig;
+  sponsor: SponsorIdentity;
+  sender: string;
+  accountId: string;
+  coinType: string;
+  /** Read from chain by the caller. Refused unless zero — see the note above. */
+  creationFeeMist: string;
+}): Promise<Reading<{ bytes: string; sponsorSignature: string; sponsorAddress: string; gasBudgetMist: string }>> {
+  const source = 'sponsored vault';
+  if (input.creationFeeMist !== '0') {
+    return fail(
+      'unconfigured',
+      source,
+      `vault sponsorship is only offered while the creation fee is zero; it currently reads ${input.creationFeeMist} MIST. Refusing to pay a fee nobody authorised.`,
+    );
+  }
+  try {
+    const client = createClient(input.config);
+    const tx = new Transaction();
+    const [payment] = tx.splitCoins(tx.gas, [0n]);
+    openCreatorVault(
+      { config: input.config, tx },
+      { coinType: input.coinType, accountId: input.accountId, paymentCoin: payment!, sender: input.sender },
+    );
+    tx.setSender(input.sender);
+    tx.setGasOwner(input.sponsor.address);
+    tx.setGasBudget(SPONSORED_VAULT_GAS_BUDGET_MIST);
+
+    const shape = assertIsOnlyAccountOpen(tx, input.config, 'vault');
+    if (!shape.ok) return shape;
+
+    const bytes = await tx.build({ client });
+    const sim = (await client.simulateTransaction({ transaction: bytes, include: { effects: true } })) as {
+      Transaction?: { status?: { success?: boolean; error?: string | null }; effects?: { status?: { success?: boolean; error?: string | null } } };
+    };
+    const status = sim.Transaction?.effects?.status ?? sim.Transaction?.status;
+    if (status?.success !== true) {
+      return fail('malformed', source, `the vault would not open, so no gas was paid: ${status?.error ?? 'no status returned'}`);
+    }
+
+    const { signature } = await input.sponsor.keypair.signTransaction(bytes);
+    return ok({
+      bytes: toBase64(bytes),
+      sponsorSignature: signature,
+      sponsorAddress: input.sponsor.address,
+      gasBudgetMist: SPONSORED_VAULT_GAS_BUDGET_MIST.toString(),
     });
   } catch (error) {
     return fail('transport', source, error instanceof Error ? error.message : String(error));
