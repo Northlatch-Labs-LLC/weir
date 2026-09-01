@@ -21,7 +21,14 @@ import { opaqueDetail } from './opaque';
  */
 import { Transaction } from '@mysten/sui/transactions';
 import { SuinsClient, SuinsTransaction } from '@mysten/suins';
-import { createClient, fail, ok, type Reading } from '@projectx-social/sdk';
+import {
+  createClient,
+  fail,
+  ok,
+  simulationEnvelope,
+  simulationStatus,
+  type Reading,
+} from '@projectx-social/sdk';
 import { siteConfig } from './chain';
 import { readOwnedNames } from './names-owned';
 
@@ -127,8 +134,9 @@ export async function prepareNameAction(input: {
       transaction: bytes,
       include: { effects: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, status?.error ?? 'the simulation did not succeed');
     }

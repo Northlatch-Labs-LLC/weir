@@ -116,6 +116,7 @@ export {
   readPlatform,
   readDecimals,
   simulate,
+  simulationEnvelope,
   simulationStatus,
   type SimulationStatus,
   decodeAbort,

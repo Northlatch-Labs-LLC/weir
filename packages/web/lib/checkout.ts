@@ -37,6 +37,8 @@ import {
   tx as txBuilders,
   type DecodedAbort,
   type Reading,
+  simulationEnvelope,
+  simulationStatus,
 } from '@projectx-social/sdk';
 import { siteConfig, vaultCoinTypes } from './chain';
 import { db } from './db';
@@ -79,8 +81,9 @@ async function quote(
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -340,8 +343,9 @@ export async function prepareDeposit(input: {
       include: { effects: true, balanceChanges: true },
     });
 
-    const result = (simulation as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(simulation);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(simulation);
 
     if (status?.success !== true) {
       const raw = status?.error ?? 'the node reported no status';
@@ -653,8 +657,9 @@ export async function prepareSubscribe(input: {
       include: { effects: true, balanceChanges: true },
     });
 
-    const result = (simulation as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(simulation);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(simulation);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -787,8 +792,9 @@ export async function prepareTip(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -899,8 +905,9 @@ export async function prepareUnlock(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -988,8 +995,9 @@ export async function prepareSetContentPrice(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -1067,8 +1075,9 @@ export async function prepareOpenAccount(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -1134,8 +1143,9 @@ export async function prepareKeyPublish(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -1241,8 +1251,9 @@ export async function prepareOpenVault(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -1365,8 +1376,9 @@ export async function prepareAddTier(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
@@ -1441,8 +1453,9 @@ export async function prepareClaimEarnings(input: {
       transaction: bytes,
       include: { effects: true, balanceChanges: true },
     });
-    const result = (sim as { Transaction?: SimulatedTransaction }).Transaction;
-    const status = result?.effects?.status ?? result?.status;
+    const { grpc } = simulationEnvelope(sim);
+    const result = grpc as SimulatedTransaction | undefined;
+    const status = simulationStatus(sim);
     if (status?.success !== true) {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
