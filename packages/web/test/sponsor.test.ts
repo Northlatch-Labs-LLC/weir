@@ -79,7 +79,9 @@ describe('the guard on what we will pay gas for', () => {
 
     const r = assertIsOnlyAccountOpen(tx, config);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.failure.detail).toMatch(/exactly one MoveCall/);
+    // The message now names the allowed shape per action — "exactly [MoveCall] and nothing else"
+    // for an account, "[SplitCoins, MoveCall]" for a vault. Still an equality, still a refusal.
+    if (!r.ok) expect(r.failure.detail).toMatch(/exactly \[MoveCall\] and nothing else/);
   });
 
   it('refuses a transaction with no move call at all', () => {

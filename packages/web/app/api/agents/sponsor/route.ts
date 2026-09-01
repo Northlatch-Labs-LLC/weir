@@ -11,7 +11,9 @@ import {
   reserveSeat,
   seatsRemaining,
   sponsorAccountOpen,
+  sponsorVaultOpen,
 } from '@/lib/sponsor';
+import { createClient, readPlatform } from '@projectx-social/sdk';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +78,78 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+  }
+
+  /*
+    Two things can be sponsored, and they are separate requests because they happen at different
+    moments in an agent's life: the account when it arrives holding nothing, the vault when it
+    decides to start earning.
+
+    The vault branch does NOT consume a seat. Seats meter the offer of an identity; an agent that
+    already holds an account has been counted, and charging it a second seat to open the vault
+    would mean the fifty ran out at twenty-five agents who each did both.
+  */
+  if (body['action'] === 'vault') {
+    const addr = body['address'];
+    const accountId = body['accountId'];
+    const coinType = body['coinType'];
+    if (typeof addr !== 'string' || typeof accountId !== 'string' || typeof coinType !== 'string') {
+      return NextResponse.json(
+        { error: 'address, accountId and coinType are required for a vault sponsorship' },
+        { status: 400 },
+      );
+    }
+
+    const sponsorV = loadSponsor();
+    if (!sponsorV.ok) {
+      return NextResponse.json(
+        { error: sponsorV.failure.detail, kind: sponsorV.failure.kind },
+        { status: sponsorV.failure.kind === 'unconfigured' ? 501 : 500 },
+      );
+    }
+    const cfgV = siteConfig();
+    if (!cfgV.ok) {
+      return NextResponse.json({ error: cfgV.failure.detail, kind: cfgV.failure.kind }, { status: 503 });
+    }
+
+    /*
+      The creation fee is read from chain on every request rather than assumed zero. If somebody
+      restores it while this path is live we would start paying it out of the sponsor wallet
+      without anybody deciding to — so the fee is measured, and a non-zero reading refuses.
+    */
+    const platform = await readPlatform(createClient(cfgV.value), cfgV.value);
+    if (!platform.ok) {
+      return NextResponse.json(
+        { error: 'the platform fee could not be read, so no vault was sponsored', kind: platform.failure.kind },
+        { status: 503 },
+      );
+    }
+    const feeMist = String(platform.value.creationFeeMist);
+
+    const sponsoredVault = await sponsorVaultOpen({
+      config: cfgV.value,
+      sponsor: sponsorV.value,
+      sender: normaliseAddress(addr.trim()),
+      accountId: accountId.trim(),
+      coinType: coinType.trim(),
+      creationFeeMist: feeMist,
+    });
+    if (!sponsoredVault.ok) {
+      return NextResponse.json(
+        { error: sponsoredVault.failure.detail, kind: sponsoredVault.failure.kind },
+        { status: sponsoredVault.failure.kind === 'unconfigured' ? 409 : sponsoredVault.failure.kind === 'transport' ? 503 : 400 },
+      );
+    }
+    return NextResponse.json(
+      {
+        ...sponsoredVault.value,
+        action: 'vault',
+        note:
+          'Sign these exact bytes with the key for the account owner and submit with both ' +
+          'signatures. Do not rebuild: the gas payment is signed over these bytes.',
+      },
+      { status: 200, headers: { 'cache-control': 'no-store' } },
+    );
   }
 
   const rawAddress = body['address'];
