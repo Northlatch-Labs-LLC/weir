@@ -281,6 +281,49 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
             );
 
       /*
+        No journal row, no harvest.
+
+        A journal is mandatory in live mode — the startup above exits `misconfigured` if it cannot
+        be opened — and the comment there states why: "before the first tick so nothing is ever
+        harvested unrecorded". That invariant was enforced once, at startup, and then not again. A
+        `journal.begin` that failed logged its detail, set `run` to null, and FELL THROUGH to
+        `runOnce`, which harvests and signs. The `finish` and `abandon` calls below are both guarded
+        on `run !== null`, so the work completed and left no trace of having happened.
+
+        Unrecorded is the one outcome this daemon may not produce. A tick that does not run is
+        visible in the next tick and costs a cycle; a tick that ran without a row is invisible and
+        costs a reconciliation nobody knows to perform.
+
+        Counted as a failure so the backoff applies. A journal that will not open a run is usually a
+        database that is unwell, and retrying it at full rate is how one outage becomes two.
+      */
+      if (journal !== null && run === null) {
+        console.error(
+          JSON.stringify({
+            tick: 'skipped',
+            reason: 'the journal would not open a run, and an unrecorded harvest is not permitted',
+          }),
+        );
+        backoff.fail();
+        exitCode = EXIT.runFailed;
+        if (options.once) break;
+        if (shutdown.requested) {
+          exitCode = EXIT.ok;
+          break;
+        }
+        const wait = backoff.delayMs();
+        console.error(
+          JSON.stringify({ backingOff: wait, consecutiveFailures: backoff.failures() }),
+        );
+        await sleepUnlessShutdown(wait, shutdown);
+        if (shutdown.requested) {
+          exitCode = EXIT.ok;
+          break;
+        }
+        continue;
+      }
+
+      /*
         The tick is raced against the shutdown deadline, but it is NOT cancelled. Nothing here can
         safely interrupt a transaction that may already be in flight — the deadline bounds how long
         shutdown waits, not what the tick is allowed to finish doing. A tick that outlives the grace
