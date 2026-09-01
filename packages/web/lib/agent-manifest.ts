@@ -543,6 +543,17 @@ const SAMPLES: Record<Action['kind'], Array<{ variant: string; action: Action }>
   upload: [
     { variant: 'only', action: { kind: 'upload', postId: '{postId}', fileSha256: '{fileSha256}' } },
   ],
+  onramp: [
+    {
+      variant: 'only',
+      action: {
+        kind: 'onramp',
+        walletAddress: '{walletAddress}',
+        network: '{network}',
+        origin: '{origin}',
+      },
+    },
+  ],
 };
 
 /**

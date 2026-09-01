@@ -1,7 +1,9 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
 import { fold } from '@projectx-social/sdk';
-import { rateLimit, clientKey } from '@/lib/rate-limit';
+import { rateLimit, clientKey, quotaLimit } from '@/lib/rate-limit';
+import { verifyAction } from '@/lib/identity';
+import { siteConfig } from '@/lib/chain';
 import { createOnrampSession } from '@/lib/onramp';
 import { readSiteMode } from '@/lib/site-mode';
 import { passIsValid, passTokenFrom } from '@/lib/access-codes';
@@ -58,7 +60,14 @@ export async function POST(request: Request) {
     }
   }
 
-  let body: { walletAddress?: unknown; asset?: unknown; fiatAmount?: unknown; fiatCurrency?: unknown };
+  let body: {
+    walletAddress?: unknown;
+    asset?: unknown;
+    fiatAmount?: unknown;
+    fiatCurrency?: unknown;
+    signature?: unknown;
+    timestampMs?: unknown;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -69,8 +78,69 @@ export async function POST(request: Request) {
   if (!ADDRESS.test(walletAddress)) {
     // Refused rather than passed through: a malformed address sent to the on-ramp becomes a
     // purchase delivered nowhere, and there is no counterparty to appeal to afterwards.
+    // Deliberately still the FIRST refusal, before anything upstream is touched.
     return NextResponse.json({ error: 'that is not a Sui address' }, { status: 400 });
   }
+
+  /*
+    THE AUTHORITY, and it does not evaporate.
+
+    The gate above is a rule about the *site* being closed, so it is correct that it lifts when the
+    site opens. What was wrong was that it was the ONLY thing standing here, so the moment the door
+    opened this route went from "pass holders and the administrator" to "anybody at all" — and
+    nothing said so. Every mint spends two calls against a third-party partner account and is
+    attributed to this merchant, so an open mint is somebody else's abuse surface carried on our
+    name.
+
+    What is required now is proof that the caller controls the address they are asking us to fund.
+    That is deliberately NOT an account, a session or a redeemed pass: anyone holding a Sui address
+    can sign this, including a visitor who has never used this site and holds nothing, which is the
+    person this door exists for. What it removes is the only thing worth removing — minting
+    sessions that deliver to an address the caller does not control.
+
+    `verifyAction` rebuilds the statement from the values below rather than trusting any of them,
+    checks the signature against `walletAddress` itself, enforces the ten-minute window, and spends
+    a replay row because this statement is not a `read`. The statement binds the network and this
+    deployment's own origin, so bytes signed against another deployment do not verify here.
+  */
+  const signature = typeof body.signature === 'string' ? body.signature : '';
+  const timestampMs = typeof body.timestampMs === 'number' ? body.timestampMs : Number.NaN;
+  const config = siteConfig();
+  if (!config.ok) {
+    return NextResponse.json({ error: 'this deployment is not configured' }, { status: 503 });
+  }
+
+  const proven = await verifyAction({
+    address: walletAddress,
+    signature,
+    timestampMs,
+    action: {
+      kind: 'onramp',
+      walletAddress,
+      network: config.value.network,
+      origin: new URL(request.url).origin,
+    },
+  });
+  if (!proven.ok) {
+    return NextResponse.json(
+      {
+        error:
+          'prove this wallet is yours before we fund it: sign the on-ramp statement with the same ' +
+          'address you are asking us to deliver to.',
+      },
+      { status: 403 },
+    );
+  }
+
+  /*
+    The ceiling, keyed on the proven wallet and held in Postgres rather than in this instance's
+    memory. `rateLimit` above is per-process, so a ceiling that must bound spend against somebody
+    else's ledger cannot live there — serverless multiplies instances and multiplies the ceiling
+    with them. `quotaLimit` refuses when the store is unreachable rather than passing the request
+    through, which is the only honest direction for a limit that protects a merchant account.
+  */
+  const overQuota = await quotaLimit(walletAddress, 'onramp');
+  if (overQuota !== null) return overQuota;
 
   const asset = body.asset === 'SUI' ? 'SUI' : 'USDC';
   const fiatAmount =
