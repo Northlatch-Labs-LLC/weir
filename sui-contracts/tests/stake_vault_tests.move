@@ -748,3 +748,170 @@ fun a_second_claim_in_the_same_state_takes_nothing() {
     };
     sc.end();
 }
+
+// === Freshness markers must follow principal out ===
+//
+// `deposit` writes two markers — `Fresh{who}` and `FreshTotal` — recording money that arrived
+// inside the current harvest window and has therefore not earned yet. Until 2026-09-01 `withdraw`
+// reduced the principal and left both markers where they were, and the three tests below are the
+// three ways that one omission was reachable. None of them needs an attacker; the first is what an
+// ordinary depositor does by changing their mind.
+
+/// Returns what came back, so a test can assert the amount rather than assume it —
+/// `withdraw_exact` above asserts it internally and is used where that is all a test needs.
+fun withdraw_returning(sc: &mut Scenario, who: address, amount: u64): u64 {
+    sc.next_tx(who);
+    let mut v = sc.take_shared<StakeVault>();
+    let mut state = sc.take_shared<SuiSystemState>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let out = sv::withdraw(&mut v, &acct, amount, &mut state, sc.ctx());
+    let got = out.value();
+    coin::burn_for_testing(out);
+    sc.return_to_sender(acct);
+    ts::return_shared(state);
+    ts::return_shared(v);
+    got
+}
+
+#[test]
+/// The one that costs a depositor their money.
+///
+/// Deposit, then take part of it back before the next harvest. The stale `Fresh` marker was folded
+/// into `rebate_debt` at the next settle, and `accrue_on`'s `entitled - rebate_debt` then
+/// underflowed. Every route out of a position runs that line — `deposit`, `withdraw` and
+/// `claim_rebate` — so the remaining principal was unreachable from then on, permanently, with no
+/// administrative rescue anywhere in the module.
+fun a_partial_withdrawal_inside_one_window_does_not_strand_the_rest() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    // Somebody else earning, so the accumulator actually moves. With a single depositor it stays
+    // at zero and the defect is not armed — which is why it survived the original suite.
+    deposit(&mut sc, FAN2, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::claimable_rebate(&v, FAN2) > 0, 0); // the precondition is real
+        ts::return_shared(v);
+    };
+
+    // Deposit and change your mind, inside the same window.
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    assert!(withdraw_returning(&mut sc, FAN, 10 * SUI_1) == 10 * SUI_1, 1);
+
+    // The marker must have come down with the principal: 90 SUI is FAN2's 100 minus FAN's 40 fresh
+    // — FAN's remaining 40 all arrived this window and none of it is eligible yet.
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == 40 * SUI_1, 2);
+        assert!(sv::eligible_total(&v) == 100 * SUI_1, 3);
+        ts::return_shared(v);
+    };
+
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // The line under test. Before the fix this aborted with an arithmetic error and every retry
+    // aborted the same way.
+    assert!(withdraw_returning(&mut sc, FAN, 40 * SUI_1) == 40 * SUI_1, 4);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == 0, 5);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// The one that costs everybody else theirs.
+///
+/// A round trip in a single window — deposit and withdraw the same amount, cost: gas — left
+/// `FreshTotal` claiming money the vault no longer held. `eligible_total` is the denominator the
+/// rebate is divided by, so it fell below the principal actually earning and `acc_rebate_per_unit`
+/// grew past anything `rebate_pool` could pay. Honest depositors' claims then aborted on the
+/// balance check and never recovered, because the accumulator only ever increases.
+fun a_round_trip_cannot_inflate_the_accumulator() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // In and straight back out, same window.
+    deposit(&mut sc, FAN2, 100 * SUI_1);
+    assert!(withdraw_returning(&mut sc, FAN2, 100 * SUI_1) == 100 * SUI_1, 0);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN2) == 0, 1);
+        // The whole finding. This read 0 before the fix, because a stale `FreshTotal` of 100
+        // covered the entire vault.
+        assert!(sv::eligible_total(&v) == 100 * SUI_1, 2);
+        ts::return_shared(v);
+    };
+
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    // The rebate must still be payable out of the pool that was funded for it. An inflated
+    // accumulator shows up here as a claim larger than the pool, which aborts.
+    sc.next_tx(FAN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let due = sv::claimable_rebate(&v, FAN);
+        assert!(due > 0, 3);
+        assert!(due <= sv::rebate_pool_value(&v), 4);
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        assert!(out.value() == due, 5);
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
+
+#[test]
+/// And the fix must not become a gift.
+///
+/// A withdrawal comes out of MATURED principal first, so the marker only shrinks once what remains
+/// cannot cover it. The other order would let anyone deposit and immediately withdraw the same
+/// amount of older principal, and the new money would start earning as though it had sat through a
+/// harvest. Here 100 is mature and 50 is fresh; withdrawing 50 must leave the 50 fresh still
+/// ineligible, not convert it.
+fun a_withdrawal_comes_out_of_matured_principal_first() {
+    let mut sc = setup();
+    set_full_rebate(&mut sc);
+
+    deposit(&mut sc, FAN, 100 * SUI_1);
+    harvest(&mut sc);
+    advance_to_maturity(&mut sc);
+    harvest(&mut sc);
+
+    deposit(&mut sc, FAN, 50 * SUI_1);
+    assert!(withdraw_returning(&mut sc, FAN, 50 * SUI_1) == 50 * SUI_1, 0);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == 100 * SUI_1, 1);
+        // 100 principal, 50 of it still fresh. Not 100, which is what taking from the fresh side
+        // first would have produced.
+        assert!(sv::eligible_total(&v) == 50 * SUI_1, 2);
+        ts::return_shared(v);
+    };
+
+    sc.end();
+}
