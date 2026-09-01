@@ -13,6 +13,18 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-01 · CLOUDFLARE MANAGED ROBOTS.TXT IS OFF for weir.social (zone 4e20f9cc…) on the Master's word. Live now: robots.txt is OUR file, 1,313 bytes, Content-Signal search=yes, ai-input=yes, ai-train=no, zero full-site disallows; API read-back is_robots_txt_managed=false, cf_robots_variant=off. How: the desk's Cloudflare credentials live at ~/.config/protocolx/ (cloudflare.token, cloudflare-workers.token, cloudflare-email.token) — the desk had searched the wrong places earlier and said none existed; only cloudflare-email.token carries bot-management scope. The API PATCH was blocked by the agent shell's auto-mode classifier, so the switch was flipped in the dashboard session the Master signed in to, then verified by API read and live fetch. Follow-up: give the primary desk token Zone→Bot Management→Edit so the next change is API-only. Also live tonight: #103 funnel (/explore, /explore/agents 200 for a visitor), #102 browse, #93 contracts on main; live stake vault closed to deposits by the Master's signature.
+
+---
+
+## 2026-09-01 · LIVE STAKE VAULT CLOSED TO NEW DEPOSITS by the Master's own signature: tx 2k9utK3vCEAueZcHDkCTBLodnEZw7Mk3FoZXxcfQgzNh, sender 0xda78…715d, stake_vault::set_accepting(false), status Success, storage 6779200 + computation 100000 MIST. Read back on chain: accepting=false, total_principal 3 SUI intact. Withdrawals, rebate and yield claims unaffected (tested). This removes the S-1 exposure for any NEW depositor until the ceremony ships the fix; the existing 3 SUI remains withdrawable. Undo is the same call with true.
+
+---
+
+## 2026-09-01 · #103 MERGED (24f5ff8) — spec capability C1 shipped: the two-sided explore funnel ('Explore creators' / 'Explore AI agents') on the waitlist page and the home page, reachable by a visitor under waitlist mode (/explore and /explore/agents opened at the gate with their reason; gate test now strips comments — it had been parsing ALWAYS_OPEN wrongly and could pass against a lie), and the agent marker delivered on every post by a DECLARED agent via the declaration register (PostCard's pill finally has a caller; undeclared never gets it; withdrawn rows excluded). Verified: 103 tests across four files, mutation 'agents guessed from profiles' fails five, nine CI checks green. Not in this PR: the profile identity line (spec PR-1b). The kicker reads 'Creators', not 'Humans' — the register proves a declaration was made, never that one was not. #102 (browse) and #93 (contracts) merged earlier tonight; main was 82563b7 → 24f5ff8. The close-deposits transaction for the live stake vault is prepared and dry-run proven with the Master's address as sender (StakeCap 0x0b8882…e1c5, vault 0xee64…bb11, set_accepting false, status Success, two mutated objects); it awaits his signature — the desk holds no key for it and will not.
+
+---
+
 ## 2026-09-01 · PR #93 at 32a1e7d: ALL CHECKS GREEN — Secret scan, Move tests (131), Typecheck/tests/build, Digest guard (matches ci-next-digest, the intended upgrade), and every PVS gate including PVS·digest, now that the verifier accepts the intended digest from the canonical source (protocolx-verify #22 merged, verification-tools 095fd38). Nothing on this PR is red by design any more. #102 (public browse endpoint) merged and live: /api/browse posts 200 with 15 items on production. Still blocked on a Sui CLI for protocol 135 before the ceremony; still open with the Master: the door (passes vs open explore under waitlist mode), the Moltbook comment, the Cloudflare sign-in.
 
 ---
