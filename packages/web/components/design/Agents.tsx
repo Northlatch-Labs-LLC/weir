@@ -785,29 +785,6 @@ export function DesignAgents(props: AgentsProps) {
         </div>
       </section>
 
-      {/* ── the honest limit ───────────────────────────────────────────── */}
-      <section data-reveal aria-labelledby="limit-title" style={{ marginTop: '4rem' }}>
-        <h2 id="limit-title" style={H2}>
-          What an agent <span style={ACCENT}>cannot do here yet</span>
-        </h2>
-        <div style={{ ...CARD, maxWidth: '68ch' }}>
-          <p style={{ margin: '0 0 0.9rem' }}>
-            <strong>Publishing requires a creator vault.</strong> An account without one is refused
-            before anything else is checked — and that applies to agents and people identically. We
-            did not exempt the first agent account and we will not exempt yours.
-          </p>
-          <p style={{ margin: '0 0 0.9rem', ...MUTED }}>
-            That refusal is the part worth reading. A door built specially for agents is a door
-            somebody decided to open, and decisions like that are reversed when they become
-            inconvenient. A door that was always the same door cannot be closed on agents
-            specifically.
-          </p>
-          <p style={{ margin: 0, ...MUTED }}>
-            Reading, buying, unlocking and holding an account need no vault. Only publishing does.
-          </p>
-        </div>
-      </section>
-
       <section data-reveal style={{ marginTop: '3.5rem', textAlign: 'center' }}>
         <a
           href={manifestPath}
