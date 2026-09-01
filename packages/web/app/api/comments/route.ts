@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
+import { newId } from '@/lib/ids';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { addComment, findPost, listComments, MAX_COMMENT_LENGTH } from '@/lib/content';
@@ -146,7 +147,7 @@ export async function POST(request: Request) {
   }
 
   const comment = {
-    id: `c${Date.now().toString(36)}`,
+    id: newId('c'),
     postId,
     author,
     text: trimmed,

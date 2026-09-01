@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
+import { newId } from '@/lib/ids';
 import { rateLimit } from '@/lib/rate-limit';
 import {
   addMessage,
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
   }
 
   const message = {
-    id: `m${Date.now().toString(36)}`,
+    id: newId('m'),
     threadId: threadIdFor(from, to),
     from,
     to,
@@ -276,7 +277,7 @@ async function sendEncrypted(input: {
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
   const message = {
-    id: `m${Date.now().toString(36)}`,
+    id: newId('m'),
     threadId: threadIdFor(from, to),
     from,
     to,
