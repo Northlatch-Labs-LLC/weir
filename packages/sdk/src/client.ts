@@ -234,6 +234,66 @@ export interface DecodedAbort {
  * On a chain, an abort discovered after signing has already cost gas — and a *success* discovered
  * after signing may have moved money somewhere unintended. Neither is recoverable by retrying.
  */
+/** The `{ success, error }` pair a node reports for a simulated transaction. */
+export interface SimulationStatus {
+  success?: boolean;
+  error?: string | null;
+}
+
+/**
+ * The one place that knows where a simulation's status lives.
+ *
+ * # Why this is a function and not four lines at the call site
+ *
+ * It was four lines at the call site, in more than one call site, and they disagreed. The daemon's
+ * `adapters/signer.ts` carried its own copy that read `Transaction.status` and the legacy
+ * `transaction.effects.status` — and NOT `FailedTransaction`. A successful simulation was decoded
+ * correctly there; a genuine Move abort found no status at all and was reported as
+ * "a client/server shape mismatch, not a rejected transaction", which is the opposite of what had
+ * happened. It failed closed, so nothing was signed, and it wrote down the wrong reason for ever.
+ *
+ * Duplicating a decoder duplicates the shape it was written against, and only one copy gets fixed
+ * when that shape moves. This client has already changed underneath this code once.
+ *
+ * # The envelopes, measured rather than read from documentation
+ *
+ * On `@mysten/sui` 2.27.1 against mainnet:
+ *
+ *     success -> { $kind: 'Transaction',       Transaction:       { status: { success: true } } }
+ *     abort   -> { $kind: 'FailedTransaction', FailedTransaction: { status: { … } } }
+ *     legacy  -> { transaction: { effects: { status: … } } }   (JSON-RPC, older nodes)
+ *
+ * # Why every level is checked before it is indexed
+ *
+ * `shape.Transaction?.status` guards `Transaction` being **undefined**. It does not guard it being
+ * literally `null`: a node answering `{"Transaction": null}` would throw a TypeError inside the
+ * caller's `try`, which returns `fail('transport', …)` — telling the caller to retry something
+ * permanent. A `transport` label on a condition that reproduces for ever is worse than no label.
+ *
+ * Returns `undefined` when no status is found anywhere. The caller must treat that as REFUSAL:
+ * "no status" is not permission to sign.
+ */
+export function simulationStatus(result: unknown): SimulationStatus | undefined {
+  const isObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null;
+  const envelope: Record<string, unknown> = isObject(result) ? result : {};
+  const grpc = isObject(envelope['Transaction'])
+    ? envelope['Transaction']
+    : isObject(envelope['FailedTransaction'])
+      ? envelope['FailedTransaction']
+      : undefined;
+  const legacy = isObject(envelope['transaction']) ? envelope['transaction'] : undefined;
+  const legacyEffects =
+    legacy !== undefined && isObject(legacy['effects']) ? legacy['effects'] : undefined;
+  const grpcStatus =
+    grpc !== undefined && isObject(grpc['status']) ? (grpc['status'] as SimulationStatus) : undefined;
+  const legacyStatus =
+    legacyEffects !== undefined && isObject(legacyEffects['status'])
+      ? (legacyEffects['status'] as SimulationStatus)
+      : undefined;
+  return grpcStatus ?? legacyStatus;
+}
+
 export async function simulate(
   client: SuiGrpcClient,
   transaction: Transaction,
@@ -276,42 +336,7 @@ export async function simulate(
       So each level is checked for being an object before it is indexed. The cost is four lines;
       the alternative is a permanent condition wearing a transient's name.
     */
-    type SimStatus = { success?: boolean; error?: string | null };
-    const isObject = (v: unknown): v is Record<string, unknown> =>
-      typeof v === 'object' && v !== null;
-
-    const envelope: Record<string, unknown> = isObject(result) ? result : {};
-
-    /*
-      A FAILED simulation does not arrive under `Transaction`. It arrives under
-      `FailedTransaction`, and reading only the success envelope makes every genuine abort look
-      like a shape mismatch. From `@mysten/sui` 2.27.1 `src/grpc/core.ts:1597`:
-
-          return status.success
-            ? { $kind: 'Transaction',       Transaction: result }
-            : { $kind: 'FailedTransaction', FailedTransaction: result };
-
-      Missing this branch fails CLOSED — nothing is signed, which is the property that matters —
-      but it answers an abort with "this is a client/server shape mismatch, not a rejected
-      transaction", which is exactly backwards and sends the reader looking for a library bug
-      instead of at their own transaction. The decoded abort was unreachable.
-    */
-    const grpc = isObject(envelope['Transaction'])
-      ? envelope['Transaction']
-      : isObject(envelope['FailedTransaction'])
-        ? envelope['FailedTransaction']
-        : undefined;
-
-    const legacy = isObject(envelope['transaction']) ? envelope['transaction'] : undefined;
-    const legacyEffects = legacy !== undefined && isObject(legacy['effects']) ? legacy['effects'] : undefined;
-
-    const grpcStatus = grpc !== undefined && isObject(grpc['status']) ? (grpc['status'] as SimStatus) : undefined;
-    const legacyStatus =
-      legacyEffects !== undefined && isObject(legacyEffects['status'])
-        ? (legacyEffects['status'] as SimStatus)
-        : undefined;
-
-    const status = grpcStatus ?? legacyStatus;
+    const status = simulationStatus(result);
 
     /*
       An unrecognised shape REFUSES, and must keep refusing.

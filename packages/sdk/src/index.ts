@@ -116,6 +116,8 @@ export {
   readPlatform,
   readDecimals,
   simulate,
+  simulationStatus,
+  type SimulationStatus,
   decodeAbort,
   ABORT_EXPLANATIONS,
   PLATFORM_BCS_FIELDS,
