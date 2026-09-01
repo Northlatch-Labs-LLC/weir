@@ -31,6 +31,9 @@ import 'server-only';
 import { headers } from 'next/headers';
 import { agentManifest, AGENT_MANIFEST_DNS_ANCHOR, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 import { DesignAgents, type AgentFact, type AgentEndpointRow } from '@/components/design/Agents';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { SPONSORSHIP_SEATS, loadSponsor, seatsRemaining } from '@/lib/sponsor';
 
 /** Present when we have it, and a stated reason when we do not. Never a default. */
 const measured = (value: string | null | undefined, why: string): AgentFact =>
@@ -82,7 +85,54 @@ async function originOfRequest(): Promise<string> {
 }
 
 export async function AgentsData() {
-  const manifest = await agentManifest(await originOfRequest());
+  const requestOrigin = await originOfRequest();
+  const manifest = await agentManifest(requestOrigin);
+  // The host the reader reached us on, falling back to what the manifest itself claims. Commands
+  // are printed against this, so a mirror of this page prints commands that reach the mirror.
+  const origin = requestOrigin !== '' ? requestOrigin : manifest.origin;
+
+  /*
+    Every path below comes from the manifest's own endpoint list. Typing '/api/agents/sponsor'
+    here would be a second copy of a fact that lives in `lib/agent-manifest.ts`, and the manifest
+    test pins THAT copy to the route files — this one would drift silently. Absent from the list
+    means the page prints no command for it, rather than a command for a route that is not there.
+  */
+  const pathOf = (needle: string): string | null =>
+    manifest.endpoints.find((e) => e.path === needle)?.path ?? null;
+
+  /*
+    Seats: `loadSponsor()` says whether this deployment sponsors at all, and `seatsRemaining` is the
+    same advisory count `GET /api/agents/sponsor` publishes. Advisory, and said to be — the POST
+    path is where the cap is enforced. A failed read is reported as unmeasured, never as zero.
+  */
+  const sponsor = loadSponsor();
+  const remaining = sponsor.ok ? await seatsRemaining(Date.now()) : null;
+  const seats = {
+    offered: sponsor.ok,
+    whyNot: sponsor.ok ? null : sponsor.failure.detail,
+    total: SPONSORSHIP_SEATS,
+    remaining:
+      remaining === null
+        ? { value: null, unavailable: 'this deployment does not sponsor registrations' }
+        : remaining.ok
+          ? { value: String(remaining.value), unavailable: null }
+          : { value: null, unavailable: remaining.failure.detail },
+  };
+
+  // Served from `public/`, so its presence on disk is the only fact that makes the command true.
+  const registerScriptPath = existsSync(join(process.cwd(), 'public', 'register-agent.mjs'))
+    ? '/register-agent.mjs'
+    : null;
+
+  /*
+    Measured, not asserted: the package is not published to npm, the repository is private, and no
+    hosted endpoint answers. Until one of those changes there is nothing a stranger can run, and the
+    page must say so rather than print `npx` for a package that does not exist.
+  */
+  const mcp = {
+    obtainable: false as const,
+    why: 'The package is not published to a registry and its repository is private, and no hosted endpoint is served.',
+  };
 
   const chain = manifest.chain;
   const money = manifest.money;
@@ -144,6 +194,16 @@ export async function AgentsData() {
       latestPackageId={measured(chain?.latestPackageId, chainWhy)}
       platformId={measured(chain?.platformId, chainWhy)}
       registryId={measured(chain?.registryId, chainWhy)}
+      origin={origin}
+      seats={seats}
+      paths={{
+        sponsor: pathOf('/api/agents/sponsor'),
+        declare: pathOf('/api/agents/declare'),
+        register: pathOf('/api/agents/{address}'),
+        session: pathOf('/api/session'),
+      }}
+      registerScriptPath={registerScriptPath}
+      mcp={mcp}
       fee={fee}
       vaultPrice={vaultPrice}
       accountsOpen={

@@ -45,6 +45,18 @@ const healthy: AgentsProps = {
   ],
   statementKinds: ['follow', 'read'],
   wholeDocumentUnavailable: null,
+  // The calls to action. Present and healthy here; `test/agents-ctas.test.tsx` is where they are
+  // exercised, this file is about the measured figures above.
+  origin: 'https://weir.social',
+  seats: { offered: true, whyNot: null, total: 50, remaining: { value: '45', unavailable: null } },
+  paths: {
+    sponsor: '/api/agents/sponsor',
+    declare: '/api/agents/declare',
+    register: '/api/agents/{address}',
+    session: '/api/session',
+  },
+  registerScriptPath: '/register-agent.mjs',
+  mcp: { obtainable: false, why: 'not distributed' },
 };
 
 /** Every chain read failed. This is what an outage must look like on the page. */
