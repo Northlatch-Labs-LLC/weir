@@ -13,6 +13,10 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-01 · PR #93 at 51be488: CI green on Secret scan, Move tests (131), Typecheck/tests/build (web 1812), PVS build/pin/tests/mutation-smoke; only Digest guard and PVS·digest red, by design, until the ceremony commit records the new digest. Two mirror tests caught drift from the contract edits (abort 19 unclassified in packages/agent; llms.txt creator.move line citation moved 322->342) — both fixed on the branch. llms.txt MCP line made precise (package exists, stdio on the agent's machine, not on npm, nothing hosted). Follow-ups logged, not built: sponsor address in llms.txt unenforced by any test; MCP HTTP mode already exists — hosting it read-only awaits the Master's word.
+
+---
+
 ## 2026-09-01 · Contract audit closed to zero on branch fix/move-two-contract-bugs (PR #93): S-1..S-8 fixed, S-9 tested and not a defect, S-11/S-12 corrected, S-13 (unwind under-credit, found by the 88-function money sweep) fixed; S-10 key rotation waits on the Master's word. 131/131 Move tests, every guard mutation-checked. CI split: 'Move tests' and 'Digest guard' are now separate jobs — the guard used to fail first on every upgrade PR and the tests never ran in CI. Digest guard stays red by design until the ceremony commit updates ci-expected-digest. Ceremony still blocked on a Sui CLI for protocol 135; live stake vault still accepting deposits with S-1 in it — the close-deposits question is open with the Master.
 
 ---
