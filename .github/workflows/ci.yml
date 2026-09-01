@@ -308,11 +308,21 @@ jobs:
           PY
           )"
           rm -f build-dump.json
+          # Two digests are legitimate: the one recorded as DEPLOYED (ci-expected-digest) and, on
+          # an upgrade branch, the one recorded as INTENDED (ci-next-digest). The second file is
+          # written on purpose, by hand, with the pinned compiler, and it is what turns "source
+          # drifted" into "source changed to exactly what somebody meant". Without it every upgrade
+          # PR was red on this check by design for its whole life, and a check that is red by
+          # design is a check nobody reads — which is the failure this guard exists to prevent.
+          # The ceremony commit promotes next -> expected and deletes ci-next-digest.
+          NEXT=""; [ -f ci-next-digest ] && NEXT="$(tr -d '[:space:]' < ci-next-digest)"
           if [ "$ACTUAL" = "$EXPECTED" ]; then
-            echo "digest-guard: OK ($ACTUAL)"
+            echo "digest-guard: OK — matches the deployed digest ($ACTUAL)"
+          elif [ -n "$NEXT" ] && [ "$ACTUAL" = "$NEXT" ]; then
+            echo "digest-guard: OK — matches ci-next-digest, the intended upgrade ($ACTUAL); deployed is $EXPECTED"
           else
-            echo "digest-guard: MISMATCH — expected $EXPECTED, built $ACTUAL"
-            echo "If this is a deliberate upgrade, update ci-expected-digest in this commit."
+            echo "digest-guard: MISMATCH — expected $EXPECTED${NEXT:+ or next $NEXT}, built $ACTUAL"
+            echo "If this change is intended, record the built digest in ci-next-digest in this commit (or in ci-expected-digest in the ceremony commit)."
             exit 1
           fi
 
