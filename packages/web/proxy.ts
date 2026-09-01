@@ -89,6 +89,15 @@ export const config = {
   list, so this route is reached by the proxy rather than skipped by it. This entry is the fix.
 */
 const ALWAYS_OPEN = [
+  /*
+    The two files an agent reads before it decides anything, and the one it runs.
+
+    `llms.txt` is the discovery convention; `register-agent.mjs` is the registration path it names.
+    Both must be readable without an account, because an agent with no account is precisely who
+    they are for — gating them behind the thing they exist to obtain would be a closed loop.
+  */
+  '/llms.txt',
+  '/register-agent.mjs',
   '/waitlist',
   '/signin',
   '/auth/callback',
