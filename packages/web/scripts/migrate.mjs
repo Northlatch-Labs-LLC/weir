@@ -57,8 +57,19 @@ const BASELINE = args.has('--baseline');
  */
 const through = [...args].find((a) => a.startsWith('--through='))?.slice('--through='.length);
 
+/*
+  Run only when this file IS the command, not when something imports it.
+
+  The rules that decide whether a migration may run inside a transaction are worth testing, and a
+  module that connects to a database and calls `process.exit` at import time cannot be tested at
+  all. Nothing about the command changes: `node scripts/migrate.mjs` still reads the environment,
+  still refuses to start without it, and still exits 2.
+*/
+const RUN_AS_COMMAND = process.argv[1] !== undefined
+  && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
 const url = process.env['PROJECTX_DATABASE_URL'];
-if (url === undefined || url.trim() === '') {
+if (RUN_AS_COMMAND && (url === undefined || url.trim() === '')) {
   console.error(
     'PROJECTX_DATABASE_URL is not set. There is no default — a default connection string is how ' +
       'a deployment silently migrates the wrong database.',
@@ -79,6 +90,55 @@ function describe(connectionString) {
 }
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
+
+/**
+ * SQL with its comments removed, so a rule never matches a sentence describing it.
+ *
+ * Both checks below decide whether a file may run inside a transaction, and both would be wrong if
+ * a docblock explaining `CREATE INDEX CONCURRENTLY` counted as using it. A migration's comments are
+ * usually longer than its statements here, so this is the common case rather than the corner.
+ */
+export function statementsOnly(sql) {
+  /*
+    `--` to end of line ANYWHERE, not only where a line begins with it.
+
+    A trailing comment is the ordinary way to annotate a statement, and stripping only whole-line
+    comments left `CREATE INDEX i ON t (c); -- one day, CONCURRENTLY` reading as a file that uses
+    CONCURRENTLY. That is the expensive direction: it refuses a valid migration, in a message about
+    a restriction the file does not actually hit.
+
+    This does not parse SQL, so a `--` inside a string literal takes the rest of that line with it.
+    That can only ever hide a real CONCURRENTLY, never invent one — and a hidden one is caught
+    immediately by Postgres, in its own words, on a file that has been applied to nothing. The
+    asymmetry is deliberate: a false refusal blocks a deployment, a false permission does not.
+  */
+  return sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--.*$/gm, ' ');
+}
+
+/** The marker a migration writes to opt out of the wrapper, on a line of its own. */
+export const OUTSIDE_MARKER = 'weir:outside-a-transaction';
+
+/**
+ * Whether this file asked to run outside a transaction.
+ *
+ * Read from the RAW text, not from `statementsOnly`: the marker is a comment, which is the only
+ * place it can live in a file that must remain valid SQL.
+ */
+export function runsOutsideATransaction(sql) {
+  return new RegExp(`^\\s*--\\s*${OUTSIDE_MARKER}\\s*$`, 'm').test(sql);
+}
+
+/**
+ * Whether this file contains a statement Postgres refuses inside a transaction block.
+ *
+ * `CREATE INDEX CONCURRENTLY` is the one that matters here, and the reason this whole opt-out
+ * exists: without it, no migration can ever add an index to a live table without taking
+ * `ACCESS EXCLUSIVE` on it for the duration of the build. `DROP INDEX CONCURRENTLY` and
+ * `REINDEX CONCURRENTLY` carry the same restriction.
+ */
+export function needsToRunOutsideATransaction(sql) {
+  return /\bconcurrently\b/i.test(statementsOnly(sql));
+}
 
 /** Every `NNN_name.sql` in db/, in filename order. */
 function migrations() {
@@ -222,10 +282,64 @@ async function main() {
   }
 
   console.log('');
+  /*
+    Refuse the whole run before applying anything, rather than failing partway.
+
+    A file using `CONCURRENTLY` without the marker cannot work: Postgres rejects it inside a
+    transaction block, and every file is wrapped in one by default. That failure arrives as a
+    Postgres error naming a restriction rather than the fix, halfway through a migration set. This
+    says the sentence the author needs, and says it while nothing has been applied yet.
+  */
+  const mislabelled = pending.filter(
+    (m) => needsToRunOutsideATransaction(m.sql) && !runsOutsideATransaction(m.sql),
+  );
+  if (mislabelled.length > 0) {
+    for (const m of mislabelled) {
+      console.error(`  REFUSED   ${m.filename}: uses CONCURRENTLY inside a transaction`);
+    }
+    console.error(
+      `\nPostgres will not run CONCURRENTLY inside a transaction block, and every migration is\n` +
+        `wrapped in one. Add this as the first line of the file to opt out:\n\n` +
+        `    -- ${OUTSIDE_MARKER}\n\n` +
+        `Read what that costs in the block above it before you do — an unwrapped file that fails\n` +
+        `is left half-applied, and CREATE INDEX CONCURRENTLY leaves an INVALID index behind.\n`,
+    );
+    await client.end();
+    process.exit(1);
+  }
+
   for (const m of pending) {
-    // Its own transaction. A failure leaves nothing behind and is not recorded, so the next run
-    // retries exactly this file rather than the ones that already succeeded.
+    const unwrapped = runsOutsideATransaction(m.sql);
     try {
+      if (unwrapped) {
+        /*
+          No transaction, because the file said so and because the statement it holds cannot run in
+          one. `CREATE INDEX CONCURRENTLY` builds without taking `ACCESS EXCLUSIVE` on the table —
+          which is the entire reason to want it on a live deployment, and was impossible here until
+          this branch existed.
+
+          The timeouts are set on the SESSION rather than inside a transaction, so they must be put
+          back afterwards: this connection runs the remaining migrations too, and leaving a ceiling
+          of zero on it would silently exempt every later file from a limit it was meant to keep.
+        */
+        await client.query('set statement_timeout = 0');
+        await client.query('set lock_timeout = 0');
+        try {
+          await client.query(m.sql);
+          await client.query(
+            'insert into schema_migrations (filename, checksum) values ($1, $2)',
+            [m.filename, m.checksum],
+          );
+        } finally {
+          await client.query('reset statement_timeout').catch(() => {});
+          await client.query('reset lock_timeout').catch(() => {});
+        }
+        console.log(`  applied   ${m.filename}  (outside a transaction)`);
+        continue;
+      }
+
+      // Its own transaction. A failure leaves nothing behind and is not recorded, so the next run
+      // retries exactly this file rather than the ones that already succeeded.
       await client.query('begin');
       /*
         Migrations are exempt from the statement ceiling, deliberately and explicitly.
@@ -251,9 +365,25 @@ async function main() {
       await client.query('commit');
       console.log(`  applied   ${m.filename}`);
     } catch (error) {
-      await client.query('rollback').catch(() => {});
       console.error(`  FAILED    ${m.filename}: ${error.message}`);
-      console.error('\nRolled back. Nothing from this file was kept and it was not recorded.\n');
+      if (unwrapped) {
+        /*
+          There is nothing to roll back, and saying "rolled back" here would be a lie that costs an
+          operator the one thing they need to know: the database is in a state this tool did not
+          choose and cannot describe.
+        */
+        console.error(
+          `\nNOT rolled back. This file ran outside a transaction, so whatever succeeded before the\n` +
+            `failure is still applied, and it was NOT recorded in schema_migrations — so the next run\n` +
+            `will attempt the whole file again.\n\n` +
+            `If it was building an index, Postgres has left an INVALID one behind. Find it with\n` +
+            `  SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;\n` +
+            `drop it, then re-run.\n`,
+        );
+      } else {
+        await client.query('rollback').catch(() => {});
+        console.error('\nRolled back. Nothing from this file was kept and it was not recorded.\n');
+      }
       await client.end();
       process.exit(1);
     }
@@ -262,7 +392,9 @@ async function main() {
   await client.end();
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (RUN_AS_COMMAND) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
