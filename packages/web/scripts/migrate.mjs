@@ -227,6 +227,22 @@ async function main() {
     // retries exactly this file rather than the ones that already succeeded.
     try {
       await client.query('begin');
+      /*
+        Migrations are exempt from the statement ceiling, deliberately and explicitly.
+
+        `028` puts a `statement_timeout` on the `postgres` role, which is the role this runner
+        connects as. Without this line the ceiling would apply to migrations too, and the work that
+        legitimately runs long is exactly the migration work: an index build over a large table, or
+        the whole-table `UPDATE` in `019`. Those would begin to fail at the ceiling — on a big table,
+        every time — and the failure would look like a broken migration rather than a timeout doing
+        its job.
+
+        `0` is "no limit", set inside the transaction, so it lasts for this file and no longer. The
+        ceiling is for the request path, which should never hold a connection for seconds; a
+        migration is the one place in this system where holding one is correct.
+      */
+      await client.query('set statement_timeout = 0');
+      await client.query('set lock_timeout = 0');
       await client.query(m.sql);
       await client.query(
         'insert into schema_migrations (filename, checksum) values ($1, $2)',
