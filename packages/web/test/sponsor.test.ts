@@ -239,3 +239,60 @@ describe('the cap, enforced by the database', () => {
     expect(worstCaseSui).toBeLessThanOrEqual(1);
   });
 });
+
+describe('the vault guard — what it must let through and what it must not', () => {
+  const VAULT_CFG = config;
+  const mk = (target: string, opts: { transfers?: number; recipient?: string } = {}) => {
+    const tx = new Transaction();
+    tx.setSender(SENDER);
+    const [coin] = tx.splitCoins(tx.gas, [0n]);
+    tx.moveCall({ target, arguments: [coin!] });
+    for (let i = 0; i < (opts.transfers ?? 1); i += 1) {
+      tx.transferObjects([coin!], opts.recipient ?? SENDER);
+    }
+    return tx;
+  };
+
+  it('accepts the real shape: split, call, transfer home', () => {
+    /*
+      `open_vault` returns a CreatorCap and change. Move cannot drop either, so a legitimate vault
+      open is three commands. The first version of this guard allowed only two and refused every
+      real vault — which is the right way round for a guard to be wrong, but still wrong.
+    */
+    const r = assertIsOnlyAccountOpen(mk(`${LATEST}::creator::open_vault`), VAULT_CFG, 'vault');
+    expect(r.ok).toBe(true);
+  });
+
+  it('refuses a vault transaction that transfers to somebody else', () => {
+    // The attack the recipient check exists for: we pay the gas, an attacker receives the
+    // CreatorCap, and controls a creator's earnings from that moment on.
+    const stranger = `0x${'a'.repeat(64)}`;
+    const r = assertIsOnlyAccountOpen(
+      mk(`${LATEST}::creator::open_vault`, { recipient: stranger }),
+      VAULT_CFG,
+      'vault',
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.failure.detail).toMatch(/hand the CreatorCap to somebody else|does not name its own sender/);
+  });
+
+  it('refuses a second transfer hiding beside the legitimate one', () => {
+    const r = assertIsOnlyAccountOpen(
+      mk(`${LATEST}::creator::open_vault`, { transfers: 2 }),
+      VAULT_CFG,
+      'vault',
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it('refuses the vault shape when the action is an account', () => {
+    // An account open is exactly one MoveCall. The extra commands are not permitted there.
+    const r = assertIsOnlyAccountOpen(mk(`${LATEST}::account::open`), VAULT_CFG, 'account');
+    expect(r.ok).toBe(false);
+  });
+
+  it('refuses a different function even in the vault shape', () => {
+    const r = assertIsOnlyAccountOpen(mk(`${LATEST}::creator::claim_earnings`), VAULT_CFG, 'vault');
+    expect(r.ok).toBe(false);
+  });
+});
