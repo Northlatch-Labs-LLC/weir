@@ -145,7 +145,21 @@ export async function openSession(input: {
   try {
     response = await doFetch(`${input.baseUrl}/api/session`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        /*
+          Ask for the bearer token in the body.
+
+          The route now withholds it unless asked, because a browser gets one it never reads while
+          script on that origin could carry it away for a day. This client is the caller it was
+          built for: it holds a key, has no cookie jar, and would otherwise parse `Set-Cookie` to
+          obtain a credential the server just minted for it.
+
+          A deployment that does not know this header still works — it returns no token, and the
+          fallback below reads the cookie instead.
+        */
+        'x-weir-bearer': '1',
+      },
       // `statement` is deliberately absent. The server rebuilds it; sending ours would invite the
       // substitution `identity.ts` refuses to allow.
       body: JSON.stringify({
