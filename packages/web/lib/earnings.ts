@@ -81,7 +81,8 @@ export async function readEarnings(owner: string): Promise<Reading<CreatorEarnin
   if (!config.ok) return config;
 
   const address = normaliseAddress(owner);
-  const profiles = (await listProfiles()).filter((p) => normaliseAddress(p.owner) === address);
+  // Narrowed in SQL, served by `profiles_owner_idx`. This read every creator to keep one owner's.
+  const profiles = await listProfiles({ owner: address });
   if (profiles.length === 0) return ok([]);
 
   const caps = await findCreatorCaps(owner);

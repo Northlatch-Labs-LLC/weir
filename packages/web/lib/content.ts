@@ -315,8 +315,86 @@ function toProfile(row: ProfileRow): Profile {
   };
 }
 
-export async function listProfiles(): Promise<Profile[]> {
-  const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles ORDER BY handle');
+/**
+ * Creator profiles, alphabetically.
+ *
+ * # Narrowing, because most callers wanted a few
+ *
+ * This took no arguments and returned the whole table. Three callers then threw most of it away in
+ * JavaScript: the entity markers kept the handles on the current page, the earnings page kept the
+ * rows belonging to one address, and the sidebar kept the first few. Each read every creator on the
+ * platform to use a handful, on every render, and `RightRail` sits in the shell — so that was every
+ * page on the site.
+ *
+ * The options narrow in SQL instead. `handles` and `owner` are served by the primary key and
+ * `profiles_owner_idx`; `limit` bounds the rest.
+ *
+ * # Why there is no DEFAULT limit, unlike `listPosts`
+ *
+ * Posts grow without bound and a feed is a window onto them, so a default page is right there. The
+ * remaining callers here build a lookup map over every creator — a handle-to-vault index, a
+ * coin-type index — and a silently truncated map is not a smaller answer, it is a wrong one: a
+ * creator missing from it renders as though they do not exist. So an unnarrowed call still returns
+ * everything, deliberately, and the callers that want a subset now say so.
+ *
+ * That remains a whole-table read for those callers. It is bounded by the number of creators rather
+ * than by anything this function does, and turning those maps into targeted lookups is a different
+ * change to a different set of call sites.
+ */
+/**
+ * How many creator profiles exist.
+ *
+ * Separate from {@link listProfiles} so a caller showing a subset can say what it is a subset OF
+ * without fetching the rest. The sidebar's "Showing 6 of 12" is the honest version of showing six —
+ * its own comment says showing the first six as though they were all of them is how a reader
+ * concludes the platform has six creators — and keeping that sentence true was the only reason that
+ * component read every row.
+ *
+ * One aggregate instead of every column of every row.
+ */
+export async function countProfiles(): Promise<number> {
+  const { rows } = await db().query<{ n: string }>('SELECT count(*)::text AS n FROM profiles');
+  return Number(rows[0]?.n ?? '0');
+}
+
+export async function listProfiles(options?: {
+  handles?: readonly string[];
+  owner?: string;
+  limit?: number;
+}): Promise<Profile[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (options?.handles !== undefined) {
+    // An empty array matches nothing, which is the wanted behaviour: "these creators" with an empty
+    // list is an empty answer, not everybody.
+    params.push([...options.handles]);
+    conditions.push(`handle = ANY($${params.length}::text[])`);
+  }
+  if (options?.owner !== undefined) {
+    let owner: string;
+    try {
+      owner = normaliseAddress(options.owner);
+    } catch {
+      // Not an address, so nobody owns anything under it. Returning nothing beats throwing on a
+      // page that is only trying to list what somebody has.
+      return [];
+    }
+    params.push(owner);
+    conditions.push(`owner = $${params.length}`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  let limit = '';
+  if (options?.limit !== undefined) {
+    params.push(Math.max(1, Math.floor(options.limit)));
+    limit = ` LIMIT $${params.length}`;
+  }
+
+  const { rows } = await db().query<ProfileRow>(
+    `SELECT * FROM profiles ${where} ORDER BY handle${limit}`,
+    params,
+  );
   return rows.map(toProfile);
 }
 
