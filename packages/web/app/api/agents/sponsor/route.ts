@@ -278,13 +278,20 @@ export async function GET(request: Request) {
   }
 
   /*
-    The public counter settles against the chain first, for the same reason the POST path does:
-    an unconfirmed-but-real claim would otherwise expire and be counted as an available seat, and
-    this number is the one we publish.
+    This counter does NOT settle against the chain, and that is deliberate.
+
+    It did. Settling here meant every anonymous request looped one sequential fullnode read per
+    unclaimed seat — up to the cap — plus an UPDATE per confirmation, on an endpoint that needs no
+    account and costs the caller one HTTP request. That is an amplification primitive against our
+    own fullnode quota, and it was introduced by the change that fixed the seat-recycling defect:
+    correct settlement put in the wrong path.
+
+    The number published here is therefore advisory and may briefly over-report free seats, for at
+    most one hold window. That is the right trade. The POST path settles before it reserves, so the
+    cap is still enforced exactly where enforcement happens, and a caller who acts on a stale count
+    is corrected by the attempt itself rather than by this number.
   */
   const nowMs = Date.now();
-  const cfg = siteConfig();
-  if (cfg.ok) await confirmClaimsFromChain({ config: cfg.value, nowMs });
 
   // Typed as a plain Response: the two branches carry different bodies on purpose — a count and a
   // failure are not the same shape and must not be flattened into one that has both optional.

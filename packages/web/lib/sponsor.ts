@@ -64,6 +64,16 @@ import { db } from '@/lib/db';
 const { openAccount, openCreatorVault } = txBuilders;
 
 /** How many seats the offer has. The database constraint mirrors this; they are asserted equal. */
+/**
+ * How many unclaimed seats one settlement pass will check against the chain.
+ *
+ * Each row costs a sequential fullnode read, so this is the ceiling on what a single request can
+ * spend of somebody else's rate limit. It is deliberately NOT derived from `SPONSORSHIP_SEATS`:
+ * raising the offer should not silently raise the cost of a request, and these two numbers answer
+ * different questions.
+ */
+export const SETTLE_SCAN_LIMIT = 12;
+
 export const SPONSORSHIP_SEATS = 50;
 
 /**
@@ -428,8 +438,20 @@ export async function confirmClaimsFromChain(input: {
 }): Promise<Reading<number>> {
   const source = 'sponsored registration';
   try {
+    /*
+      Bounded, and the bound does not depend on a caller.
+
+      One chain read happens per unclaimed row, sequentially. That is fine at fifty seats and is
+      still an unbounded loop in a request path: the ceiling belongs here rather than in the size
+      the table happens to be today. A settlement pass that runs out of budget resolves the oldest
+      reservations first, and the next call resumes with what it did not reach.
+    */
     const { rows } = await db().query<{ address: string; handle: string }>(
-      'SELECT address, handle FROM agent_sponsorships WHERE claimed_at_ms IS NULL',
+      `SELECT address, handle FROM agent_sponsorships
+        WHERE claimed_at_ms IS NULL
+        ORDER BY reserved_at_ms ASC
+        LIMIT $1`,
+      [SETTLE_SCAN_LIMIT],
     );
     if (rows.length === 0) return ok(0);
 
