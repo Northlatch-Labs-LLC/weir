@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { isSuiId } from '@/lib/db';
 import { createClient, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { machineContentKey } from '@/lib/machine-pricing';
@@ -56,6 +57,17 @@ export async function GET(request: Request) {
   const contentKey = url.searchParams.get('contentKey');
   if (vaultId === null || contentKey === null || contentKey.trim() === '') {
     return NextResponse.json({ error: 'vaultId and contentKey are required' }, { status: 400 });
+  }
+  /*
+    A vault id is an object id or it is not a vault id. Checked before the chain read, for the same
+    reason `names/owned` checks its address: the request is certainly wasted, and the failure that
+    comes back describes the node's disappointment rather than the caller's mistake.
+  */
+  if (!isSuiId(vaultId)) {
+    return NextResponse.json(
+      { error: 'vaultId must be 0x followed by hex digits' },
+      { status: 400 },
+    );
   }
 
   /*
