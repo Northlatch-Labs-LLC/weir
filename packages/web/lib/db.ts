@@ -85,6 +85,43 @@ export function db(): Pool {
  * logs in whichever case each produced. Storing them as given makes `follower = $1` miss, which
  * turns a composite primary key into no key at all and lets the same person follow twice.
  */
+const HEX_ID = /^0x[0-9a-fA-F]{1,64}$/;
+
+/**
+ * Whether this string is a Sui object id or address at all.
+ *
+ * `0x` followed by one to sixty-four hex digits. Short forms are real — `0x2` is the Sui framework
+ * — so they are accepted and padded by {@link normaliseAddress}, not rejected.
+ */
+export function isSuiId(value: unknown): value is string {
+  return typeof value === 'string' && HEX_ID.test(value);
+}
+
 export function normaliseAddress(address: string): string {
+  /*
+    Validated before it is parsed, because `BigInt` accepts far more than Sui does.
+
+    This was `BigInt(address)` alone, and `BigInt` reads JavaScript numeric literal syntax rather
+    than hex addresses. Measured, not assumed:
+
+        ''        -> 0x000…000   the ZERO ADDRESS, silently
+        '  '      -> 0x000…000   the zero address again
+        '10'      -> 0x000…00a   a decimal string, reinterpreted as hex
+        '0b1010'  -> 0x000…00a   a binary literal
+        '0o17'    -> 0x000…00f   an octal one
+
+    Only two of those throw anything at all. The rest return a well-formed address that is not the
+    one the caller named, and the first two return the SAME well-formed address for two different
+    kinds of nothing — so an empty field and a whitespace field both become an address that can be
+    stored, compared, and matched against a row.
+
+    Thirty-three call sites reach this function, several on money paths, and none of them could
+    tell the difference between "normalised" and "invented".
+  */
+  if (!isSuiId(address)) {
+    throw new TypeError(
+      `not a Sui address: ${JSON.stringify(address)}. Expected 0x followed by 1-64 hex digits.`,
+    );
+  }
   return `0x${BigInt(address).toString(16).padStart(64, '0')}`;
 }
