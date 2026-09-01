@@ -1,6 +1,32 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
- * `PolicySigner` — the only path to a transaction signature in this repository.
+ * `PolicySigner` — the gated path for signatures that spend on someone else's behalf.
+ *
+ * # Two exceptions, named here, because an unnamed exception makes this docblock false
+ *
+ * This opened with a claim that it was the only path to a transaction signature in this
+ * repository. That was not true, and it had not been true for as long as either of these existed:
+ *
+ *  - `packages/daemon/src/adapters/signer.ts` — the harvest daemon. Its key is **capability-less
+ *    and gas-only**: no `AdminCap`, no `CreatorCap`, no treasury authority, and the one call it
+ *    can make is `stake_vault::harvest`, which moves a vault's own principal into its own stake
+ *    and can send nothing anywhere else. The control is what that key CANNOT do. A spend ceiling
+ *    on an amount it cannot direct would be ceremony rather than a control.
+ *
+ *  - `packages/agent/src/tx.ts` — the agent SDK. It signs with the OPERATOR'S OWN key, for the
+ *    operator, on their own funds. There is no third party whose money a policy would be
+ *    protecting; the person bearing the risk is the person holding the key. It still simulates
+ *    before it signs, through the SDK's `simulate()` gate, which is the property that matters
+ *    there.
+ *
+ * Both exceptions are deliberate and both arguments are sound. Neither was written down, and the
+ * false claim was written here — in the file somebody reads when deciding whether a NEW signing
+ * path has to come through this one. It answered "everything already does". That was the wrong
+ * answer twice already and would have been wrong a third time.
+ *
+ * **What must come through here: anything holding a capability, spending a budget, or moving
+ * another party's funds.** A third exception is named in that list, or the claim above is false
+ * again. `packages/signer/test/the-only-path-claim.test.ts` fails until it is.
  *
  * # The five steps, in order, and why the order is the design
  *
