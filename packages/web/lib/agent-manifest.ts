@@ -704,6 +704,20 @@ const ENDPOINTS: ManifestEndpoint[] = [
     body: [],
   },
   {
+    path: '/api/browse',
+    methods: ['GET'],
+    proof: 'none',
+    budget: 'read',
+    purpose:
+      'What is here, for a caller who knows nothing yet. `kind=creators` lists creators by handle; ' +
+      '`kind=posts` lists posts newest first, optionally one creator\'s with `handle`. Pages are ' +
+      'fixed at 20 and the size is not a parameter; `truncated` says a further page exists and ' +
+      '`nextCursor` fetches it. A post\'s words are included only when its access is public; ' +
+      'previews and prices always are; sealed material never is.',
+    query: ['kind', 'cursor', 'handle'],
+    body: [],
+  },
+  {
     path: '/api/account',
     methods: ['GET'],
     proof: 'none',
