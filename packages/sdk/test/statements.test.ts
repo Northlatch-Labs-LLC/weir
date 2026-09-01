@@ -57,6 +57,7 @@ const GOLDEN: Readonly<Record<string, string>> = {
   "send(free)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: send\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\ntext: hello\npreview: hel\npaid: ",
   "send-encrypted": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: send encrypted\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\nciphertext-sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   "read": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: read\nthread with: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "onramp": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: fund wallet\nwallet: 0xabababababababababababababababababababababababababababababababab\nnetwork: mainnet\norigin: https://weir.social",
   "read-content": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: read content",
   "publish": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: publish\ncreator: atlas\naccess: paid\ntitle: Sealed on Walrus\ncontent-sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nkey: sealed-on-walrus-001\nprice: 10000",
   "name-vault": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\naction: name vault\nvault: 0x1111111111111111111111111111111111111111111111111111111111111111\nname: Atlas\nbio: Documentary notes.\ncoin: 0x2::sui::SUI",
@@ -90,6 +91,11 @@ const CASES: ReadonlyArray<readonly [string, Action]> = [
   ],
   ['read', { kind: 'read', other: `0x${'cd'.repeat(32)}` }],
   ['read-content', { kind: 'read-content' }],
+  [
+    'onramp',
+    { kind: 'onramp', walletAddress: `0x${'ab'.repeat(32)}`, network: 'mainnet', origin: 'https://weir.social' },
+  ],
+
   [
     'publish',
     {
@@ -156,6 +162,7 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
       'send-encrypted': true,
       read: true,
       'read-content': true,
+      onramp: true,
       publish: true,
       'name-vault': true,
       'set-profile': true,
@@ -167,7 +174,7 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
     expect([...new Set(CASES.map(([, action]) => action.kind))].sort()).toEqual(
       Object.keys(covered).sort(),
     );
-    expect(Object.keys(covered)).toHaveLength(13);
+    expect(Object.keys(covered)).toHaveLength(14);
   });
 
   it('would notice a single changed byte', () => {
@@ -233,7 +240,7 @@ describe('STATEMENT_SHAPES', () => {
   });
 
   it('describes every kind', () => {
-    expect(Object.keys(STATEMENT_SHAPES)).toHaveLength(13);
+    expect(Object.keys(STATEMENT_SHAPES)).toHaveLength(14);
   });
 });
 

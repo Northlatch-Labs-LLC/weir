@@ -246,7 +246,32 @@ export type Action =
    * purpose — a signature requirement is the cheapest way to close it without deleting a feature
    * somebody may be about to build.
    */
-  | { kind: 'upload'; postId: string; fileSha256: string };
+  | { kind: 'upload'; postId: string; fileSha256: string }
+  /**
+   * Funding a wallet through the card on-ramp.
+   *
+   * The signer is the wallet that will receive the funds. That is the whole content of the claim:
+   * this proves the caller controls the address they are asking us to deliver to, which is what
+   * separates a visitor buying their own coins from somebody minting payment sessions against a
+   * stranger's address on our merchant account.
+   *
+   * It deliberately does NOT require an account, a session or a redeemed pass. Anyone holding a
+   * Sui address can sign this, including a person who has never used this site and holds nothing —
+   * which is exactly the visitor this door exists for, and re-closing the door to them would be
+   * the wrong trade.
+   *
+   * # `network` and `origin`, and why they are here and not in the head
+   *
+   * Every other statement in this file binds neither, so bytes signed against a staging, testnet,
+   * local or forked deployment verify identically against production, and a page that is not ours
+   * can present text a wallet renders as ours. Both are bound here so this statement cannot be
+   * harvested somewhere else and spent here.
+   *
+   * They sit in the body rather than the shared head because moving them into the head rotates
+   * every statement at once and invalidates signatures in flight. This is the shape the rest
+   * should take when they are rotated deliberately; it is not a reason to leave them unbound now.
+   */
+  | { kind: 'onramp'; walletAddress: string; network: string; origin: string };
 
 /**
  * The exact bytes a client must sign.
@@ -287,6 +312,8 @@ export function statementFor(action: Action, address: string, timestampMs: numbe
       return `${head}\naction: declare operator\noperating: ${action.agent}\nmodel: ${action.model}\npurpose: ${action.purpose}`;
     case 'upload':
       return `${head}\naction: upload\npost: ${action.postId}\nfile-sha256: ${action.fileSha256}`;
+    case 'onramp':
+      return `${head}\naction: fund wallet\nwallet: ${action.walletAddress}\nnetwork: ${action.network}\norigin: ${action.origin}`;
   }
 }
 
@@ -358,6 +385,7 @@ const SHAPE_SAMPLES: Readonly<Record<Action['kind'], readonly Action[]>> = {
   'declare-agent': [{ kind: 'declare-agent', operator: '', model: '', purpose: '' }],
   'declare-operator': [{ kind: 'declare-operator', agent: '', model: '', purpose: '' }],
   upload: [{ kind: 'upload', postId: '', fileSha256: '' }],
+  onramp: [{ kind: 'onramp', walletAddress: '', network: '', origin: '' }],
 };
 
 /**

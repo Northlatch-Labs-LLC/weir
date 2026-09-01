@@ -392,6 +392,19 @@ export const QUOTAS = {
   read: { capacity: 600, msPerToken: 100 },
   write: { capacity: 120, msPerToken: 1_000 },
   purchase: { capacity: 10, msPerToken: 360_000 },
+  /*
+    Minting card-purchase sessions, keyed on the wallet proven by the signature.
+
+    This one is durable rather than per-instance for a reason the others can tolerate and it
+    cannot: each mint spends two calls against a third-party partner account, and the traffic is
+    attributed to this merchant rather than to the caller. A ceiling that multiplies by the
+    instance count is not a ceiling on somebody else's ledger.
+
+    Small and slow on purpose. Buying coins for a wallet is something a person does occasionally,
+    not in a loop — five to begin with, then one every ten minutes. A legitimate visitor never
+    reaches it; an address trying to industrialise the door meets it immediately.
+  */
+  onramp: { capacity: 5, msPerToken: 600_000 },
 } as const satisfies Record<string, Quota>;
 
 export type QuotaName = keyof typeof QUOTAS;
@@ -708,6 +721,7 @@ export const BREAKER_ENV = {
   read: 'PROJECTX_SOCIAL_BREAKER_READ_PER_MINUTE',
   write: 'PROJECTX_SOCIAL_BREAKER_WRITE_PER_MINUTE',
   purchase: 'PROJECTX_SOCIAL_BREAKER_PURCHASE_PER_HOUR',
+  onramp: 'PROJECTX_SOCIAL_BREAKER_ONRAMP_PER_HOUR',
 } as const satisfies Record<QuotaName, string>;
 
 /**
@@ -721,6 +735,7 @@ export const BREAKER_WINDOW_MS = {
   read: 60_000,
   write: 60_000,
   purchase: 3_600_000,
+  onramp: 3_600_000,
 } as const satisfies Record<QuotaName, number>;
 
 /**
@@ -741,6 +756,13 @@ export const BREAKER_DEFAULTS = {
   read: 12_000,
   write: 1_200,
   purchase: 60,
+  /*
+    Deployment-wide backstop on card-session mints, expressed per hour like `purchase` and for the
+    same reason: exhausting it costs money on a third-party account rather than CPU here. Set above
+    any honest hour — sixty distinct wallets funding themselves in one hour is far past anything
+    this platform has seen — and far below what an address farm would want.
+  */
+  onramp: 60,
 } as const satisfies Record<QuotaName, number>;
 
 /**
