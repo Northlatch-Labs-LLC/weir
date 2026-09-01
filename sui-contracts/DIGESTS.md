@@ -14,6 +14,6 @@ the chain does. Editing it on a branch would make CI report the source as deploy
 2026-09-01 the only alternative was leaving every upgrade PR red on this check for its whole life, and a
 check that is red by design is a check nobody reads.
 
-The external verifier (PVS · digest) reads only `ci-expected-digest` today and will stay red on an upgrade
-branch until it learns the second file. That is recorded as a follow-up on the verifier, not papered over
-here.
+The external verifier (PVS · digest) learned the second file on 2026-09-01 (protocolx-verify #22, via the
+canonical `verification-tools/ci/digest-compare.sh`): it accepts a build matching either file and says
+which one it matched, the same rule as the workflow above.
