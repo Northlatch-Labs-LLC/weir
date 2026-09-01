@@ -26,6 +26,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The secret scanner, which until now ran nowhere.
+  #
+  # It existed, `install-hooks.sh` installed it as a pre-commit hook, and `core.hooksPath` was
+  # empty in at least one working checkout with no `.git/hooks/pre-commit` — so it guarded nothing
+  # there and said nothing about it. install-hooks.sh warns about exactly that case: "every other
+  # checkout committed with no guard at all and nothing said so."
+  #
+  # A local hook is per-checkout and will always be missing somewhere. This is the copy that cannot
+  # be skipped, and it is deliberately its own job: a scanner that only runs after a two-minute
+  # typecheck is a scanner people wait for rather than one that stops them.
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # CI has no .env, so this run is PATTERNS ONLY and the scanner now says so rather than
+      # printing CLEAN. The identity rule -- exact containment of a value read from a live .env --
+      # is the strongest of the three and cannot run here. That is a real limit of this job and it
+      # is stated rather than papered over: CI catches the shapes, a local commit with the
+      # environment present catches the values.
+      - name: Scan every tracked file
+        run: python3 scripts/scan-secrets.py --all
+
   web:
     name: Typecheck, tests, build
     runs-on: ubuntu-latest

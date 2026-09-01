@@ -713,6 +713,19 @@ def main() -> int:
           f'{len(secrets)} live secret(s) compared{note}')
 
     if not findings:
+        # CLEAN and DEGRADED are different answers and must not print the same word.
+        #
+        # The identity rule -- exact containment of a value read from a live .env -- is the strongest
+        # of the three checks and the only one that catches a real key pasted into a comment. With no
+        # .env present it compares against nothing and contributes nothing, and the run still printed
+        # CLEAN. A checkout with no .env therefore reported the same result as a fully checked one,
+        # which is how a guard convinces people it is guarding.
+        if not secrets:
+            print('scan-secrets: DEGRADED — no live secrets were available to compare against.')
+            print('  The pattern rules ran and found nothing. The identity rule did not run at all,')
+            print('  so a real credential copied out of .env would not have been caught by this run.')
+            print('  This is not CLEAN. Provide the environment file, or read this as "patterns only".')
+            return 0
         print('scan-secrets: CLEAN')
         return 0
 
