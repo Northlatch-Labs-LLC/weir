@@ -157,6 +157,37 @@ describe('the cap, enforced by the database', () => {
     if (!again.ok) expect(again.failure.detail).toContain('One each');
   });
 
+  it('reuses a seat whose hold expired instead of jamming on it', async () => {
+    /*
+      The defect this exists for: an expired hold leaves its row behind holding its seat. With
+      `ON CONFLICT DO NOTHING` the next request selected that seat as free, collided with the
+      stale row, and came back empty — reported as "the offer is fully taken" at three seats of
+      fifty. The offer jammed permanently on the first hold that ever expired.
+    */
+    const t0 = 1_000_000;
+    const first = await reserveSeat({ address: `0x${'1'.repeat(64)}`, handle: 'expiredone', gasBudgetMist: 1n, nowMs: t0 });
+    expect(first.ok).toBe(true);
+
+    // Long past the hold, a different agent asks. It must get a seat, not a refusal.
+    const later = t0 + SEAT_HOLD_MS + 1;
+    const second = await reserveSeat({ address: `0x${'2'.repeat(64)}`, handle: 'freshone', gasBudgetMist: 1n, nowMs: later });
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.value.seat).toBe(1);
+  });
+
+  it('never takes over a seat that was actually claimed', async () => {
+    // The guard that makes the takeover safe. A claimed seat is gone forever, however old it is.
+    const t0 = 2_000_000;
+    const r = await reserveSeat({ address: `0x${'3'.repeat(64)}`, handle: 'claimedone', gasBudgetMist: 1n, nowMs: t0 });
+    expect(r.ok).toBe(true);
+    await testDb().query('UPDATE agent_sponsorships SET claimed_at_ms = $1 WHERE handle = $2', [t0, 'claimedone']);
+
+    const later = t0 + SEAT_HOLD_MS * 100;
+    const next = await reserveSeat({ address: `0x${'4'.repeat(64)}`, handle: 'anotherone', gasBudgetMist: 1n, nowMs: later });
+    expect(next.ok).toBe(true);
+    if (next.ok) expect(next.value.seat).not.toBe(r.ok ? r.value.seat : -1);
+  });
+
   it('refuses a handle another seat already claimed', async () => {
     /*
       Without this, fifty seats could be spent racing for one desirable name and forty-nine of them
