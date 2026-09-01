@@ -1,6 +1,12 @@
--- 029_sponsored_vaults.sql
+-- 030_sponsored_vaults.sql
 --
 -- Meter the sponsored vault opening, which was the one sponsored action nothing counted.
+--
+-- Numbered 030 rather than 029. Two migrations were written as 029 in parallel branches, and the
+-- other one reached production's ledger first — so the number was taken on the database, not merely
+-- in a branch. Filename order is the whole contract of a migration set, and a duplicate number is
+-- the one thing that contract cannot survive: two files claiming one position leaves no answer to
+-- "what ran, and in what order".
 --
 -- # What was unmetered
 --

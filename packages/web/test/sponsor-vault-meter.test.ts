@@ -23,7 +23,7 @@ function codeOf(source: string): string {
 const route = () => readFileSync(join(process.cwd(), 'app/api/agents/sponsor/route.ts'), 'utf8');
 const migration = () => {
   try {
-    return readFileSync(join(process.cwd(), 'db/029_sponsored_vaults.sql'), 'utf8')
+    return readFileSync(join(process.cwd(), 'db/030_sponsored_vaults.sql'), 'utf8')
       .split('\n')
       .map((line) => line.replace(/--.*$/, ''))
       .join('\n');
