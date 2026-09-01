@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { createHash } from 'node:crypto';
+import { newId } from '@/lib/ids';
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { createClient, periodOf, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
@@ -233,7 +234,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `unknown access "${access}"` }, { status: 400 });
   }
 
-  const postId = `p${Date.now().toString(36)}`;
+  const postId = newId('p');
 
   /*
     A paid body is sealed before it is stored, and the plaintext never reaches a column.
