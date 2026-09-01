@@ -329,11 +329,34 @@ export async function listProfiles(): Promise<Profile[]> {
  * second one: the save succeeds, and every page keeps reading the first. This is the lookup that
  * asks the question the caller means.
  */
+/**
+ * The profile that owns a vault.
+ *
+ * # Why this compares the bare column
+ *
+ * It asked `WHERE lower(vault_id) = lower($1)`. `profiles_vault_id_key` is a plain unique index on
+ * the bare column, so a function applied to that column made the predicate non-sargable and the
+ * index unusable — every call sequentially scanned `profiles`, on the paths that take money:
+ * `checkout/tip`, `checkout/unlock`, `creator/profile` and `messages/read`.
+ *
+ * The `lower()` could not simply be dropped. It looked redundant because addresses are normalised
+ * on write, and `vault_id` was the one that was not: `upsertProfile` normalised `owner` and passed
+ * `vaultId` through raw. So both sides are normalised now — the writer, a CHECK in `db/031`, and
+ * the argument here — and only then is comparing the bare column correct rather than merely faster.
+ *
+ * A caller that hands over something unparseable gets `null` rather than an exception. This is a
+ * lookup; "no profile owns that" is the honest answer to a vault id that cannot exist, and throwing
+ * would turn a bad query parameter into a 500 on a money path.
+ */
 export async function findProfileByVault(vaultId: string): Promise<Profile | null> {
-  const { rows } = await db().query<ProfileRow>(
-    'SELECT * FROM profiles WHERE lower(vault_id) = lower($1)',
-    [vaultId],
-  );
+  let key: string;
+  try {
+    key = normaliseAddress(vaultId);
+  } catch {
+    return null;
+  }
+
+  const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles WHERE vault_id = $1', [key]);
   return rows[0] === undefined ? null : toProfile(rows[0]);
 }
 
@@ -383,7 +406,10 @@ export async function upsertProfile(profile: Profile): Promise<void> {
        coin_type = COALESCE(EXCLUDED.coin_type, profiles.coin_type)`,
     [
       profile.handle,
-      profile.vaultId,
+      // Normalised like `owner` below, which it was not: this column is compared against a
+      // normalised argument and constrained to that shape by `db/031`, so a raw value here would
+      // be a row its own lookup cannot find.
+      profile.vaultId === null ? null : normaliseAddress(profile.vaultId),
       normaliseAddress(profile.owner),
       profile.displayName,
       profile.bio,
