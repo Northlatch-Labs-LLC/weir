@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
 import { fold, MAX_HANDLE_LEN } from '@projectx-social/sdk';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, sharedLimit } from '@/lib/rate-limit';
 import { accountHandle } from '@/lib/accounts';
 import { verifyAction } from '@/lib/identity';
 import { listPerks, setPerks, setSupportersFirst, readSupportersFirst, validatePerks } from '@/lib/perks';
@@ -33,6 +33,20 @@ export async function GET(request: Request) {
   */
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
+
+  /*
+    And a ceiling that survives the instance count.
+
+    The line above is per-process and says so in its own header, so the limit an anonymous caller
+    actually meets is forty times however many instances happen to be warm — a number nobody chose.
+    That is why 70 sequential requests to this route saw no refusal after it was first limited: the
+    guard was working and the ceiling was not the ceiling.
+
+    Cheap first, durable second. The local map stops a naive loop against a warm instance for free;
+    this one round trip is what makes the published number true.
+  */
+  const shared = await sharedLimit(request, 'read');
+  if (shared !== null) return shared;
 
   const handle = new URL(request.url).searchParams.get('handle');
   if (handle === null) return NextResponse.json({ error: 'handle is required' }, { status: 400 });
