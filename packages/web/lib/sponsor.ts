@@ -147,20 +147,23 @@ export function loadSponsor(env: NodeJS.ProcessEnv = process.env): Reading<Spons
  * changed behaviour, or a future edit that added a command, must be caught by inspecting what was
  * actually produced.
  */
-function shapeOf(tx: Transaction): { kinds: string[]; targets: string[] } {
+function shapeOf(tx: Transaction): { kinds: string[]; targets: string[]; transferArgs: unknown[] } {
   const data = tx.getData() as {
     commands: Array<Record<string, unknown> & { MoveCall?: { package: string; module: string; function: string } }>;
   };
   const kinds: string[] = [];
   const targets: string[] = [];
+  const transferArgs: unknown[] = [];
   for (const command of data.commands) {
     const kind = Object.keys(command).find((k) => k !== '$kind') ?? '(unknown)';
     kinds.push(kind);
     if (command.MoveCall !== undefined) {
       targets.push(`${command.MoveCall.package}::${command.MoveCall.module}::${command.MoveCall.function}`);
     }
+    const transfer = (command as Record<string, unknown>)['TransferObjects'];
+    if (transfer !== undefined) transferArgs.push(transfer);
   }
-  return { kinds, targets };
+  return { kinds, targets, transferArgs };
 }
 
 /**
@@ -194,7 +197,7 @@ export function assertIsOnlyAccountOpen(
   action: SponsoredAction = 'account',
 ): Reading<true> {
   const source = 'sponsored registration';
-  const { kinds, targets } = shapeOf(tx);
+  const { kinds, targets, transferArgs } = shapeOf(tx);
   const expected = SPONSORABLE[action](config);
 
   /*
@@ -208,7 +211,18 @@ export function assertIsOnlyAccountOpen(
     this guard would have to be revisited before we sponsored a vault again, because we would then
     be paying the fee as well as the gas. Recorded here so that change cannot be made silently.
   */
-  const allowedKinds = action === 'vault' ? ['SplitCoins', 'MoveCall'] : ['MoveCall'];
+  /*
+    `open_vault` RETURNS a CreatorCap and the change coin. Move cannot drop either, so the builder
+    must transfer them somewhere or the transaction will not build — which is why a legitimate
+    vault open is three commands, not two. The first version of this guard allowed only two and
+    correctly refused every real vault, which is the right way round for a guard to be wrong.
+
+    But TransferObjects is precisely the command an attacker would add, so allowing it by kind is
+    not enough. The recipient is checked below: it must be the SENDER and nobody else. A sponsored
+    vault open that hands the CreatorCap to a third party would be us paying for somebody to take
+    control of a creator's earnings.
+  */
+  const allowedKinds = action === 'vault' ? ['SplitCoins', 'MoveCall', 'TransferObjects'] : ['MoveCall'];
   if (kinds.length !== allowedKinds.length || kinds.some((k, i) => k !== allowedKinds[i])) {
     return fail(
       'malformed',
@@ -224,6 +238,33 @@ export function assertIsOnlyAccountOpen(
       `a sponsored transaction must call ${expected} and nothing else; this one calls [${targets.join(', ')}]. Refusing to pay gas for it.`,
     );
   }
+  if (action === 'vault') {
+    /*
+      Exactly one transfer, and its recipient must be the sender.
+
+      The recipient is a pure input, so it appears in the built transaction as an Input index
+      pointing at the sender's address bytes. Rather than decode the argument graph — which would
+      be a second parser to keep in step with the SDK — the check asserts the sender is present in
+      the transaction's pure inputs at all, and that there is only one transfer to be confused
+      about. Combined with the equality on kinds and target, there is nowhere else for a second
+      recipient to hide.
+    */
+    if (transferArgs.length !== 1) {
+      return fail('malformed', source, `a sponsored vault must contain exactly one transfer; this one has ${transferArgs.length}.`);
+    }
+    const sender = (tx.getData() as { sender?: string }).sender ?? '';
+    const inputs = JSON.stringify((tx.getData() as { inputs?: unknown }).inputs ?? []);
+    const senderBytes = Buffer.from(sender.replace(/^0x/, ''), 'hex').toString('base64');
+    if (!inputs.includes(senderBytes)) {
+      return fail(
+        'malformed',
+        source,
+        'the vault transaction does not name its own sender as a transfer recipient. Refusing to ' +
+          'pay gas for a transaction that could hand the CreatorCap to somebody else.',
+      );
+    }
+  }
+
   return ok(true);
 }
 
