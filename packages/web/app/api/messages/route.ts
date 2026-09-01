@@ -99,6 +99,33 @@ export async function POST(request: Request) {
   }
 
   /*
+    A price is a whole number of the smallest unit, checked before the signature is.
+
+    Refusing after verification would spend a single-use signature on a request that was never
+    going to be stored, so a creator who typed "1.5" would have to sign again to find that out —
+    the same reason `POST /api/posts` bounds its lengths before it verifies.
+
+    `POST /api/posts` cannot reach this state at all: it compares the submitted price against the
+    on-chain price and refuses a disagreement, so only digits get through. This route took
+    `body.paid.price` and stored it. Every consumer then parses it with `BigInt()`, which throws on
+    '', '1.5' and '1,000' alike — and a stored row is read on every render, so one bad value breaks
+    that thread permanently rather than failing one request.
+
+    `db/032` carries the same rule as a column constraint. Both, deliberately: this one gives a
+    sentence a person can act on, and the column is the rule every other writer passes through.
+  */
+  if (body.paid !== undefined && !/^[0-9]+$/.test(body.paid.price)) {
+    return NextResponse.json(
+      {
+        error:
+          'a price must be a whole number of the smallest unit, written in digits only — ' +
+          `"${body.paid.price}" is not`,
+      },
+      { status: 400 },
+    );
+  }
+
+  /*
     What the paid block commits to, as one field.
 
     Rebuilt from the request in the order the client builds it, and empty when the message is not
