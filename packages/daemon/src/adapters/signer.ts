@@ -23,7 +23,9 @@
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
-import { classify, fail, ok, type Reading } from '@projectx-social/sdk';
+import { classify, fail, ok, type Reading,
+  simulationStatus,
+} from '@projectx-social/sdk';
 
 /** The Sui framework `SuiSystemState`, required by `harvest`. */
 const SUI_SYSTEM_STATE_ID = '0x5';
@@ -85,27 +87,23 @@ export function createSigner(
         const simulation = await client.simulateTransaction({ transaction: bytes });
 
         /*
-          The status lives at `Transaction.status` — capital T, and no `effects` in the path.
+          Decoded by the SDK, not here.
 
-          This read was `transaction.effects.status`, which is the JSON-RPC shape and is not what
-          the gRPC client returns. It therefore resolved to `undefined` on every call, and
-          `undefined` is not `true`, so every harvest was reported as a failed simulation and
-          nothing was ever submitted. The daemon looked healthy, exited 0, and journalled a failure
-          per vault per tick for ever.
-        */
-        type SimStatus = { success?: boolean; error?: string | null };
-        const sim = simulation as {
-          Transaction?: { status?: SimStatus };
-          transaction?: { effects?: { status?: SimStatus } };
-        };
-        const status: SimStatus | undefined =
-          sim.Transaction?.status ?? sim.transaction?.effects?.status;
+          This function carried its own copy of the envelope read, and the copy was wrong in a way
+          the original is not: it looked under `Transaction` and the legacy
+          `transaction.effects.status`, and NOT under `FailedTransaction` — which is where a node
+          puts a simulation that ABORTED. So a successful simulation decoded correctly and a genuine
+          Move abort found no status at all, and was reported as "a client/server shape mismatch,
+          not a rejected transaction". Exactly backwards: the transaction had been rejected, and the
+          daemon wrote down that it could not tell.
 
-        /*
-          An unrecognised shape refuses, and must keep refusing. Treating "no status found" as
-          permission to sign is how a client library's rename turns into money moving with no
-          simulation behind it — the exact gate this function exists to be.
+          It failed closed, which is why this was a reporting defect rather than an incident. It
+          still wrote the wrong reason into `daemon_harvests.error`, on every abort, for ever.
+
+          One decoder now, in the package that already had the correct one.
         */
+        const status = simulationStatus(simulation);
+
         if (status === undefined) {
           return fail(
             'malformed',

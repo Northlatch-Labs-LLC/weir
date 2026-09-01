@@ -93,9 +93,22 @@ export async function tick(
       vaultReading,
       (value) => value,
       (failure) => {
+        /*
+          `unreadable`, not `empty-vault`.
+
+          This branch is reached when the vault could not be READ. It used to record
+          `empty-vault`, which is a measured fact — "the vault holds no principal at all" is what
+          that reason means in `domain/harvest.ts` — about a vault nobody managed to measure.
+
+          The two point opposite ways. An empty vault is the steady state and needs nobody. An
+          unreadable one means the daemon is not seeing part of the estate, and anyone counting
+          reasons to find out how much of it is being missed was reading those failures as vaults
+          that were fine. The `error` field carried the truth the whole time; the field people
+          aggregate on did not.
+        */
         failed.push({
           vaultId,
-          decision: { act: false, reason: 'empty-vault' },
+          decision: { act: false, reason: 'unreadable' },
           error: `${failure.kind}: ${failure.detail}`,
         });
         return null;

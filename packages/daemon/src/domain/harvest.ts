@@ -69,7 +69,21 @@ export type SkipReason =
   /** Nothing matured, and the ladder is at its tranche ceiling. Principal stays liquid. */
   | 'tranche-cap-reached'
   /** The vault holds no principal at all. */
-  | 'empty-vault';
+  | 'empty-vault'
+  /**
+   * The vault could not be read, so no decision was made about it at all.
+   *
+   * Distinct from `empty-vault` on purpose, and the distinction is the whole reason this member
+   * exists. A read failure used to be journalled as `empty-vault` — a measured fact about a vault
+   * nobody could measure. The two are opposite in what they should cause: an empty vault is the
+   * steady state and needs nobody, an unreadable one means this daemon is not seeing part of the
+   * estate and somebody should find out why. Aggregated by reason, the first buries the second.
+   *
+   * This reason never comes from `decideHarvest`, which cannot be reached without a state to
+   * decide on. It is written by `engine.ts` for the vault whose read failed, alongside the real
+   * error text.
+   */
+  | 'unreadable';
 
 export type HarvestDecision =
   | { readonly act: true; readonly reason: HarvestReason }
