@@ -167,7 +167,9 @@ export type PreconditionName =
   /** Below this creator's minimum tip. */
   | 'tip-below-minimum'
   /** The on-chain object is on an older schema than the package and needs migrating. */
-  | 'schema-not-migrated';
+  | 'schema-not-migrated'
+  /** The address named as referrer does not hold an account here yet. */
+  | 'referrer-not-registered';
 
 export interface Precondition {
   /** Which condition. Stable, machine-readable, safe to branch on. */
@@ -205,6 +207,8 @@ const CLEARS_WHEN: Record<PreconditionName, string> = {
   'tier-retired': 'the creator reactivates that tier with creator::set_tier(..., active: true).',
   'content-not-priced': 'the creator calls creator::set_content_price for this key.',
   'insufficient-balance': 'this agent is funded with more of the coin it spends.',
+  'referrer-not-registered':
+    'the address named as referrer opens an account here, or a different referrer is named.',
   'price-above-ceiling':
     'the on-chain price falls below the ceiling, or the operator raises maxPrice deliberately.',
   'price-changed': 'a fresh quote is read and the decision is taken again against it.',
@@ -321,6 +325,19 @@ export const ABORT_CLASSIFICATION: Record<string, Record<number, PreconditionNam
       fires, the registry and the accounts disagree, and no amount of waiting reconciles them.
     */
     8: 'permanent',
+    /*
+      9: EReferrerNotRegistered. A PRECONDITION, and the only one in this module.
+
+      Every other code here describes something the caller must change — a different handle, a
+      different account, a different platform. This one describes something SOMEBODY ELSE has not
+      done yet: the address named as referrer does not hold an account here. It can clear without
+      the caller doing anything, the moment that person registers, so an agent that treated it as
+      permanent would abandon a referral that becomes valid an hour later.
+
+      An agent hitting it should say which address was refused. "Your referrer is not registered
+      here" is actionable; "permanent failure" is not.
+    */
+    9: 'referrer-not-registered',
   },
   creator: {
     1: 'schema-not-migrated', // EWrongVersion — the vault needs migrating.
