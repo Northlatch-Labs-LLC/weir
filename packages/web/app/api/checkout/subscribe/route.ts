@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as {
     sender?: string;
     vaultId?: string;
+    coinType?: string;
     tierIndex?: number;
   };
 
@@ -47,14 +48,48 @@ export async function POST(request: Request) {
     denomination is the only correct answer and there is nothing to fall back to: a guessed type
     parameter builds a transaction against a vault that does not exist.
 
-    `coinType` is no longer read from the body at all, rather than read and validated. A field that
-    is accepted and then overridden is a field somebody will wire back through later, believing it
-    was always meant to be honoured.
+    The body may still SEND `coinType`, and it is checked rather than obeyed or discarded — see the
+    mismatch refusal below.
   */
   const profile = await findProfileByVault(body.vaultId);
   if (profile?.coinType == null || profile.coinType === '') {
     return NextResponse.json(
       { error: 'this vault has no known denomination, so nothing can be subscribed to it' },
+      { status: 409 },
+    );
+  }
+
+  /*
+    The body may STATE the coin type. It may not DECIDE it.
+
+    Ignoring the field silently was the first fix and it was wrong in the way this whole audit has
+    been about. The dangerous caller is not the one sending the right denomination — it is the one
+    sending a DIFFERENT one, and under silent ignoring that caller receives a subscription
+    denominated in a currency it never named, on a money path, with no signal at all. The same
+    shape as a missing price reading as free.
+
+    Refusing outright was also wrong: every client sending the correct value today would break, and
+    an outage to fix a bug nobody was hitting is a bad trade.
+
+    So the field is a CLAIM about the world, checked against the world:
+
+        absent             -> the vault's, as before
+        present, agrees    -> the vault's; nobody notices and no client breaks
+        present, disagrees -> refused, naming both, because that caller is wrong about what they
+                              are buying and only they can fix it
+
+    Production holds exactly one denomination today, so this refusal is a tripwire rather than a
+    live path. That is what makes it cheap to add now: it costs nothing until the day a second
+    denomination exists, which is the day it would otherwise cost somebody a payment in the wrong
+    currency.
+  */
+  if (body.coinType !== undefined && body.coinType !== profile.coinType) {
+    return NextResponse.json(
+      {
+        error:
+          `this vault is denominated in ${profile.coinType}, but the request asked to subscribe ` +
+          `in ${body.coinType}`,
+      },
       { status: 409 },
     );
   }

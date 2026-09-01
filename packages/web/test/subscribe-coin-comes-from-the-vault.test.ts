@@ -11,9 +11,11 @@
  * of every authorship defect on this codebase: a value the caller supplies standing in for a value
  * the chain already decided.
  *
- * The field is now not read from the body at all, rather than read and overridden. A field that is
- * accepted and then ignored is one somebody wires back through later, believing it was always
- * meant to be honoured.
+ * The body may still SEND the field. It may not DECIDE it. Ignoring it silently was the first fix
+ * and it was wrong for tonight's own reason: the dangerous caller is the one sending a DIFFERENT
+ * coin, and silence hands that caller a subscription denominated in a currency they never named.
+ * Refusing the field outright was also wrong — it breaks every client sending the correct value
+ * today. So it is treated as a CLAIM about the world and checked against the world.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -45,15 +47,43 @@ function subscribe(extra: Record<string, unknown> = {}): Request {
 afterEach(() => vi.clearAllMocks());
 
 describe('the coin type', () => {
-  it("is the vault's, even when the body names another", async () => {
+  it('REFUSES a body that names a different coin, rather than quietly substituting', async () => {
+    /*
+      The first version of this fix ignored the field. That is wrong in the way this whole audit
+      has been about: the dangerous caller is not the one sending the right denomination, it is the
+      one sending a DIFFERENT one — and silent substitution hands them a subscription in a currency
+      they never named, on a money path, with no signal. The same shape as a missing price reading
+      as free.
+    */
+    findProfileByVault.mockResolvedValue({ coinType: VAULT_COIN });
+
+    const response = await POST(subscribe({ coinType: ATTACKER_COIN }));
+
+    expect(response.status).toBe(409);
+    expect(prepareSubscribe).not.toHaveBeenCalled();
+  });
+
+  it('names both coins when it refuses, so the caller can see which is which', async () => {
+    findProfileByVault.mockResolvedValue({ coinType: VAULT_COIN });
+
+    const body = (await (await POST(subscribe({ coinType: ATTACKER_COIN }))).json()) as {
+      error: string;
+    };
+
+    expect(body.error).toContain(VAULT_COIN);
+    expect(body.error).toContain(ATTACKER_COIN);
+  });
+
+  it('accepts a body that names the SAME coin, so no existing client breaks', async () => {
+    // The reason this is a mismatch check and not a rejection of the field. Every caller sending
+    // the correct value today keeps working and never learns anything changed.
     findProfileByVault.mockResolvedValue({ coinType: VAULT_COIN });
     prepareSubscribe.mockResolvedValue({ ok: true, value: { kind: 'quote' } });
 
-    await POST(subscribe({ coinType: ATTACKER_COIN }));
+    const response = await POST(subscribe({ coinType: VAULT_COIN }));
 
-    const call = prepareSubscribe.mock.calls[0]?.[0] as { coinType: string };
-    expect(call.coinType).toBe(VAULT_COIN);
-    expect(call.coinType).not.toBe(ATTACKER_COIN);
+    expect(response.status).toBe(200);
+    expect((prepareSubscribe.mock.calls[0]?.[0] as { coinType: string }).coinType).toBe(VAULT_COIN);
   });
 
   it('is read from the vault even when the body omits it entirely', async () => {
