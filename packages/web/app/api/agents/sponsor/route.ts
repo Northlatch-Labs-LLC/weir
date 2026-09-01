@@ -5,7 +5,10 @@ import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
 import {
+  SPONSORED_VAULT_GAS_BUDGET_MIST,
   SPONSORSHIP_SEATS,
+  claimVaultSlot,
+  releaseVaultSlot,
   loadSponsor,
   releaseSeat,
   confirmClaimsFromChain,
@@ -86,9 +89,14 @@ export async function POST(request: Request) {
     moments in an agent's life: the account when it arrives holding nothing, the vault when it
     decides to start earning.
 
-    The vault branch does NOT consume a seat. Seats meter the offer of an identity; an agent that
+    The vault branch does NOT consume a SEAT. Seats meter the offer of an identity; an agent that
     already holds an account has been counted, and charging it a second seat to open the vault
     would mean the fifty ran out at twenty-five agents who each did both.
+
+    It consumes a vault SLOT instead — its own bounded offer, in its own table. That distinction is
+    the whole of it: the two are separate offers with separate budgets, and until now the second one
+    had no budget at all. "Does not consume a seat" was true and was read as "is not metered", which
+    it also was.
   */
   if (body['action'] === 'vault') {
     const addr = body['address'];
@@ -127,6 +135,36 @@ export async function POST(request: Request) {
     }
     const feeMist = String(platform.value.creationFeeMist);
 
+    /*
+      Meter it before any gas is signed.
+
+      The account branch spends one of fifty seats. This branch spent nothing: it checked that three
+      fields were strings and signed a gas payment, with no seat, no row and no dedup, and nothing
+      on chain caps it either because a creator may hold more than one vault. The same caller could
+      ask again immediately, and again, until the sponsor wallet was empty.
+
+      The transaction guard is not what closes this and was never meant to: it proves the
+      transaction does what it claims and pays only what it should, which is a different question
+      from how often it may be asked for.
+
+      Taken BEFORE signing, so a refusal costs nothing. `claimVaultSlot` is one atomic statement
+      whose `UNIQUE` slot is the cap, so two callers cannot both take the last one.
+    */
+    const slot = await claimVaultSlot({
+      address: normaliseAddress(addr.trim()),
+      gasBudgetMist: SPONSORED_VAULT_GAS_BUDGET_MIST,
+      nowMs: Date.now(),
+    });
+    if (!slot.ok) {
+      return NextResponse.json(
+        { error: slot.failure.detail, kind: slot.failure.kind },
+        // Exhausted is not the caller's fault and not a server fault: the offer ran out. `malformed`
+        // here is "you already have one", which is a 409 rather than a 400 — the request was well
+        // formed and the state refuses it.
+        { status: slot.failure.kind === 'budget-exhausted' ? 429 : 409 },
+      );
+    }
+
     const sponsoredVault = await sponsorVaultOpen({
       config: cfgV.value,
       sponsor: sponsorV.value,
@@ -136,6 +174,14 @@ export async function POST(request: Request) {
       creationFeeMist: feeMist,
     });
     if (!sponsoredVault.ok) {
+      /*
+        Give the slot back. The offer is bounded, so a slot burned by a transaction that was never
+        built is a slot nobody can ever use — and the failures reaching here are ours, not the
+        caller's: an unreadable config, a fullnode that did not answer, bytes that would not
+        simulate. `releaseVaultSlot` is best-effort by design; if it fails, the caller still gets
+        the real error rather than a second one about bookkeeping.
+      */
+      await releaseVaultSlot(normaliseAddress(addr.trim()));
       return NextResponse.json(
         { error: sponsoredVault.failure.detail, kind: sponsoredVault.failure.kind },
         { status: sponsoredVault.failure.kind === 'unconfigured' ? 409 : sponsoredVault.failure.kind === 'transport' ? 503 : 400 },
