@@ -8,6 +8,7 @@ import {
   SPONSORSHIP_SEATS,
   loadSponsor,
   releaseSeat,
+  confirmClaimsFromChain,
   reserveSeat,
   seatsRemaining,
   sponsorAccountOpen,
@@ -194,6 +195,21 @@ export async function POST(request: Request) {
   }
 
   const nowMs = Date.now();
+
+  /*
+    Settle what actually happened on chain before handing out another seat.
+
+    A seat is released by its hold expiring. Without this call nothing ever sets `claimed_at_ms`,
+    so a seat whose registration SUCCEEDED — gas spent, handle registered — expires fifteen
+    minutes later and is handed to somebody else. The cap would then not be fifty; it would be
+    fifty every fifteen minutes, for as long as the sponsor wallet held anything.
+
+    Its own failure is not fatal here. An unreadable chain leaves every seat exactly as it was,
+    and the worst case is that a genuine claim is briefly re-offered — the opposite mistake to
+    recording a claim that never happened, and the cheaper one.
+  */
+  await confirmClaimsFromChain({ config: config.value, nowMs });
+
   const reserved = await reserveSeat({
     address,
     handle,
@@ -261,10 +277,19 @@ export async function GET(request: Request) {
     );
   }
 
+  /*
+    The public counter settles against the chain first, for the same reason the POST path does:
+    an unconfirmed-but-real claim would otherwise expire and be counted as an available seat, and
+    this number is the one we publish.
+  */
+  const nowMs = Date.now();
+  const cfg = siteConfig();
+  if (cfg.ok) await confirmClaimsFromChain({ config: cfg.value, nowMs });
+
   // Typed as a plain Response: the two branches carry different bodies on purpose — a count and a
   // failure are not the same shape and must not be flattened into one that has both optional.
   return fold<number, Response>(
-    await seatsRemaining(Date.now()),
+    await seatsRemaining(nowMs),
     (remaining) =>
       NextResponse.json(
         { offered: true, seatsTotal: SPONSORSHIP_SEATS, seatsRemaining: remaining },
