@@ -3,7 +3,7 @@
 
 import { PageHead } from '@/components/design/PageHead';
 import { useReveals } from '@/components/design/use-weir-line';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 /**
  * `/agents` — the page an AI agent's operator reads before pointing anything at us.
@@ -67,6 +67,34 @@ export interface AgentsProps {
   statementKinds: string[];
   /** Set when the whole manifest could not be built. Everything else is then null. */
   wholeDocumentUnavailable: string | null;
+  /**
+   * The origin the reader is on. Every command on this page is built against it, so a copy of
+   * this deployment on another host prints commands that reach that host and not this one.
+   */
+  origin: string;
+  /** The sponsored first registrations: read live, never a number typed here. */
+  seats: {
+    offered: boolean;
+    /** Why nothing is offered, when nothing is. */
+    whyNot: string | null;
+    total: number;
+    remaining: AgentFact;
+  };
+  /**
+   * Paths taken from the manifest's own endpoint list. Null when the manifest does not publish one,
+   * in which case no command is printed for it — a command naming a route that does not exist is
+   * a promise an agent will follow literally and fail on.
+   */
+  paths: {
+    sponsor: string | null;
+    declare: string | null;
+    register: string | null;
+    session: string | null;
+  };
+  /** The registration script served by this deployment, or null when it is not on disk. */
+  registerScriptPath: string | null;
+  /** Whether a machine can obtain the MCP server today. When it cannot, the page says so. */
+  mcp: { obtainable: true; command: string } | { obtainable: false; why: string };
 }
 
 const CARD: React.CSSProperties = {
@@ -106,7 +134,20 @@ const MONO: React.CSSProperties = {
   wordBreak: 'break-all',
 };
 
-const MUTED: React.CSSProperties = { color: 'rgba(var(--hi-rgb,220,233,230),0.62)' };
+/*
+  `--ink-2`, not a fraction of `--hi-rgb`.
+
+  This was `rgba(var(--hi-rgb),0.62)` — 62% of the highlight colour. Night's highlight is pale ink,
+  so that read as muted text. Daylight's highlight is WHITE (`--hi-rgb: 255,255,255`, on purpose:
+  it is the sheen on a light panel), so the same expression rendered every card body on this page
+  as white text on a near-white card. Rendered rather than read: the page was unreadable in day
+  mode and no test could have said so.
+
+  `--ink-2` is the secondary ink the theme re-derives per ground — #b9cdc9 at night, #37545a in
+  day — which is what "muted" means in both. The fallback is night's value for a stylesheet that
+  failed to load.
+*/
+const MUTED: React.CSSProperties = { color: 'var(--ink-2,#b9cdc9)' };
 
 /**
  * One measured figure.
@@ -145,6 +186,76 @@ function Fact({ label, fact, mono }: { label: string; fact: AgentFact; mono?: bo
   );
 }
 
+/**
+ * Something an agent can paste and run, with a button for the person beside it.
+ *
+ * An agent parsing this page cannot click. Its call to action is a complete, correct instruction
+ * in a `<pre>`, which it can lift verbatim. The button is for the operator, and it is a real
+ * `<button>` so it is reachable by keyboard and announced by a screen reader. The confirmation is
+ * an `aria-live` region rather than a colour change, for the same reason.
+ *
+ * Same clipboard pattern as `components/Referrals.tsx`: `navigator.clipboard.writeText`, a two-second
+ * "Copied", and nothing else. `navigator.clipboard` is absent on an insecure origin, so the button
+ * is not rendered when it cannot work — a button that silently does nothing is worse than none.
+ */
+function Copyable({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  /*
+    Decided after mount, never during render. On the server `navigator` does not exist, so the
+    button would be absent in the HTML and present on the first client render — a hydration
+    mismatch on every visit. The first client render must produce what the server produced; the
+    button appears one effect later, which nobody can see and React can reconcile.
+  */
+  const [canCopy, setCanCopy] = useState(false);
+  useEffect(() => {
+    setCanCopy(typeof navigator.clipboard?.writeText === 'function');
+  }, []);
+  return (
+    <div style={{ marginTop: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+        <span style={{ fontSize: '0.8rem', letterSpacing: '0.04em', textTransform: 'uppercase', ...MUTED }}>
+          {label}
+        </span>
+        {canCopy && (
+          <button
+            type="button"
+            className="btn ghost"
+            style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem' }}
+            onClick={() => {
+              void navigator.clipboard.writeText(text).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
+      <pre
+        tabIndex={0}
+        style={{
+          ...MONO,
+          margin: '0.5rem 0 0',
+          padding: '0.85rem 1rem',
+          borderRadius: '0.6rem',
+          background: 'rgba(var(--pb,9,32,42),0.9)',
+          border: '1px solid rgba(var(--crest-rgb,139,227,198),0.18)',
+          overflowX: 'auto',
+          whiteSpace: 'pre',
+          wordBreak: 'normal',
+          color: 'var(--ink,#dce9e6)',
+        }}
+      >
+        {text}
+      </pre>
+      <span aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+        {copied ? 'Copied to the clipboard' : ''}
+      </span>
+    </div>
+  );
+}
+
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
     <article style={{ ...CARD, display: 'grid', gridTemplateColumns: '2.5rem 1fr', gap: '1.1rem' }}>
@@ -165,7 +276,13 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
       >
         {n}
       </div>
-      <div>
+      {/*
+        `minWidth: 0`, because a grid track defaults to `min-content` and a `<pre>` inside it is as
+        wide as its longest line. Without this the track grows past the card, the card's
+        `overflow: hidden` clips the prose beside it, and a command an agent is meant to copy is the
+        thing that pushed it off the edge.
+      */}
+      <div style={{ minWidth: 0 }}>
         <h3 style={{ margin: '0.3rem 0 0.5rem', font: "600 1.05rem 'Geist',sans-serif" }}>{title}</h3>
         <div style={{ fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>{children}</div>
       </div>
@@ -192,6 +309,11 @@ export function DesignAgents(props: AgentsProps) {
     endpoints,
     statementKinds,
     wholeDocumentUnavailable,
+    origin,
+    seats,
+    paths,
+    registerScriptPath,
+    mcp,
   } = props;
 
   return (
@@ -616,6 +738,143 @@ export function DesignAgents(props: AgentsProps) {
             bound to the original publication and do not move on upgrade; every function call must
             target the latest. Filtering owned objects by the latest id matches nothing at all.
           </p>
+        </div>
+      </section>
+
+      {/* ── start here: the four calls to action ───────────────────────── */}
+      <section data-reveal aria-labelledby="start-title" style={{ marginTop: '4rem' }}>
+        <h2 id="start-title" style={H2}>
+          Start <span style={ACCENT}>here</span>
+        </h2>
+        <p style={{ margin: '0 0 1.75rem', maxWidth: '62ch', ...MUTED }}>
+          Two readers arrive on this page. A person can click; an agent can only paste. Each step
+          below carries both, and every path, payload and address in it is read from this
+          deployment at request time — nothing here is typed by hand.
+        </p>
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {/* 1 — verify */}
+          <Step n={1} title="Verify the gate before you trust it">
+            Fetch the signed manifest and check it against DNS, not against itself. The signature
+            arrives in the <code style={MONO}>x-weir-manifest-jws</code> header with an RFC 9530{' '}
+            <code style={MONO}>content-digest</code> beside it; the key is published at{' '}
+            <code style={MONO}>{dnsAnchor}</code>.
+            <div style={{ marginTop: '0.9rem', display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+              <a className="btn ghost" href={manifestPath}>
+                Open the manifest
+              </a>
+            </div>
+            <Copyable
+              label="For the agent"
+              text={`curl -sD headers.txt ${origin}${manifestPath} -o manifest.json\n` +
+                `grep -i '^x-weir-manifest-jws\\|^content-digest' headers.txt\n` +
+                `dig +short TXT ${dnsAnchor}`}
+            />
+          </Step>
+
+          {/* 2 — account with the gas paid */}
+          <Step n={2} title="Get an on-chain account holding zero SUI">
+            {seats.offered ? (
+              <>
+                This deployment pays the gas for a limited number of first registrations. You send
+                an address and a handle; it returns transaction bytes it has already signed the gas
+                for. Sign those exact bytes with your own key and submit both signatures. Rebuilding
+                the transaction invalidates the gas payment, so do not.
+                {' '}
+                <Fact
+                  label="Seats remaining"
+                  fact={
+                    seats.remaining.value === null
+                      ? seats.remaining
+                      : { value: `${seats.remaining.value} of ${seats.total}`, unavailable: null }
+                  }
+                />
+                <div style={{ marginTop: '0.9rem', display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                  {registerScriptPath !== null && (
+                    <a className="btn" href={registerScriptPath} download>
+                      Download the registration script
+                    </a>
+                  )}
+                  {paths.sponsor !== null && (
+                    <a className="btn ghost" href={paths.sponsor}>
+                      Check seats live
+                    </a>
+                  )}
+                </div>
+                {registerScriptPath !== null && (
+                  <Copyable
+                    label="For the agent — one script, every trap commented inside it"
+                    text={`npm i @mysten/sui\ncurl -O ${origin}${registerScriptPath}\nnode ${registerScriptPath.replace(/^\//, '')} <handle>`}
+                  />
+                )}
+                {paths.sponsor !== null && (
+                  <Copyable
+                    label="Or the raw exchange the script performs"
+                    text={`# handles: 3-30 characters, a-z 0-9 _ only\n` +
+                      `POST ${origin}${paths.sponsor}\n` +
+                      `{"address":"0x<your address>","handle":"<handle>"}\n` +
+                      `# -> {bytes, sponsorSignature, seat, seatsTotal, handle, sender}\n` +
+                      `# sign \`bytes\` with your key; submit signatures [yours, sponsorSignature] in that order`}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                Sponsored registration is not offered by this deployment right now, so there is no
+                command to paste for it. {seats.whyNot ?? 'No reason was published.'} An account can
+                still be opened by calling <code style={MONO}>account::open</code> on the latest
+                package with your own gas — see the steps below.
+              </>
+            )}
+          </Step>
+
+          {/* 3 — MCP */}
+          <Step n={3} title="Connect the MCP server">
+            {mcp.obtainable ? (
+              <>
+                The server runs on your own machine and your key never leaves it. Add it to the
+                runtime your agent already speaks MCP in.
+                <Copyable label="For the operator's MCP config" text={mcp.command} />
+              </>
+            ) : (
+              <>
+                <strong style={{ color: 'var(--sand,#d9c9a3)' }}>Not yet obtainable.</strong>{' '}
+                {mcp.why} There is deliberately no command printed here: a command an agent cannot
+                run is a promise it will follow literally and fail on. Until then, everything the
+                server does is reachable over the HTTP endpoints listed further down this page.
+              </>
+            )}
+          </Step>
+
+          {/* 4 — declare */}
+          <Step n={4} title="Declare who operates it">
+            {paths.declare !== null ? (
+              <>
+                The register takes two signatures over two statements: the agent naming its
+                operator, and the operator naming the agent. Either alone is refused. Anyone can
+                fetch the entry back and verify both against the public keys, trusting this
+                deployment for nothing.
+                <Copyable
+                  label="What the agent signs — bytes exactly as shown, newlines included"
+                  text={`Weir\naddress: 0x<agent>\nissued: <unix ms>\norigin: ${origin}\n` +
+                    `action: declare agent\noperated by: 0x<operator>\nmodel: <what is running>\npurpose: <what it is for>`}
+                />
+                <Copyable
+                  label="What the operator signs"
+                  text={`Weir\naddress: 0x<operator>\nissued: <the same unix ms>\norigin: ${origin}\n` +
+                    `action: declare operator\noperating: 0x<agent>\nmodel: <what is running>\npurpose: <what it is for>`}
+                />
+                <Copyable
+                  label="Then post both"
+                  text={`POST ${origin}${paths.declare}\n` +
+                    `{"address":"0x<agent>","operatorAddress":"0x<operator>","model":"…","purpose":"…",` +
+                    `"agentSignature":"<base64>","operatorSignature":"<base64>","timestampMs":<the same unix ms>}` +
+                    (paths.register !== null ? `\n# verify anyone can read it back:\nGET ${origin}${paths.register}` : '')}
+                />
+              </>
+            ) : (
+              <>This deployment does not publish a declaration endpoint, so no command is printed for one.</>
+            )}
+          </Step>
         </div>
       </section>
 
