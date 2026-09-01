@@ -215,12 +215,19 @@ describe('a browser is unaffected', () => {
  * holding a credential that is not the reader's session.
  */
 describe('what POST /api/session hands back', () => {
-  async function mint(): Promise<{ body: Record<string, unknown>; setCookie: string }> {
+  async function mint(
+    /** Whether the caller asks for the bearer in the body, as a non-browser client does. */
+    wantsBearer = true,
+  ): Promise<{ body: Record<string, unknown>; setCookie: string }> {
     rows = [{ address: ADDRESS }];
     const response = await mintSession(
       new Request('https://weir.social/api/session', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-forwarded-proto': 'https' },
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-proto': 'https',
+          ...(wantsBearer ? { 'x-weir-bearer': '1' } : {}),
+        },
         body: JSON.stringify({ address: ADDRESS, signature: 'sig', timestampMs: Date.now() }),
       }),
     );
@@ -230,7 +237,7 @@ describe('what POST /api/session hands back', () => {
     };
   }
 
-  it('returns the token in the body and sets the identical token in the cookie', async () => {
+  it('returns the token in the body TO A CALLER THAT ASKS, and the identical token in the cookie', async () => {
     const { body, setCookie } = await mint();
 
     expect(typeof body['token']).toBe('string');
@@ -243,6 +250,22 @@ describe('what POST /api/session hands back', () => {
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Secure');
+  });
+
+  it('withholds it from a caller that does not ask, which is every browser', async () => {
+    /*
+      The exposure had no beneficiary. `SessionBridge` fires this POST and never reads the response
+      — the cookie does the work — while script running on this origin during the exchange could
+      read a day-long bearer out of the body and use it from somewhere else. `HttpOnly` stops script
+      reading the stored cookie and does nothing about a body.
+    */
+    const { body, setCookie } = await mint(false);
+
+    expect(body['token']).toBeUndefined();
+    // The credential itself is unchanged: the browser still gets its cookie.
+    expect(setCookie).toContain(`${READ_SESSION_COOKIE}=`);
+    expect(setCookie).toContain('HttpOnly');
+    expect(body['address']).toBe(ADDRESS);
   });
 
   it('authenticates that token identically through either carrier', async () => {

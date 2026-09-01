@@ -92,8 +92,33 @@ export async function POST(request: Request) {
     widened, and the mitigation is unchanged and elsewhere: this grants reads only, of what the
     address already owns on chain, and `DELETE /api/session` withdraws every session at once.
   */
+  /*
+    The body token is now ASKED FOR rather than handed out.
+
+    It exists for callers that are not browsers, and the reasoning above still holds for them: a
+    program holding a key has no cookie jar and would otherwise parse `Set-Cookie` to obtain a
+    credential we just minted for it. What was wrong is that everybody got it, including the one
+    caller that has no use for it — `SessionBridge` fires this POST and never reads the response,
+    because the cookie does the work.
+
+    So the exposure had no beneficiary. Script running on this origin during the exchange could read
+    a day-long bearer out of the response and use it from somewhere else; `HttpOnly` stops it
+    reading the stored cookie and does nothing about a body. Now a caller that wants the token says
+    so, and a browser never does.
+
+    A header rather than a body field, so the signed statement is untouched and no client has to
+    change what it signs. An agent that does not send it still works: `packages/agent/src/session.ts`
+    falls back to the `Set-Cookie` value, which it already implements and which yields the same
+    credential.
+  */
+  const wantsBearer = (request.headers.get('x-weir-bearer') ?? '').trim() === '1';
+
   return NextResponse.json(
-    { address, expiresAtMs: session.expiresAtMs, token: session.token },
+    {
+      address,
+      expiresAtMs: session.expiresAtMs,
+      ...(wantsBearer ? { token: session.token } : {}),
+    },
     {
       headers: {
         'set-cookie': readSessionCookie({
