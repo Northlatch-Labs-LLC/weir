@@ -43,6 +43,7 @@ import { opaqueDetail } from './opaque';
  */
 
 import { createHash } from 'node:crypto';
+import type { Pool } from 'pg';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import {
   createClient,
@@ -98,6 +99,39 @@ export async function verifyAction(input: {
    */
   origin: string;
 }): Promise<Reading<true>> {
+  const proved = await proveSignature(input);
+  if (!proved.ok) return proved;
+  if (proved.value === null) return ok(true);
+
+  const spent = await spendSignature(db(), proved.value);
+  if (spent.ok) await sweepUsedSignatures();
+  return spent;
+}
+
+/**
+ * The same proof, with the spend left for the caller to make.
+ *
+ * Identical verification, and then it stops: the digest comes back unspent so the caller can claim
+ * it inside the transaction that performs the write. See `spendSignature` for why that matters.
+ */
+export async function verifyActionDeferringSpend(
+  input: Parameters<typeof verifyAction>[0],
+): Promise<Reading<PendingSpend | null>> {
+  return proveSignature(input);
+}
+
+/**
+ * Everything that proves the signature genuine, and nothing that records it.
+ *
+ * Returns `null` for an action that is not single-use — there is no digest to claim, and the
+ * caller has nothing to carry.
+ *
+ * Since #61 `isSingleUse` returns true for every action, so that `null` cannot currently occur. It
+ * stays because it is the correct answer if an exemption ever returns, but a caller must not read
+ * it as a live branch: code shaped as `if (proof.value === null) skip the spend` is a hole written
+ * against a state that does not happen, and it would be the hole that matters on the day it does.
+ */
+async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promise<Reading<PendingSpend | null>> {
   const source = 'signature';
   const age = Date.now() - input.timestampMs;
 
@@ -135,35 +169,75 @@ export async function verifyAction(input: {
     );
   }
 
-  if (!isSingleUse(input.action)) return ok(true);
+  if (!isSingleUse(input.action)) return ok(null);
 
   /*
-    Spend it.
+    The digest is derived here and claimed elsewhere.
 
-    After verification, never before: only a signature that has been proved genuine may consume a
-    row. Claiming first would let anyone burn arbitrary digests by posting garbage, and — worse —
-    a caller who guessed a digest could pre-spend somebody else's signature before they used it.
-
-    `ON CONFLICT DO NOTHING` makes the claim atomic. Two concurrent replays of the same signature
-    race for one insert, and Postgres decides; `rowCount` is 1 for exactly one of them. A read of
-    "does this digest exist" followed by an insert would leave a window between the two, which is
-    the entire attack rewritten as a race.
+    Deriving costs nothing and has no side effect, so it belongs with the proof. Claiming writes a
+    row, and where that row is written from decides whether a failed request costs the reader their
+    signature — which is what `spendSignature` is about.
   */
-  const digest = createHash('sha256').update(input.signature).digest();
-  const expiresAtMs = input.timestampMs + SIGNATURE_WINDOW_MS;
+  return ok({
+    digest: createHash('sha256').update(input.signature).digest(),
+    expiresAtMs: input.timestampMs + SIGNATURE_WINDOW_MS,
+  });
+}
 
+/**
+ * A proved signature that has not yet been recorded as used.
+ *
+ * It exists as a value so it can be carried from the proof to the write, across work that may
+ * fail in between.
+ */
+export interface PendingSpend {
+  digest: Buffer;
+  expiresAtMs: number;
+}
+
+/**
+ * Claim the digest, on whichever connection the caller names.
+ *
+ * # Why the connection is a parameter
+ *
+ * A signature is single-use, so spending it is a write, and it was previously made on the pool the
+ * moment the proof succeeded — before the work it authorises had happened. On `POST /api/posts`
+ * that left four `await`s between the claim and the row, one of them a Seal upload over the
+ * network. Anything failing in that gap consumed the signature and stored nothing, and the reader
+ * had to sign a second time to find out.
+ *
+ * Passing a client instead lets the caller claim the digest inside the same transaction as the
+ * write, so the two commit together or neither does. A failed publish now leaves the signature
+ * unspent and the reader's next attempt is the same signature, not a new one.
+ *
+ * # Why not simply hold a transaction across the whole route
+ *
+ * Because the Seal upload sits in the middle of it. A transaction open across a network call to a
+ * third party is a connection held for as long as that party takes to answer, and `db/028` sets
+ * `idle_in_transaction_session_timeout` to 30 seconds precisely to stop that. Verification first,
+ * network second, transaction last is the ordering that respects both.
+ *
+ * `ON CONFLICT DO NOTHING` makes the claim atomic. Two concurrent replays of the same signature
+ * race for one insert and Postgres decides; `rowCount` is 1 for exactly one of them. A read of
+ * "does this digest exist" followed by an insert would leave a window between the two, which is
+ * the entire attack rewritten as a race.
+ */
+export async function spendSignature(
+  runner: { query: Pool['query'] },
+  pending: PendingSpend,
+): Promise<Reading<true>> {
+  const source = 'signature';
   try {
-    const claimed = await db().query(
+    const claimed = await runner.query(
       `INSERT INTO used_signatures (digest, expires_at_ms)
        VALUES ($1, $2)
        ON CONFLICT (digest) DO NOTHING`,
-      [digest, expiresAtMs],
+      [pending.digest, pending.expiresAtMs],
     );
 
     if (claimed.rowCount === 0) {
       return fail('malformed', source, 'this signature has already been used — sign again');
     }
-
   } catch (error) {
     /*
       Fails closed. A signature we could not record is a signature we cannot promise is unused, and
@@ -174,34 +248,40 @@ export async function verifyAction(input: {
     return fail(
       'transport',
       source,
-      `could not record this signature, so it was not accepted: ${
-        opaqueDetail(source, error)
-      }`,
+      `could not record this signature, so it was not accepted: ${opaqueDetail(source, error)}`,
     );
   }
 
-  /*
-    Sweep what can no longer matter. Opportunistic rather than scheduled: this application has no
-    cron, and a table that only grows is how a cheap guard becomes the slowest statement here.
+  return ok(true);
+}
 
-    Bounded, so one unlucky request does not pay for every expired row ever written.
-
-    ITS OWN TRY, AND THE SEPARATION IS THE POINT. This DELETE used to sit inside the try above,
-    which meant a sweep that failed AFTER a successful insert was reported as
-    "could not record this signature, so it was not accepted". That sentence was false in exactly
-    the case it was most likely to be read: the signature HAD been recorded, `rowCount` was 1, and
-    it was spent. The caller was told to sign again, and the statement they had just spent stayed
-    in the table doing nothing for anyone.
-
-    A failed sweep is housekeeping that did not happen. It is not a rejection, and it must not be
-    able to produce one — which is the same conclusion `rememberQuote` in `lib/checkout.ts:433`
-    already reached in its own words: "the caller is in the middle of being quoted a price and a
-    bookkeeping error is not their problem". The two paths disagreed, and the security-critical one
-    was the one that had it wrong.
-
-    Swallowed rather than logged-and-swallowed for the same reason it is swallowed there: the next
-    request tries again, and the table's growth is bounded by every other caller's sweep.
-  */
+/**
+ * Sweep what can no longer matter.
+ *
+ * Opportunistic rather than scheduled: this application has no cron, and a table that only grows
+ * is how a cheap guard becomes the slowest statement here. Bounded, so one unlucky request does
+ * not pay for every expired row ever written.
+ *
+ * # Two separations, and they are different arguments
+ *
+ * NOT part of `spendSignature`, because a caller spending inside its own transaction would drag
+ * this delete in with it — lengthening a transaction that is holding a connection open for a row
+ * it has already written. Housekeeping runs on the pool, after the commit.
+ *
+ * NOT inside the claim's `try`, because a sweep that failed AFTER a successful insert used to be
+ * reported as "could not record this signature, so it was not accepted". That sentence was false
+ * in exactly the case it was most likely to be read: the signature HAD been recorded, `rowCount`
+ * was 1, and it was spent. The caller was told to sign again, and the statement they had just
+ * spent sat in the table doing nothing for anyone. (#75.)
+ *
+ * A failed sweep is housekeeping that did not happen. It is not a rejection and it must not be
+ * able to produce one — the conclusion `rememberQuote` in `lib/checkout.ts` already reached in its
+ * own words: the caller is mid-request and a bookkeeping error is not their problem.
+ *
+ * Swallowed rather than logged-and-swallowed for the same reason it is swallowed there: the next
+ * request tries again, and the table's growth is bounded by every other caller's sweep.
+ */
+export async function sweepUsedSignatures(): Promise<void> {
   try {
     await db().query(
       `DELETE FROM used_signatures
@@ -211,6 +291,4 @@ export async function verifyAction(input: {
   } catch {
     // See above. A signature that is recorded stays accepted.
   }
-
-  return ok(true);
 }

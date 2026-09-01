@@ -14,7 +14,8 @@ import {
 } from '@/lib/content';
 import { siteConfig } from '@/lib/chain';
 import { storeBody, type BodyGate } from '@/lib/body-storage';
-import { verifyAction } from '@/lib/identity';
+import { spendSignature, sweepUsedSignatures, verifyActionDeferringSpend } from '@/lib/identity';
+import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
     a free one, or reused for different words. `verifyAction` binds the recovered key to `author`
     and enforces the freshness window.
   */
-  const proof = await verifyAction({
+  const proof = await verifyActionDeferringSpend({
     origin: new URL(request.url).origin,
     address: author,
     signature: signature ?? '',
@@ -309,6 +310,42 @@ export async function POST(request: Request) {
     ...(sealedBody?.ok ? { sealedBody: sealedBody.value } : {}),
   };
 
-  await addPost(post);
+  /*
+    The signature is claimed HERE, with the row, and not where it was proved.
+
+    Proving happens before the Seal upload because there is no reason to encrypt a body for a
+    request that cannot authenticate. Claiming happens after, with the insert, in one transaction:
+    a signature is single-use, so spending it is a promise that the thing it authorised has
+    happened. Spending it at the proof made that promise four `await`s early, and the upload
+    between them can fail — in which case the reader had paid a signature for no post and had to
+    sign again to discover it.
+
+    Ordered claim-then-insert inside the transaction so a replay is refused before a second row is
+    built, and so both roll back together.
+  */
+  const client = await db().connect();
+  try {
+    await client.query('BEGIN');
+
+    if (proof.value !== null) {
+      const spent = await spendSignature(client, proof.value);
+      if (!spent.ok) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: spent.failure.detail }, { status: 401 });
+      }
+    }
+
+    await addPost(post, client);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  // Housekeeping, after the commit and outside the transaction, so it cannot lengthen the write.
+  await sweepUsedSignatures();
+
   return NextResponse.json({ post: { id: post.id, access: post.access } });
 }

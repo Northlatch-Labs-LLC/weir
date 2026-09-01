@@ -20,7 +20,11 @@ import 'server-only';
  * Every query is parameterised. There is no string interpolation of values into SQL in this file.
  */
 
+import type { Pool } from 'pg';
 import { db, normaliseAddress } from './db';
+
+/** Anything that can run a query: the pool, or a client inside an open transaction. */
+export type QueryRunner = { query: Pool['query'] };
 /*
   Type-only, and circular on purpose: `entitlement.ts` imports `Post` from here to write `canRead`.
   A value import either way round would be a real cycle; a type import is erased entirely by the
@@ -616,9 +620,17 @@ export async function findPost(postId: string): Promise<Post | null> {
   return rows[0] === undefined ? null : toPost(rows[0]);
 }
 
-export async function addPost(post: Post): Promise<void> {
+/**
+ * Store the post.
+ *
+ * `runner` defaults to the pool and exists so a caller can hand in a client and have this row
+ * written inside a transaction it already opened — `POST /api/posts` claims the author's
+ * single-use signature in that same transaction, so a publish that fails leaves the signature
+ * unspent rather than making them sign a second time.
+ */
+export async function addPost(post: Post, runner: QueryRunner = db()): Promise<void> {
   const paid = post.access.kind === 'paid' ? post.access : null;
-  await db().query(
+  await runner.query(
     `INSERT INTO posts (id, vault_id, author_handle, created_at_ms, title, preview, body,
                         access_kind, price, content_key,
                         body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256,
