@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { fold } from '@projectx-social/sdk';
+import { fold, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import { rateLimit } from '@/lib/rate-limit';
 import { accountHandle } from '@/lib/accounts';
 import { verifyAction } from '@/lib/identity';
@@ -23,8 +23,27 @@ export const dynamic = 'force-dynamic';
  * authorisation on the write has to be as strong as the ones that move money.
  */
 export async function GET(request: Request) {
+  /*
+    Limited like every other handler, because it was the only one that was not.
+
+    Two Postgres round trips per call, unauthenticated, on a `handle` with no bound on its length or
+    shape. Against a small pool that is a way to hold connections without holding an account. The
+    read budget rather than the write one: this writes nothing, and pricing it as a write would
+    refuse a page that legitimately renders several creators.
+  */
+  const limited = rateLimit(request, 'read');
+  if (limited !== null) return limited;
+
   const handle = new URL(request.url).searchParams.get('handle');
   if (handle === null) return NextResponse.json({ error: 'handle is required' }, { status: 400 });
+  /*
+    Bounded before it reaches the database. A handle is short by construction, and an unbounded
+    parameter is an unbounded query parameter — the trigram scan behind `listPerks` has no reason to
+    be handed a megabyte.
+  */
+  if (handle.length > MAX_HANDLE_LEN) {
+    return NextResponse.json({ error: 'that is not a handle' }, { status: 400 });
+  }
   const [perks, supportersFirst] = await Promise.all([listPerks(handle), readSupportersFirst(handle)]);
   return NextResponse.json({
     // bigint does not survive JSON; the smallest unit travels as a decimal string, as it does on the wire everywhere else here.
