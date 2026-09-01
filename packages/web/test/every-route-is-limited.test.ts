@@ -72,7 +72,7 @@ describe('every API handler consults a limiter', () => {
     if (handlers.length === 0) return;
 
     const exemptBecause = EXEMPT[relative];
-    const limited = /\brateLimit\(|\bquotaLimit\(/.test(code);
+    const limited = /\brateLimit\(|\bquotaLimit\(|\bsimulateLimit\(/.test(code);
 
     if (exemptBecause !== undefined) {
       // An exemption that has grown a limiter is not a failure, but the note is now wrong.
@@ -84,7 +84,7 @@ describe('every API handler consults a limiter', () => {
 
     expect(
       limited,
-      `${relative} exports ${handlers.join(', ')} and consults no limiter. Add rateLimit()/quotaLimit(), ` +
+      `${relative} exports ${handlers.join(', ')} and consults no limiter. Add rateLimit()/quotaLimit()/simulateLimit(), ` +
         'or add it to EXEMPT with the reason it needs none.',
     ).toBe(true);
   });
@@ -112,5 +112,58 @@ describe('the perks read is bounded before it reaches the database', () => {
       runs.
     */
     expect(code).toMatch(/handle\.length\s*>\s*MAX_HANDLE_LEN/);
+  });
+});
+
+describe('the simulate class goes through the durable ceiling', () => {
+  /*
+    `rateLimit` counts in a module-level Map, and its own header says so: "Serverless multiplies
+    instances, and each instance counts on its own." For most routes that is an acceptable first
+    line. For these it is not the limit at all — each one builds a transaction and calls a fullnode
+    WE PAY FOR, so a ceiling of twenty a minute is twenty times however many instances happen to be
+    warm, and traffic is what makes them warm.
+
+    `simulateLimit` runs the cheap Map first and then spends a row in Postgres, which is the ceiling
+    that holds across instances.
+
+    # Why this is asserted as an inverse and a floor rather than per route
+
+    The obvious shape — find every route in the class, require each to call the guard — cannot be
+    written, because after the fix the routes no longer contain the word `simulate` anywhere except
+    in the call itself. Selecting them by that call and then asserting they make it is circular: it
+    would pass on an empty set and on a codebase where the guard had been deleted from every one.
+
+    So: NO route may reach the per-process limiter for this budget, which catches the old shape
+    coming back one route at a time; and the guard must appear at least twenty times, which catches
+    it being stripped out wholesale. Neither can be satisfied by an import line.
+  */
+  const all = routeFiles().map((relative) => ({
+    relative,
+    code: codeOf(readFileSync(join(API, relative), 'utf8')),
+  }));
+
+  it('found the routes, so an empty result cannot pass as a clean one', () => {
+    expect(all.length).toBeGreaterThan(30);
+  });
+
+  it('no route reaches the per-process limiter for this budget', () => {
+    /*
+      Matched as a CALL carrying the budget name. An assertion matched by an import is matched by
+      nothing that runs — that mistake has already been made once in this file and a mutation caught
+      it, which is why the comparison rather than the identifier is matched here too.
+    */
+    const direct = all
+      .filter(({ code }) => /\brateLimit\(\s*\w+\s*,\s*'simulate'\s*\)/.test(code))
+      .map(({ relative }) => relative);
+
+    expect(direct).toEqual([]);
+  });
+
+  it('the durable guard is actually wired, in the numbers this class has', () => {
+    // A floor, not an exact count: a route legitimately leaving the class should not fail this.
+    // Deleting the guard from all of them, which is the failure that matters, cannot pass it.
+    const wired = all.filter(({ code }) => /\bsimulateLimit\s*\(/.test(code));
+
+    expect(wired.length).toBeGreaterThanOrEqual(20);
   });
 });

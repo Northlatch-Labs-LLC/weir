@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { readPlatformRevenue, type PlatformRevenue } from '@/lib/revenue';
 
@@ -27,7 +27,7 @@ export const dynamic = 'force-dynamic';
  * one, and the limiter's classes exist so a cheap page is not charged for it.
  */
 export async function GET(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   return fold<PlatformRevenue, NextResponse>(
