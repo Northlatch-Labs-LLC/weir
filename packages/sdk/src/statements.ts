@@ -104,8 +104,13 @@ export type Action =
    *
    * Nothing to bind. There is no target, no amount and no text: the statement's entire content is
    * the address and the timestamp already in `head`. Binding a page or a post would be worse, not
-   * better — it would mean one session per post, and therefore a wallet prompt per post, which is
-   * the prompt fatigue `isSingleUse` refuses for reads.
+   * better — it would mean one session per post, and therefore a wallet prompt per post.
+   *
+   * That prompt-fatigue argument used to end "which is the prompt fatigue `isSingleUse` refuses for
+   * reads". It no longer does: `isSingleUse` returns true for every kind, because the exemption it
+   * described was reasoned from the signer's side alone. The argument is still sound HERE — one
+   * session per post really would mean a prompt per post — and it is no longer a description of
+   * what `isSingleUse` does.
    *
    * # What it can and cannot do if stolen
    *
@@ -373,7 +378,32 @@ export function statementFor(
  * everything else may only report what it says.
  */
 export function isSingleUse(action: Action): boolean {
-  return action.kind !== 'read';
+  /*
+    Every kind, including `read`.
+
+    `read` was exempt, and the argument for the exemption was good: spending it would demand a
+    wallet prompt per refresh, and training people to approve prompts without reading them is worse
+    than the replay it prevents. The note in `db/011_signature_replay.sql` finishes with "replaying
+    a read grants exactly the access the signer already had".
+
+    That sentence is true of the SIGNER and false of an INTERCEPTOR, and the exemption was reasoned
+    entirely from one of the two parties. The same bytes in somebody else's hands return that
+    address's inbox — the thread list, the message bodies, the notification feed — for the whole ten
+    minutes the statement stays fresh. It grants the attacker what the signer had, not the signer
+    what they already held.
+
+    THE COST IT AVOIDS WAS NOT BEING PAID. `Notifications.load()` and both read paths in
+    `Messages.tsx` call `sign()` on every invocation and cache nothing, and `load()` is bound to an
+    explicit button rather than a timer. No client in this repository has ever reused a read
+    signature, so spending them costs exactly zero additional prompts. The exemption was protecting
+    a price nobody was being charged.
+
+    What it does cost: a retried POST — a flaky network, a double click — now fails the second time
+    with a signature error rather than silently succeeding twice. That is the same behaviour every
+    write on this site already has.
+  */
+  void action;
+  return true;
 }
 
 /**
