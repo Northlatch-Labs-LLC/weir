@@ -108,3 +108,10 @@ sui.keystore
 # collaborator can clone.
 MULTISIG-RECOVERY-CARD.md
 **/MULTISIG-RECOVERY-CARD.md
+
+# Python bytecode. `scripts/scan-secrets.py` is run by the git hooks, so CPython writes a
+# `__pycache__` beside it on every push. A compiled copy of the secret scanner was committed in
+# 185a9cc by a `git add -A scripts` that was meant to add two files, and this repository is on a
+# publication path.
+__pycache__/
+*.pyc
