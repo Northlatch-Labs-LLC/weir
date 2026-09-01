@@ -28,10 +28,23 @@ describe('the sponsorship route settles claims before it counts seats', () => {
     expect(code).toContain('confirmClaimsFromChain(');
   });
 
-  it('calls it in both the POST and the GET path', () => {
-    // Two call sites: one before reserving a seat, one before publishing the public counter.
+  it('does NOT call it from the public GET', () => {
+    /*
+      This assertion was the opposite of itself until the amplification was found.
+
+      Settling in the public counter meant one sequential fullnode read per unclaimed seat on an
+      endpoint needing no account — an amplification primitive introduced by the change that fixed
+      seat recycling. The published count is now advisory and may briefly over-report; the POST
+      path settles before it reserves, so the cap is enforced where enforcement happens.
+
+      Exactly one call site is the invariant, and it is in POST.
+    */
     const calls = code.match(/confirmClaimsFromChain\(/g) ?? [];
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.length).toBe(1);
+
+    const getAt = code.indexOf('export async function GET');
+    expect(getAt).toBeGreaterThan(-1);
+    expect(code.indexOf('confirmClaimsFromChain(')).toBeLessThan(getAt);
   });
 
   it('settles before it reserves, not after', () => {
@@ -44,9 +57,10 @@ describe('the sponsorship route settles claims before it counts seats', () => {
     expect(settle).toBeLessThan(reserve);
   });
 
-  it('settles before it reads the count it publishes', () => {
-    const lastSettle = code.lastIndexOf('confirmClaimsFromChain(');
-    const count = code.indexOf('seatsRemaining(');
-    expect(lastSettle).toBeLessThan(count);
+  it('bounds the settlement scan rather than reading every unclaimed row', () => {
+    // An unbounded loop in a request path is a defect even when today's input is small.
+    const lib = codeOf(readFileSync(join(process.cwd(), 'lib/sponsor.ts'), 'utf8'));
+    expect(lib).toContain('SETTLE_SCAN_LIMIT');
+    expect(lib).toMatch(/LIMIT \$1/);
   });
 });
