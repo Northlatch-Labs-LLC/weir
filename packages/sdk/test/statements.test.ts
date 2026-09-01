@@ -59,7 +59,7 @@ const GOLDEN: Readonly<Record<string, string>> = {
   "send(free)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: send\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\ntext: hello\npreview: hel\npaid: ",
   "send-encrypted": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: send encrypted\nto: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\nciphertext-sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   "read": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: read\nthread with: 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
-  "onramp": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: fund wallet\nwallet: 0xabababababababababababababababababababababababababababababababab\nnetwork: mainnet\norigin: https://weir.social",
+  "onramp": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: fund wallet\nwallet: 0xabababababababababababababababababababababababababababababababab\nnetwork: mainnet",
   "read-content": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: read content",
   "publish": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: publish\ncreator: atlas\naccess: paid\ntitle: Sealed on Walrus\ncontent-sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nkey: sealed-on-walrus-001\nprice: 10000",
   "name-vault": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: name vault\nvault: 0x1111111111111111111111111111111111111111111111111111111111111111\nname: Atlas\nbio: Documentary notes.\ncoin: 0x2::sui::SUI",
@@ -95,7 +95,7 @@ const CASES: ReadonlyArray<readonly [string, Action]> = [
   ['read-content', { kind: 'read-content' }],
   [
     'onramp',
-    { kind: 'onramp', walletAddress: `0x${'ab'.repeat(32)}`, network: 'mainnet', origin: 'https://weir.social' },
+    { kind: 'onramp', walletAddress: `0x${'ab'.repeat(32)}`, network: 'mainnet' },
   ],
 
   [
@@ -191,15 +191,15 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
 });
 
 describe('isSingleUse', () => {
-  it('spends everything except read', () => {
+  it('spends every kind, with no exemption', () => {
     /*
-      `read` is the only exemption, and it is a decision: spending it would mean a wallet prompt per
-      timed refresh, which trains people to approve prompts without reading them. `read-content` is
-      NOT exempt despite the similar name — it mints a session, so a replay hands a second session
-      to whoever captured the statement.
+      `read` was the one exemption and it is gone. The argument for it was that spending a read
+      means a wallet prompt per refresh — true, and reasoned entirely from the SIGNER: replaying a
+      read grants an INTERCEPTOR that address's inbox for the full window. The prompt cost was also
+      not being paid, since every client signs a fresh read per call and caches none.
     */
     for (const [, action] of CASES) {
-      expect([action.kind, isSingleUse(action)]).toEqual([action.kind, action.kind !== 'read']);
+      expect([action.kind, isSingleUse(action)]).toEqual([action.kind, true]);
     }
   });
 });

@@ -134,8 +134,40 @@ jobs:
       - name: Configuration for tests that need a configured deployment
         run: cp .env.example packages/web/.env.local
 
+      # Every package that defines a `test` script, not just this one.
+      #
+      # This step read `working-directory: packages/web` / `pnpm test` until 2026-09-01, which
+      # resolved to the WEB package's script and nothing else. The root script is `pnpm -r test`
+      # and CI never invoked it, so seven of the eight TypeScript packages were outside the gate
+      # for the whole life of this workflow: the SDK that defines the bytes of every signature,
+      # the daemon that signs mainnet transactions hourly against a funded wallet, the signer and
+      # policy packages that enforce spend limits, and the MCP server. Their suites passed when
+      # somebody ran them by hand and were unchecked between those times. `#56` merged with a
+      # failing SDK suite and eight green checks.
+      #
+      # `-r` also means a package added later is gated the day it gains a test script, rather than
+      # the day somebody remembers to add a line here.
+      #
+      # `--no-bail`, inside the root script, so one failing package does not hide the state of the
+      # others. The run still exits non-zero; it just reports every failure instead of the first.
+      #
+      # THE ROOT SCRIPT BUILDS THE SDK FIRST, and that is the fix rather than a tidiness. It is
+      # `pnpm --filter @projectx-social/sdk build && pnpm -r --no-bail test`, so the rebuild is a
+      # precondition of the tests in the same string and cannot be separated from them by an edit
+      # that looks harmless. `packages/sdk/dist` is gitignored: it is whatever was last built on
+      # that machine and it does NOT change when you switch branches, so testing without rebuilding
+      # produces results for a mixture of two commits. That was observed twice on a developer
+      # machine on 2026-09-01, the second time by the person who had written the warning — the
+      # symptom is a correct implementation failing with a plausible assertion error, which reads
+      # exactly like a real defect.
+      #
+      # CI was already safe here by accident, because a build step happens to run earlier in this
+      # job. A developer's checkout was not, and `pnpm test` is what a developer types.
+      #
+      # NOT covered, and this step must not be read as claiming otherwise: `packages/room` defines
+      # no `test` script at all, so `-r` skips it silently. Six packages are newly gated here
+      # (sdk, agent, daemon, policy, signer, mcp); room has no tests for any gate to run.
       - name: Tests
-        working-directory: packages/web
         run: pnpm test
 
       # Configuration is supplied per environment and has no defaults — a build that silently
