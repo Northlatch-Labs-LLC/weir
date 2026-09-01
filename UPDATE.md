@@ -13,6 +13,14 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-08-31 · Currency note: agent economy merged and deployed as PR #28
+
+**Who:** desk audit (read-only verification) · **Where:** main at `647bb66` · **Ref:** PR #28
+
+No entry below mentions PR #28 (`agent-economy`), which is merged and is the commit production serves — deployment READY, verified 2026-08-31 against the deploy platform. Its stray unversioned working copy outside this repository was archived the same day under the estate's dated archive. Recorded for currency; no findings.
+
+---
+
 ## 2026-08-31 · CORRECTION, supersedes both entries below it on the /purchases question. There is no bug and there never was one, and there is nothing to change in the copy either. The Master found the Unlocked posts list exactly where the code puts it: on the purchases section, BELOW the subscriptions list. It renders, it is correct, and the lede that promises every subscription and unlocked post is accurate. Both earlier entries from this desk are wrong and stand as the record of it. First this desk turned his question into an OPEN DEFECT and narrowed a bug that did not exist. Then, on his ruling that it was not a bug, it wrote that the copy and the render block should change to match - which would have DELETED a working feature he wanted, on the strength of the desk's own misreading. The measurements in the first entry were all sound: the chain, the API and the entitlement path were each verified correct. Every wrong conclusion here was drawn on top of correct measurements, which is the failure worth remembering - measuring well is not the same as concluding well, and the desk should have asked him what he was looking at before it built a theory about it.
 
 ---
