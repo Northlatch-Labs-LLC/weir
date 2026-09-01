@@ -509,6 +509,11 @@ export interface ServerOptions {
   allowedOrigins: string[];
   /** `Host` header values this endpoint answers to. See {@link hostAllowed}. */
   allowedHosts: string[];
+  /**
+   * The environment the agent library is handed — {@link agentEnvironment}, a projection of exactly
+   * the names in {@link AGENT_ENVIRONMENT}, never the whole process environment.
+   */
+  agentEnvironment: Record<string, string>;
 }
 
 /** The default the operator gets if they name nothing. Production, because that is where posts are. */
@@ -523,6 +528,46 @@ export const ENV = {
   allowedOrigins: 'WEIR_MCP_ALLOWED_ORIGINS',
   allowedHosts: 'WEIR_MCP_ALLOWED_HOSTS',
 } as const;
+
+/**
+ * The variables the agent library reads, and the only ones it is handed.
+ *
+ * `createAgent` loads its manifest from the record it is given — `loadAgentManifest(config)` reads
+ * the six chain ids, the coin type and the base URL from THAT object, not from `process.env`. This
+ * package used to pass `{ source: 'weir-mcp' }`, so the agent saw none of them and refused with
+ * "missing required environment variables" whatever the operator had exported; hosted mode had never
+ * started on any machine. It is handed a projection now, and a projection rather than `process.env`
+ * itself so that the one secret the agent's own manifest names (`PROJECTX_SOCIAL_AGENT_SECRET`) can
+ * never travel to it by accident from this side — keys reach `createAgent` through `keypair`, and in
+ * HTTP mode that is `null` by construction.
+ *
+ * The list is checked, not trusted: `test/env-handoff.ts` compares it to the agent's and the SDK's
+ * own exported names, so a variable added over there fails a test here.
+ */
+export const AGENT_ENVIRONMENT = [
+  // The six the SDK requires (`REQUIRED_ENV` in `@projectx-social/sdk`).
+  'PROJECTX_SOCIAL_NETWORK',
+  'PROJECTX_SOCIAL_GRPC_URL',
+  'PROJECTX_SOCIAL_PACKAGE_ID',
+  'PROJECTX_SOCIAL_LATEST_PACKAGE_ID',
+  'PROJECTX_SOCIAL_PLATFORM_ID',
+  'PROJECTX_SOCIAL_REGISTRY_ID',
+  // The two the agent's manifest requires (`AGENT_ENV` in `@projectx-social/agent`).
+  'PROJECTX_SOCIAL_AGENT_COIN_TYPE',
+  'PROJECTX_SOCIAL_AGENT_BASE_URL',
+  // The one optional seam the SDK reads when present; absent is a supported state.
+  'PROJECTX_SOCIAL_KEY_REGISTRY_ID',
+] as const;
+
+/** Exactly the {@link AGENT_ENVIRONMENT} names that are set and non-empty, trimmed. */
+export function agentEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of AGENT_ENVIRONMENT) {
+    const value = env[name]?.trim();
+    if (value !== undefined && value !== '') out[name] = value;
+  }
+  return out;
+}
 
 /** Raised for every condition that must stop the process before it can do harm. */
 export class StartupRefusal extends Error {
@@ -627,6 +672,7 @@ export function resolveOptions(argv: readonly string[], env: NodeJS.ProcessEnv):
     httpPort,
     allowedOrigins,
     allowedHosts: configuredHosts.length > 0 ? configuredHosts : defaultAllowedHosts(httpHost, httpPort),
+    agentEnvironment: agentEnvironment(env),
   };
 }
 
@@ -849,7 +895,8 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
   const created: unknown = await (createAgent as (input: unknown) => unknown)({
     keypair,
     baseUrl: options.baseUrl,
-    config: { source: 'weir-mcp' },
+    // The projection, never `process.env`. See `AGENT_ENVIRONMENT`.
+    config: options.agentEnvironment,
   });
 
   if (created === null || typeof created !== 'object') {

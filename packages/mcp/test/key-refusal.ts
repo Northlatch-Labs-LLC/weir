@@ -58,6 +58,7 @@ function optionsWith(secretKey: string | null): Parameters<typeof openWeir>[0] {
     httpPort: 0,
     allowedOrigins: [],
     allowedHosts: [],
+    agentEnvironment: {},
   };
 }
 
