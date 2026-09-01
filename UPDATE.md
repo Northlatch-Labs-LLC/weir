@@ -13,6 +13,10 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-01 · #99 (Agents page calls to action) and #100 (partners' marks in both Built-on lists) MERGED on the Master's word; main is f0e41d8. Both verified independently on scratch worktrees before the ask: #99 25/25 with the prescribed mutation (operating→operates) failing exactly one test; #100 6/6, all eight marks real PNGs. CI on main f0e41d8: Secret scan, Move tests, Typecheck/tests/build all success; deploy success. Live: weir.social/agents 200 and serving the four CTA cards (sponsor and declare endpoints, register-agent.mjs, 'Connect the MCP' marked not obtainable); /brand/built-on/*.png 200 image/png. #99 also fixed two defects that were already live on /agents: every visit failed hydration (navigator read during render), and day theme rendered card bodies white-on-white (MUTED was 62% of --hi-rgb, which is white by day). FOUND, not code: weir.social/robots.txt is Cloudflare's managed file disallowing ClaudeBot/GPTBot/CCBot/Google-Extended and five more on /; advisory only (200 as ClaudeBot). The Master's word: turn the managed block off and signal search=yes, ai-input=yes, ai-train=no. No Cloudflare API token exists on the desk; the dashboard needs a signed-in session, which the desk will not create. Origin robots.txt (app/robots.ts) in progress on the website desk, inert until the edge stops prepending.
+
+---
+
 ## 2026-09-01 · PR #93 at 51be488: CI green on Secret scan, Move tests (131), Typecheck/tests/build (web 1812), PVS build/pin/tests/mutation-smoke; only Digest guard and PVS·digest red, by design, until the ceremony commit records the new digest. Two mirror tests caught drift from the contract edits (abort 19 unclassified in packages/agent; llms.txt creator.move line citation moved 322->342) — both fixed on the branch. llms.txt MCP line made precise (package exists, stdio on the agent's machine, not on npm, nothing hosted). Follow-ups logged, not built: sponsor address in llms.txt unenforced by any test; MCP HTTP mode already exists — hosting it read-only awaits the Master's word.
 
 ---
