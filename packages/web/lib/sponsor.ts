@@ -54,7 +54,7 @@ import {
   type ProjectXSocialConfig,
   type Reading,
 } from '@projectx-social/sdk';
-import { db } from '@/lib/db';
+import { db, normaliseAddress } from '@/lib/db';
 
 /*
   Destructured the same way `lib/checkout.ts` does. The SDK groups its transaction constructors
@@ -648,5 +648,151 @@ export async function sponsorVaultOpen(input: {
     });
   } catch (error) {
     return fail('transport', source, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * How many vault openings the sponsored offer covers, in total, across everybody.
+ *
+ * Matching {@link SPONSORSHIP_SEATS} because the two are the same offer seen twice: an agent takes
+ * a seat to get an identity, then opens a vault with it. At {@link SPONSORED_VAULT_GAS_BUDGET_MIST}
+ * this is 1 SUI of gas, which sits inside the float the sponsor wallet holds.
+ *
+ * It is a budget rather than a promise. Exhausting it is a refusal, which is the point: the
+ * alternative to a ceiling here is an empty wallet and a door that fails for everybody at once.
+ */
+export const SPONSORED_VAULT_SLOTS = 50;
+
+/**
+ * Take one of the sponsored vault slots for `address`, atomically.
+ *
+ * # The shape, and why it is one statement
+ *
+ * There is no count-then-insert anywhere here. A count read in one statement and acted on in
+ * another is a ceiling with a gap in the middle, and this route is reachable by anybody. The
+ * insert picks the lowest free slot and writes the row in the same statement, so the cap is
+ * enforced by the `UNIQUE` column rather than by this function's arithmetic — two concurrent
+ * callers cannot both take the last slot, because the database will not let them.
+ *
+ * # What it does NOT do
+ *
+ * It does not prove the caller controls `address`. The transaction guard does that work: the
+ * sponsored transaction names the caller as sender and transfers to the sender, so a sponsorship
+ * for an address you do not control is worthless to you. This meters how often it may be asked
+ * for, which is the separate question, and the one nothing was answering.
+ *
+ * Sui addresses are free, so the primary key bounds one caller and the slot bounds everybody. One
+ * without the other is not a limit.
+ */
+export async function claimVaultSlot(input: {
+  address: string;
+  gasBudgetMist: bigint;
+  nowMs: number;
+}): Promise<Reading<{ slot: number }>> {
+  const source = 'sponsor-vault-slot';
+  const address = normaliseAddress(input.address);
+
+  try {
+    const { rows } = await db().query<{ slot: number }>(
+      `
+      INSERT INTO agent_sponsored_vaults (address, slot, gas_budget_mist, sponsored_at_ms)
+      SELECT $1, s.slot, $2, $3
+        FROM generate_series(1, $4) AS s(slot)
+       WHERE NOT EXISTS (
+             SELECT 1 FROM agent_sponsored_vaults taken WHERE taken.slot = s.slot
+       )
+         /*
+           This address already holds one: select nothing rather than reaching the primary key and
+           raising. Returning no rows is the correct answer; the diagnostic below says which of the
+           two reasons it was.
+         */
+         AND NOT EXISTS (
+             SELECT 1 FROM agent_sponsored_vaults mine WHERE mine.address = $1
+       )
+       ORDER BY s.slot
+       LIMIT 1
+      RETURNING slot
+      `,
+      [address, input.gasBudgetMist.toString(), input.nowMs, SPONSORED_VAULT_SLOTS],
+    );
+
+    if (rows.length > 0) return ok({ slot: rows[0]!.slot });
+
+    /*
+      No row, and the two reasons are not the same answer. "You already have one" and "the offer is
+      gone" send a reader to opposite next actions, and one message for both would be a lie to one
+      of them.
+    */
+    const mine = await db().query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM agent_sponsored_vaults WHERE address = $1',
+      [address],
+    );
+    if ((mine.rows[0]?.n ?? 0) > 0) {
+      return fail(
+        'malformed',
+        source,
+        'this address has already had a vault opening sponsored. One each.',
+      );
+    }
+    const used = await db().query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM agent_sponsored_vaults',
+    );
+    return fail(
+      'budget-exhausted',
+      source,
+      `the sponsored vault offer is fully taken — ${used.rows[0]?.n ?? 0} of ${SPONSORED_VAULT_SLOTS} ` +
+        'slots are used. Opening a vault still works; it costs about 0.02 SUI in gas.',
+    );
+  } catch (error) {
+    /*
+      A unique violation here is the race the statement above is written to make harmless: two
+      callers picked the same free slot in the same instant and the database refused the second.
+      That is the cap working, not a transport failure, and reporting it as one would tell a caller
+      to retry a network problem that does not exist.
+    */
+    if ((error as { code?: string } | null)?.code === '23505') {
+      return fail(
+        'budget-exhausted',
+        source,
+        'two callers took the last sponsored vault slot at once and this one lost the race.',
+      );
+    }
+    return fail('transport', source, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** How many sponsored vault slots remain. Advisory: the cap is enforced by the insert, not by this. */
+export async function vaultSlotsLeft(): Promise<Reading<number>> {
+  const source = 'sponsor-vault-slot';
+  try {
+    const { rows } = await db().query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM agent_sponsored_vaults',
+    );
+    return ok(Math.max(0, SPONSORED_VAULT_SLOTS - (rows[0]?.n ?? 0)));
+  } catch (error) {
+    return fail('transport', source, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * Give a vault slot back when the transaction could not be built or simulated.
+ *
+ * The mirror of {@link releaseSeat}, and for the same reason: the offer is bounded, so a slot
+ * burned by a transaction that never existed is a slot nobody can use. The failures that reach this
+ * are ours rather than the caller's — an unreadable configuration, a fullnode that did not answer,
+ * bytes that would not simulate — and charging somebody a slot for our outage is the wrong way
+ * round.
+ *
+ * Best-effort and silent: the caller is already returning a real failure, and a second error about
+ * bookkeeping would bury it. A slot that fails to release is recoverable by hand; a masked error is
+ * not.
+ */
+export async function releaseVaultSlot(address: string): Promise<void> {
+  try {
+    await db().query('DELETE FROM agent_sponsored_vaults WHERE address = $1 AND vault_id IS NULL', [
+      normaliseAddress(address),
+    ]);
+  } catch {
+    // Deliberately swallowed. See the note above.
   }
 }
