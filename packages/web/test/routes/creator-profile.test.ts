@@ -64,7 +64,9 @@ vi.mock('@projectx-social/sdk', async (importOriginal) => ({
   readCreatorVault: async () => ({ ok: true, value: { owner: OWNER } }),
 }));
 
-const { POST } = await import('@/app/api/creator/profile/route');
+const { POST, MAX_DISPLAY_NAME_LENGTH, MAX_BIO_LENGTH } = await import(
+  '@/app/api/creator/profile/route'
+);
 
 function save(body: Record<string, string>): Promise<Response> {
   return POST(
@@ -186,5 +188,85 @@ describe('proving the caller is the owner', () => {
     } finally {
       proofOk = true;
     }
+  });
+});
+
+describe('what the signature covers is what gets stored', () => {
+  /*
+    `displayName` and `bio` used to be sliced to 60 and 280 AFTER verifyAction returned, so the
+    stored value was not the value the signature covered. These two fields ARE the payload — the
+    docblock above says a signature authorising "some change to this vault" would authorise every
+    later one too — so a signature over bytes that were never stored authorises a thing that never
+    happened.
+  */
+  it('refuses a display name over the limit rather than shortening it', async () => {
+    const response = await save({
+      owner: OWNER,
+      vaultId: VAULT,
+      coinType: COIN,
+      displayName: 'n'.repeat(MAX_DISPLAY_NAME_LENGTH + 1),
+      signature: 'sig',
+      timestampMs: String(Date.now()),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toContain('displayName');
+  });
+
+  it('refuses a bio over the limit rather than shortening it', async () => {
+    const response = await save({
+      owner: OWNER,
+      vaultId: VAULT,
+      coinType: COIN,
+      bio: 'b'.repeat(MAX_BIO_LENGTH + 1),
+      signature: 'sig',
+      timestampMs: String(Date.now()),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toContain('bio');
+  });
+
+  it('stores a name at the limit exactly as it was signed', async () => {
+    const name = 'n'.repeat(MAX_DISPLAY_NAME_LENGTH);
+
+    const response = await save({
+      owner: OWNER,
+      vaultId: VAULT,
+      coinType: COIN,
+      displayName: name,
+      signature: 'sig',
+      timestampMs: String(Date.now()),
+    });
+
+    expect(response.status).toBe(200);
+    const { rows } = await testDb().query('SELECT display_name FROM profiles WHERE vault_id = $1', [
+      VAULT,
+    ]);
+    // Byte for byte. Not "starts with", not "is 60 characters long" — the same string.
+    expect(rows[0]?.display_name).toBe(name);
+  });
+
+  it('does not spend a signature to refuse an over-long field', async () => {
+    /*
+      The check runs BEFORE verifyAction, for the reason POST /api/posts gives for its own length
+      checks: signatures are single-use, so refusing afterwards charges the creator a signature for
+      a request that was never going to be stored.
+    */
+    proofOk = false;
+    const response = await save({
+      owner: OWNER,
+      vaultId: VAULT,
+      coinType: COIN,
+      bio: 'b'.repeat(MAX_BIO_LENGTH + 1),
+      signature: 'sig',
+      timestampMs: String(Date.now()),
+    });
+    proofOk = true;
+
+    // 400 for the length, not 401 for the signature — so the length was decided first.
+    expect(response.status).toBe(400);
   });
 });
