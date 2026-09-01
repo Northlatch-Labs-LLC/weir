@@ -402,6 +402,36 @@ def is_local_url(value: str) -> bool:
     return bool(m) and m.group(3).split(':')[0].lower() in LOCAL_HOSTS
 
 
+def carries_no_credential(value: str) -> bool:
+    """True when a connection string demonstrably holds nothing worth protecting.
+
+    The identity rule compares every tracked file against values read from a live .env, and it is
+    the strongest of the three checks -- the only one that catches a real key pasted into a
+    comment. It was also indiscriminate: any secret-NAMED variable became a comparison value
+    whatever it held. `PROJECTX_DATABASE_URL` matches SECRET_NAME, so a passwordless local DSN
+    entered the set, and the documented local setup command in db/README.md then read as a live
+    secret leak. It blocked a real push.
+
+    That is not a near miss, it is the failure mode this scanner cannot survive: a guard that
+    fires on a value everybody knows is harmless gets --no-verify'd within a day, and the real
+    checks leave with it. So the fix is here rather than in the README -- the README documents the
+    correct command, and editing it would leave the classifier wrong for the next person who
+    follows the setup.
+
+    A DSN qualifies only when BOTH are true: no password component at all, and no network host.
+    A Unix-socket connection string has neither. Anything with a password, or reaching a host over
+    a network, is still compared -- the narrowing is deliberate and small.
+    """
+    if not re.match(r'^[a-z][a-z0-9+.-]*://', value):
+        return False
+    if URL_CRED.search(value):
+        return False  # carries user:password@ -- a credential by construction
+    authority = value.split('://', 1)[1].split('/')[0]
+    if authority == '':
+        return True   # postgresql:///db?host=/var/run/... -- a socket, no host, no password
+    return authority.split(':')[0].lower() in LOCAL_HOSTS
+
+
 # ── helpers ─────────────────────────────────────────────────────────────────────────────────────
 
 def h(value: str) -> str:
@@ -476,6 +506,10 @@ def live_secrets() -> dict[str, str]:
             for name, raw in re.findall(r'^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$', text, re.M):
                 value = raw.strip().strip('"').strip("'")
                 if len(value) >= MIN_LITERAL and SECRET_NAME.search(name):
+                    # A value that holds no credential must not become something every tracked
+                    # file is compared against. See carries_no_credential.
+                    if carries_no_credential(value):
+                        continue
                     found[value] = f'{rel}:{name}'
 
             # Raw key material, whatever the file is called. Checksum-verified here too: a
