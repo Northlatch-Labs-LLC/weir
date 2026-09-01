@@ -431,6 +431,42 @@ export type Capability =
  * by what it needs rather than by what it costs, and `tools.ts` marks it `readOnlyHint: true` so a
  * runtime is told the truth about it.
  */
+/**
+ * Unwrap what `createAgent` actually returns, which is a `Reading<Agent>` and not an `Agent`.
+ *
+ * # The defect this exists to close
+ *
+ * The call site asked only whether the answer was an object. BOTH answers are: a success is
+ * `{ ok: true, value: … }`, a refusal is `{ ok: false, failure: … }`. Neither carries `feed`,
+ * `quote`, `unlock` or any other method — and {@link capabilitiesOf} decides what this server can
+ * do by asking `typeof port[name] === 'function'` for each one.
+ *
+ * So the envelope passed the guard and was bound as though it were the agent, every capability
+ * check answered false, and the server started and registered **zero tools** — on the SUCCESS path
+ * as much as the failure path. It did not crash and it did not warn. A server with no tools is a
+ * valid server, and this one reported that it was fine.
+ *
+ * A refusal is now a refusal rather than an inert endpoint: an operator is told at startup why the
+ * agent could not be built, instead of discovering it from a client that lists nothing.
+ *
+ * @throws StartupRefusal when the agent refused, or when the shape is not a Reading at all.
+ */
+export function agentFromReading(created: unknown): WeirPort {
+  const reading = created as { ok?: unknown; value?: unknown; failure?: { detail?: unknown } };
+  if (reading?.ok === false) {
+    const detail =
+      typeof reading.failure?.detail === 'string' ? reading.failure.detail : 'no reason given';
+    throw new StartupRefusal(`${AGENT_PACKAGE} createAgent() refused: ${detail}`);
+  }
+  if (reading?.ok !== true || reading.value === null || typeof reading.value !== 'object') {
+    throw new StartupRefusal(
+      `${AGENT_PACKAGE} createAgent() did not return a Reading<Agent>. Nothing was bound, because ` +
+        'binding an unrecognised shape is how a server starts with no tools and reports success.',
+    );
+  }
+  return reading.value as WeirPort;
+}
+
 export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   const has = (name: keyof WeirPort): boolean => typeof binding.port[name] === 'function';
   const out = new Set<Capability>();
@@ -820,7 +856,7 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
     throw new StartupRefusal(`${AGENT_PACKAGE} createAgent() did not return an object.`);
   }
 
-  const port = created as WeirPort;
+  const port = agentFromReading(created);
 
   /*
     The signer is a separate package from the agent on purpose, and this is where that separation
