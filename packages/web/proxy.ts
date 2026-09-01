@@ -124,6 +124,14 @@ export const ALWAYS_OPEN = [
   */
   '/robots.txt',
   '/sitemap.xml',
+  /*
+    `/explore` — the creators directory — and `/explore/agents` beneath it are the two sides of
+    the funnel on the waiting-list page: "see what is here before you commit". A funnel whose
+    both doors 307 back to the page the visitor is standing on is a drawing of a funnel. Only the
+    directories are opened; a creator's own page (`/c/…`) and the feed stay behind the gate, and a
+    visitor who follows a card is returned here with `?from=` set so a code takes them onward.
+  */
+  '/explore',
 ];
 
 export async function proxy(request: NextRequest) {
