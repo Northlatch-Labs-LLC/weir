@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter @projectx-social/sdk build && pnpm -r --no-bail test",
+    "test": "node scripts/every-package-is-tested.mjs && pnpm --filter @projectx-social/sdk build && pnpm -r --no-bail test",
     "typecheck": "pnpm -r typecheck"
   },
   "dependencies": {

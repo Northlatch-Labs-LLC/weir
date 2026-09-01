@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "tsx test/the-live-boundary.ts",
     "dry-run": "tsx src/index.ts"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     }
   },
   "devDependencies": {
+    "tsx": "4.20.6",
     "typescript": "7.0.2"
   }
 }
