@@ -46,7 +46,10 @@ vi.mock('../lib/db', () => ({
   signs a real statement with a real keypair — so what is stubbed here is everything except the one
   thing under test: what the route hands back once the proof has passed.
 */
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null }));
+vi.mock('@/lib/rate-limit', () => ({
+  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
+  // these files are about what the route decides and not about how often it may be asked.
+  simulateLimit: async () => null, rateLimit: () => null }));
 vi.mock('@/lib/identity', () => ({
   verifyAction: async () => ({ ok: true, value: true, observedAtMs: Date.now() }),
 }));

@@ -194,10 +194,14 @@ jobs:
       # Pinned to the version the contracts were published and tested with. A floating toolchain
       # means a framework revision can change what compiles without a line of this repository
       # changing, and the first sign of it would be a red build nobody can attribute.
-      - name: Install Sui CLI
-        env:
-          SUI_VERSION: mainnet-v1.77.2
+      # The version is READ FROM `Published.toml` rather than written here, so this workflow and the
+      # package cannot drift apart. It was a hardcoded `mainnet-v1.77.2` until 2026-09-01, which
+      # meant two places recorded the toolchain and only one of them was ever updated.
+      - name: Install Sui CLI, at the version the package pins
         run: |
+          SUI_VERSION="mainnet-v$(sed -n 's/^[[:space:]]*toolchain-version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' sui-contracts/Published.toml | head -1)"
+          [ "$SUI_VERSION" != "mainnet-v" ] || { echo "no toolchain-version in Published.toml"; exit 1; }
+          echo "installing $SUI_VERSION"
           curl -sSL -o sui.tgz \
             "https://github.com/MystenLabs/sui/releases/download/${SUI_VERSION}/sui-${SUI_VERSION}-ubuntu-x86_64.tgz"
           mkdir -p "$HOME/.local/bin"
@@ -206,6 +210,14 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - run: sui --version
+
+      # STRICT here, because CI is the one place where a toolchain difference is never intentional:
+      # the workflow just installed the pinned version, so a mismatch means the install did not do
+      # what it said, or something else on PATH is winning. That is a shadowed binary, which is the
+      # exact defect this file was added for — a stale sui in ~/.local/bin silently won every command
+      # on a developer machine for months, and the first symptom was an upgrade ceremony failing.
+      - name: The compiler is the one this package is pinned to
+        run: bash sui-contracts/assert-toolchain.sh --strict
 
       # The deployed-drift tripwire: weir v3 is live on mainnet, and source that stops building
       # to the recorded package digest fails here, on the pull request, instead of during an

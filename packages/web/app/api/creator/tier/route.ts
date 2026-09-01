@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { prepareAddTier, type CheckoutQuote } from '@/lib/checkout';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 /** Build and simulate adding a subscription tier. */
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const b = (await request.json()) as {

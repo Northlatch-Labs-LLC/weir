@@ -7,6 +7,12 @@ chain-id = "35834a8a"
 published-at = "0xfa7eb18bbb29b047ec86434e8a8f4cfba35615bde9680eebd781a187ca3a3694"
 original-id = "0xc5c833991ed1123d70b1001c0bcdb01ec5728b09f25dfc42a0edaf16005d404d"
 version = 3
-toolchain-version = "1.77.2"
+# Moved 1.77.2 -> 1.78.1 on 2026-09-01, and the move was MEASURED before it was made: this package
+# builds to the byte-identical digest 12536777af66da8eb607a97e470390fec265aa197a85abf1dd02588d08af841f
+# under 1.77.2, 1.78.0 and 1.78.1. So the pin moved at no cost and `ci-expected-digest` is unchanged.
+#
+# It moved because mainnet reached protocol 135 and 1.77.2 could not submit past 133 — an upgrade
+# ceremony stopped on exactly that. `assert-toolchain.sh` reads this line; nothing else did before.
+toolchain-version = "1.78.1"
 build-config = { flavor = "sui", edition = "2024" }
 upgrade-capability = "0x895e20c44aed9c884be8dffa42c93d93653b47e86cd3a12d919998d9b1eaed08"

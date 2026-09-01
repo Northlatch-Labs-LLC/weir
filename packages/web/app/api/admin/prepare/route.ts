@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { prepareAdminAction, type AdminAction, type AdminQuote } from '@/lib/admin';
 
@@ -21,7 +21,7 @@ const SUI_ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
  * transaction aborts is finding out after several people have signed it.
  */
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json()) as { sender?: string; action?: AdminAction };

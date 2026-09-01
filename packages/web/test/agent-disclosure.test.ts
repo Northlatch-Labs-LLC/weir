@@ -69,7 +69,10 @@ const verifyAction = vi.fn(
 
 const agentAccount = vi.fn();
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null }));
+vi.mock('@/lib/rate-limit', () => ({
+  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
+  // these files are about what the route decides and not about how often it may be asked.
+  simulateLimit: async () => null, rateLimit: () => null }));
 vi.mock('@/lib/identity', async () => {
   const real = await vi.importActual<typeof import('../lib/identity')>('../lib/identity');
   return {

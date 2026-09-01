@@ -23,7 +23,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const prepareSubscribe = vi.fn();
 const findProfileByVault = vi.fn();
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, clientKey: () => 'x' }));
+vi.mock('@/lib/rate-limit', () => ({
+  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
+  // these files are about what the route decides and not about how often it may be asked.
+  simulateLimit: async () => null, rateLimit: () => null, clientKey: () => 'x' }));
 vi.mock('@/lib/checkout', () => ({ prepareSubscribe: (...a: unknown[]) => prepareSubscribe(...a) }));
 vi.mock('@/lib/content', () => ({
   findProfileByVault: (...a: unknown[]) => findProfileByVault(...a),

@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, simulateLimit } from '@/lib/rate-limit';
 import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
@@ -55,7 +55,7 @@ export const dynamic = 'force-dynamic';
  * here" and "you were too late" call for different next actions.
  */
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;

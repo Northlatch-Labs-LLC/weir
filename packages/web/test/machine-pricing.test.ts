@@ -392,7 +392,10 @@ let priceOf: (contentKey: string) => { ok: true; value: bigint | null } | { ok: 
 /** Whether the vault itself reads. */
 let vaultReadable = true;
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null }));
+vi.mock('@/lib/rate-limit', () => ({
+  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
+  // these files are about what the route decides and not about how often it may be asked.
+  simulateLimit: async () => null, rateLimit: () => null }));
 
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({ ok: true, value: { network: 'mainnet' }, observedAtMs: 0 }),

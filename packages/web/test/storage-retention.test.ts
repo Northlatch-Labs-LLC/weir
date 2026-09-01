@@ -30,7 +30,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EPOCH_DAYS, TIER_EPOCHS, retentionDays } from '../lib/storage-retention';
+import { EPOCH_DAYS, TIER_EPOCHS, retentionDays, tierForAccess } from '../lib/storage-retention';
 import { MAX_EPOCHS } from '../lib/walrus';
 
 const root = join(import.meta.dirname, '..');
@@ -107,5 +107,64 @@ describe('what the composer tells a creator before they publish', () => {
       confirmation shown after publishing, which is too late to change the decision.
     */
     expect(composer).toMatch(/deleted|removed|disappears/i);
+  });
+});
+
+describe('the mapping from access to lease', () => {
+  /*
+    `tierForAccess` said `ephemeral` for subscribers, nothing called it, and no test asserted it —
+    while `POST /api/studio/upload` derived the tier itself as `gated !== null ? 'durable' :
+    'ephemeral'`, and `gated` is non-null for paid AND subscribers. So live behaviour gave
+    subscriber media the durable lease and this function said one epoch.
+
+    Wiring it in as written would have cut subscriber media from fifty-three epochs to one: paid-for
+    pictures expiring off Walrus for exactly the people who subscribed to see them. It was a wrong
+    answer sitting where the right one is supposed to live, and `body-storage.ts` cites it BY NAME
+    as the rule media follows — so a second module already pointed a reader at it.
+  */
+  it('gives an open post the short lease', () => {
+    expect(tierForAccess('public')).toBe('ephemeral');
+  });
+
+  for (const access of ['subscribers', 'paid'] as const) {
+    it(`gives ${access} media the durable lease`, () => {
+      /*
+        Asserted as the LITERAL tier rather than by comparing this function to the route. Comparing
+        the two passes when both are wrong together, which is the state this finding was found in.
+      */
+      expect(tierForAccess(access)).toBe('durable');
+    });
+  }
+
+  it('the durable lease is the one that outlives an entitlement', () => {
+    // The reason subscribers are durable, pinned as a number rather than left as an argument.
+    // `body-storage.ts` puts it in words: media that evaporates while the entitlement continues is
+    // a promise the storage cannot keep.
+    expect(TIER_EPOCHS.durable).toBeGreaterThan(TIER_EPOCHS.ephemeral);
+    expect(TIER_EPOCHS.ephemeral).toBe(1);
+  });
+});
+
+describe('the upload route uses the mapping rather than its own', () => {
+  const route = readFileSync(
+    join(process.cwd(), 'app', 'api', 'studio', 'upload', 'route.ts'),
+    'utf8',
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^\s*\/\/.*$/gm, ' ');
+
+  it('calls tierForAccess', () => {
+    // Comments stripped first: the docblock above the call names the function while explaining why
+    // the old ternary was wrong, and a raw search would count that as the call.
+    expect(route).toMatch(/tier:\s*tierForAccess\(/);
+  });
+
+  it('no longer decides a lease by asking whether the asset is encrypted', () => {
+    /*
+      The half that matters more. Without it, somebody reintroduces the ternary, this function goes
+      quiet again, and the two drift apart exactly as they did before — with every test above still
+      passing, because they only ever asked what the helper returns.
+    */
+    expect(route).not.toMatch(/gated\s*!==\s*null\s*\?\s*'durable'/);
   });
 });

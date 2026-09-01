@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { simulateLimit } from '@/lib/rate-limit';
 import { computeZkLoginAddressFromSeed, genAddressSeed } from '@mysten/sui/zklogin';
 import { checkProveResponse, KEY_CLAIM_NAME, type ProveRequest } from '@/lib/zklogin';
 import { deriveUserSalt, requestProof, verifyGoogleIdToken, zkLoginConfig } from '@/lib/zklogin-server';
@@ -32,7 +32,7 @@ export const dynamic = 'force-dynamic';
  * existing user at an empty address that looks exactly as legitimate as their real one.
  */
 export async function POST(request: Request) {
-  const limited = rateLimit(request, 'simulate');
+  const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json()) as Record<string, unknown>;

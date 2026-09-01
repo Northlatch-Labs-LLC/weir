@@ -6,6 +6,7 @@ import { verifyAction } from '@/lib/identity';
 import { createClient, periodOf, readCreatorVault } from '@projectx-social/sdk';
 import { attachAsset, findPost, findProfile } from '@/lib/content';
 import { MAX_BYTES, storeAsset, type AssetGate } from '@/lib/media';
+import { tierForAccess } from '@/lib/storage-retention';
 import { tooLarge } from '@/lib/body-limit';
 import { siteConfig } from '@/lib/chain';
 
@@ -209,7 +210,15 @@ export async function POST(request: Request) {
     // Not the form's `author` field: this is the address the vault reports as owner, already
     // checked above. It decides who ends up owning the `Blob` object we are about to pay for.
     owner: vault.value.owner,
-    tier: gated !== null ? 'durable' : 'ephemeral',
+    /*
+      The mapping lives in `tierForAccess`, not here.
+
+      This was `gated !== null ? 'durable' : 'ephemeral'` — a storage lease decided by asking
+      whether the asset is encrypted. Those two facts agree today by coincidence rather than by
+      construction, and deriving one from the other is how this route and `tierForAccess` came to
+      disagree about subscribers while both looked correct.
+    */
+    tier: tierForAccess(post.access.kind),
     gated,
   });
 

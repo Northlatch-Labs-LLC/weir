@@ -482,6 +482,25 @@ export const QUOTAS = {
     reaches it; an address trying to industrialise the door meets it immediately.
   */
   onramp: { capacity: 5, msPerToken: 600_000 },
+  /*
+    Building a transaction and asking a fullnode about it, keyed on the caller's network address
+    because these doors take no proof of identity and cannot.
+
+    They cannot: a visitor pricing a tip before they have an account is exactly who this platform is
+    for, and demanding a signature to be quoted a price is a door shut on the person it was built
+    to serve. So the ceiling is on VOLUME, and volume is the only thing there is to bound.
+
+    Durable rather than per-instance for the same reason `onramp` is. `rateLimit` counts in a
+    module-level Map, and its own header says so: "Serverless multiplies instances, and each
+    instance counts on its own." A ceiling of twenty a minute is therefore twenty times however many
+    instances happen to be warm — and traffic is what makes them warm, so the limit rises exactly
+    when it is being tested. Twenty-four routes in this class each build a transaction and call a
+    fullnode we pay for.
+
+    Sixty, then one every two seconds. A page quoting several prices at once fits inside the burst;
+    a loop meets the refill rate and stays there.
+  */
+  simulate: { capacity: 60, msPerToken: 2_000 },
 } as const satisfies Record<string, Quota>;
 
 export type QuotaName = keyof typeof QUOTAS;
@@ -627,6 +646,60 @@ export async function spendQuota(
  * cheaper and is where a limit belongs; this is what the application can enforce on its own, and it
  * closes the gap between "the limit says forty" and "the limit is forty times the instance count".
  */
+/**
+ * The guard every simulate-class route calls: both ceilings, in the order that costs least.
+ *
+ * # Why two
+ *
+ * {@link rateLimit} is a per-process Map and is honest about it. It is kept because it is free —
+ * it refuses a burst without touching Postgres — but it cannot bound anything across instances, so
+ * it is the cheap first line and not the limit.
+ *
+ * {@link spendShared} is one row in Postgres, so its ceiling holds across every instance at once.
+ * That is what makes it a limit rather than a suggestion.
+ *
+ * # Why these routes take no proof instead
+ *
+ * A visitor pricing a tip before they have an account is who this platform is for. Demanding a
+ * signature to be quoted a price shuts the door on exactly that person. So the caller is not
+ * identified and the ceiling is on volume, keyed on the network address they arrived from.
+ *
+ * # Fails closed
+ *
+ * If the store cannot be reached the request is refused, for the reason `quotaLimit` gives: a quota
+ * that stops applying when the database is unreachable is not a quota, and these calls are billed
+ * to us.
+ */
+export async function simulateLimit(request: Request): Promise<Response | null> {
+  const burst = rateLimit(request, 'simulate');
+  if (burst !== null) return burst;
+
+  const outcome = await spendShared(clientKey(request), 'simulate');
+  if (outcome.allowed) return null;
+
+  if (outcome.kind === 'unavailable') {
+    return Response.json(
+      {
+        error:
+          'this request could not be counted against the shared ceiling, so it was not accepted.',
+        retryAfterSeconds: 5,
+      },
+      { status: 503, headers: { 'retry-after': '5' } },
+    );
+  }
+
+  const retryAfterSeconds = Math.max(1, Math.ceil(QUOTAS.simulate.msPerToken / 1000));
+  return Response.json(
+    {
+      error:
+        'too many quotes from this address. Each one builds a transaction and asks a fullnode ' +
+        'about it, so the ceiling is on how often rather than on who.',
+      retryAfterSeconds,
+    },
+    { status: 429, headers: { 'retry-after': String(retryAfterSeconds) } },
+  );
+}
+
 export async function spendShared(
   clientKeyValue: string,
   name: QuotaName,
@@ -834,6 +907,7 @@ export const BREAKER_ENV = {
   write: 'PROJECTX_SOCIAL_BREAKER_WRITE_PER_MINUTE',
   purchase: 'PROJECTX_SOCIAL_BREAKER_PURCHASE_PER_HOUR',
   onramp: 'PROJECTX_SOCIAL_BREAKER_ONRAMP_PER_HOUR',
+  simulate: 'PROJECTX_SOCIAL_BREAKER_SIMULATE_PER_MINUTE',
 } as const satisfies Record<QuotaName, string>;
 
 /**
@@ -848,6 +922,12 @@ export const BREAKER_WINDOW_MS = {
   write: 60_000,
   purchase: 3_600_000,
   onramp: 3_600_000,
+  /*
+    A minute, like `read` and `write`, because this is a per-request cost rather than a per-person
+    one. An hour-long window would let a burst that empties a fullnode's patience in ninety seconds
+    sit under the ceiling for the remaining fifty-eight minutes.
+  */
+  simulate: 60_000,
 } as const satisfies Record<QuotaName, number>;
 
 /**
@@ -875,6 +955,16 @@ export const BREAKER_DEFAULTS = {
     this platform has seen — and far below what an address farm would want.
   */
   onramp: 60,
+  /*
+    Six hundred a minute across the WHOLE deployment — ten a second of transaction building and
+    fullnode traffic. Far above any honest audience at this size, and far below the rate at which a
+    single caller could make our node bill somebody else's problem.
+
+    This is the deployment-wide breaker, not the per-address bucket. The bucket in `QUOTAS.simulate`
+    stops one caller; this stops all of them at once when something is wrong that no per-caller
+    ceiling would notice.
+  */
+  simulate: 600,
 } as const satisfies Record<QuotaName, number>;
 
 /**

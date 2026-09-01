@@ -19,7 +19,7 @@
 
 import { afterAll, describe, expect, it } from 'vitest';
 import { closeDatabase, testDb, useTestDatabase } from './helpers/database';
-import { paidAccess, type PostRow } from '../lib/content';
+import { paidAccess, paidMessageAccess, type MessageRow, type PostRow } from '../lib/content';
 
 useTestDatabase();
 afterAll(closeDatabase);
@@ -104,5 +104,56 @@ describe('reading a paid post that cannot say what it costs', () => {
   it('returns the real price when the row has one', () => {
     const access = paidAccess({ ...postRow('250000'), content_key: 'k' } as unknown as PostRow);
     expect(access).toEqual({ kind: 'paid', price: '250000', contentKey: 'k' });
+  });
+});
+
+describe('reading a paid MESSAGE that cannot say what it costs', () => {
+  /*
+    The same defect as the post reader above, in the same file seven hundred lines away, and it
+    survived that fix — because the fix was applied where the finding pointed rather than everywhere
+    the shape occurred. Third instance of "a default that makes an impossible state look cheap", and
+    the second in this one file.
+
+    `001_init.sql` carries `paid_messages_need_pricing`: a paid message must have a price, a content
+    key AND a vault. All three defaults stood in for a state the database forbids.
+
+    Worse than the post case, because a post's price is public and visible elsewhere on the page. A
+    direct message somebody paid to send is not.
+  */
+  const row = (over: Partial<MessageRow>) =>
+    ({
+      id: 'm1',
+      access_kind: 'paid',
+      price: '250000',
+      content_key: 'k',
+      vault_id: `0x${'ab'.repeat(32)}`,
+      ...over,
+    }) as unknown as MessageRow;
+
+  it('refuses a missing price rather than calling it free', () => {
+    expect(() => paidMessageAccess(row({ price: null }))).toThrow(/no price/);
+  });
+
+  it('refuses a missing content key rather than handing back an empty one', () => {
+    expect(() => paidMessageAccess(row({ content_key: null }))).toThrow(/no content key/);
+  });
+
+  it('refuses a missing vault rather than pointing the payment at nowhere', () => {
+    // The one the post reader has no equivalent of: a message is paid INTO a vault, and an empty
+    // vault id is a payment with no destination.
+    expect(() => paidMessageAccess(row({ vault_id: null }))).toThrow(/no vault/);
+  });
+
+  it('names the row, so the message leads somewhere', () => {
+    expect(() => paidMessageAccess(row({ price: null }))).toThrow(/m1/);
+  });
+
+  it('returns all three when the row has them', () => {
+    expect(paidMessageAccess(row({}))).toEqual({
+      kind: 'paid',
+      price: '250000',
+      contentKey: 'k',
+      vaultId: `0x${'ab'.repeat(32)}`,
+    });
   });
 });
