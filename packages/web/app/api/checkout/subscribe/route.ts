@@ -1,6 +1,8 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { isSuiId } from '@/lib/db';
+import { findProfileByVault } from '@/lib/content';
 import { fold } from '@projectx-social/sdk';
 import { prepareSubscribe, type SubscribeBlocker, type SubscribeQuote } from '@/lib/checkout';
 
@@ -20,21 +22,47 @@ export async function POST(request: Request) {
   const body = (await request.json()) as {
     sender?: string;
     vaultId?: string;
-    coinType?: string;
     tierIndex?: number;
   };
 
-  if (!body.sender || !body.vaultId || !body.coinType || body.tierIndex === undefined) {
+  if (!body.sender || !body.vaultId || body.tierIndex === undefined) {
     return NextResponse.json(
-      { error: 'sender, vaultId, coinType and tierIndex are required' },
+      { error: 'sender, vaultId and tierIndex are required' },
       { status: 400 },
+    );
+  }
+  if (!isSuiId(body.sender) || !isSuiId(body.vaultId)) {
+    return NextResponse.json(
+      { error: 'sender and vaultId must be 0x followed by hex digits' },
+      { status: 400 },
+    );
+  }
+
+  /*
+    The coin type comes from the vault, not from the request — the same rule `tip` and `unlock`
+    already state in their own words, and this route was the one that did not.
+
+    `subscribe<T>` is a generic call, so `coinType` chooses which instantiation executes. Taking it
+    from the body let a caller name a different coin than the vault actually holds. The vault's own
+    denomination is the only correct answer and there is nothing to fall back to: a guessed type
+    parameter builds a transaction against a vault that does not exist.
+
+    `coinType` is no longer read from the body at all, rather than read and validated. A field that
+    is accepted and then overridden is a field somebody will wire back through later, believing it
+    was always meant to be honoured.
+  */
+  const profile = await findProfileByVault(body.vaultId);
+  if (profile?.coinType == null || profile.coinType === '') {
+    return NextResponse.json(
+      { error: 'this vault has no known denomination, so nothing can be subscribed to it' },
+      { status: 409 },
     );
   }
 
   const result = await prepareSubscribe({
     sender: body.sender,
     vaultId: body.vaultId,
-    coinType: body.coinType,
+    coinType: profile.coinType,
     tierIndex: body.tierIndex,
   });
 

@@ -7,6 +7,15 @@ import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
 import { verifyAction } from '@/lib/identity';
 
+/**
+ * What a creator may write about themselves.
+ *
+ * Exported so the composer, this route and the tests read ONE pair of numbers. They were literals
+ * at two call sites in this file and nowhere else, which is how a limit gets changed in one place.
+ */
+export const MAX_DISPLAY_NAME_LENGTH = 60;
+export const MAX_BIO_LENGTH = 280;
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -57,6 +66,29 @@ export async function POST(request: Request) {
     they are the entire payload — a signature authorising "some change to this vault" would
     authorise every later one too.
   */
+  /*
+    Bounded before the signature is checked, and refused rather than trimmed.
+
+    These two fields used to be sliced to 60 and 280 AFTER `verifyAction` returned, so what was
+    stored was not what the signature covered. A creator who signed a 300-character bio had 280 of
+    it stored under a signature attesting to the other shape — and the whole reason the name and bio
+    are bound into the statement is that they ARE the payload. A signature covering bytes that were
+    never stored authorises a thing that never happened.
+
+    Refused rather than silently shortened, and refused BEFORE verification, for the reason
+    `POST /api/posts` gives for its own length checks: rejecting afterwards would spend a
+    single-use signature on a request that was never going to be stored, so the creator would have
+    to sign again to find out. The length reported is the one they actually sent, not one this
+    route trimmed to.
+  */
+  const tooLong =
+    (b.displayName ?? '').length > MAX_DISPLAY_NAME_LENGTH
+      ? `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`
+      : (b.bio ?? '').length > MAX_BIO_LENGTH
+        ? `bio exceeds ${MAX_BIO_LENGTH} characters`
+        : null;
+  if (tooLong !== null) return NextResponse.json({ error: tooLong }, { status: 400 });
+
   const proof = await verifyAction({
     origin: new URL(request.url).origin,
     address: b.owner,
@@ -115,8 +147,12 @@ export async function POST(request: Request) {
     await upsertProfile({
       ...claimed,
       owner: b.owner,
-      displayName: (b.displayName ?? claimed.handle).trim().slice(0, 60),
-      bio: (b.bio ?? '').trim().slice(0, 280),
+      /*
+        Stored exactly as signed. The handle stands in only when the field is ABSENT — a display
+        fallback for something never supplied, not a modification of something that was.
+      */
+      displayName: b.displayName ?? claimed.handle,
+      bio: b.bio ?? '',
       coinType: b.coinType,
     });
     return NextResponse.json({ handle: claimed.handle });
@@ -145,8 +181,9 @@ export async function POST(request: Request) {
     handle: slug,
     vaultId: b.vaultId,
     owner: b.owner,
-    displayName: (b.displayName ?? handle.value).trim().slice(0, 60),
-    bio: (b.bio ?? '').trim().slice(0, 280),
+    // As signed, for the same reason as the branch above.
+    displayName: b.displayName ?? handle.value,
+    bio: b.bio ?? '',
     coinType: b.coinType,
   });
 
