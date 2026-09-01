@@ -217,6 +217,29 @@ export function clientKey(request: Request): string {
     change.
   */
   if ((process.env['PROJECTX_SOCIAL_BEHIND_CLOUDFLARE'] ?? '') === 'true') {
+    /*
+      The flag says a proxy is in front. Nothing in the flag PROVES this request came through it.
+
+      A boolean in the environment is a statement about the deployment, not about the request, and
+      the two differ exactly when it matters: a caller who reaches the origin directly — deployment
+      URLs are enumerable — sets `cf-connecting-ip` themselves and mints a fresh bucket per request,
+      which is the `x-forwarded-for` bypass this function already removed once, reintroduced under a
+      different header name.
+
+      So when a shared secret is configured, it is checked, and a request that cannot present it is
+      treated as not having come through the proxy however the flag is set. The secret is set by a
+      Transform Rule at the edge, where a client cannot reach it.
+
+      Unset, the behaviour is exactly as before. That is deliberate: turning this on before the edge
+      is configured would send every genuine visitor down the `unattributed` path and collapse them
+      into one shared bucket, which reads as an outage rather than as a limiter. The check arrives
+      inert and becomes load-bearing the moment the secret exists on both sides.
+    */
+    const expected = (process.env['PROJECTX_SOCIAL_EDGE_SECRET'] ?? '').trim();
+    if (expected !== '' && (request.headers.get('x-edge-secret') ?? '').trim() !== expected) {
+      return 'unattributed';
+    }
+
     const visitor = request.headers.get('cf-connecting-ip');
     if (visitor !== null && visitor.trim() !== '') return visitor.trim();
     // Configured as proxied but the header is absent: the request did not come through Cloudflare.
@@ -311,6 +334,59 @@ export function rateLimit(request: Request, name: BudgetName): Response | null {
         'retry-after': String(outcome.retryAfterSeconds),
         'x-ratelimit-limit': String(budget.limit),
         'x-ratelimit-remaining': '0',
+      },
+    },
+  );
+}
+
+/**
+ * The durable twin of {@link rateLimit}: a ceiling that holds across every instance at once.
+ *
+ * `rateLimit` stays where it is and is still called first — it is free, it needs no round trip, and
+ * it stops a naive loop against a warm instance before anything else is spent. What it cannot do is
+ * bound a caller spread across instances, because each instance counts on its own. This can, and it
+ * costs one indexed upsert to do it.
+ *
+ * Applied where the per-instance ceiling is provably not the ceiling: an anonymous caller that
+ * reaches the database. It is deliberately NOT applied to every route in one change — a database
+ * round trip added to all sixty-nine call sites at once would be a real cost paid against a small
+ * pool, and the routes differ in what they actually spend.
+ *
+ * Fails closed. A store this cannot reach refuses rather than admits, for the reason
+ * {@link spendQuota} gives: a limit an attacker turns off by making Postgres unreachable is not a
+ * limit, and a route that carries one was about to read that database anyway.
+ */
+export async function sharedLimit(request: Request, name: QuotaName): Promise<Response | null> {
+  const outcome = await spendShared(clientKey(request), name);
+  if (outcome.allowed) return null;
+
+  if (outcome.kind === 'unavailable') {
+    return Response.json(
+      {
+        error:
+          'this request could not be counted against a shared limit, so it was not accepted. A ' +
+          'limit that stops applying when the store is unreachable is not a limit.',
+        retryAfterSeconds: 5,
+      },
+      { status: 503, headers: { 'retry-after': '5' } },
+    );
+  }
+
+  return Response.json(
+    {
+      error:
+        'too many requests. This ceiling is shared across every instance of this deployment, so it ' +
+        'is the same limit wherever the request lands, and it refills on its own.',
+      bucket: name,
+      remaining: outcome.remaining,
+      retryAfterSeconds: outcome.retryAfterSeconds,
+    },
+    {
+      status: 429,
+      headers: {
+        'retry-after': String(outcome.retryAfterSeconds),
+        'x-ratelimit-limit': String(QUOTAS[name].capacity),
+        'x-ratelimit-remaining': String(outcome.remaining),
       },
     },
   );
@@ -521,6 +597,48 @@ export async function spendQuota(
   name: QuotaName,
   options: { cost?: number; now?: number } = {},
 ): Promise<QuotaOutcome> {
+  let key: string;
+  try {
+    key = normaliseAddress(address);
+  } catch {
+    return { allowed: false, kind: 'unavailable', reason: 'that is not an address' };
+  }
+  return spendBucketKey(key, name, options);
+}
+
+/**
+ * The same bucket, for a caller who has no address to be keyed on.
+ *
+ * # Why this exists
+ *
+ * {@link rateLimit} is a per-PROCESS map, and it says so in its own header: "Serverless multiplies
+ * instances, and each instance counts on its own." That is honest and it is also the whole defect —
+ * a ceiling of forty a minute is forty times however many instances happen to be warm, so the limit
+ * an anonymous caller actually meets is a number nobody chose and nobody can read off the code.
+ *
+ * The bucket here is one row in Postgres, so the ceiling holds across every instance at once. The
+ * key is the client key with an `ip:` prefix, which cannot collide with the addresses
+ * {@link spendQuota} writes because those are `0x` and sixty-six characters.
+ *
+ * # This does not replace an edge limiter and is not pretending to
+ *
+ * A request that reaches this has already been served by a function. Refusing at the edge is
+ * cheaper and is where a limit belongs; this is what the application can enforce on its own, and it
+ * closes the gap between "the limit says forty" and "the limit is forty times the instance count".
+ */
+export async function spendShared(
+  clientKeyValue: string,
+  name: QuotaName,
+  options: { cost?: number; now?: number } = {},
+): Promise<QuotaOutcome> {
+  return spendBucketKey(`ip:${clientKeyValue}`, name, options);
+}
+
+async function spendBucketKey(
+  key: string,
+  name: QuotaName,
+  options: { cost?: number; now?: number } = {},
+): Promise<QuotaOutcome> {
   const quota = QUOTAS[name];
   const cost = options.cost ?? 1;
   const nowMs = options.now ?? Date.now();
@@ -531,13 +649,6 @@ export async function spendQuota(
     throw new Error(
       `a cost of ${cost} cannot be spent from the ${name} quota, whose capacity is ${quota.capacity}`,
     );
-  }
-
-  let key: string;
-  try {
-    key = normaliseAddress(address);
-  } catch {
-    return { allowed: false, kind: 'unavailable', reason: 'that is not an address' };
   }
 
   try {
