@@ -23,6 +23,16 @@ import type { NextConfig } from 'next';
   `NEXT_DIST_DIR=.next-verify next build` now leaves the dev server's directory untouched. Unset,
   the default is exactly what it was.
 */
+/**
+ * SHA-256 of the one inline script this application serves: the theme restore in `app/layout.tsx`.
+ *
+ * A hash rather than a nonce because the script is static, so there is nothing per-request to
+ * generate and no middleware to thread it through. `test/csp.test.ts` recomputes this from the
+ * layout source, so a change to that script fails a test rather than silently producing a policy
+ * that blocks it.
+ */
+const INLINE_THEME_SCRIPT_SHA256 = 'xOzuRG2yFs86iI5GqL/OQiIlHl49POOgQv+m9I8u4o0=';
+
 const config: NextConfig = {
   distDir: process.env['NEXT_DIST_DIR'] ?? '.next',
 
@@ -107,6 +117,64 @@ const config: NextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), payment=()',
+          },
+          /*
+            Two policies, and the split is the point.
+
+            The note above says a Content-Security-Policy "needs a report-only period against real
+            traffic before it can be enforced". That is true of the directives that govern scripts
+            and styles: this is a Next application, the framework injects its own inline script and
+            style, and enforcing a guess about them takes the site down for everybody rather than
+            for an attacker. It is NOT true of the four directives below, which govern surfaces this
+            application does not use at all — so they are enforced now rather than waiting behind a
+            report period they do not need.
+
+            ENFORCED. `object-src 'none'` removes plugin embedding; `base-uri 'none'` stops injected
+            markup rewriting every relative URL on the page, which is the one XSS primitive that
+            survives a good script policy; `form-action 'self'` stops an injected form posting
+            somewhere else; `frame-ancestors 'none'` is the modern `X-Frame-Options: DENY`, kept
+            beside it because the old header is what older browsers read. Nothing here can break a
+            page that was not already doing one of those four things, and this one does none.
+          */
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "object-src 'none'",
+              "base-uri 'none'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+            ].join('; '),
+          },
+          /*
+            REPORT-ONLY, and it enforces nothing. It is the report period the note asked for, made
+            concrete: a browser evaluates this policy, breaks nothing, and names every violation in
+            the console. What it buys is the list of exceptions this application actually needs,
+            measured rather than guessed, so enforcement later is an edit to a string rather than a
+            new investigation.
+
+            `script-src` carries the SHA-256 of the one inline script in this application — the
+            theme restore in `app/layout.tsx`, which is static and therefore hashable, so no nonce
+            and no middleware are needed. `test/csp.test.ts` recomputes that hash from the layout
+            source and fails if the two drift, because a stale hash here would be a policy that
+            blocks the very script it was written to allow.
+
+            There is no `report-uri`: nothing collects reports yet, and naming an endpoint that does
+            not exist would look like collection while dropping every report on the floor.
+          */
+          {
+            key: 'Content-Security-Policy-Report-Only',
+            value: [
+              "default-src 'self'",
+              `script-src 'self' 'sha256-${INLINE_THEME_SCRIPT_SHA256}'`,
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "connect-src 'self'",
+              "font-src 'self'",
+              "object-src 'none'",
+              "base-uri 'none'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+            ].join('; '),
           },
         ],
       },
