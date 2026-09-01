@@ -18,8 +18,9 @@
     "http": "tsx src/index.ts --http",
     "canary": "tsx test/injection-canary.ts",
     "transport": "tsx test/transport-http.ts",
-    "check": "tsc --noEmit && tsx test/injection-canary.ts && tsx test/transport-http.ts",
-    "test": "tsx test/injection-canary.ts && tsx test/transport-http.ts"
+    "keys": "tsx test/key-refusal.ts",
+    "check": "tsc --noEmit && tsx test/injection-canary.ts && tsx test/transport-http.ts && tsx test/key-refusal.ts",
+    "test": "tsx test/injection-canary.ts && tsx test/transport-http.ts && tsx test/key-refusal.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

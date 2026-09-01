@@ -785,8 +785,30 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
     The keypair is built here and handed straight to the agent. It is never stored on `options`,
     never returned, never logged, and no other module in this package can reach it. In HTTP mode
     `options.secretKey` is null by construction (see `resolveOptions`), so `keypair` is null.
+
+    The decode is wrapped because the library's failure message QUOTES THE KEY. `decodeSuiPrivateKey`
+    reaches bech32, which throws `Invalid checksum in <the whole string>`; that error is not a
+    `StartupRefusal`, so it reaches the top-level handler in `index.ts`, which prints
+    `error.message` to stderr. A value one character off a real key, or a truncated one, is still
+    key material, so the cause is dropped rather than wrapped — the same shape as
+    `agent/src/keys.ts`, `daemon/src/adapters/signer.ts` and `signer/src/local.ts`.
+
+    The prefix check in `resolveOptions` does NOT already cover this: it accepts anything beginning
+    `suiprivkey1`, and a mistyped or truncated key clears that gate and fails here.
   */
-  const keypair = options.secretKey === null ? null : Ed25519Keypair.fromSecretKey(options.secretKey);
+  let keypair: Ed25519Keypair | null = null;
+  if (options.secretKey !== null) {
+    try {
+      keypair = Ed25519Keypair.fromSecretKey(options.secretKey);
+    } catch (error) {
+      // Dropped on purpose: the message can quote the key. See the note above.
+      void error;
+      throw new StartupRefusal(
+        `${ENV.key} is set but could not be decoded as a bech32 Ed25519 Sui private key ` +
+          `(expected "${SUI_PRIVATE_KEY_PREFIX}…"). The value has not been logged.`,
+      );
+    }
+  }
 
   const created: unknown = await (createAgent as (input: unknown) => unknown)({
     keypair,
