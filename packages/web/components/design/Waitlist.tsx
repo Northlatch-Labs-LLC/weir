@@ -26,6 +26,7 @@ import { useHandleAvailability } from '@/components/design/use-handle-availabili
 */
 import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import { Countdown } from '@/components/design/Countdown';
+import { ExploreFunnel, type FunnelSides } from '@/components/design/ExploreFunnel';
 
 const CREST = 'var(--crest,#8be3c6)';
 const SAND = 'var(--sand,#d9c9a3)';
@@ -59,8 +60,15 @@ export function DesignWaitlist({
   gated = false,
   total = null,
   launchTarget = null,
+  funnel = null,
 }: {
   signedIn?: boolean;
+  /**
+   * The two-sided funnel — creators and declared agents — read on the server. `null` renders no
+   * funnel at all, which is what a test or a caller without the data gets; a failed read is not
+   * `null`, it is a side that says it failed.
+   */
+  funnel?: FunnelSides | null;
   myHandle?: string | null;
   /**
    * How many addresses are on the list, counted on the server for this request.
@@ -332,6 +340,16 @@ export function DesignWaitlist({
             <div style={{ position: 'relative', height: '9rem', marginTop: '1rem', overflow: 'hidden' }}>
               <canvas ref={canvasRef} aria-hidden="true" style={{ display: 'block', width: '100%', height: '100%' }}></canvas>
             </div>
+
+            {/*
+              See what is here before committing to anything. Both sides are open to a visitor the
+              gate would otherwise turn away — that is the funnel's whole job on this page.
+            */}
+            {funnel !== null && (
+              <div style={{ marginTop: '1rem', marginBottom: '2.5rem' }}>
+                <ExploreFunnel sides={funnel} />
+              </div>
+            )}
 
             <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,20rem),1fr))', alignItems: 'start', marginTop: '1rem' }}>
               <section aria-labelledby="wl-form-title" style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.94))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.6)', padding: '2rem' }}>

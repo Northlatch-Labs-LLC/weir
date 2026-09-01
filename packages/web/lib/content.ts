@@ -387,6 +387,7 @@ export async function countProfiles(): Promise<number> {
 
 export async function listProfiles(options?: {
   handles?: readonly string[];
+  owners?: readonly string[];
   owner?: string;
   limit?: number;
   /**
@@ -408,6 +409,20 @@ export async function listProfiles(options?: {
     // list is an empty answer, not everybody.
     params.push([...options.handles]);
     conditions.push(`handle = ANY($${params.length}::text[])`);
+  }
+  if (options?.owners !== undefined) {
+    // The same shape as `handles`, for the callers that start from an address — the agent register
+    // keys on owners, and a profile is how an owner gets a name.
+    const owners: string[] = [];
+    for (const owner of options.owners) {
+      try {
+        owners.push(normaliseAddress(owner));
+      } catch {
+        // Not an address; it owns nothing here. Skipped rather than thrown, as `owner` is below.
+      }
+    }
+    params.push(owners);
+    conditions.push(`owner = ANY($${params.length}::text[])`);
   }
   if (options?.owner !== undefined) {
     let owner: string;

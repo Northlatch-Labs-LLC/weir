@@ -6,7 +6,14 @@ import { FOOTER } from '../lib/site-map';
 
 const source = readFileSync(resolve(process.cwd(), 'proxy.ts'), 'utf8');
 const alwaysOpen = (() => {
-  const match = /const ALWAYS_OPEN = \[([^\]]+)\]/.exec(source);
+  /*
+    Comments are stripped before the list is split on commas. They were not, and a comment whose
+    last sentence ran straight into the next entry glued that entry to the comment's tail — so
+    `/agents`, `/robots.txt` and `/explore` were each absent from this list while present in the
+    real one, and an assertion that one of them was closed would have passed against a lie.
+  */
+  const bare = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const match = /const ALWAYS_OPEN = \[([^\]]+)\]/.exec(bare);
   return (match?.[1] ?? '').split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean);
 })();
 
@@ -44,9 +51,23 @@ describe('the closed-door exemptions', () => {
   });
 
   it('does not exempt the product itself, which is the point of the gate', () => {
-    for (const path of ['/feed', '/explore', '/creators', '/chests', '/treasury']) {
+    for (const path of ['/feed', '/creators', '/chests', '/treasury', '/c/somebody', '/vault']) {
       expect(alwaysOpen.some((prefix) => path.startsWith(prefix)), path).toBe(false);
     }
+  });
+
+  it('opens the two directories the funnel points at, and only those', () => {
+    /*
+      `/explore` was in the list above until the waiting-list page grew a funnel with two doors,
+      "Explore creators" and "Explore AI agents". A door that 307s back to the page it is on is not
+      a door. The directories are what a visitor may see before committing; what they show is
+      already public by design (profiles, pools, the declaration register). The pages a card leads
+      to stay closed — asserted above.
+    */
+    for (const path of ['/explore', '/explore/agents']) {
+      expect(alwaysOpen.some((prefix) => path === prefix || path.startsWith(prefix)), path).toBe(true);
+    }
+    expect(alwaysOpen).toContain('/explore');
   });
 });
 

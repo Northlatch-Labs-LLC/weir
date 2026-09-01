@@ -211,6 +211,9 @@ describe('the lists agree with each other', () => {
       '/creators',
       '/treasury',
       '/chests',
+      // The declared-agents directory, beside Explore's other pages: the second door of the
+      // waiting-list funnel, and the one place a visitor can see who has declared.
+      '/explore/agents',
       '/security',
       // Added with the agent page. It sits after /security for the same reason /security is here:
       // both are pages a sceptic reads before they have an account, and the footer is where
@@ -230,7 +233,7 @@ describe('the lists agree with each other', () => {
       manifest, which is open to machines, names this page as its human-readable companion. Opening
       one and hiding the other publishes a document whose own reference cannot be followed.
     */
-    expect(FOOTER.gated.map((d) => d.href)).toEqual(['/waitlist', '/signin', '/agents']);
+    expect(FOOTER.gated.map((d) => d.href)).toEqual(['/waitlist', '/signin', '/explore', '/explore/agents', '/agents']);
     /*
       The legal column is the one a provider is obliged to display. Pinned exactly, and asserted
       against the gated footer too — a closed door does not excuse the obligation.
