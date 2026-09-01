@@ -26,7 +26,8 @@ import { useTestDatabase, testDb, closeDatabase } from './helpers/database';
 useTestDatabase();
 
 const { assertIsOnlyAccountOpen, loadSponsor, reserveSeat, releaseSeat, seatsRemaining,
-        SPONSORSHIP_SEATS, SEAT_HOLD_MS, SPONSORED_GAS_BUDGET_MIST } = await import('../lib/sponsor');
+        SPONSORSHIP_SEATS, SEAT_HOLD_MS, SPONSORED_GAS_BUDGET_MIST,
+        ZERO_COIN_TARGET } = await import('../lib/sponsor');
 
 const LATEST = `0x${'f'.repeat(64)}`;
 const OTHER = `0x${'e'.repeat(64)}`;
@@ -53,7 +54,7 @@ describe('the guard on what we will pay gas for', () => {
     // an attacker's gas to withdraw somebody's earnings.
     const r = assertIsOnlyAccountOpen(callTo(`${LATEST}::creator::claim_earnings`), config);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.failure.detail).toContain('and nothing else');
+    if (!r.ok) expect(r.failure.detail).toContain('claim_earnings');
   });
 
   it('refuses the right function on the wrong package', () => {
@@ -242,10 +243,15 @@ describe('the cap, enforced by the database', () => {
 
 describe('the vault guard — what it must let through and what it must not', () => {
   const VAULT_CFG = config;
+  /*
+    The payment is MINTED empty, not split off the gas coin. In a sponsored transaction the gas
+    belongs to the sponsor and Sui rejects the sender spending it as an input, so a fixture built
+    with splitCoins would test a shape that cannot execute on chain.
+  */
   const mk = (target: string, opts: { transfers?: number; recipient?: string } = {}) => {
     const tx = new Transaction();
     tx.setSender(SENDER);
-    const [coin] = tx.splitCoins(tx.gas, [0n]);
+    const [coin] = tx.moveCall({ target: ZERO_COIN_TARGET, typeArguments: ['0x2::sui::SUI'] });
     tx.moveCall({ target, arguments: [coin!] });
     for (let i = 0; i < (opts.transfers ?? 1); i += 1) {
       tx.transferObjects([coin!], opts.recipient ?? SENDER);
@@ -253,11 +259,10 @@ describe('the vault guard — what it must let through and what it must not', ()
     return tx;
   };
 
-  it('accepts the real shape: split, call, transfer home', () => {
+  it('accepts the real shape: mint an empty coin, open, transfer home', () => {
     /*
-      `open_vault` returns a CreatorCap and change. Move cannot drop either, so a legitimate vault
-      open is three commands. The first version of this guard allowed only two and refused every
-      real vault — which is the right way round for a guard to be wrong, but still wrong.
+      Three commands, each mandatory: a zero payment coin `open_vault` can consume, the open
+      itself, and the transfer that rehomes the CreatorCap and change Move will not let us drop.
     */
     const r = assertIsOnlyAccountOpen(mk(`${LATEST}::creator::open_vault`), VAULT_CFG, 'vault');
     expect(r.ok).toBe(true);
@@ -274,6 +279,22 @@ describe('the vault guard — what it must let through and what it must not', ()
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.failure.detail).toMatch(/hand the CreatorCap to somebody else|does not name its own sender/);
+  });
+
+  it('refuses a vault that pays out of the sponsor gas coin', () => {
+    /*
+      The bug a real mainnet run caught. Splitting the payment off `tx.gas` builds and passes a
+      naive shape check, then fails on chain with "Gas object is not an owned object with owner:
+      AddressOwner(sender)" — because in a sponsored transaction that coin is the sponsor's. This
+      keeps the dead shape dead.
+    */
+    const tx = new Transaction();
+    tx.setSender(SENDER);
+    const [coin] = tx.splitCoins(tx.gas, [0n]);
+    tx.moveCall({ target: `${LATEST}::creator::open_vault`, arguments: [coin!] });
+    tx.transferObjects([coin!], SENDER);
+    const r = assertIsOnlyAccountOpen(tx, VAULT_CFG, 'vault');
+    expect(r.ok).toBe(false);
   });
 
   it('refuses a second transfer hiding beside the legitimate one', () => {

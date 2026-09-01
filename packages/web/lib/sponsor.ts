@@ -186,6 +186,14 @@ export type SponsoredAction = 'account' | 'vault';
  * deliberate edit to this table and not something that falls out of a caller passing a different
  * string. Everything else in the transaction is still forbidden.
  */
+/**
+ * The empty payment coin for a zero-fee vault open.
+ *
+ * `0x2` is the Sui framework and is the same on every network, so this is a genuine constant and
+ * not a deployment value that ought to be configuration.
+ */
+export const ZERO_COIN_TARGET = '0x0000000000000000000000000000000000000000000000000000000000000002::coin::zero';
+
 const SPONSORABLE: Record<SponsoredAction, (config: ProjectXSocialConfig) => string> = {
   account: (c) => `${c.latestPackageId}::account::open`,
   vault: (c) => `${c.latestPackageId}::creator::open_vault`,
@@ -201,28 +209,33 @@ export function assertIsOnlyAccountOpen(
   const expected = SPONSORABLE[action](config);
 
   /*
-    A vault open legitimately carries a SplitCoins beside the MoveCall: `open_vault` takes a
-    `Coin<SUI>` payment, and with the creation fee at zero that is a zero-value split off the gas
-    coin. So the shape for a vault is exactly SplitCoins + MoveCall, in that order, and nothing
-    else — still an equality, just a two-command one. An account open remains exactly one MoveCall.
+    A sponsored vault is three commands, and each one is here for a reason that cost a failed
+    mainnet run to learn.
 
-    The split comes off `tx.gas`, which in a sponsored transaction is the SPONSOR's coin. That is
-    deliberate and safe: with the fee at zero it moves nothing, and if the fee were ever non-zero
-    this guard would have to be revisited before we sponsored a vault again, because we would then
-    be paying the fee as well as the gas. Recorded here so that change cannot be made silently.
-  */
-  /*
-    `open_vault` RETURNS a CreatorCap and the change coin. Move cannot drop either, so the builder
-    must transfer them somewhere or the transaction will not build — which is why a legitimate
-    vault open is three commands, not two. The first version of this guard allowed only two and
-    correctly refused every real vault, which is the right way round for a guard to be wrong.
+    1. `coin::zero<T>` — `open_vault` takes a `Coin<SUI>` payment by value, so one must exist.
+       The obvious way to make it is to split zero off `tx.gas`, and that is what this did first.
+       It fails on chain: in a sponsored transaction the gas coin belongs to the SPONSOR, and Sui
+       refuses to let the sender spend it as a transaction input — "Gas object is not an owned
+       object with owner: AddressOwner(sender)". Gas can only ever become gas. So the payment is
+       minted empty instead, which moves nothing and touches nobody's coins.
 
-    But TransferObjects is precisely the command an attacker would add, so allowing it by kind is
-    not enough. The recipient is checked below: it must be the SENDER and nobody else. A sponsored
-    vault open that hands the CreatorCap to a third party would be us paying for somebody to take
-    control of a creator's earnings.
+       This is only sound because `collect_creation_fee` asserts `payment.value() >= due` and
+       takes nothing when `due` is zero. The route refuses unless the fee reads zero from chain,
+       so the zero coin is always sufficient. If the fee is ever restored, that refusal fires
+       first and this path stops — it does not silently start underpaying.
+
+    2. `creator::open_vault` — the call itself.
+
+    3. `TransferObjects` — `open_vault` RETURNS a CreatorCap and the change coin. Move cannot drop
+       either, so they must be transferred or the transaction will not build. But TransferObjects
+       is also precisely the command an attacker would add, so allowing it by kind is not enough:
+       the recipient is checked below and must be the sender. Sponsoring a vault whose CreatorCap
+       went to a third party would be us paying for somebody to take control of a creator's
+       earnings from the moment the vault existed.
+
+    An account open remains exactly one MoveCall.
   */
-  const allowedKinds = action === 'vault' ? ['SplitCoins', 'MoveCall', 'TransferObjects'] : ['MoveCall'];
+  const allowedKinds = action === 'vault' ? ['MoveCall', 'MoveCall', 'TransferObjects'] : ['MoveCall'];
   if (kinds.length !== allowedKinds.length || kinds.some((k, i) => k !== allowedKinds[i])) {
     return fail(
       'malformed',
@@ -231,13 +244,17 @@ export function assertIsOnlyAccountOpen(
     );
   }
 
-  if (targets.length !== 1 || targets[0] !== expected) {
+  // Both calls are pinned, in order. `coin::zero` is as much a part of the allowed shape as the
+  // open itself — an unpinned first call would be a free MoveCall riding on our gas.
+  const expectedTargets = action === 'vault' ? [`${ZERO_COIN_TARGET}`, expected] : [expected];
+  if (targets.length !== expectedTargets.length || targets.some((t, i) => t !== expectedTargets[i])) {
     return fail(
       'malformed',
       source,
-      `a sponsored transaction must call ${expected} and nothing else; this one calls [${targets.join(', ')}]. Refusing to pay gas for it.`,
+      `a sponsored ${action} must call exactly [${expectedTargets.join(', ')}]; this one calls [${targets.join(', ')}]. Refusing to pay gas for it.`,
     );
   }
+
   if (action === 'vault') {
     /*
       Exactly one transfer, and its recipient must be the sender.
@@ -539,7 +556,13 @@ export async function sponsorVaultOpen(input: {
   try {
     const client = createClient(input.config);
     const tx = new Transaction();
-    const [payment] = tx.splitCoins(tx.gas, [0n]);
+    /*
+      Minted empty, never split off `tx.gas`. The gas coin belongs to the sponsor and Sui refuses
+      to let the sender spend it as an input; see the shape guard for the full reasoning and the
+      on-chain error that proved it. Sound only while the fee is zero, which the caller has
+      already read from chain and refused otherwise.
+    */
+    const [payment] = tx.moveCall({ target: ZERO_COIN_TARGET, typeArguments: ['0x2::sui::SUI'] });
     openCreatorVault(
       { config: input.config, tx },
       { coinType: input.coinType, accountId: input.accountId, paymentCoin: payment!, sender: input.sender },
