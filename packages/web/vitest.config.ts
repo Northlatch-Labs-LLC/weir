@@ -12,6 +12,17 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     /*
+      Rebuild `@projectx-social/sdk` when its `dist` is older than its `src`, before anything runs.
+
+      `dist` is gitignored, so it survives a branch switch carrying the other commit's behaviour,
+      and testing against it produces results for a mixture of two commits — as a plausible-looking
+      assertion failure in correct code, which is the expensive kind of wrong. The root `test`
+      script builds the SDK first, but `npx vitest run` in this package bypasses that entirely, and
+      running one package's tests directly is the ordinary way to work. A globalSetup is reached
+      whichever way vitest was started.
+    */
+    globalSetup: ['../../scripts/sdk-freshness.mjs'],
+    /*
       Component tests declare their own environment with a `@vitest-environment happy-dom` docblock
       at the top of the file, so nothing is configured here.
 
