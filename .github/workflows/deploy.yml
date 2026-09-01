@@ -5,8 +5,21 @@ name: Deploy to Vercel
 # does what that connection used to do: build with the Vercel CLI and ship the
 # prebuilt output to production.
 
+# A merge to main is a production deployment, so what gates the merge gates the users.
+#
+# This ran `on: push` with no `needs:` and no tests of its own, and CI is a separate workflow with
+# no relationship to it — so a red tree shipped to production exactly as fast as a green one, and
+# the suite everybody quoted had never gated a single deploy.
+#
+# `workflow_run` waits for CI to actually finish and reports its conclusion, which is the free
+# control: no paid plan, no duplicated suite (CI applies migrations and installs the Sui CLI, and
+# running that twice per merge would buy nothing). Branch protection would ALSO stop a red merge
+# reaching main in the first place, and is not available on this plan — so this stops the deploy
+# rather than the merge. That is the weaker of the two and it is the one available.
 on:
-  push:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -16,12 +29,30 @@ concurrency:
 
 jobs:
   deploy:
+    # A manual dispatch is a deliberate act by someone who can read the tree; an automatic run is
+    # not, so only the automatic path is gated. `conclusion` is checked rather than `status`:
+    # a cancelled or failed CI run is also "completed".
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
+      # `workflow_run` starts from the default branch, NOT from the commit that triggered CI, so
+      # without this the deploy would ship whatever main happened to be at the time the run began
+      # rather than the commit that was actually tested. Deploying an untested commit because the
+      # gate said green would be worse than having no gate.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Say what is being deployed, and why it was allowed
+        run: |
+          echo "commit:    ${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "trigger:   ${{ github.event_name }}"
+          echo "CI result: ${{ github.event.workflow_run.conclusion || 'n/a (manual dispatch)' }}"
 
       # This is a pnpm workspace; the Vercel CLI shells out to pnpm during the
       # build and fails with ENOENT if it is not on PATH first. The version is
