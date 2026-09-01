@@ -98,8 +98,13 @@ export const READ_SESSION_COOKIE = 'projectx_read';
  * How long a proof of readership lasts.
  *
  * A day, because the wallet prompt that mints it is the cost. Shorter means re-prompting people
- * mid-session, which is how users learn to approve prompts without reading them — the same
- * reasoning `isSingleUse` gives for not spending read signatures.
+ * mid-session, which is how users learn to approve prompts without reading them.
+ *
+ * That last clause used to read "the same reasoning `isSingleUse` gives for not spending read
+ * signatures". `isSingleUse` no longer gives it: reads are spent like every other kind, because the
+ * exemption was reasoned from the signer's side and ignored what the same bytes are worth to
+ * somebody who intercepted them. The argument for a long TTL stands on its own — it is about how
+ * often a person is asked, not about whether a signature is reusable.
  */
 export const READ_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 

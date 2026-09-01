@@ -104,8 +104,13 @@ export type Action =
    *
    * Nothing to bind. There is no target, no amount and no text: the statement's entire content is
    * the address and the timestamp already in `head`. Binding a page or a post would be worse, not
-   * better — it would mean one session per post, and therefore a wallet prompt per post, which is
-   * the prompt fatigue `isSingleUse` refuses for reads.
+   * better — it would mean one session per post, and therefore a wallet prompt per post.
+   *
+   * That prompt-fatigue argument used to end "which is the prompt fatigue `isSingleUse` refuses for
+   * reads". It no longer does: `isSingleUse` returns true for every kind, because the exemption it
+   * described was reasoned from the signer's side alone. The argument is still sound HERE — one
+   * session per post really would mean a prompt per post — and it is no longer a description of
+   * what `isSingleUse` does.
    *
    * # What it can and cannot do if stolen
    *
