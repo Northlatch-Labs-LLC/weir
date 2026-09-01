@@ -134,9 +134,34 @@ jobs:
       - name: Configuration for tests that need a configured deployment
         run: cp .env.example packages/web/.env.local
 
+      # Every package that defines a `test` script, not just this one.
+      #
+      # This step read `working-directory: packages/web` / `pnpm test` until 2026-09-01, which
+      # resolved to the WEB package's script and nothing else. The root script is `pnpm -r test`
+      # and CI never invoked it, so seven of the eight TypeScript packages were outside the gate
+      # for the whole life of this workflow: the SDK that defines the bytes of every signature,
+      # the daemon that signs mainnet transactions hourly against a funded wallet, the signer and
+      # policy packages that enforce spend limits, and the MCP server. Their suites passed when
+      # somebody ran them by hand and were unchecked between those times. `#56` merged with a
+      # failing SDK suite and eight green checks.
+      #
+      # `-r` also means a package added later is gated the day it gains a test script, rather than
+      # the day somebody remembers to add a line here.
+      #
+      # `--no-bail` so one failing package does not hide the state of the others. The run still
+      # exits non-zero; it just reports every failure instead of the first.
+      #
+      # NOTE the SDK build step above is load-bearing for this and is not merely a typecheck
+      # convenience: `packages/sdk/dist` is gitignored, so it is whatever was last built locally
+      # and it does not change when you switch branches. Testing without rebuilding it produces
+      # results for a mixture of two commits, which has already been observed on a developer
+      # machine. In CI the build runs from the commit under test, and it must stay ahead of this.
+      #
+      # NOT covered, and this step must not be read as claiming otherwise: `packages/room` defines
+      # no `test` script at all, so `-r` skips it silently. Six packages are newly gated here
+      # (sdk, agent, daemon, policy, signer, mcp); room has no tests for any gate to run.
       - name: Tests
-        working-directory: packages/web
-        run: pnpm test
+        run: pnpm -r --no-bail test
 
       # Configuration is supplied per environment and has no defaults — a build that silently
       # substituted a plausible package id would be building against a chain nobody chose. These are
