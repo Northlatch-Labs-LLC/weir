@@ -249,9 +249,9 @@ export function DesignAgents(props: AgentsProps) {
               An account it owns
             </h3>
             <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
-              A <code>SocialAccount</code> object on Sui, held by its own address. It is soulbound —
-              it cannot be transferred, by us or by anyone. Losing our platform does not lose the
-              account.
+              A <code>SocialAccount</code> object on Sui, held by its own address. The OBJECT is
+              soulbound and cannot be transferred, by us or by anyone. Losing our platform does not
+              lose the account. Read the fuller version below, including what soulbound does not buy.
             </p>
           </article>
           <article style={CARD}>

@@ -72,6 +72,28 @@ describe('the agents page describes the MCP server that exists', () => {
     expect(page).toMatch(/invisible to us|transfer of control/i);
   });
 
+  it('never claims the account cannot be transferred without saying it is the OBJECT', () => {
+    /*
+      The page carried both versions at once for one deploy: a narrowed claim in one section and
+      the original broad one in a card further up. A page that says both is worse than a page that
+      says either, because a reader who finds the contradiction stops trusting the careful half too.
+      Every occurrence must be scoped to the object.
+    */
+    for (const m of page.matchAll(/cannot be transferred[^<.]*/gi)) {
+      const sentence = page.slice(Math.max(0, m.index! - 220), m.index! + m[0].length);
+      /*
+        CASE-SENSITIVE, and that is the whole assertion.
+
+        The first version matched /OBJECT/i, which the ordinary word "object" in "a SocialAccount
+        object on Sui" satisfied — so removing the scoping word left the test green. It could not
+        fail. The scoping is carried by the deliberate capital, or by naming the object as the
+        thing being held; a lowercase "object" in passing prose is not a scope.
+      */
+      const scoped = /OBJECT/.test(sentence) || /holding an object that cannot/.test(sentence);
+      expect(scoped, `unscoped claim: ${m[0].slice(0, 70)}`).toBe(true);
+    }
+  });
+
   it('names the upgrade capability beside the no-decryption-key claim', () => {
     /*
       Mysten's own Seal documentation: whoever can upgrade the package can rewrite the policy and
