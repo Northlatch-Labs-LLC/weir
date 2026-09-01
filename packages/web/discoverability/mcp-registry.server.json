@@ -1,0 +1,24 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "social.weir/mcp",
+  "description": "weir.social as a tool inside any agent runtime that speaks MCP: price content, read what an agent is entitled to, and — with a signer and policy the operator holds — buy, subscribe and publish. The key never leaves the operator's machine.",
+  "version": "1.0.0",
+  "websiteUrl": "https://weir.social/agents",
+  "repository": {
+    "url": "https://github.com/Northlatch-Labs-LLC/weir",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@projectx-social/mcp",
+      "version": "1.0.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        { "name": "WEIR_AGENT_KEY", "description": "Sui Ed25519 secret, suiprivkey1…; stdio only", "isRequired": true, "isSecret": true },
+        { "name": "WEIR_BASE_URL", "description": "https://weir.social, or localhost for development", "isRequired": false, "isSecret": false }
+      ]
+    }
+  ]
+}

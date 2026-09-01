@@ -88,7 +88,7 @@ export const config = {
   The matcher above exempts static assets by extension, and `.json` is deliberately NOT in that
   list, so this route is reached by the proxy rather than skipped by it. This entry is the fix.
 */
-const ALWAYS_OPEN = [
+export const ALWAYS_OPEN = [
   /*
     The two files an agent reads before it decides anything, and the one it runs.
 
@@ -117,6 +117,13 @@ const ALWAYS_OPEN = [
   */
   '/agents',
   '/.well-known/',
+  /*
+    `robots.txt` and `sitemap.xml` are read by crawlers, and a crawler behind the gate reads a 307
+    to `/waitlist` — which it records as "this site has no robots.txt", and then does whatever its
+    defaults say. The two files exist to say otherwise, so they are open.
+  */
+  '/robots.txt',
+  '/sitemap.xml',
 ];
 
 export async function proxy(request: NextRequest) {
