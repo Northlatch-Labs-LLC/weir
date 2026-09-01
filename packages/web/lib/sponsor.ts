@@ -160,6 +160,50 @@ export function loadSponsor(env: NodeJS.ProcessEnv = process.env): Reading<Spons
  * changed behaviour, or a future edit that added a command, must be caught by inspecting what was
  * actually produced.
  */
+/**
+ * The address a `TransferObjects` command actually sends to, or `null` if it cannot be decoded.
+ *
+ * `null` means REFUSE. It is not "no recipient found" — it is "this transaction names a recipient
+ * in a form we do not read", and paying gas for something we cannot describe is the thing this
+ * whole function exists to stop.
+ *
+ * The shape, taken from a transaction the SDK built rather than from documentation:
+ *
+ *     command.TransferObjects.address = { $kind: 'Input', Input: 0, type: 'pure' }
+ *     data.inputs[0]                  = { $kind: 'Pure', Pure: { bytes: '<base64 of 32 bytes>' } }
+ *
+ * Only an `Input` pointing at a `Pure` is accepted. A `Result`, a `NestedResult` or the gas coin
+ * is a recipient computed on chain, which we cannot evaluate here and therefore will not sponsor.
+ */
+function transferRecipient(tx: Transaction, transfer: unknown): string | null {
+  const address = (transfer as { address?: unknown } | undefined)?.address as
+    | { $kind?: string; Input?: number }
+    | undefined;
+  if (address?.$kind !== 'Input' || typeof address.Input !== 'number') return null;
+
+  const inputs = (tx.getData() as { inputs?: unknown[] }).inputs ?? [];
+  const input = inputs[address.Input] as { Pure?: { bytes?: string } } | undefined;
+  const bytes = input?.Pure?.bytes;
+  if (typeof bytes !== 'string' || bytes === '') return null;
+
+  const raw = Buffer.from(bytes, 'base64');
+  // A Sui address is exactly 32 bytes. A pure input of any other length is not one, whatever it
+  // decodes to, and guessing at it is how a check starts accepting things it never meant to.
+  if (raw.length !== 32) return null;
+  return `0x${raw.toString('hex')}`;
+}
+
+/** Both sides lower-cased and zero-padded before comparison, so `0x2` and `0x02` agree. */
+function sameAddress(a: string, b: string): boolean {
+  const norm = (v: string): string | null => {
+    if (!/^0x[0-9a-fA-F]{1,64}$/.test(v)) return null;
+    return v.slice(2).toLowerCase().padStart(64, '0');
+  };
+  const left = norm(a);
+  const right = norm(b);
+  return left !== null && right !== null && left === right;
+}
+
 function shapeOf(tx: Transaction): { kinds: string[]; targets: string[]; transferArgs: unknown[] } {
   const data = tx.getData() as {
     commands: Array<Record<string, unknown> & { MoveCall?: { package: string; module: string; function: string } }>;
@@ -270,27 +314,44 @@ export function assertIsOnlyAccountOpen(
 
   if (action === 'vault') {
     /*
-      Exactly one transfer, and its recipient must be the sender.
+      Exactly one transfer, and its recipient must BE the sender — decoded, not searched for.
 
-      The recipient is a pure input, so it appears in the built transaction as an Input index
-      pointing at the sender's address bytes. Rather than decode the argument graph — which would
-      be a second parser to keep in step with the SDK — the check asserts the sender is present in
-      the transaction's pure inputs at all, and that there is only one transfer to be confused
-      about. Combined with the equality on kinds and target, there is nowhere else for a second
-      recipient to hide.
+      The previous version of this check asked whether the sender's address bytes appeared
+      ANYWHERE in `JSON.stringify(inputs)`, and reasoned that "there is nowhere else for a second
+      recipient to hide". There is. A pure input does not have to be used by any command, and an
+      unused one does not add a command — so the kind list, the target list and the single-transfer
+      count are all unchanged by adding one.
+
+      Demonstrated against a real built transaction, not argued:
+
+        commands           MoveCall, MoveCall, TransferObjects   <- passes the kind check
+        transfer.address   { Input: 1 }                          <- the ATTACKER's address
+        inputs[0]          the sender's 32 bytes, referenced by nothing
+        inputs[1]          the attacker's 32 bytes
+
+      `JSON.stringify(inputs).includes(senderBytes)` is TRUE for that transaction. We would have
+      signed gas for a vault whose CreatorCap goes to somebody else — which is precisely the
+      outcome the paragraph above said could not happen, on the path we invite agents through.
+
+      So the recipient is resolved properly: take the transfer's `address` argument, require it to
+      be an Input, read that input's pure bytes, and compare them to the sender. It is a few lines
+      rather than "a second parser to keep in step with the SDK", and the shape it reads is pinned
+      by `test/sponsor-recipient.test.ts` against a transaction the SDK itself built.
+
+      A recipient that is not a pure Input — a result, a nested result, the gas coin — is refused
+      rather than interpreted. Anything we cannot decode exactly is something we do not pay for.
     */
     if (transferArgs.length !== 1) {
       return fail('malformed', source, `a sponsored vault must contain exactly one transfer; this one has ${transferArgs.length}.`);
     }
     const sender = (tx.getData() as { sender?: string }).sender ?? '';
-    const inputs = JSON.stringify((tx.getData() as { inputs?: unknown }).inputs ?? []);
-    const senderBytes = Buffer.from(sender.replace(/^0x/, ''), 'hex').toString('base64');
-    if (!inputs.includes(senderBytes)) {
+    const recipient = transferRecipient(tx, transferArgs[0]);
+    if (recipient === null || !sameAddress(recipient, sender)) {
       return fail(
         'malformed',
         source,
-        'the vault transaction does not name its own sender as a transfer recipient. Refusing to ' +
-          'pay gas for a transaction that could hand the CreatorCap to somebody else.',
+        'the vault transaction does not transfer to its own sender. Refusing to pay gas for a ' +
+          'transaction that would hand the CreatorCap to somebody else.',
       );
     }
   }
