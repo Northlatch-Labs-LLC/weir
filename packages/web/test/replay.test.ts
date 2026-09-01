@@ -153,21 +153,28 @@ describe('a write signature', () => {
 });
 
 describe('a read signature', () => {
-  it('is reusable, deliberately', async () => {
+  it('is spent like every other kind', async () => {
     /*
-      Not an oversight. `read` proves identity for fetching a thread or a notification list, which
-      the client polls; spending it would mean a wallet prompt per refresh, and a prompt that
-      appears constantly is one nobody reads. Replaying a read grants the signer exactly the access
-      they already had — so the trade is a real usability cost against no gain.
+      This asserted the opposite until the reasoning behind it was re-read.
+
+      The old note said replaying a read "grants the signer exactly the access they already had —
+      so the trade is a real usability cost against no gain". True of the SIGNER, false of an
+      INTERCEPTOR: the same bytes in somebody else's hands return that address's inbox for the whole
+      ten-minute window. The argument was reasoned from one of the two parties.
+
+      The usability cost it weighed against was also not being paid. Every client here signs a fresh
+      read on every call and caches none, so spending them costs zero additional prompts.
     */
     const input = await sign({ kind: 'read', other: address }, Date.now());
 
     expect((await verifyAction(input)).ok).toBe(true);
-    expect((await verifyAction(input)).ok).toBe(true);
+
+    const replayed = await verifyAction(input);
+    expect(replayed.ok).toBe(false);
 
     const rows = await testDb().query('SELECT 1 FROM used_signatures WHERE digest = $1', [
       digestOf(input.signature),
     ]);
-    expect(rows.rowCount).toBe(0);
+    expect(rows.rowCount).toBe(1);
   });
 });
