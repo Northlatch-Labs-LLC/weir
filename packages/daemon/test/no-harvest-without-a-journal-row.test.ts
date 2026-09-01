@@ -24,9 +24,11 @@
  * old code would only have reached later.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const begin = vi.fn();
+const abandon = vi.fn();
+const finish = vi.fn();
 const discoverVaults = vi.fn();
 const tick = vi.fn();
 
@@ -40,8 +42,8 @@ vi.mock('../src/adapters/journal.js', () => ({
     ok: true,
     value: {
       begin: (...a: unknown[]) => begin(...a),
-      finish: async () => ({ ok: true, value: undefined }),
-      abandon: async () => undefined,
+      finish: (...a: unknown[]) => finish(...a),
+      abandon: (...a: unknown[]) => abandon(...a),
       // Reported at startup, before the loop. Empty because stuck runs are not what this file is
       // about, and a non-empty list would put noise in front of the assertions that are.
       stuckRuns: async () => ({ ok: true, value: [] }),
@@ -94,6 +96,13 @@ vi.mock('../src/config.js', async (importOriginal) => {
 
 const { main } = await import('../src/index.js');
 
+beforeEach(() => {
+  // Defaults for the records this file is not about, so a test that forgets one fails on its own
+  // subject rather than on an unstubbed fold. Each case overrides what it is actually asserting.
+  finish.mockResolvedValue({ ok: true, value: undefined });
+  abandon.mockResolvedValue({ ok: true, value: true });
+});
+
 afterEach(() => vi.clearAllMocks());
 
 describe('when the journal will not open a run', () => {
@@ -133,5 +142,60 @@ describe('when the journal opens a run', () => {
     await main(['--once'], {} as NodeJS.ProcessEnv);
 
     expect(discoverVaults).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('when the journal will not record that a run was abandoned', () => {
+  /*
+    `abandon` returns a Reading and its result was discarded, while `finish` beside it was folded
+    and logged. So an abandon that FAILED left the run row `running` — and `stuckRuns` describes
+    exactly that row as "runs left `running` by a process that died. The only way to see a crash
+    after the fact."
+
+    The process did not die. The tick failed and the write recording that failure was the thing
+    that did not land, so the daemon manufactured a crash report about itself — corrupting the one
+    signal that exists to reveal a real crash.
+  */
+  it('says so, rather than leaving a row that reads as a crash', async () => {
+    begin.mockResolvedValue({ ok: true, value: { id: 'run-1' } });
+    discoverVaults.mockResolvedValue({
+      ok: false,
+      failure: { kind: 'transport', detail: 'node unreachable' },
+    });
+    abandon.mockResolvedValue({
+      ok: false,
+      failure: { kind: 'transport', detail: 'journal write failed' },
+    });
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      errors.push(String(line));
+    });
+
+    await main(['--once'], {} as NodeJS.ProcessEnv);
+    spy.mockRestore();
+
+    expect(abandon).toHaveBeenCalledTimes(1);
+    expect(errors.some((l) => l.includes('journalAbandon'))).toBe(true);
+  });
+
+  it('is silent about the abandon when it succeeds', async () => {
+    // The converse. A line printed every time would train whoever reads these to skip it, which
+    // is the same as not printing it on the run that mattered.
+    begin.mockResolvedValue({ ok: true, value: { id: 'run-1' } });
+    discoverVaults.mockResolvedValue({
+      ok: false,
+      failure: { kind: 'transport', detail: 'node unreachable' },
+    });
+    abandon.mockResolvedValue({ ok: true, value: true });
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      errors.push(String(line));
+    });
+
+    await main(['--once'], {} as NodeJS.ProcessEnv);
+    spy.mockRestore();
+
+    expect(abandon).toHaveBeenCalledTimes(1);
+    expect(errors.some((l) => l.includes('journalAbandon'))).toBe(false);
   });
 });

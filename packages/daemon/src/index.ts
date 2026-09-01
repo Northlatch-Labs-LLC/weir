@@ -366,10 +366,33 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
           }),
         );
         if (run !== null && journal !== null) {
-          await journal.abandon(run, {
-            kind: result.failure.kind,
-            detail: result.failure.detail,
-          });
+          /*
+            `abandon` returns a Reading and it was discarded.
+
+            `finish` immediately above is folded and logs `journalFinish` when the record fails.
+            This one was awaited and dropped, so an abandon that failed left the run row `running` —
+            and `stuckRuns` describes exactly that row as "runs left `running` by a process that
+            died. The only way to see a crash after the fact."
+
+            The process did not die. It ran, the tick failed, and the write recording that failure
+            was the thing that did not land. So the daemon manufactured a crash report about
+            itself, and the one signal that exists to reveal a real crash was the signal it
+            corrupted.
+          */
+          fold(
+            await journal.abandon(run, {
+              kind: result.failure.kind,
+              detail: result.failure.detail,
+            }),
+            () => null,
+            (failure) => {
+              // Reported, not escalated. The tick had already failed and its exit code already
+              // says so; this line is the difference between a stuck run that means a crash and
+              // one that means a write did not land.
+              console.error(JSON.stringify({ journalAbandon: failure.detail }));
+              return null;
+            },
+          );
         }
         exitCode = EXIT.runFailed;
       }
