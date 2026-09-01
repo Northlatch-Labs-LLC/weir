@@ -13,5 +13,8 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     exclude: ['test/**/*.chain.test.ts', 'test/**/*.db.test.ts'],
+    // Rebuild the SDK if its `dist` is stale. See `scripts/sdk-freshness.mjs` — this daemon signs
+    // mainnet transactions, so testing it against a build from another commit is the worst case.
+    globalSetup: ['../../scripts/sdk-freshness.mjs'],
   },
 });

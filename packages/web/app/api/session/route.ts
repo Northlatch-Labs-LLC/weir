@@ -77,20 +77,24 @@ export async function POST(request: Request) {
   const session = await mintReadSession(address);
 
   /*
-    The token goes out twice: in `Set-Cookie`, and in the body.
+    SUPERSEDED, and left standing because it is the record of why the body token exists at all.
+    What follows it, below, is what the route does now.
 
-    The cookie is for browsers and is untouched — same attributes, same lifetime, same `HttpOnly`.
-    The body is for callers that are not browsers. A program holding a key has no cookie jar it
-    wants to keep and nothing that attaches one for it, so without this it would have to parse
-    `Set-Cookie` and replay the value: reimplementing a browser to obtain a credential we just
-    minted for it. `lib/read-session.ts` accepts the same token as `Authorization: Bearer`.
+    It read: "The token goes out twice: in `Set-Cookie`, and in the body." That was true until the
+    body token became something a caller has to ask for. The paragraph is a description of the
+    response SHAPE, which is what a reader opens this file to find, so it is the sentence most
+    likely to be believed — and it is now the wrong half of a file that answers the question twice.
 
-    What this costs, stated rather than implied. `HttpOnly` still stops script reading the *stored*
-    cookie, but script that runs during this exchange can now read the response. Cross-site
-    scripting on this origin could already act as the reader through the ambient cookie; it can now
-    also carry a token away and use it for a day from somewhere else. A narrow window, genuinely
-    widened, and the mitigation is unchanged and elsewhere: this grants reads only, of what the
-    address already owns on chain, and `DELETE /api/session` withdraws every session at once.
+    Two of its claims survive unchanged and are the reason it is not deleted. The cookie is for
+    browsers and is untouched, same attributes and same lifetime. And the body is for callers that
+    are not browsers: a program holding a key has no cookie jar, so without it that program would
+    parse `Set-Cookie` and replay the value — reimplementing a browser to obtain a credential we
+    just minted for it. `lib/read-session.ts` accepts the same token as `Authorization: Bearer`.
+
+    One claim is now wrong in the reader's favour. It said script running during the exchange "can
+    now read the response", and that script has to be looking at a response that carries a token —
+    which a browser's no longer does, because a browser does not ask. The window it called
+    "genuinely widened" is closed for every caller that does not opt in.
   */
   /*
     The body token is now ASKED FOR rather than handed out.
