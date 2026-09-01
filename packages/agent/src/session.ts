@@ -35,15 +35,20 @@
  * case-insensitively, and a credential containing **any** whitespace is refused outright, so the
  * token is emitted with exactly one space after `Bearer` and never wrapped or padded.
  *
- * The other half landed too: `POST /api/session` now answers
- * `{ address, expiresAtMs, token }`, with the token in the body **and** in `Set-Cookie`. Both were
- * read from the route rather than assumed, which is why {@link BEARER_FIELDS} names exactly one
- * field instead of guessing at several.
+ * The other half landed too: `POST /api/session` answers `{ address, expiresAtMs }`, and adds
+ * `token` **only when the request asks for it** with `x-weir-bearer: 1`. This client asks — see the
+ * header set on the request below. Read from the route rather than assumed, which is why
+ * {@link BEARER_FIELDS} names exactly one field instead of guessing at several.
+ *
+ * This paragraph said the token came back unconditionally, which was true when it was written and
+ * false the moment the route began withholding it. It is corrected here rather than only at the
+ * request, because a reader looking for the SHAPE of the response reads the top of the file and a
+ * reader looking for the header reads the middle, and the two disagreed.
  *
  * The route is explicit about what that costs and it is repeated here rather than left behind a
  * link, because a client author is entitled to know what they are holding: `HttpOnly` still stops
  * script reading the *stored* cookie, but script running during the exchange can read the response,
- * so cross-site scripting on that origin can now carry a token away and use it for a day from
+ * so cross-site scripting on that origin can carry a token away and use it for a day from
  * somewhere else. Narrow, genuinely widened, and bounded by the same three things as ever — reads
  * only, only of what the address already owns on chain, and `DELETE /api/session` withdraws every
  * session at once.
