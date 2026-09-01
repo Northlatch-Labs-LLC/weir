@@ -21,6 +21,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 git config core.hooksPath scripts/git-hooks
+
+# The hooks are tracked as mode 100755, so a fresh clone gets them executable and this chmod is a
+# belt-and-braces no-op. It was NOT always so: they were committed 100644, git ignored them with a
+# hint rather than an error, and this line quietly fixed only the checkout it ran in — which is
+# precisely the failure this script exists to prevent, wearing the script's own clothes.
 chmod +x scripts/git-hooks/*
+
+# Prove the guard refuses. A hook that has never refused anything is not known to protect anything,
+# and it took a probe that silently planted an empty string to notice this was untested.
+if ! python3 scripts/scan-secrets.py --selftest >/dev/null 2>&1; then
+  printf 'scan-secrets --selftest FAILED. The hooks are installed but the scanner is not trustworthy.\n' >&2
+  exit 1
+fi
 printf 'core.hooksPath -> %s\n' "$(git config core.hooksPath)"
 for h in scripts/git-hooks/*; do printf '  %s\n' "$(basename "$h")"; done
