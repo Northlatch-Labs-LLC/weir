@@ -285,7 +285,14 @@ export interface DirectMessagePlan {
   ciphertextSha256: string;
   /** Addresses the payload can be opened by. Asserted to be exactly `{from, to}`. */
   envelopeRecipients: readonly string[];
-  /** `statementFor({kind:'send-encrypted'}, from, issuedAtMs)` — the exact bytes to sign. */
+  /**
+   * `statementFor({kind:'send-encrypted'}, from, issuedAtMs, origin)` — the exact bytes to sign.
+   *
+   * The `origin` argument is not optional and was missing from this line until it was noticed. A
+   * reader who trusted the old signature would build bytes without the origin in the head and get a
+   * signature that verifies against nothing, with an error naming their key rather than the missing
+   * argument.
+   */
   statement: string;
   issuedAtMs: number;
   /** The payload, ready to POST. Ciphertext only; no plaintext and no key. */
@@ -551,9 +558,14 @@ export function planFanOut(input: {
  * one. This package already depends on that SDK. The copy therefore had no remaining justification
  * and only one remaining property: being the place the format could disagree with itself.
  *
- * The bytes did not change. `statementFor({ kind: 'send-encrypted', … })` emits exactly what this
- * function used to emit, and that was checked over sixteen vectors — including empty fields,
- * non-ASCII, and embedded newlines — before the transcription was deleted.
+ * The bytes did not change AT THAT REMOVAL. `statementFor({ kind: 'send-encrypted', … })` emitted
+ * exactly what this function used to emit, and that was checked over sixteen vectors — including
+ * empty fields, non-ASCII, and embedded newlines — before the transcription was deleted.
+ *
+ * They HAVE changed since, and the sentence above is about the hoist rather than about today: the
+ * shared head now carries an `origin:` line, so every statement in this system emits different
+ * bytes than it did before that. The claim is left standing because it is true of the event it
+ * describes; this note is here because it reads as present tense and is not.
  *
  * # The old mitigation was real, and it is still the backstop
  *
