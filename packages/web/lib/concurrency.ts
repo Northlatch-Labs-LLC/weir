@@ -11,10 +11,27 @@ import 'server-only';
  * sequential ones: it trades a slow page for a burst against an endpoint this deployment shares
  * with everybody else on it, and the failure it buys is a throttle rather than a wait.
  *
- * `packages/daemon` reaches the same conclusion from the other side — `agent/src/seal-node.ts`
- * chose sequential over `Promise.all` deliberately — so the choice here is a middle value rather
- * than a reversal: enough concurrency that a page is not the sum of its round trips, few enough
- * that one render is not a burst.
+ * An earlier draft of this note cited `agent/src/seal-node.ts` as precedent for going slowly. It is
+ * not. That file sequences a Walrus read before a key-server request because the first is "public,
+ * free and unmetered" and the second "carries an API key and is rate-limited", so a blob with an
+ * expired lease is discovered before a metered request is spent — `Promise.all` "would spend the
+ * request anyway". That is about not paying for something you may not need. It is correct about its
+ * own subject and says nothing about this one, and the citation is left here as a correction rather
+ * than removed, because it is the third time in this audit that a true statement about one thing
+ * has been read as covering its neighbour.
+ *
+ * # WHAT THIS DOES NOT BOUND, and it is the more important half
+ *
+ * Eight is eight PER CALL. Ten simultaneous renders of the same page is eighty requests in flight,
+ * and nothing in the request path knows that — this helper bounds a loop, not an endpoint. The
+ * fullnode it is being polite to is a PUBLIC one this deployment does not operate and cannot raise,
+ * and the estate's own capacity work already names it as the binding constraint on active users.
+ *
+ * So a reader who finds a bounded helper here and concludes the endpoint is protected has made
+ * exactly the mistake this audit found on `/explore` itself: a guard that answers yes to the
+ * obvious question while bounding the wrong thing. Bounding total in-flight fullnode calls across
+ * renders is separate work, and it belongs beside the durable per-caller ceiling rather than inside
+ * a concurrency helper.
  *
  * # Order is preserved, and that is load-bearing
  *
