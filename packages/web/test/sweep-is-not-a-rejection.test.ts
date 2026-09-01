@@ -50,9 +50,8 @@ async function verify() {
     signature: 'AAAA',
     timestampMs: Date.now(),
     origin: 'https://weir.social',
-    source: 'test',
-    action: { kind: 'read' },
-  } as Parameters<typeof verifyAction>[0]);
+    action: { kind: 'read', other: ADDRESS },
+  });
 }
 
 beforeEach(() => {
