@@ -1,0 +1,69 @@
+-- 028_statement_timeout.sql
+--
+-- Put a ceiling on how long any one statement may run.
+--
+-- # The finding, read from the server rather than from the client
+--
+-- Every role this database has, except one, already carries a ceiling. Read from
+-- `pg_roles.rolconfig`:
+--
+--     anon           statement_timeout 3s
+--     authenticated  statement_timeout 8s
+--     authenticator  statement_timeout 8s, lock_timeout 8s
+--     service_role   (unset)
+--     postgres       (unset)          <-- the role this application connects as
+--
+-- The platform applies timeouts to the roles it owns. The role our application uses is the one with
+-- no ceiling at all, so there is nothing to stop a single slow query holding a pooled connection for
+-- as long as it likes. With a bounded client pool in front of a shared pooler, a handful of those is
+-- the whole request path: the pool is exhausted, new requests wait, and the platform's response to
+-- that load is to start more instances, each opening its own pool against the same shared ceiling.
+-- The scale-out response to the load is the amplification.
+--
+-- # Why the ceiling has to be here rather than only on the connection string
+--
+-- `Pool({ options: '-c statement_timeout=…' })` sets a startup parameter, and a startup parameter
+-- needs a connection whose startup we own. Evidence says this deployment reaches Postgres through
+-- Supavisor in TRANSACTION mode — one multiplexed backend serving a ten-client pool, rather than the
+-- several a session-mode pool would pin. That is strong evidence and not proof: it is read from
+-- `pg_stat_activity`, not from the connection string, which is held as a secret this session cannot
+-- decrypt. In transaction mode a client does not own a backend for its lifetime, so the startup
+-- parameter is not reliably honoured, and shipping only that would look like a fix and not be one.
+--
+-- `ALTER ROLE` is mode-independent. It is stored on the role and applied by the server to every new
+-- session regardless of who pooled it or how. The client-side `options` is kept as well — it costs
+-- nothing, it is correct in session mode and on a direct connection, and it means this does not
+-- silently regress if the URL is ever repointed.
+--
+-- # The numbers, and why they are not invented
+--
+-- `8s` is the ceiling Supabase itself chose for `authenticated` and `authenticator` on this
+-- database. Matching it means no request path here is held to a stricter or looser standard than the
+-- platform's own, and nobody has to defend a number that came from nowhere. It is far above any
+-- honest query in this application and far below the point at which a stuck connection matters.
+--
+-- `idle_in_transaction_session_timeout` is the companion that matters more than it looks: a
+-- transaction left open by a serverless instance that was frozen mid-request holds its locks and its
+-- connection until something reaps it. `statement_timeout` does not cover that case, because no
+-- statement is running.
+--
+-- `lock_timeout` at 8s stops a request path queueing behind a lock it will never get.
+--
+-- # This does not apply to migrations, and that is deliberate
+--
+-- The migration runner connects as `postgres` too, so this ceiling would apply to it — and the work
+-- that legitimately runs long IS the migration work: an index build over a large table, or the
+-- whole-table `UPDATE` in `019`. `scripts/migrate.mjs` therefore issues `set statement_timeout = 0`
+-- and `set lock_timeout = 0` inside each migration's transaction, in the same change that adds this
+-- file. A ceiling that breaks the migration runner is not a fix.
+--
+-- # When it takes effect
+--
+-- `ALTER ROLE … SET` is applied at connection start, so it governs every session opened after this
+-- runs and none of the ones already open. Nothing needs restarting; the pooler recycles.
+--
+-- Idempotent: `ALTER ROLE … SET` is an assignment, so re-running sets the same values again.
+
+ALTER ROLE postgres SET statement_timeout = '8s';
+ALTER ROLE postgres SET idle_in_transaction_session_timeout = '30s';
+ALTER ROLE postgres SET lock_timeout = '8s';
