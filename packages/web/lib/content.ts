@@ -389,9 +389,19 @@ export async function listProfiles(options?: {
   handles?: readonly string[];
   owner?: string;
   limit?: number;
+  /**
+   * Continue strictly after this handle. Keyset over the primary key, for the same reason
+   * `listPosts` seeks by value rather than OFFSET: a deep page costs the same as the first, and a
+   * handle inserted between two requests is neither dropped nor repeated.
+   */
+  afterHandle?: string;
 }): Promise<Profile[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
+  if (options?.afterHandle !== undefined) {
+    params.push(options.afterHandle);
+    conditions.push(`handle > $${params.length}`);
+  }
 
   if (options?.handles !== undefined) {
     // An empty array matches nothing, which is the wanted behaviour: "these creators" with an empty

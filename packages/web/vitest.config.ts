@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import { DATABASE_TEST_FILES } from './vitest.database-files';
 
 /*
   Unit tests only. Anything that needs Postgres, a running Next server or the chain lives in
@@ -10,7 +11,32 @@ import { fileURLToPath } from 'node:url';
 */
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+    /*
+      Two projects, one difference: the database-backed files run one at a time.
+
+      They share a single disposable database and each truncates it in `beforeEach`, so two of them
+      running side by side erase each other's rows mid-test — `vitest.database-files.ts` says how
+      that was found. Everything else has no shared state and stays parallel. `extends: true` gives
+      both projects the alias and setup below.
+    */
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+          exclude: ['**/node_modules/**', ...DATABASE_TEST_FILES],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'database',
+          include: [...DATABASE_TEST_FILES],
+          fileParallelism: false,
+        },
+      },
+    ],
     /*
       Rebuild `@projectx-social/sdk` when its `dist` is older than its `src`, before anything runs.
 
