@@ -393,13 +393,66 @@ function quoteDigest(bytes: string): Buffer {
  * cannot forget: forgetting makes its own quotes unsubmittable, which fails loudly in development
  * rather than silently widening what the relay accepts.
  */
+/**
+ * How often one instance will pay for a sweep of expired quotes.
+ *
+ * Same shape and same number as the sweeps in `lib/rate-limit.ts` and `lib/identity.ts`, because
+ * this is the same problem: a table that grows on one path and was reclaimed on another.
+ */
+const QUOTE_SWEEP_EVERY_MS = 60_000;
+let quotesSweptAtMs = 0;
+
+/**
+ * Delete expired quotes, throttled and bounded.
+ *
+ * # Why this is called by the WRITER
+ *
+ * It already existed, and it ran only inside `submitSigned` — on the path that CONSUMES a quote.
+ * Every `prepare` route writes one, thirteen of them do so with no session and no signature, and a
+ * caller who only ever prepares and never submits therefore inserted rows that nothing reclaimed
+ * until some unrelated caller happened to succeed. On a deployment where nobody completes a
+ * purchase for an hour, nothing is swept for an hour.
+ *
+ * Reclaiming on the path that writes is the property: the work is paid for by the traffic that
+ * causes it, and a table that only grows cannot outlive the requests filling it.
+ *
+ * Awaited rather than floated, for the reason `lib/rate-limit.ts` gives: a serverless instance is
+ * frozen the moment it returns a response, so a promise left running may never run — and may run
+ * against a pool that has been torn down. Throttled to once a minute per instance and bounded to
+ * 500 rows, so what is awaited is one small DELETE in every few thousand requests.
+ */
+async function sweepQuotes(nowMs: number): Promise<void> {
+  if (nowMs - quotesSweptAtMs < QUOTE_SWEEP_EVERY_MS) return;
+  quotesSweptAtMs = nowMs;
+  try {
+    await db().query(
+      `DELETE FROM issued_quotes
+        WHERE digest IN (SELECT digest FROM issued_quotes WHERE expires_at_ms < $1 LIMIT 500)`,
+      [nowMs],
+    );
+  } catch {
+    /*
+      Swallowed deliberately. A failed sweep is housekeeping that did not happen; the caller is in
+      the middle of being quoted a price and a bookkeeping error is not their problem. The next
+      request tries again.
+    */
+  }
+}
+
+/** Test seam. Nothing in the application calls this. */
+export function resetQuoteSweep(): void {
+  quotesSweptAtMs = 0;
+}
+
 export async function rememberQuote(bytes: string): Promise<string> {
+  const nowMs = Date.now();
   await db().query(
     `INSERT INTO issued_quotes (digest, expires_at_ms)
      VALUES ($1, $2)
      ON CONFLICT (digest) DO UPDATE SET expires_at_ms = EXCLUDED.expires_at_ms`,
-    [quoteDigest(bytes), Date.now() + QUOTE_LIFETIME_MS],
+    [quoteDigest(bytes), nowMs + QUOTE_LIFETIME_MS],
   );
+  await sweepQuotes(nowMs);
   return bytes;
 }
 
