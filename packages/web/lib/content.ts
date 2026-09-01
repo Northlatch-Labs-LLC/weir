@@ -188,7 +188,7 @@ export const MAX_POST_BODY_LENGTH = 100_000;
   range; amounts stay strings the whole way to the wire.
 */
 
-interface PostRow {
+export interface PostRow {
   id: string;
   vault_id: string;
   author_handle: string;
@@ -209,10 +209,34 @@ interface PostRow {
   asset_ids: string[] | null;
 }
 
+/**
+ * A paid row that cannot say what it costs is refused, not defaulted.
+ *
+ * `price: row.price ?? '0'` read a paid post with a NULL price as one costing NOTHING, and
+ * `contentKey: row.content_key ?? ''` gave it an empty key to unlock against. Both are defaults for
+ * a state the database already forbids — `posts` carries
+ * `CHECK (access_kind <> 'paid' OR (price IS NOT NULL AND content_key IS NOT NULL))` — so neither
+ * could ever be the right answer, and the value they produced was worse than no answer at all: a
+ * gated post rendering as free, on the money path, with nothing anywhere reporting it.
+ *
+ * A default is only safe when the thing it stands in for is merely absent. Here it stands in for
+ * something impossible, and it made the impossible look ordinary. Reaching this throw means the
+ * constraint is gone or the row was written around it, and both are worth stopping for.
+ */
+export function paidAccess(row: PostRow): PostAccess {
+  if (row.price === null || row.content_key === null) {
+    throw new Error(
+      `post ${row.id} is marked paid but has no ${row.price === null ? 'price' : 'content key'}; ` +
+        `posts.access_kind = 'paid' requires both, so this row was written around its constraint`,
+    );
+  }
+  return { kind: 'paid', price: row.price, contentKey: row.content_key };
+}
+
 function toPost(row: PostRow): Post {
   const access: PostAccess =
     row.access_kind === 'paid'
-      ? { kind: 'paid', price: row.price ?? '0', contentKey: row.content_key ?? '' }
+      ? paidAccess(row)
       : row.access_kind === 'subscribers'
         ? { kind: 'subscribers' }
         : { kind: 'public' };
