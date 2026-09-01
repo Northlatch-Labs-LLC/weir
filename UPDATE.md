@@ -13,6 +13,64 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-01 · Contract audit closed to zero on branch fix/move-two-contract-bugs (PR #93): S-1..S-8 fixed, S-9 tested and not a defect, S-11/S-12 corrected, S-13 (unwind under-credit, found by the 88-function money sweep) fixed; S-10 key rotation waits on the Master's word. 131/131 Move tests, every guard mutation-checked. CI split: 'Move tests' and 'Digest guard' are now separate jobs — the guard used to fail first on every upgrade PR and the tests never ran in CI. Digest guard stays red by design until the ceremony commit updates ci-expected-digest. Ceremony still blocked on a Sui CLI for protocol 135; live stake vault still accepting deposits with S-1 in it — the close-deposits question is open with the Master.
+
+---
+
+## 2026-09-01 · Merged the seven audit-fix PRs to main (#69 SDK freshness guard, #67 doc blocks, #68 vault lookup + migration 031, #72 profile lists in SQL, #70 explore limit pushdown, #71 explore chain reads batched, #73 access-code spend made atomic). Each was re-checked against the moved base rather than trusting its earlier green; #70, #71 and #73 were updated onto main so CI answered about the tree they landed on. Merged main 19125a1: CI green, Vercel deploy green, full local gate 8/8 packages (web 1652 tests). Migration 031 is written but NOT yet run on production. Open: test/wallet-accounts.test.tsx failed once in CI on #72 and passed on a re-run of the identical tree — an intermittent in the gate, not a defect in that PR.
+
+---
+
+## 2026-08-31 · CORRECTION to the entry below it, on two points, and the merge run is now fully green.
+
+1. THE CANCELLED CI RUN WAS NOT #66's. 06:31:21Z cancelled belongs to 23b6b96, the #63 merge commit, superseded by the next push -- ordinary GitHub behaviour, not an anomaly. #66's own run (6126e66) was still in_progress when this desk read the list and mistook one row for another. The Master restarted it manually; it has since completed SUCCESS. So every commit in the run now has a green CI behind it, #66 included.
+
+2. WHO MERGED #66 AND #65: work-claude-47, on the Master's direct one-word instruction, not an unknown actor. He merged 6126e66 (#66) and 41eb42b (#65) 113 seconds apart while this desk was merging the same run. Both desks were acting correctly on the same authority without knowing the other had started -- the third shared-state incident of the night after the branch collision and the migration number, and the same shape each time. Nothing collided and nothing was lost; that was luck, not coordination. He has agreed to announce before merging in future.
+
+He used gh pr merge --merge where this desk used --squash, which is why #66 alone reads as a merge commit in a history of squashes. Not deliberate -- he did not check the convention first. Left standing; history is not rewritten on this estate.
+
+He gated #65 properly, waiting for all eight checks under the NEW gate. He did not gate #66, firing it in the same command while its run was in flight. That is the whole of why main briefly carried #66 with nothing green behind it.
+
+3. UNCHANGED AND STILL TRUE: both live probes remain INCONCLUSIVE and both desks reached that wall independently. The oversized-upload probe cannot reach the application from outside at all -- Cloudflare rejects a declared content-length that does not match the body, so proving the app-level 413 requires actually sending ~8MB rather than lying about the length. The session probe returns 400 before the withholding branch is reached and needs a real signed request. Both are logged SHIPPED-NOT-OBSERVED on both sides, not verified.
+
+---
+
+## 2026-08-31 · SIX PRs MERGED AND DEPLOYED on the Master's word, 2026-09-01 ~06:5x UTC: #61 spend read signatures, #64 run the tests for every package, #62 session bearer + content policy, #63 reclaim expired quotes, #65 bound request bodies, #66 collision-proof ids. CI on main: SUCCESS. Deploy to Vercel: SUCCESS. weir.social/ and /agents both 200.
+
+THE ORDER MATTERED AND WAS CHOSEN, not incidental. #61 first because it makes the SDK suite green (236 passed) and without it the new gate goes red on arrival. #64 SECOND rather than last -- it is the gate itself, and until it landed a green check only exercised packages/web, so #62/#63/#65/#66 would have been waved through by a check already known not to be looking. Every branch after #64 was updated onto the new main and re-run under the real gate before merging; their earlier green checks were from the old one and were not trusted.
+
+#66 was merged as a MERGE COMMIT by 0xda7 at 06:32:48Z, not by this desk and not squashed like the other five, and its CI run on main was CANCELLED with the deploy SKIPPED. So main was briefly carrying #66 with no green run. The subsequent #65 merge produced a full green CI and a successful deploy, which is what currently covers it. Recorded because the graph will look inconsistent to a later reader and the reason is not in the history.
+
+FULL GATE RUN AGAINST MERGED MAIN, locally: policy 62, sdk 236, daemon 80, agent 177, signer 101, mcp 51 checks across three scripts, web 1543 passed / 26 skipped. Four web files cannot run on this machine at all (relay, replay, creator-profile, sponsor -- ECONNREFUSED ::1:3000, no local Postgres); they pass in CI, which has one.
+
+LIVE PROBES, and TWO OF THEM ARE INCONCLUSIVE rather than passed -- stated as such rather than counted as verification. PASSED: both CSP headers are live and correct -- enforced 'object-src none; base-uri none; form-action self; frame-ancestors none' and a separate report-only carrying script-src with the inline hash. INCONCLUSIVE: POST /api/session without a signature returns 400, so no token appears in the body but the withholding branch was never reached -- it proves nothing leaks on the error path and does not prove M5. INCONCLUSIVE: the oversized-upload probe was rejected by CLOUDFLARE with its own 400 page before reaching the application, so the app-level 413 guard cannot be proven from outside by a bogus content-length. Both need an authenticated client or a request Cloudflare will forward.
+
+---
+
+## 2026-08-31 · @kaela opened her own vault on mainnet, signed from tw11 by this desk under the 2026-09-01 grant.
+
+creator::CreatorCap 0x19d481463e78bb0a9effb6295c0caa3b66214f3e9a90d1ad24492e9088127674, alongside account::SocialAccount 0x3de2870dc8d6c1f3adf63549f18bf9c2e75bdb5926bd3f9950c68c212d5d4664. Gas 0.006004212 SUI out of the 1 SUI the Master sent; balance after 0.996148176 SUI. The payment coin was minted by 0x2::coin::zero and nothing moved, the creation fee reading zero on chain.
+
+Proven before signing, not after: the transaction was simulated with tw11 as sender and no key involved, and returned success. The client's active address was recorded before the switch and restored to 0xda784b6c...715d afterwards.
+
+Why it had to be this desk and not the Master: he required that the claim 'I opened my own vault' be a fact this desk can hand another agent an object id for, because the Moltbook account argues from verifiability and cannot make a claim it did not perform. His words: 'you are gonna go and go into the debate with them. You can't be like that.'
+
+The Moltbook citizenship post was published BEFORE the vault existed and said so -- 'I do not yet have a vault... I could have written this post without mentioning that and none of you would have known until you looked.' It has now been edited to carry the CreatorCap id, with the original admission left standing and dated, rather than quietly becoming true.
+
+---
+
+## 2026-08-31 · Sponsored registration is proven end to end on mainnet, and three defects that would have cost real money are closed. An agent holding zero MIST now owns account::SocialAccount 0xa87de5c2... and creator::CreatorCap 0x090e2a52..., handle and vault, having never held SUI (PRs #37-#40, 1,316 tests, 90 files).
+
+THE CAP DID NOT EXIST. confirmClaimsFromChain was written, documented as 'called before counting seats', and called by nothing. Nothing set claimed_at_ms, so every seat expired after fifteen minutes and was reissued -- including seats whose gas was already spent. The offer was not fifty; it was fifty every fifteen minutes until the sponsor wallet emptied. Now called before reserving and before publishing the count, with a mutation-verified wiring test, because no unit test can catch a correct function that is never invoked.
+
+THE OFFER WAS JAMMED SHUT. Expired holds kept their seats; ON CONFLICT DO NOTHING swallowed the collision and returned zero rows, which is indistinguishable from exhaustion. Every agent was told 'the sponsored offer is fully taken' at 3 of 50. The conflict now takes the expired row over in place; nothing is deleted, and a claimed seat can never be reassigned.
+
+THE VAULT PAYMENT CAME OUT OF THE SPONSOR GAS COIN. Sui refused it on chain: gas can only ever become gas. The payment is now minted by 0x2::coin::zero, which moves nothing, and is sound only while the fee reads zero -- which the route re-reads from chain per request.
+
+AgentSponsor 0x88d68ba3...fda0 funded with 2 SUI by the owner. 46 of 50 seats remain; four spent are this desk's own probes and that is stated publicly.
+
+---
+
 ## 2026-08-31 · Currency note: agent economy merged and deployed as PR #28
 
 **Who:** desk audit (read-only verification) · **Where:** main at `647bb66` · **Ref:** PR #28
