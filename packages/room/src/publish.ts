@@ -126,9 +126,13 @@ export interface PublishPlan {
  * longer true, and a second copy of a byte layout with no reason to exist is just a second place
  * for it to be wrong.
  *
- * The bytes are unchanged. `statementFor({ kind: 'publish', … })` with `contentKey: ''` and
- * `price: ''` emits exactly the string this function used to build by hand, character for character,
- * and the removal was checked against the previous text over sixteen vectors before it was made.
+ * The bytes were unchanged BY THAT REMOVAL. `statementFor({ kind: 'publish', … })` with
+ * `contentKey: ''` and `price: ''` emitted exactly the string this function used to build by hand,
+ * character for character, and that was checked over sixteen vectors before it was made.
+ *
+ * They have changed since. The shared head now carries an `origin:` line, so these bytes differ
+ * from the ones this paragraph was written about. The claim stands as a statement about the
+ * removal; it is not a statement about what this function emits today.
  *
  * # Why `key` and `price` are empty strings rather than omitted
  *

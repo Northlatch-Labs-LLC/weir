@@ -10,7 +10,7 @@
  * the rail, on a proved session, and a guest never sees the column.
  */
 import Link from 'next/link';
-import { countFollowers, listProfiles } from '@/lib/content';
+import { countProfiles, countFollowers, listProfiles } from '@/lib/content';
 
 const SHOWN = 6;
 
@@ -22,8 +22,14 @@ const BUILT_ON = [
 ] as const;
 
 export async function RightRail() {
-  const profiles = await listProfiles();
-  const shown = profiles.slice(0, SHOWN);
+  /*
+    Bounded in SQL. This component sits in the shell, so reading every creator on the platform to
+    show a handful happened on every page of the site.
+  */
+  const shown = await listProfiles({ limit: SHOWN });
+  // The total, as one aggregate rather than as every row. The note below is only honest if it is
+  // the real count.
+  const total = await countProfiles();
   const followers = await Promise.all(shown.map((profile) => countFollowers(profile.handle)));
   return (
     <>
@@ -57,11 +63,11 @@ export async function RightRail() {
             </Link>
           ))
         )}
-        {profiles.length > SHOWN && (
+        {total > SHOWN && (
           // Says it is a subset: showing the first six as though they were all of them is how a
           // reader concludes the platform has six creators.
           <p className="section-note" style={{ margin: 0 }}>
-            Showing {SHOWN} of {profiles.length}.
+            Showing {SHOWN} of {total}.
           </p>
         )}
       </section>
