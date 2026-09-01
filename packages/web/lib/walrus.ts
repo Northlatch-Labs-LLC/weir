@@ -291,6 +291,85 @@ export async function storeBlob(
  * `not-found` rather than a transport failure, because those need different responses — one is a
  * lease that expired, the other is a node that is unreachable right now.
  */
+/**
+ * How long a community aggregator has to answer.
+ *
+ * Generous, because a cold blob genuinely takes seconds to serve and a deadline that fires on
+ * healthy reads is worse than none: it turns a slow success into a failure the caller retries,
+ * which is more load on the thing that was already slow.
+ */
+const READ_TIMEOUT_MS = 15_000;
+
+/**
+ * The largest blob this application will hold in memory.
+ *
+ * Sixteen megabytes — twice `media.MAX_BYTES`, the largest thing this application will ever have
+ * PUT there, so no blob we wrote can fail this. The headroom is deliberate: a cap set exactly at the
+ * write limit turns any future encoding overhead into an unreadable post.
+ *
+ * A blob id is a hash of content this deployment did not necessarily create, served by an
+ * aggregator that is not ours. Without a cap, `arrayBuffer()` allocates whatever arrives.
+ */
+const MAX_BLOB_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Read a response body, refusing anything over `limit`.
+ *
+ * # Why `content-length` is not the control
+ *
+ * It is checked first because it is free and refuses before a byte of body is read. But it is a
+ * claim made by a server nobody here operates: it can be absent under chunked encoding, it can be
+ * wrong, and a hostile one can simply understate it. An early exit, not a guard.
+ *
+ * The guard is the streaming count, which measures what actually arrives and stops mid-transfer.
+ * `arrayBuffer()` cannot do that — by the time it returns the allocation has already happened, and
+ * refusing afterwards refuses nothing.
+ */
+async function readAtMost(response: Response, limit: number): Promise<Reading<Uint8Array>> {
+  const source = 'Walrus blob';
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > limit) {
+    return fail(
+      'malformed',
+      source,
+      `the aggregator declares ${declared} bytes; the limit is ${limit}`,
+    );
+  }
+
+  const body = response.body;
+  if (body === null) return fail('transport', source, 'the aggregator returned no body');
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        /*
+          Cancelled rather than merely abandoned, so the socket is released now instead of when the
+          aggregator finishes sending something already refused.
+        */
+        await reader.cancel();
+        return fail('malformed', source, `this blob exceeds ${limit} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return ok(out);
+}
+
 export async function readBlob(blobId: string): Promise<Reading<Uint8Array>> {
   const source = `Walrus blob ${blobId}`;
   if (!isBlobId(blobId)) return fail('malformed', source, 'that is not a Walrus blob id');
@@ -299,7 +378,18 @@ export async function readBlob(blobId: string): Promise<Reading<Uint8Array>> {
   if (!config.ok) return config;
 
   try {
-    const response = await fetch(`${config.value.aggregatorUrl}/v1/blobs/${blobId}`);
+    /*
+      A deadline, because an aggregator that never answers otherwise holds this request for ever.
+
+      These are COMMUNITY aggregators — chosen deliberately, since reads need no publisher and cost
+      nothing — which also means nobody here operates them, nobody is paged when one degrades, and a
+      slow one is indistinguishable from a stopped one. `fetch` has no default timeout, so without
+      this the request lives as long as the socket does: a serverless invocation billed to its own
+      ceiling, holding a connection nothing will close.
+    */
+    const response = await fetch(`${config.value.aggregatorUrl}/v1/blobs/${blobId}`, {
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    });
     if (response.status === 404) {
       return fail(
         'not-found',
@@ -309,7 +399,9 @@ export async function readBlob(blobId: string): Promise<Reading<Uint8Array>> {
     }
     if (!response.ok) return fail('transport', source, `the aggregator answered ${response.status}`);
 
-    return ok(new Uint8Array(await response.arrayBuffer()));
+    const body = await readAtMost(response, MAX_BLOB_BYTES);
+    if (!body.ok) return fail(body.failure.kind, source, body.failure.detail);
+    return ok(body.value);
   } catch (error) {
     return fail('transport', source, opaqueDetail(source, error));
   }
