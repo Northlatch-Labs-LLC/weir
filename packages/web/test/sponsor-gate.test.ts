@@ -15,6 +15,15 @@ useTestDatabase();
 
 let sponsorAsked = 0;
 vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+// verifyAction reaches the chain configuration; give it the same stub the other route tests use.
+vi.mock('@/lib/chain', () => ({
+  siteConfig: () => ({
+    ok: true,
+    value: { network: 'mainnet', grpcUrl: 'https://fullnode.example.invalid:443', packageId: `0x${'e5'.repeat(32)}`, latestPackageId: `0x${'e5'.repeat(32)}`, platformId: `0x${'f1'.repeat(32)}`, registryId: `0x${'f2'.repeat(32)}` },
+    observedAtMs: 0,
+  }),
+  vaultCoinTypes: () => ['0x2::sui::SUI'],
+}));
 vi.mock('@/lib/sponsor', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   loadSponsor: () => {
