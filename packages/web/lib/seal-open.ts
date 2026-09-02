@@ -68,19 +68,16 @@ import { opaqueDetail } from './opaque';
  * if `instanceof` were unavailable, and it is noted here rather than used because a bundler that
  * mangles class names would silently turn every refusal into an outage.
  *
- * # What the SDK's `FailureKind` is missing, named rather than overloaded
+ * # How a Seal verdict maps onto the SDK's `FailureKind`
  *
- * `packages/sdk/src/reading.ts` enumerates `transport`, `timeout`, `malformed`, `unconfigured`,
- * `not-found` and `budget-exhausted`. **None of them means "we asked, we were understood, and the
- * answer was no."** `not-found` is the nearest and is wrong in the direction that matters: the
- * thing exists, is readable by the people entitled to it, and the caller is not one of them.
- * Reporting a paywall as a 404 is how "you have not bought this" becomes "this is gone".
- *
- * So `denied` is the member that union is missing. It is not added here, because
- * `packages/sdk/src/reading.ts` is not this file's to change and a seventh kind is a decision about
- * every reader in the SDK rather than about media. {@link SealOpenFailure} carries its own kind and
- * maps to a `FailureKind` only where an honest one exists — `null` where it does not, which is the
- * whole of the gap, written down.
+ * Until B17 (2026-09-02) `packages/sdk/src/reading.ts` had no member meaning "we asked, we were
+ * understood, and the answer was no", and this file recorded that gap as `readingKind: null` for
+ * `denied` and `unauthenticated` rather than write `not-found` — which would have made a paywall
+ * and a deleted post identical in every log line that groups by kind. The union now carries
+ * `denied` (the answer is no) and `precondition` (the answer is not yet), so every verdict here has
+ * an honest kind: `denied` → `denied`; `unauthenticated` → `precondition`, because a fresh
+ * signature clears it; `unavailable` → `transport` or `timeout`; `corrupt` → `malformed`. The
+ * field is no longer nullable, and a reader grouping by kind sees refusals as refusals.
  *
  * # The split in this file
  *
@@ -454,14 +451,13 @@ export interface SealOpenFailure {
    */
   cause: string;
   /**
-   * The nearest `FailureKind` from `packages/sdk/src/reading.ts`, or `null` when there is none.
+   * The SDK `FailureKind` this verdict is, for a log or a dashboard that groups by kind.
    *
-   * `null` is not laziness and it is not "we did not look". It is the gap named in this file's
-   * header: that union has no member meaning a refusal, and `denied` and `unauthenticated` are both
-   * refusals. Writing `not-found` there would make a paywall indistinguishable from a deleted post
-   * in every log line and every dashboard that groups by kind.
+   * Never `not-found` for a refusal: that would make a paywall indistinguishable from a deleted
+   * post. `denied` is `denied`; `unauthenticated` is `precondition` (a fresh signature clears it).
+   * See the header for the mapping and for why this field was once nullable.
    */
-  readingKind: FailureKind | null;
+  readingKind: FailureKind;
 }
 
 /**
@@ -492,7 +488,7 @@ function failure(
       retryable: false,
       alarm: false,
       reason: REASONS.denied,
-      readingKind: null,
+      readingKind: 'denied',
     },
     unauthenticated: {
       kind: 'unauthenticated',
@@ -500,7 +496,7 @@ function failure(
       retryable: false,
       alarm: false,
       reason: REASONS.unauthenticated,
-      readingKind: null,
+      readingKind: 'precondition',
     },
     unavailable: {
       kind: 'unavailable',

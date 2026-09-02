@@ -6,7 +6,7 @@
  */
 
 import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { fold } from '@projectx-social/sdk';
+import { describeFailureKind, fold, retryAdvice } from '@projectx-social/sdk';
 import { loadDaemonConfig } from './config.js';
 import { discoverVaults } from './adapters/discovery.js';
 import { readCurrentEpoch, readStakeVault } from './adapters/vault.js';
@@ -69,7 +69,12 @@ export async function status(env: NodeJS.ProcessEnv): Promise<number> {
     if (!reading.ok) {
       // A vault we could not read is not a vault with nothing in it.
       console.log(`  ${found.vaultId}`);
-      console.log(`    NOT MEASURED — ${reading.failure.kind}: ${reading.failure.detail}\n`);
+      // The kind, its sentence and what to do next — so an operator reading this at 2am is told
+      // whether to wait, retry or stop without opening the SDK.
+      console.log(
+        `    NOT MEASURED — ${reading.failure.kind} (${describeFailureKind(reading.failure.kind)}; ` +
+          `${retryAdvice(reading.failure.kind)}): ${reading.failure.detail}\n`,
+      );
       exit = 1;
       continue;
     }

@@ -47,7 +47,7 @@ type Reading<T> =
 
 /**
  * A refusal that crossed the seam. `kind` and `source` are the agent library's own words
- * (`transport`, `timeout`, `malformed`, `not-found`, `precondition`, `unconfigured`, …) so a
+ * (`transport`, `timeout`, `malformed`, `not-found`, `precondition`, `denied`, `unconfigured`, …) so a
  * caller can decide whether to retry, and so a log line reads the same on both sides.
  */
 export class PortRefusal extends Error {

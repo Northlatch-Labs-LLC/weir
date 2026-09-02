@@ -30,7 +30,98 @@ export type FailureKind =
   /** We looked, and the thing genuinely does not exist. A 404, not a 503. */
   | 'not-found'
   /** A bound was hit before the answer was complete. See `truncated` on paged reads. */
-  | 'budget-exhausted';
+  | 'budget-exhausted'
+  /**
+   * We asked, we were understood, and the answer was "not yet". Something the caller can read
+   * has to change first — a paused platform, a closed vault, an unfunded wallet, a moved price, an
+   * expired session. Not `transport` (retrying blindly is exactly wrong), not `not-found` (the thing
+   * exists), not `malformed` (nothing about the request was wrong). `detail` names the condition.
+   */
+  | 'precondition'
+  /**
+   * We asked, we were understood, and the answer was "no". The thing exists and is readable by the
+   * people entitled to it; the caller is not one of them. A paywall, a 403, a key server refusing a
+   * key. Reporting this as `not-found` is how "you have not bought this" becomes "this is gone".
+   */
+  | 'denied';
+
+/**
+ * Every member of {@link FailureKind}, as a value.
+ *
+ * The `satisfies` clause is the completeness proof: add a kind to the union without adding it here
+ * and this file stops compiling. Tests iterate this list so a switch that forgets a kind fails at
+ * both compile time (the `never` checks below) and run time (the test that walks every member).
+ */
+export const FAILURE_KINDS = [
+  'transport',
+  'timeout',
+  'malformed',
+  'unconfigured',
+  'not-found',
+  'budget-exhausted',
+  'precondition',
+  'denied',
+] as const satisfies readonly FailureKind[];
+
+/**
+ * What a caller may usefully do next, per kind.
+ *
+ * - `retry`: an identical attempt may succeed with nothing changed. Back off, then try again.
+ * - `wait`: an identical attempt fails until something readable changes. Re-check the condition
+ *   named in `detail`; do not hammer.
+ * - `stop`: an identical attempt will fail for ever. Change the request, the configuration or the
+ *   entitlement, or report and stop.
+ *
+ * An exhaustive `switch` on purpose. Removing a case makes `_exhaustive` a non-`never` and the
+ * build goes red — that is the guarantee a new kind cannot arrive here unclassified.
+ */
+export type RetryAdvice = 'retry' | 'wait' | 'stop';
+
+export function retryAdvice(kind: FailureKind): RetryAdvice {
+  switch (kind) {
+    case 'transport':
+    case 'timeout':
+      return 'retry';
+    case 'precondition':
+      return 'wait';
+    case 'malformed':
+    case 'unconfigured':
+    case 'not-found':
+    case 'budget-exhausted':
+    case 'denied':
+      return 'stop';
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
+
+/** One sentence per kind, for a log or a screen a human reads. Exhaustive, like {@link retryAdvice}. */
+export function describeFailureKind(kind: FailureKind): string {
+  switch (kind) {
+    case 'transport':
+      return 'the request never completed';
+    case 'timeout':
+      return 'the request exceeded its deadline';
+    case 'malformed':
+      return 'a response arrived but did not have the expected shape';
+    case 'unconfigured':
+      return 'nothing was configured to read from';
+    case 'not-found':
+      return 'we looked, and the thing does not exist';
+    case 'budget-exhausted':
+      return 'a bound was hit before the answer was complete';
+    case 'precondition':
+      return 'the answer was "not yet": something has to change first';
+    case 'denied':
+      return 'the answer was "no": this is not available to this caller';
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
 
 export interface Failure {
   kind: FailureKind;
@@ -122,6 +213,18 @@ export function classify(error: unknown, source: string): Failure {
   let kind: FailureKind = 'transport';
   if (lower.includes('deadline') || lower.includes('timeout') || lower.includes('aborted')) {
     kind = 'timeout';
+  } else if (
+    // A refusal that arrived as words. HTTP's 403 vocabulary, gRPC's PERMISSION_DENIED, and the
+    // sentence Seal's key servers use. Checked before not-found because "user does not have access
+    // to one or more of the requested keys" must never be read as "no such key".
+    lower.includes('forbidden') ||
+    lower.includes('permission denied') ||
+    lower.includes('permission_denied') ||
+    lower.includes('does not have access') ||
+    lower.includes('unauthorized') ||
+    lower.includes('unauthorised')
+  ) {
+    kind = 'denied';
   } else if (
     lower.includes('not found') ||
     lower.includes('notfound') ||
