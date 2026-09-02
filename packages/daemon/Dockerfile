@@ -24,6 +24,11 @@ COPY packages/daemon/package.json   packages/daemon/
 # the one script we actually need is run explicitly below.
 RUN pnpm install --frozen-lockfile --filter @projectx-social/daemon... --ignore-scripts
 
+# The SDK's build ends by writing its source fingerprint with a script that lives at the workspace
+# root. The 2026-09-02 build of this image failed on exactly that line — "Cannot find module
+# /app/scripts/write-sdk-fingerprint.mjs" — because only the packages had been copied. Same fix as
+# packages/mcp/Dockerfile: the two scripts the build runs, and nothing else from the root.
+COPY scripts/write-sdk-fingerprint.mjs scripts/sdk-src-fingerprint.mjs scripts/
 COPY packages/sdk    packages/sdk
 COPY packages/policy packages/policy
 COPY packages/signer packages/signer
