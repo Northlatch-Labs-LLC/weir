@@ -79,6 +79,8 @@ import { createServer, type IncomingMessage, type Server as HttpServer, type Ser
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SUI_PRIVATE_KEY_PREFIX } from '@mysten/sui/cryptography';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+// Type-only: erased by the compiler. The agent library itself is loaded dynamically, and only then.
+import type { Reading } from '@projectx-social/agent';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -163,6 +165,20 @@ export function parseAmount(text: string): bigint | null {
 }
 
 /** A post as it appears in a search result: enough to decide whether to pay, never the paid body. */
+/**
+ * One page of the shop window, as `GET /api/browse` answers it.
+ *
+ * `truncated` is the server's word, measured by fetching one row past the page, and it is carried
+ * to the caller untouched: a page that came back full is not evidence of a next one, and a tool
+ * that dropped the flag would leave an agent unable to tell "that is all" from "there is more".
+ * `nextCursor` is opaque; it goes back to the server as it came.
+ */
+export interface WeirFeed {
+  posts: WeirPost[];
+  truncated: boolean;
+  nextCursor: string | null;
+}
+
 export interface WeirPost {
   postId: string;
   handle: string;
@@ -247,7 +263,15 @@ export interface WeirBalance {
  */
 export interface WeirPort {
   /** Browse or search. Absent today — see {@link capabilitiesOf}. */
-  feed?: (input: { query?: string; handle?: string; limit: number }) => Promise<WeirPost[]>;
+  /**
+   * Browse the shop window: one page, optionally one creator's, optionally continuing from a cursor.
+   *
+   * No `limit` and no `query`. The page size is the server's (`BROWSE_PAGE`, not a caller
+   * parameter — a ceiling a caller can raise is not a ceiling), and `/api/browse` has no free-text
+   * search, so a `query` here would be a promise the endpoint cannot keep. A `Reading`, not a bare
+   * array: a failed read is a failure kind the caller can act on, never an empty page.
+   */
+  feed?: (input: { handle?: string; cursor?: string }) => Promise<Reading<WeirFeed>>;
   /** Price one content key from the chain. */
   quote?: (input: { vaultId: string; contentKey: string }) => Promise<WeirQuote>;
   /** Fetch a body the caller is already entitled to. `null` means "exists, not entitled". */
