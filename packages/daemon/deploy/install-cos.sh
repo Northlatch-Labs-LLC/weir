@@ -14,7 +14,7 @@
 set -euo pipefail
 
 PROJECT=projectx-daemon-prod
-IMAGE="europe-west2-docker.pkg.dev/${PROJECT}/projectx/social-harvest:v3"
+IMAGE="europe-west2-docker.pkg.dev/${PROJECT}/projectx/social-harvest:v5"
 LIB=/var/lib/projectx-social
 
 mkdir -p "$LIB"
@@ -57,7 +57,7 @@ chmod 700 "$LIB/fetch-secrets.sh"
 cat > "$LIB/harvest-public.env" <<'PUBLIC'
 PROJECTX_SOCIAL_GRPC_URL=https://fullnode.mainnet.sui.io:443
 PROJECTX_SOCIAL_PACKAGE_ID=0xc5c833991ed1123d70b1001c0bcdb01ec5728b09f25dfc42a0edaf16005d404d
-PROJECTX_SOCIAL_LATEST_PACKAGE_ID=0xfa7eb18bbb29b047ec86434e8a8f4cfba35615bde9680eebd781a187ca3a3694
+PROJECTX_SOCIAL_LATEST_PACKAGE_ID=0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5
 PROJECTX_DAEMON_TICK_SECONDS=3600
 PROJECTX_DAEMON_MAX_DISCOVERY_PAGES=20
 PROJECTX_DAEMON_GAS_BUDGET_MIST=20000000
