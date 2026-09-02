@@ -90,6 +90,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Capability, Ceiling, Currency, MachineBodyState, WeirBinding, WeirPort } from './transport.js';
 import { capabilitiesOf, log, parseAmount } from './transport.js';
+import { PortRefusal } from './agent-port.js';
 import { CallLedger, idempotencyKeyFor, type RequestId } from './idempotency.js';
 import { MAX_RESPONSE_CONTENT_CHARS, envelope, renderUntrusted, type Provenance } from './untrusted.js';
 
@@ -237,6 +238,16 @@ function refuse(reason: string, detail: string, extra: Record<string, unknown> =
  * key is what is wrong.
  */
 function fromThrown(tool: string, error: unknown): CallToolResult {
+  if (error instanceof PortRefusal) {
+    /*
+      The agent said no, in its own vocabulary. This is the path a refused Reading takes across the
+      seam (`agent-port.ts`), and it must stay distinguishable from a crash: `precondition` and
+      `not-found` tell a caller to change something and try again; `transport` and `timeout` tell it
+      to wait; `permanent` and `malformed` tell it to stop. A `call_failed` would flatten all of that.
+    */
+    log(`${tool} refused (${error.kind}/${error.source}):`, error.message);
+    return refuse('refused', `${tool}: ${error.message}`, { failure: { kind: error.kind, source: error.source } });
+  }
   const detail = error instanceof Error ? error.message : String(error);
   log(`${tool} failed:`, detail);
   return refuse('call_failed', `${tool} could not be completed: ${detail}`);
@@ -683,7 +694,7 @@ function registerBuy(
         vaultId: z.string(),
         contentKey: z.string(),
         txDigest: z.string(),
-        unlockObjectId: z.string(),
+        unlockObjectId: z.string().nullable(),
         pricePaid: z.string(),
         currency: z.enum(['SUI', 'USDC']),
         idempotencyKey: z.string(),
@@ -754,8 +765,8 @@ function registerSubscribe(
         vaultId: z.string(),
         tierIndex: z.number(),
         txDigest: z.string(),
-        subscriptionObjectId: z.string(),
-        pricePaid: z.string(),
+        subscriptionObjectId: z.string().nullable(),
+        pricePaid: z.string().nullable(),
         currency: z.enum(['SUI', 'USDC']),
         idempotencyKey: z.string(),
       },
@@ -1053,7 +1064,7 @@ function registerSend(
         text: z.string().min(1).max(4_000).describe('The message body.'),
         preview: z.string().min(1).max(500).describe('What the recipient sees before opening it.'),
       },
-      outputSchema: { messageId: z.string(), to: z.string(), idempotencyKey: z.string() },
+      outputSchema: { sent: z.literal(true), to: z.string(), idempotencyKey: z.string() },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async (args, extra) => {
@@ -1084,7 +1095,7 @@ function registerSend(
             preview: args.preview,
             idempotencyKey: key,
           });
-          return succeed({ messageId: sent.messageId, to: args.to, idempotencyKey: key });
+          return succeed({ sent: sent.sent, to: args.to, idempotencyKey: key });
         } catch (error) {
           return fromThrown(name, error);
         }
