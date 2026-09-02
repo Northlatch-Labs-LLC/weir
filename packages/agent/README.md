@@ -108,10 +108,11 @@ const reader = made.value;                                           // ReadOnly
 
 await reader.quote({ vaultId, contentKey });   // priced from chain, as above
 await reader.balanceOf(someAddress);           // any address; there is no "mine" without a key
+await reader.feed({ handle: 'alice' });        // one page of the shop window; the page size is the server's
 ```
 
 `ReadOnlyAgent` is a distinct type carrying **only the read set** — `manifest`, `client`, `seal`,
-`quote`, `balanceOf`. Every member that signs or spends is *absent* from the object, not present and
+`quote`, `balanceOf`, `feed`. Every member that signs or spends is *absent* from the object, not present and
 refusing, and absent from the type, so `reader.unlock(…)` is a compile error. This is the agent a
 hosted `weir-mcp` binds: `packages/mcp` registers a tool for every member that is a function, so a
 spending method that merely threw would become a tool that always fails. The alternative — a
@@ -137,6 +138,7 @@ compile error, so forgetting the key cannot silently produce an agent that canno
 | `.send({to, text, preview, paid?})` | HTTP | Signed `send` |
 | `.balance(coinType?)` | chain | This agent's own, minor units. *Keyed only.* |
 | `.balanceOf(owner, coinType?)` | chain | A named address, minor units. *Read set.* |
+| `.feed({handle?, cursor?})` | HTTP | `GET /api/browse`, unauthenticated. One page, the server's size; `truncated` and `nextCursor` as the server said them; a non-2xx is a failure kind, never an empty page. *Read set.* |
 
 Every method not marked *read set* needs the key and is absent from a `ReadOnlyAgent`.
 
@@ -213,7 +215,7 @@ Measured, not asserted. Against mainnet on 2026-08-31.
   `0xc5c833…` reads as **version 1**, `0xfa7eb1…` as **version 3**.
 
 - **An agent with no key builds, and has nothing on it that needs one.** `createAgent({ keypair:
-  null })` returns exactly `manifest`, `client`, `seal`, `quote`, `balanceOf` (asserted by
+  null })` returns exactly `manifest`, `client`, `seal`, `quote`, `balanceOf`, `feed` (asserted by
   `Object.keys`), `quote` and `balanceOf` run against a fake node, and the compile-only file proves
   `.unlock`, `.sign` and `.address` are type errors on it. `test/read-only-agent.test.ts`.
 

@@ -99,9 +99,14 @@ describe('the surface exports nothing that cannot work', () => {
     no event anywhere carries a title, a preview, a body or an author. A post lives in Postgres.
     A "feed" built from those events would be a list of opaque byte strings with numbers beside
     them, which is a worse answer than a 405.
+
+    `feed()` is back, and it is back because the endpoint it needed now exists: `GET /api/browse`,
+    the shop window (weir #102) — a fixed page, `truncated` measured by the server, an opaque
+    cursor. It never names `/api/posts`. `test/feed.test.ts` runs it against a loopback server;
+    this pin only says the member exists and the old path does not come back with it.
   */
-  it('does not export feed()', () => {
-    expect(made.ok && 'feed' in made.value).toBe(false);
+  it('exports feed(), over the endpoint that exists', () => {
+    expect(made.ok && typeof made.value.feed).toBe('function');
   });
 
   it('quote() takes the vault and content key, which DO exist on chain', () => {
