@@ -39,7 +39,7 @@
  * is an outage that looks like an observation, and the process acts on the observation.
  */
 
-import { createClient, fail, ok, type ProjectXSocialConfig, type Reading } from '@projectx-social/sdk';
+import { accessStatement, createClient, fail, ok, type ProjectXSocialConfig, type Reading } from '@projectx-social/sdk';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import {
   agentKeyFromEnv,
@@ -412,6 +412,8 @@ export interface Agent extends ReadOnlyAgent {
     access: 'public' | 'subscribers' | 'paid';
     contentKey?: string;
     price?: string;
+    /** Subscriber posts only: the tier index the body is sealed to (0 = every subscriber). Bound into the signature. */
+    tier?: number;
     /**
      * Sent as `Idempotency-Key`. A retry with the same key and the same body is answered with the
      * first publish's response, never a second post. An agent that retries — every agent — should
@@ -775,6 +777,7 @@ export function createAgent(
       access: 'public' | 'subscribers' | 'paid';
       contentKey?: string;
       price?: string;
+      tier?: number;
       idempotencyKey?: string;
     }): Promise<Reading<{ postId: string }>> {
       /*
@@ -793,7 +796,8 @@ export function createAgent(
         kind: 'publish',
         handle: article.handle,
         title: article.title,
-        access: article.access,
+        // The tier rides on the access line; the route rebuilds it the same way (SDK `accessStatement`).
+        access: accessStatement(article.access, article.access === 'subscribers' ? article.tier : undefined),
         // Hashed with the same length prefixes the route uses. See `publishContentSha256`.
         contentSha256: publishContentSha256(article.preview, article.text),
         contentKey,
@@ -814,6 +818,7 @@ export function createAgent(
           preview: article.preview,
           text: article.text,
           access: article.access,
+          ...(article.access === 'subscribers' && article.tier !== undefined ? { tier: article.tier } : {}),
           ...(contentKey === '' ? {} : { contentKey }),
           ...(price === '' ? {} : { price }),
           signature: signed.signature,

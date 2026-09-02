@@ -23,4 +23,5 @@ export const DATABASE_TEST_FILES: readonly string[] = [
   'test/spend-with-the-write.test.ts',
   'test/sponsor.test.ts',
   'test/the-simulate-ceiling-is-shared.test.ts',
+  'test/tiered-sealing.test.ts',
 ];

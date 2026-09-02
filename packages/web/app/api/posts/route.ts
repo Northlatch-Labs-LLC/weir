@@ -17,6 +17,7 @@ import { storeBody, type SealedBody } from '@/lib/body-storage';
 import { sealBothEditions } from '@/lib/machine-pricing';
 import { spendSignature, sweepUsedSignatures, verifyActionDeferringSpend } from '@/lib/identity';
 import { idempotently } from '@/lib/idempotent-route';
+import { accessStatement } from '@projectx-social/sdk';
 import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -74,6 +75,8 @@ async function publishOnce(request: Request) {
     preview?: string;
     text?: string;
     access?: string;
+    /** Subscriber posts only: the tier index the body is sealed to. Omitted means 0, every subscriber. */
+    tier?: string | number;
     price?: string;
     contentKey?: string;
     signature?: string;
@@ -162,6 +165,11 @@ async function publishOnce(request: Request) {
     );
   }
 
+  const requestedTier = access === 'subscribers' && body.tier !== undefined ? Number(body.tier) : 0;
+  if (!Number.isInteger(requestedTier) || requestedTier < 0 || requestedTier > 9_999) {
+    return NextResponse.json({ error: `tier must be a small non-negative integer; received ${JSON.stringify(body.tier)}` }, { status: 400 });
+  }
+
   /*
     Prove the caller controls `author`, rather than taking their word for it.
 
@@ -183,7 +191,9 @@ async function publishOnce(request: Request) {
       kind: 'publish',
       handle,
       title,
-      access,
+      // The tier rides on the access line of the statement; see `accessStatement` in the SDK. The
+      // value is validated against the vault below, after the proof and before anything is sealed.
+      access: accessStatement(access as 'public' | 'paid' | 'subscribers', requestedTier),
       contentSha256: contentDigest(preview, text),
       /*
         Bound as sent, before the paid branch below reads them.
@@ -204,7 +214,23 @@ async function publishOnce(request: Request) {
   if (access === 'public') {
     postAccess = { kind: 'public' };
   } else if (access === 'subscribers') {
-    postAccess = { kind: 'subscribers' };
+    /*
+      The tier is validated against the VAULT — the same read that proved ownership above — not
+      against the request: an index past the last tier would seal the body to a seat nobody can
+      buy, and a retired tier to one nobody can renew into. Refused with the tier count so the
+      caller can choose again. Tier 0 stays what it always was: readable by every subscriber.
+    */
+    const rawTier = requestedTier;
+    if (rawTier >= vault.value.tiers.length) {
+      return NextResponse.json(
+        { error: `tier must be an index into this vault's ${vault.value.tiers.length} tier(s); received ${JSON.stringify(body.tier)}` },
+        { status: 400 },
+      );
+    }
+    if (!vault.value.tiers[rawTier]!.active) {
+      return NextResponse.json({ error: `tier ${rawTier} is retired; a post sealed to it could never be renewed into` }, { status: 400 });
+    }
+    postAccess = { kind: 'subscribers', tier: rawTier };
   } else if (access === 'paid') {
     if (!body.contentKey || !body.price) {
       return NextResponse.json(
@@ -353,7 +379,7 @@ async function publishOnce(request: Request) {
     const stored = await storeBody({
       body: text,
       vaultId: profile.vaultId,
-      gate: { kind: 'period', tier: 0n, period: periodOf(BigInt(publishedAtMs)) },
+      gate: { kind: 'period', tier: BigInt(postAccess.tier), period: periodOf(BigInt(publishedAtMs)) },
       owner: vault.value.owner,
     });
     if (!stored.ok) {

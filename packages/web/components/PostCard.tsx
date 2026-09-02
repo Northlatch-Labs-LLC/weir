@@ -42,8 +42,11 @@ function badgeLabel(post: VisiblePost, price?: string): string {
       // the badge should not assert how they came by it.
       if (!post.locked) return 'Unlocked';
       return price === undefined ? 'Locked' : `Locked · ${price}`;
-    case 'subscribers':
-      return post.locked ? 'Subscribers only' : 'Subscribers';
+    case 'subscribers': {
+      const tier = post.access.tier;
+      const who = tier > 0 ? `Tier ${tier + 1} subscribers` : 'Subscribers';
+      return post.locked ? `${who} only` : who;
+    }
     default:
       return 'Free';
   }

@@ -99,6 +99,7 @@ interface AgentLike {
     preview: string;
     text: string;
     access: 'public' | 'paid' | 'subscribers';
+    tier?: number;
     contentKey?: string;
     price?: string;
     idempotencyKey?: string;
