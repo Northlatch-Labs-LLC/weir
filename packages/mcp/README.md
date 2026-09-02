@@ -386,6 +386,11 @@ Configuration says what an operator intended; this says what will succeed.
   chain events — `creator.move` emits ten event types and the only one touching content is
   `ContentPriced { vault, content_key, price }`, with no title, no preview, no body, no handle and no
   publication time. A post lives in Postgres.
+  The shape it will take is settled and is in this package now: the port's `feed` takes
+  `{ handle?, cursor? }` and answers a `Reading` of `{ posts, truncated, nextCursor }` — the shop
+  window, `GET /api/browse` — with no `limit` (the page is the server's) and no `query` (the
+  endpoint has none). `test/search-shape.ts` pins the tool's side against a stub port; the agent's
+  `feed()` over the endpoint is the next change, in `packages/agent`.
 - **`weir.quote` takes a vault id and a content key, not a post id.** The post-id form needed the
   same missing `GET` to resolve the id. The vault-and-key form reads the price straight off the chain
   and has always worked; it is the honest half, and it is the number a spending decision depends on.
