@@ -21,8 +21,8 @@ COPY packages/signer/package.json packages/signer/
 COPY packages/mcp/package.json    packages/mcp/
 # `--ignore-scripts`: the SDK's `prepare` compiles it and there is no source at this layer; the one
 # build we need runs explicitly below. `--filter .` includes the workspace root, whose
-# devDependencies carry `tsx` — this package has no build of its own yet (README "No build") and
-# runs from source, so the runner must be present at run time.
+# devDependencies carry `tsx`, which the canary and transport checks still use; the server itself
+# now runs from its compiled dist like every library it depends on.
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @projectx-social/mcp... --filter .
 # Both fingerprint scripts: the writer imports `./sdk-src-fingerprint.mjs`, and the first Cloud Build
 # of this image (2026-09-02, build 82ca11ed) failed at the SDK build step with ERR_MODULE_NOT_FOUND
@@ -34,7 +34,11 @@ COPY packages/agent  packages/agent
 COPY packages/policy packages/policy
 COPY packages/signer packages/signer
 COPY packages/mcp    packages/mcp
-RUN pnpm --filter @projectx-social/sdk build
+RUN pnpm --filter @projectx-social/sdk build \
+ && pnpm --filter @projectx-social/policy build \
+ && pnpm --filter @projectx-social/signer build \
+ && pnpm --filter @projectx-social/agent build \
+ && pnpm --filter @projectx-social/mcp build
 
 # --- runtime ---
 FROM node:22-alpine AS runtime
@@ -53,4 +57,4 @@ EXPOSE 8080
 # The Host allowlist (the DNS-rebinding control), the base URL and the eight chain variables are
 # supplied by the service definition at deploy time, never baked here — see
 # packages/mcp/deploy/cloudrun.service.yaml. No secret is ever an ENV in this file.
-ENTRYPOINT ["pnpm", "--filter", "@projectx-social/mcp", "exec", "tsx", "src/index.ts", "--http"]
+ENTRYPOINT ["node", "packages/mcp/dist/index.js", "--http"]

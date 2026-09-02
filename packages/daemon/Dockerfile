@@ -15,6 +15,8 @@ RUN corepack enable
 # the whole tree first makes every source edit re-resolve the lockfile.
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/sdk/package.json      packages/sdk/
+COPY packages/policy/package.json   packages/policy/
+COPY packages/signer/package.json   packages/signer/
 COPY packages/daemon/package.json   packages/daemon/
 # `--ignore-scripts` because the SDK has a `prepare` script that compiles it, and at this layer only
 # the manifests exist — there is no source to compile yet. Splitting them is also the safer default:
@@ -23,6 +25,8 @@ COPY packages/daemon/package.json   packages/daemon/
 RUN pnpm install --frozen-lockfile --filter @projectx-social/daemon... --ignore-scripts
 
 COPY packages/sdk    packages/sdk
+COPY packages/policy packages/policy
+COPY packages/signer packages/signer
 COPY packages/daemon packages/daemon
 # Compiled, not type-stripped. `node --experimental-strip-types` removes the annotations but does
 # not rewrite module specifiers, and this codebase imports `./index.js` — the correct ESM specifier
@@ -30,6 +34,8 @@ COPY packages/daemon packages/daemon
 # does not exist until tsc has run, so the container started and immediately died on
 # ERR_MODULE_NOT_FOUND. Compiling is also what should happen in a production image regardless.
 RUN pnpm --filter @projectx-social/sdk build \
+ && pnpm --filter @projectx-social/policy build \
+ && pnpm --filter @projectx-social/signer build \
  && pnpm --filter @projectx-social/daemon build
 
 # --- runtime ---
