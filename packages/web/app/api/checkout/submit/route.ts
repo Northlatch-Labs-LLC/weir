@@ -1,6 +1,8 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
-import { simulateLimit } from '@/lib/rate-limit';
+import { quotaLimit, simulateLimit } from '@/lib/rate-limit';
+import { isPurchase, moveTargets } from '@/lib/tx-shape';
+import { verifyTransactionSignature } from '@mysten/sui/verify';
 import { fold } from '@projectx-social/sdk';
 import { submitSigned } from '@/lib/checkout';
 import { idempotently } from '@/lib/idempotent-route';
@@ -43,6 +45,30 @@ async function submitOnce(request: Request) {
   if (!body.bytes || !body.signature) {
     return NextResponse.json({ error: 'bytes and signature are required' }, { status: 400 });
   }
+
+  /*
+    The purchase quota is spent HERE, at the one step that is a purchase, keyed on the address the
+    signature proves — never on a body field, and never at prepare, whose sender is an
+    unauthenticated claim (a per-address bucket spent there is a free denial-of-purchase against
+    any buyer). `QUOTAS.purchase` — ten at once, then one every six minutes — bounded nothing until
+    this line; the breaker for the `purchase` bucket lands here through the same call.
+
+    The signature is checked locally first so a forged sender cannot spend a stranger's tokens; the
+    node would refuse the bytes anyway, but only after the bucket had been debited.
+  */
+  let signer: string;
+  try {
+    const key = await verifyTransactionSignature(Buffer.from(body.bytes, 'base64'), body.signature);
+    signer = key.toSuiAddress();
+  } catch {
+    return NextResponse.json({ error: 'the signature does not verify against these bytes' }, { status: 401 });
+  }
+  const sender = (Transaction.from(body.bytes).getData() as { sender?: string | null }).sender ?? null;
+  if (sender === null || sender.toLowerCase() !== signer.toLowerCase()) {
+    return NextResponse.json({ error: 'the signature was made by an address other than the sender' }, { status: 401 });
+  }
+  const quota = await quotaLimit(signer, isPurchase(moveTargets(body.bytes)) ? 'purchase' : 'write');
+  if (quota !== null) return quota;
 
   const result = await submitSigned({ bytes: body.bytes, signature: body.signature });
   return fold<string, NextResponse>(
