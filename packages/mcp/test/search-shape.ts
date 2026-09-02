@@ -26,7 +26,10 @@ import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { registerTools } from '../src/tools.js';
+import { MAX_RESPONSE_CONTENT_CHARS } from '../src/untrusted.js';
 import type { WeirBinding, WeirFeed, WeirPort, WeirPost } from '../src/transport.js';
 
 let checks = 0;
@@ -54,11 +57,18 @@ const PAGE_TWO: WeirFeed = { posts: [post(7), post(8)], truncated: false, nextCu
 class StubShopWindow implements WeirPort {
   readonly calls: unknown[] = [];
   failNext = false;
+  /** When set, the next call answers this page whatever the cursor. */
+  override: WeirFeed | null = null;
   feed = async (input: { handle?: string; cursor?: string }) => {
     this.calls.push(input);
     if (this.failNext) {
       this.failNext = false;
       return { ok: false as const, failure: { kind: 'transport' as const, source: 'feed', detail: 'GET /api/browse answered 500' } };
+    }
+    if (this.override !== null) {
+      const page = this.override;
+      this.override = null;
+      return { ok: true as const, value: page, observedAtMs: Date.now() };
     }
     const page = input.cursor === undefined ? PAGE_ONE : input.cursor === PAGE_ONE.nextCursor ? PAGE_TWO : null;
     if (page === null) return { ok: false as const, failure: { kind: 'malformed' as const, source: 'feed', detail: 'cursor not one this endpoint issued' } };
@@ -121,6 +131,62 @@ async function main(): Promise<void> {
     for (const p of [...firstValue.posts, ...secondValue.posts] as { authored?: { untrusted?: unknown } }[]) {
       assert.equal(p.authored?.untrusted, true);
     }
+  });
+
+  console.log('=== the page is budgeted as a whole ===');
+  const web = join(import.meta.dirname, '..', '..', 'web');
+  const constant = (file: string, name: string): number => {
+    const m = new RegExp(`export const ${name} = ([0-9_]+);`).exec(readFileSync(join(web, file), 'utf8'));
+    if (m === null) throw new Error(`${name} not found in ${file}`);
+    return Number(m[1]!.replace(/_/g, ''));
+  };
+  const PAGE = constant('app/api/browse/route.ts', 'BROWSE_PAGE');
+  const TITLE = constant('lib/content.ts', 'MAX_POST_TITLE_LENGTH');
+  const PREVIEW = constant('lib/content.ts', 'MAX_POST_PREVIEW_LENGTH');
+  check('the budget IS the largest page the web can return: BROWSE_PAGE × (title cap + preview cap), read from the web’s source', () => {
+    assert.equal(MAX_RESPONSE_CONTENT_CHARS, PAGE * (TITLE + PREVIEW));
+  });
+
+  const atTheCaps = (i: number, handle = 'alice'): WeirPost => ({ ...post(i, handle), title: 'T'.repeat(TITLE), preview: 'p'.repeat(PREVIEW) });
+  window.override = { posts: Array.from({ length: PAGE }, (_, i) => atTheCaps(i)), truncated: true, nextCursor: 'c-full' };
+  const full = await client.callTool({ name: 'weir_search', arguments: {} });
+  const fullValue = full.structuredContent as Structured & { budget: { maxContentChars: number; contentChars: number; truncatedPosts: number; responseTruncated: boolean } };
+  check('a full page at exactly the web’s caps is never touched: every character shown, nothing flagged', () => {
+    assert.equal(fullValue.count, PAGE);
+    assert.equal(fullValue.budget.responseTruncated, false);
+    assert.equal(fullValue.budget.truncatedPosts, 0);
+    assert.equal(fullValue.budget.contentChars, PAGE * (TITLE + PREVIEW));
+    for (const p of fullValue.posts as { authored: { truncated: boolean; content: Record<string, string> } }[]) {
+      assert.equal(p.authored.truncated, false);
+      assert.equal(p.authored.content['title']!.length, TITLE);
+      assert.equal(p.authored.content['preview']!.length, PREVIEW);
+    }
+  });
+
+  const oversized = Array.from({ length: PAGE }, (_, i) => atTheCaps(i));
+  oversized[3] = { ...oversized[3]!, preview: 'x'.repeat(PREVIEW * 15) };
+  window.override = { posts: oversized, truncated: true, nextCursor: 'c-over' };
+  const over = await client.callTool({ name: 'weir_search', arguments: {} });
+  const overValue = over.structuredContent as typeof fullValue;
+  check('a page over budget keeps every post, shortens the one that exceeds its share, and SAYS so', () => {
+    assert.equal(overValue.count, PAGE);
+    assert.equal(overValue.nextCursor, 'c-over');
+    assert.equal(overValue.budget.responseTruncated, true);
+    assert.equal(overValue.budget.truncatedPosts, 1);
+    const posts = overValue.posts as { postId: string; authored: { truncated: boolean; originalChars: number; content: Record<string, string> } }[];
+    const cut = posts[3]!;
+    assert.equal(cut.authored.truncated, true);
+    assert.equal(cut.authored.originalChars, TITLE + PREVIEW * 15);
+    const share = Math.floor(MAX_RESPONSE_CONTENT_CHARS / PAGE);
+    assert.ok(cut.authored.content['title']!.length + cut.authored.content['preview']!.length <= share);
+    const shown = posts.reduce((n, p) => n + p.authored.content['title']!.length + p.authored.content['preview']!.length, 0);
+    assert.ok(shown <= MAX_RESPONSE_CONTENT_CHARS, `${shown} shown > ${MAX_RESPONSE_CONTENT_CHARS}`);
+    // The server's word about further pages is untouched by our cut.
+    assert.equal(overValue.truncated, true);
+  });
+  check('the budget is not a caller parameter: the schema still has only cursor and handle', () => {
+    const props = Object.keys((listed?.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}).sort();
+    assert.deepEqual(props, ['cursor', 'handle']);
   });
 
   console.log('=== a failed read is a failure, never an empty page ===');
