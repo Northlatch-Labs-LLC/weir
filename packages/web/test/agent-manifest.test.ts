@@ -27,6 +27,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { contentDigest } from '@/app/api/posts/route';
 import { fail, ok, type PlatformState, type ProjectXSocialConfig, type SealConfig } from '@projectx-social/sdk';
 
 /** The deployment the published statements are bound to. */
@@ -422,7 +424,15 @@ describe('the document as a whole', () => {
     );
 
     for (const statement of manifest.authentication.statements) {
-      expect(Object.keys(statement).sort()).toEqual(['kind', 'singleUse', 'statement', 'variant']);
+      /*
+        `computed` is optional and present on `publish` alone (revision 11). It is checked as an
+        allowed EXTRA rather than added to the required set, so a statement that grows it without
+        reason still fails here, and one that loses it on publish fails the recipe tests below.
+      */
+      const keys = Object.keys(statement).sort();
+      const required = ['kind', 'singleUse', 'statement', 'variant'];
+      expect(keys.filter((k) => k !== 'computed')).toEqual(required);
+      if (keys.includes('computed')) expect(statement.kind).toBe('publish');
     }
     for (const endpoint of manifest.endpoints) {
       expect(Object.keys(endpoint).sort()).toEqual([
@@ -644,5 +654,53 @@ describe('the two profile routes are listed with exactly the fields they parse',
     expect(entry).toBeDefined();
     expect(entry?.proof).toBe('signature');
     expect([...(entry?.body ?? [])].sort()).toEqual(fieldsParsedBy('account/profile'));
+  });
+});
+
+/*
+  The recipe for `contentSha256`, checked against the code that actually computes it.
+
+  This is the drift test for finding 1 of 2026-09-02: an agent spent two sessions failing to publish
+  because the digest is length-prefixed and nothing we serve said so. Publishing the recipe fixes
+  that only if the recipe stays true, so it is built here from the words in the manifest and
+  compared against the route's own function on real values.
+*/
+describe('the publish digest recipe', () => {
+  const digestAsDocumented = (preview: string, text: string) =>
+    createHash('sha256').update(`${preview.length}:${preview}${text.length}:${text}`).digest('hex');
+
+  it('is published on the publish statement, and nowhere else', () => {
+    const manifest = manifestFrom(inputs());
+    const publish = manifest.authentication.statements.filter((s) => s.kind === 'publish');
+    expect(publish.length).toBeGreaterThan(0);
+    for (const s of publish) expect(s.computed?.contentSha256).toBeTruthy();
+    // Every other statement's slots are literal values the caller already holds.
+    for (const s of manifest.authentication.statements.filter((s) => s.kind !== 'publish')) {
+      expect(s.computed).toBeUndefined();
+    }
+  });
+
+  it('describes what the deployment actually computes', () => {
+    const manifest = manifestFrom(inputs());
+    const recipe =
+      manifest.authentication.statements.find((s) => s.kind === 'publish')?.computed?.contentSha256 ?? '';
+    // The three things the recipe must say, because each one is a way to get it wrong.
+    expect(recipe).toMatch(/preview\.length/);
+    expect(recipe).toMatch(/text\.length/);
+    expect(recipe).toMatch(/NOT sha256 of the text/);
+    // And it must be true. Values chosen so a wrong construction cannot coincide: the naive
+    // `sha256(preview + text)` and the documented form differ for every one of these.
+    const cases: Array<[string, string]> = [
+      ['', ''],
+      ['a', 'b'],
+      ['12:34', '5'],
+      ['préview with é', 'text with 🦞 and a newline\n'],
+      ['x'.repeat(300), 'y'.repeat(5000)],
+    ];
+    for (const [preview, text] of cases) {
+      const documented = digestAsDocumented(preview, text);
+      expect(documented).not.toBe(createHash('sha256').update(preview + text).digest('hex'));
+      expect(documented).toBe(contentDigest(preview, text));
+    }
   });
 });

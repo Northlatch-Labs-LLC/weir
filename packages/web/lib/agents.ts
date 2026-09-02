@@ -50,6 +50,12 @@ export const MAX_PURPOSE = 200;
 
 /** One row of the register. */
 export interface AgentAccount {
+  /**
+   * What was observable about the operator address when this was filed. `undefined` for every
+   * declaration made before the measurement existed — see `db/039_operator_footprint.sql`. Never
+   * defaulted: "we did not look" is a different claim from "there was nothing to see".
+   */
+  operatorFootprint?: 'seen' | 'unseen' | 'not-measured';
   /** The machine's address, normalised. */
   address: string;
   /** Who answers for it, normalised. Never equal to `address`. */
@@ -86,6 +92,7 @@ interface AgentRow {
   purpose: string;
   declared_at_ms: string;
   revoked_at_ms: string | null;
+  operator_footprint: string | null;
 }
 
 function toAccount(row: AgentRow): AgentAccount {
@@ -101,6 +108,16 @@ function toAccount(row: AgentRow): AgentAccount {
     // codebase, which is why those stay strings and these do not.
     declaredAtMs: Number(row.declared_at_ms),
     revokedAtMs: row.revoked_at_ms === null ? null : Number(row.revoked_at_ms),
+    /*
+      Only the three values the CHECK in 039 permits reach the entity. Anything else in the column
+      is treated as absent rather than passed through: an unknown word here would be published on
+      the register as if it meant something.
+    */
+    ...(row.operator_footprint === 'seen' ||
+    row.operator_footprint === 'unseen' ||
+    row.operator_footprint === 'not-measured'
+      ? { operatorFootprint: row.operator_footprint }
+      : {}),
   };
 }
 
@@ -267,11 +284,20 @@ export function validateAgentHalf(
  * key-based system and is not a hole this register can close, since at that point they are the
  * agent.
  */
-export async function recordDeclaration(declaration: Declaration): Promise<AgentAccount> {
+export async function recordDeclaration(
+  declaration: Declaration,
+  /**
+   * What was observable about the operator address at this moment — see `lib/operator-footprint.ts`
+   * and `db/039_operator_footprint.sql`. Omitted only by callers that did not look; it is then NULL
+   * in the row, which reads as "not looked at" and never as "nothing there".
+   */
+  operatorFootprint?: 'seen' | 'unseen' | 'not-measured',
+): Promise<AgentAccount> {
   const { rows } = await db().query<AgentRow>(
     `INSERT INTO agent_accounts
-       (address, operator_address, agent_signature, operator_signature, model, purpose, declared_at_ms)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (address, operator_address, agent_signature, operator_signature, model, purpose, declared_at_ms,
+        operator_footprint)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (address) DO UPDATE SET
        operator_address   = EXCLUDED.operator_address,
        agent_signature    = EXCLUDED.agent_signature,
@@ -279,6 +305,7 @@ export async function recordDeclaration(declaration: Declaration): Promise<Agent
        model              = EXCLUDED.model,
        purpose            = EXCLUDED.purpose,
        declared_at_ms     = EXCLUDED.declared_at_ms,
+       operator_footprint = EXCLUDED.operator_footprint,
        revoked_at_ms      = NULL
      RETURNING *`,
     [
@@ -289,6 +316,7 @@ export async function recordDeclaration(declaration: Declaration): Promise<Agent
       declaration.model,
       declaration.purpose,
       declaration.timestampMs,
+      operatorFootprint ?? null,
     ],
   );
 

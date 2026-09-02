@@ -48,6 +48,18 @@ export async function GET(request: Request) {
     purpose: a.purpose,
     declaredAtMs: a.declaredAtMs,
     recovery: recoveryOf(a.agentSignature, a.operatorAddress),
+    /*
+      What we could see about the operator address when this was filed, and nothing more.
+
+      Published because the guard behind this register is thinner than it reads: it refuses an agent
+      that names ITSELF, and an agent that generates a second key and names that is accepted, with
+      two real signatures. We cannot tell those apart cryptographically, so instead of implying a
+      check we do not perform, the observation is handed to the reader.
+
+      Absent on declarations filed before the measurement existed. 'unseen' is a signal and not a
+      verdict: a new human wallet looks identical to a key an agent made a minute ago.
+    */
+    ...(a.operatorFootprint === undefined ? {} : { operatorFootprint: a.operatorFootprint }),
   }));
 
   return NextResponse.json({ agents, count: agents.length, truncated, ...(operator === null ? {} : { operator }) });

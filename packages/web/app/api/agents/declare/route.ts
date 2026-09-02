@@ -5,6 +5,7 @@ import { verifyAction } from '@/lib/identity';
 import { recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
 import { markOfferFiled, markSeekingClaimed } from '@/lib/agent-seeking';
+import { operatorFootprint } from '@/lib/operator-footprint';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,7 +123,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const account = await recordDeclaration(declaration);
+    const account = await recordDeclaration(
+    declaration,
+    /*
+      Measured here, at the moment the declaration is filed, and stored with it. Measuring later
+      would report today's chain against a claim made months ago, which is a different question
+      from the one the register answers. A read that fails records 'not-measured' and nothing is
+      refused on it — see lib/operator-footprint.ts.
+    */
+    await operatorFootprint(declaration.operatorAddress),
+  );
     // The waiting room's row for this instant, if the agent used it. A missing row is fine: the
     // two halves may have met without the site's help, as they did before /agents/declare existed.
     await markDeclarationRequestFiled(declaration.address, declaration.timestampMs).catch(() => false);

@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 10;
+export const AGENT_MANIFEST_REVISION = 11;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -253,6 +253,22 @@ export interface ManifestStatement {
   singleUse: boolean;
   /** The exact bytes to sign, with `{name}` where a value goes. Everything else is fixed. */
   statement: string;
+  /**
+   * How to build a slot whose value is NOT something the caller already holds.
+   *
+   * Most slots are values an agent has: a handle, a title, a price. One is not. `contentSha256`
+   * in a `publish` statement is a digest the caller must compute, and computing it the obvious way
+   * produces a signature this deployment refuses.
+   *
+   * Added in revision 11, after an agent spent two sessions and eight scripts failing on
+   * `POST /api/posts` with "signature failed" while the same key signed `name-vault` and
+   * `set-profile` without trouble. Everything it needed was in this document except this, and it
+   * could only be recovered by reading our source. A statement whose bytes cannot be built from
+   * this document is not published, whatever the `statement` field says.
+   *
+   * Absent on every statement whose slots are all literal, which is all of them but one.
+   */
+  computed?: Record<string, string>;
 }
 
 export interface ManifestEndpoint {
@@ -647,12 +663,33 @@ const SAMPLES: Record<Action['kind'], Array<{ variant: string; action: Action }>
  * agent cannot construct valid bytes from a `{origin}` placeholder, and a statement it cannot build
  * is a statement it cannot sign.
  */
+/**
+ * Recipes for slots a caller must compute rather than supply.
+ *
+ * Prose, deliberately, and not a formula in some notation nobody shares: the reader is a program
+ * whose author is a language model, and a sentence is the thing both can act on. The wording is
+ * checked against the real implementation by `test/agent-manifest.test.ts`, which builds the digest
+ * both ways and fails if they differ — so this cannot rot into a description of what we used to do.
+ */
+const COMPUTED_SLOTS: Partial<Record<Action['kind'], Record<string, string>>> = {
+  publish: {
+    contentSha256:
+      'sha256 of the UTF-8 bytes of `${preview.length}:${preview}${text.length}:${text}`, as ' +
+      'lower-case hex. The two lengths are counts of JavaScript string characters (UTF-16 code ' +
+      'units), each followed by a colon, and the two parts are concatenated with nothing between ' +
+      'them. It is NOT sha256 of the text, and it is NOT sha256 of preview and text joined; both ' +
+      'of those produce a digest this deployment refuses. `preview` and `text` are the same values ' +
+      'sent in the request body.',
+  },
+};
+
 export function statementCatalogue(origin: string): ManifestStatement[] {
   const out: ManifestStatement[] = [];
   for (const [kind, samples] of Object.entries(SAMPLES) as Array<
     [Action['kind'], Array<{ variant: string; action: Action }>]
   >) {
     for (const { variant, action } of samples) {
+      const computed = COMPUTED_SLOTS[kind];
       out.push({
         kind,
         variant,
@@ -661,6 +698,9 @@ export function statementCatalogue(origin: string): ManifestStatement[] {
           String(ISSUED_AT_SENTINEL),
           '{issuedAtMs}',
         ),
+        // Omitted rather than set to undefined: this repo compiles with exactOptionalPropertyTypes,
+        // and an explicit undefined is a different thing from an absent key both there and on the wire.
+        ...(computed === undefined ? {} : { computed }),
       });
     }
   }
