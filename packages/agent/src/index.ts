@@ -655,6 +655,10 @@ export function createAgent(
     async unlock(
       spend: { vaultId: string; contentKey: string; priceMinorUnits: bigint } & SpendCeiling,
     ): Promise<Reading<Executed>> {
+      // Before any read: a spend a policy can never approve is refused without touching the chain.
+      const shaped = policyShaped(payment, transactionSigner, `creator::unlock "${spend.contentKey}"`);
+      if (!shaped.ok) return shaped;
+
       const vault = await readPayableVault(client, spend.vaultId, agent.address);
       if (!vault.ok) return vault;
 
@@ -674,8 +678,6 @@ export function createAgent(
       const ready = await payable(agent, guarded.value);
       if (!ready.ok) return ready;
 
-      const shaped = policyShaped(payment, transactionSigner, `creator::unlock "${spend.contentKey}"`);
-      if (!shaped.ok) return shaped;
       const tx = buildUnlock(manifest.config, {
         coinType: manifest.coinType,
         vaultId: spend.vaultId,
@@ -698,6 +700,9 @@ export function createAgent(
     async subscribe(
       spend: { vaultId: string; tierIndex: number } & SpendCeiling,
     ): Promise<Reading<Executed>> {
+      const shaped = policyShaped(payment, transactionSigner, `creator::subscribe tier ${spend.tierIndex}`);
+      if (!shaped.ok) return shaped;
+
       const vault = await readPayableVault(client, spend.vaultId, agent.address);
       if (!vault.ok) return vault;
 
@@ -723,8 +728,6 @@ export function createAgent(
       const ready = await payable(agent, guarded.value);
       if (!ready.ok) return ready;
 
-      const shaped = policyShaped(payment, transactionSigner, `creator::subscribe tier ${spend.tierIndex}`);
-      if (!shaped.ok) return shaped;
       const tx = buildSubscribe(manifest.config, {
         coinType: manifest.coinType,
         vaultId: spend.vaultId,
@@ -745,6 +748,9 @@ export function createAgent(
     },
 
     async tip(spend: { vaultId: string; amount: bigint } & SpendCeiling): Promise<Reading<Executed>> {
+      const shaped = policyShaped(payment, transactionSigner, `creator::tip ${spend.amount}`);
+      if (!shaped.ok) return shaped;
+
       const vault = await readPayableVault(client, spend.vaultId, agent.address);
       if (!vault.ok) return vault;
 
@@ -779,8 +785,6 @@ export function createAgent(
       const ready = await payable(agent, guarded.value);
       if (!ready.ok) return ready;
 
-      const shaped = policyShaped(payment, transactionSigner, `creator::tip ${guarded.value}`);
-      if (!shaped.ok) return shaped;
       const tx = buildTip(manifest.config, {
         coinType: manifest.coinType,
         vaultId: spend.vaultId,
