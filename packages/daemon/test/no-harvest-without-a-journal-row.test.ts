@@ -29,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const begin = vi.fn();
 const abandon = vi.fn();
 const finish = vi.fn();
+const anchorAudit = vi.fn();
 const discoverVaults = vi.fn();
 const tick = vi.fn();
 
@@ -44,6 +45,7 @@ vi.mock('../src/adapters/journal.js', () => ({
       begin: (...a: unknown[]) => begin(...a),
       finish: (...a: unknown[]) => finish(...a),
       abandon: (...a: unknown[]) => abandon(...a),
+      anchorAudit: (...a: unknown[]) => anchorAudit(...a),
       // Reported at startup, before the loop. Empty because stuck runs are not what this file is
       // about, and a non-empty list would put noise in front of the assertions that are.
       stuckRuns: async () => ({ ok: true, value: [] }),
@@ -65,7 +67,7 @@ vi.mock('@mysten/sui/grpc', () => ({
 const SIGNER = `0x${'ab'.repeat(32)}`;
 
 vi.mock('../src/adapters/signer.js', () => ({
-  createSigner: () => ({ ok: true, value: { address: SIGNER } }),
+  createSigner: () => ({ ok: true, value: { address: SIGNER, auditHead: () => ({ headHash: '0'.repeat(64), entries: 0, intact: true }) } }),
 }));
 
 vi.mock('../src/config.js', async (importOriginal) => {
@@ -101,6 +103,7 @@ beforeEach(() => {
   // subject rather than on an unstubbed fold. Each case overrides what it is actually asserting.
   finish.mockResolvedValue({ ok: true, value: undefined });
   abandon.mockResolvedValue({ ok: true, value: true });
+  anchorAudit.mockResolvedValue({ ok: true, value: true });
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -142,6 +145,14 @@ describe('when the journal opens a run', () => {
     await main(['--once'], {} as NodeJS.ProcessEnv);
 
     expect(discoverVaults).toHaveBeenCalledTimes(1);
+    // The run's audit head is anchored after the run is recorded, and only then: a chain with
+    // no decisions ends at genesis, and that is what an idle tick writes.
+    expect(anchorAudit).toHaveBeenCalledTimes(1);
+    expect(anchorAudit).toHaveBeenCalledWith(
+      { id: 'run-1' },
+      expect.objectContaining({ signer: SIGNER, headHash: '0'.repeat(64), entries: 0, intact: true }),
+    );
+    expect(anchorAudit.mock.invocationCallOrder[0]!).toBeGreaterThan(finish.mock.invocationCallOrder[0]!);
   });
 });
 

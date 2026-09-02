@@ -62,10 +62,13 @@ describe('reading a simulation status', () => {
     expect(handRolled.map((p) => p.replace(process.cwd(), ''))).toEqual([]);
   });
 
-  it('goes through the SDK, which is the decoder that knows about FailedTransaction', () => {
+  it('goes through the policy signer, whose gate is the SDK decoder that knows about FailedTransaction', () => {
     // The positive half. Without it this file would pass on a daemon that had simply stopped
-    // checking simulation status altogether, which is worse than the defect it replaced.
+    // checking simulation status altogether, which is worse than the defect it replaced. The
+    // harvest adapter no longer simulates by hand at all: `policySigner` simulates, judges and
+    // records before anything is signed, and its gate is the SDK's `simulate`.
     const signer = code(join(SRC, 'adapters', 'signer.ts'));
-    expect(signer).toMatch(/\bsimulationStatus\s*\(/);
+    expect(signer).toMatch(/\bpolicySigner\s*\(/);
+    expect(signer).not.toMatch(/simulateTransaction\s*\(/);
   });
 });

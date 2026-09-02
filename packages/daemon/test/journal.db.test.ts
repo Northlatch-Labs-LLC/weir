@@ -71,7 +71,7 @@ async function take(): Promise<Journal> {
 
 beforeEach(async () => {
   pool = new Pool({ connectionString: url, max: 2 });
-  await pool.query('TRUNCATE daemon_harvests, daemon_runs RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE daemon_audit_anchors, daemon_harvests, daemon_runs RESTART IDENTITY CASCADE');
 });
 
 afterEach(async () => {
@@ -352,5 +352,68 @@ describe('reading the journal', () => {
     const runs = await journal.recentRuns(10);
     expect(runs.ok).toBe(true);
     expect(runs.ok && runs.value).toEqual([]);
+  });
+});
+
+describe('anchoring the audit chain', () => {
+  /*
+    The chain is tamper-evident on its own only against partial edits; this row is the memory
+    outside the process that makes a rewritten chain detectable. See db/002_audit_anchor.sql.
+  */
+  const HEAD = 'a'.repeat(64);
+  const GENESIS = '0'.repeat(64);
+
+  it('writes one row per run, readable back through recentRuns', async () => {
+    const journal = await take();
+    const run = await journal.begin({ mode: 'live', signer: SIGNER });
+    if (!run.ok) throw new Error(run.failure.detail);
+    await journal.finish(run.value, tickResult({ harvested: [harvested(VAULT, 'digest-1')] }));
+    const anchored = await journal.anchorAudit(run.value, { signer: SIGNER, headHash: HEAD, entries: 1, intact: true });
+    expect(anchored.ok, JSON.stringify(anchored)).toBe(true);
+
+    const recent = await journal.recentRuns(5);
+    if (!recent.ok) throw new Error(recent.failure.detail);
+    expect(recent.value[0]!.auditHead).toEqual({ headHash: HEAD, entries: 1, intact: true });
+  });
+
+  it('a run without an anchor reads as null, never as an empty chain', async () => {
+    const journal = await take();
+    const run = await journal.begin({ mode: 'live', signer: SIGNER });
+    if (!run.ok) throw new Error(run.failure.detail);
+    await journal.finish(run.value, tickResult());
+    const recent = await journal.recentRuns(5);
+    if (!recent.ok) throw new Error(recent.failure.detail);
+    expect(recent.value[0]!.auditHead).toBeNull();
+  });
+
+  it('refuses a second anchor for the same run rather than overwriting the first', async () => {
+    const journal = await take();
+    const run = await journal.begin({ mode: 'live', signer: SIGNER });
+    if (!run.ok) throw new Error(run.failure.detail);
+    await journal.finish(run.value, tickResult());
+    expect((await journal.anchorAudit(run.value, { signer: SIGNER, headHash: GENESIS, entries: 0, intact: true })).ok).toBe(true);
+    const again = await journal.anchorAudit(run.value, { signer: SIGNER, headHash: HEAD, entries: 1, intact: true });
+    expect(again.ok).toBe(false);
+    const recent = await journal.recentRuns(5);
+    if (!recent.ok) throw new Error(recent.failure.detail);
+    expect(recent.value[0]!.auditHead?.headHash).toBe(GENESIS);
+  });
+
+  it('refuses a head that is not a head: wrong shape, or a non-empty chain ending at genesis', async () => {
+    const journal = await take();
+    const run = await journal.begin({ mode: 'live', signer: SIGNER });
+    if (!run.ok) throw new Error(run.failure.detail);
+    await journal.finish(run.value, tickResult());
+    expect((await journal.anchorAudit(run.value, { signer: SIGNER, headHash: 'not-a-hash', entries: 1, intact: true })).ok).toBe(false);
+    expect((await journal.anchorAudit(run.value, { signer: SIGNER, headHash: GENESIS, entries: 3, intact: true })).ok).toBe(false);
+    expect((await journal.anchorAudit(run.value, { signer: SIGNER, headHash: HEAD, entries: 0, intact: true })).ok).toBe(false);
+  });
+
+  it('an abandoned run can be anchored too — the refusals it recorded are still evidence', async () => {
+    const journal = await take();
+    const run = await journal.begin({ mode: 'live', signer: SIGNER });
+    if (!run.ok) throw new Error(run.failure.detail);
+    await journal.abandon(run.value, { kind: 'transport', detail: 'the node went away' });
+    expect((await journal.anchorAudit(run.value, { signer: SIGNER, headHash: HEAD, entries: 2, intact: true })).ok).toBe(true);
   });
 });

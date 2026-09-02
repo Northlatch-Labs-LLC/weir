@@ -38,7 +38,7 @@ import {
 } from './supervisor.js';
 import { discoverVaults } from './adapters/discovery.js';
 import { readCurrentEpoch, readStakeVault } from './adapters/vault.js';
-import { createSigner, type HarvestSigner } from './adapters/signer.js';
+import { createSigner, EMPTY_AUDIT_HEAD, type HarvestSigner } from './adapters/signer.js';
 import { tick, type EnginePorts, type TickResult } from './engine.js';
 import { classify, fail, ok, type Reading } from '@projectx-social/sdk';
 
@@ -79,6 +79,7 @@ export function dryRunSigner(): HarvestSigner {
     async simulateAndHarvest(vaultId: string) {
       return fail('unconfigured', `harvest ${vaultId}`, 'dry run: would harvest, did not sign');
     },
+    auditHead: () => EMPTY_AUDIT_HEAD,
   };
 }
 
@@ -91,6 +92,25 @@ export function buildPorts(client: SuiGrpcClient, signer: HarvestSigner): Engine
 }
 
 /** Discover, then tick once. Exposed so a test or a cron wrapper can drive a single pass. */
+/**
+ * Anchor the audit chain head for a run that has just been finished or abandoned.
+ *
+ * After the journal write, never before: the anchor names the chain as it stood when the run's
+ * outcome was recorded, and a failed anchor is reported the same way a failed finish is — loudly,
+ * without undoing work that already happened on chain.
+ */
+async function anchor(journal: Journal, run: RunHandle, signer: HarvestSigner): Promise<void> {
+  const head = signer.auditHead();
+  fold(
+    await journal.anchorAudit(run, { signer: signer.address, ...head }),
+    () => null,
+    (failure) => {
+      console.error(JSON.stringify({ journalAnchor: failure.detail, headHash: head.headHash, entries: head.entries }));
+      return null;
+    },
+  );
+}
+
 export async function runOnce(
   client: SuiGrpcClient,
   config: DaemonConfig,
@@ -355,6 +375,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
               return null;
             },
           );
+          await anchor(journal, run, signer);
         }
       } else {
         backoff.fail();
@@ -393,6 +414,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
               return null;
             },
           );
+          await anchor(journal, run, signer);
         }
         exitCode = EXIT.runFailed;
       }

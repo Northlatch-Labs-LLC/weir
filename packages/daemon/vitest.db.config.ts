@@ -11,6 +11,7 @@ import { defineConfig } from 'vitest/config';
 
     createdb projectx_daemon_test
     psql -d projectx_daemon_test -f db/001_journal.sql
+    psql -d projectx_daemon_test -f db/002_audit_anchor.sql
     PROJECTX_DAEMON_TEST_DATABASE_URL=… pnpm test:db
 */
 export default defineConfig({

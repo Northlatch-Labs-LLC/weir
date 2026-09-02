@@ -45,9 +45,15 @@ importers:
       '@mysten/sui':
         specifier: 2.27.1
         version: 2.27.1(typescript@7.0.2)
+      '@projectx-social/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@projectx-social/sdk':
         specifier: workspace:*
         version: link:../sdk
+      '@projectx-social/signer':
+        specifier: workspace:*
+        version: link:../signer
       pg:
         specifier: 8.23.0
         version: 8.23.0
