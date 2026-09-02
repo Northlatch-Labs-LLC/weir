@@ -18,6 +18,8 @@ import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { readPlatform, PLATFORM_BCS_FIELDS } from '../src/client.js';
 
+const show = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x));
+
 const hex = (c: string) => `0x${c.repeat(64)}`;
 const config = {
   network: 'mainnet' as const,
@@ -59,13 +61,13 @@ describe('readPlatform through the one decoder', () => {
   it('a base64 platform is read — the shape the old client.ts reader refused', async () => {
     const b64 = Buffer.from(platformBytes()).toString('base64');
     const r = await readPlatform(clientAnswering(b64), config);
-    expect(r.ok, JSON.stringify(r)).toBe(true);
+    expect(r.ok, show(r)).toBe(true);
     if (r.ok) expect(r.value.feeBps).toBe(290n);
   });
 
   it('an array platform is read too', async () => {
     const r = await readPlatform(clientAnswering(Array.from(platformBytes())), config);
-    expect(r.ok, JSON.stringify(r)).toBe(true);
+    expect(r.ok, show(r)).toBe(true);
   });
 
   it('bytes that are not base64 are malformed, not a platform', async () => {
