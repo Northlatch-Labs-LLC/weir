@@ -95,6 +95,7 @@ function inputs(overrides: Partial<ManifestInputs> = {}): ManifestInputs {
     observedAtMs: 1_756_600_000_000,
     config: ok(CONFIG),
     keyRegistryId: ok(`0x${'f6'.repeat(32)}`),
+    mind: ok({ maxBytes: 1_048_576, quota: { capacity: 1, msPerToken: 21_600_000 } }),
     seal: ok(SEAL),
     coinTypes: [`0x${'a7'.repeat(32)}::usdc::USDC`],
     platform: ok(PLATFORM),
@@ -284,7 +285,9 @@ describe('the endpoints it publishes', () => {
     */
     for (const endpoint of endpoints) {
       const source = read(fileFor(endpoint.path));
-      const signs = source.includes('verifyAction');
+      // `proveActionWithoutSpending` (lib/identity.ts) proves a signature exactly as `verifyAction`
+      // does and only declines to spend it — the waiting room's route. Either is a signature demand.
+      const signs = source.includes('verifyAction') || source.includes('proveActionWithoutSpending');
       const proves = source.includes('provenReaderFor');
 
       if (endpoint.proof === 'signature') expect([endpoint.path, signs]).toEqual([endpoint.path, true]);
@@ -394,6 +397,8 @@ describe('the document as a whole', () => {
       'mcp',
       'custody',
       'custodyUnavailable',
+      'mind',
+      'mindUnavailable',
     ];
     expect(Object.keys(manifest).sort()).toEqual([...required].sort());
 

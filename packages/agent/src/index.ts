@@ -80,6 +80,20 @@ import {
   type TransactionSigner,
 } from './tx.js';
 import { loadAgentManifest, type AgentManifest } from './manifest.js';
+import {
+  buildPublishKey,
+  deriveMindKey,
+  fetchBlob,
+  LABEL,
+  openMind,
+  PUBLIC_WALRUS_AGGREGATORS,
+  registryStateFor,
+  sealMind,
+  type MindKeyPair,
+  type MindSigner,
+  type Recalled,
+  type Remembered,
+} from './mind.js';
 
 export {
   agentKeyFromEnv,
@@ -164,6 +178,22 @@ export {
   the alignment instead of a comment asking a human to.
 */
 export type { SealApproval, SealedRef } from './seal-node.js';
+export {
+  deriveMindKey,
+  registryStateFor,
+  buildPublishKey,
+  sealMind,
+  openMind,
+  fetchBlob,
+  sha256Hex,
+  LABEL as MIND_LABEL,
+  AGGREGATOR_TIMEOUT_MS,
+  type MindSigner,
+  type MindKeyPair,
+  type Remembered,
+  type Recalled,
+  type RegistryState,
+} from './mind.js';
 import type { SealedRef } from './seal-node.js';
 
 /**
@@ -463,6 +493,41 @@ export interface Agent extends ReadOnlyAgent {
    */
   requestDeclaration: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<Reading<DeclarationRequested>>;
 
+  /**
+   * The public half of this agent's mind key, derived from a signature over `KEY_STATEMENT`.
+   * The secret is never returned. See `mind.ts` for what the key is and what it is not.
+   */
+  mindKey: () => Promise<Reading<{ x25519Public: string }>>;
+
+  /**
+   * Put the derived key in the on-chain `key_registry`, or confirm it is already there.
+   *
+   * One transaction, gas only, the agent's own, simulated first. Needs
+   * `PROJECTX_SOCIAL_KEY_REGISTRY_ID`. A registry already holding this exact key is left alone
+   * (`alreadyPublished: true`, no transaction); one holding a DIFFERENT key is replaced, which is a
+   * rotation — every blob remembered under the old key then needs the old secret to open.
+   */
+  publishMindKey: () => Promise<Reading<{ x25519Public: string; alreadyPublished: boolean; digest: string | null }>>;
+
+  /**
+   * Store the whole state under a label. Encrypted here to the agent's registered key (one
+   * envelope, its own), signed as a `remember` statement over the ciphertext's hash and length,
+   * posted to `POST /api/agents/mind`, which fronts the WAL and returns the blob and its lease.
+   * Refused when the registry does not hold the derived key: publish first.
+   *
+   * Whole state, not a delta — the platform pays per blob and the route's per-address quota is
+   * sized for one blob per working session. The size ceiling is the deployment's, returned in the
+   * refusal when it is hit.
+   */
+  remember: (input: { label: string; plaintext: Uint8Array }) => Promise<Reading<Remembered>>;
+
+  /**
+   * The newest blob under a label: `GET /api/agents/mind`, the bytes from a public aggregator,
+   * the hash checked, the envelope opened with the derived secret. A hash mismatch or a key that
+   * cannot open it is a `malformed` reading, never a partial plaintext.
+   */
+  recall: (input: { label: string }) => Promise<Reading<Recalled>>;
+
   /** Publish a post under a handle this agent's address owns the vault for. */
   post: (input: {
     handle: string;
@@ -557,6 +622,14 @@ export interface CreateAgentInput {
   fetchImpl?: FetchLike;
   /** Injected for tests, and for a caller who already holds a client for this deployment. */
   client?: SuiGrpcClient;
+  /**
+   * How the mind key's derivation signature is produced. Default: the keypair above, in process.
+   * An agent whose key lives in the Sui keystore passes a function that runs `sui keytool sign`
+   * and returns the printed signature — this package never reads a keystore. See `mind.ts`.
+   */
+  mindSigner?: MindSigner;
+  /** Walrus aggregators `recall` reads from, in order. Default: the public mainnet list. */
+  aggregators?: readonly string[];
 }
 
 /**
@@ -660,6 +733,21 @@ export function createAgent(
     cheapest way to make it impossible.
   */
   let live: SessionCredential | null = null;
+
+  /*
+    The mind key, derived once per agent and held in this closure — not on the object, where a
+    caller could read the secret, and not module-wide, where two agents would share it.
+  */
+  const mindSigner: MindSigner =
+    input.mindSigner ?? (async (message) => (await key.keypair.signPersonalMessage(message)).signature);
+  const aggregators: readonly string[] = input.aggregators ?? PUBLIC_WALRUS_AGGREGATORS;
+  let derived: MindKeyPair | null = null;
+  async function mindPair(): Promise<Reading<MindKeyPair>> {
+    if (derived !== null) return ok(derived);
+    const pair = await deriveMindKey(mindSigner);
+    if (pair.ok) derived = pair.value;
+    return pair;
+  }
 
   const agent: Agent = {
     // The read set is built once, by the same function the keyless path uses, so the two surfaces
@@ -895,6 +983,114 @@ export function createAgent(
         return fail('malformed', what, 'the waiting room answered without expiresAtMs and operatorPage.');
       }
       return ok({ issuedAtMs: signed.timestampMs, expiresAtMs, operatorPage: `${manifest.baseUrl}${operatorPage}` });
+    },
+
+    async mindKey(): Promise<Reading<{ x25519Public: string }>> {
+      const pair = await mindPair();
+      if (!pair.ok) return pair;
+      return ok({ x25519Public: pair.value.x25519Public });
+    },
+
+    async publishMindKey(): Promise<Reading<{ x25519Public: string; alreadyPublished: boolean; digest: string | null }>> {
+      const what = 'publishMindKey';
+      if (manifest.keyRegistryId === null) return fail('unconfigured', what, 'PROJECTX_SOCIAL_KEY_REGISTRY_ID is not set, so there is no registry to publish to.');
+      const pair = await mindPair();
+      if (!pair.ok) return pair;
+      const state = await registryStateFor({ client, keyRegistryId: manifest.keyRegistryId, address, x25519Public: pair.value.x25519Public });
+      if (!state.ok) return state;
+      if (state.value.kind === 'same') return ok({ x25519Public: pair.value.x25519Public, alreadyPublished: true, digest: null });
+      const tx = buildPublishKey(manifest.config, { keyRegistryId: manifest.keyRegistryId, x25519Public: pair.value.x25519Public });
+      const done = await simulateAndExecute({ client, transaction: tx, key, transactionSigner, gasBudgetMist: manifest.gasBudgetMist, what });
+      if (!done.ok) return done;
+      return ok({ x25519Public: pair.value.x25519Public, alreadyPublished: false, digest: done.value.digest });
+    },
+
+    async remember(input: { label: string; plaintext: Uint8Array }): Promise<Reading<Remembered>> {
+      const what = 'remember';
+      const label = input.label.trim();
+      if (!LABEL.test(label)) return fail('malformed', what, `a label is 1–64 characters of letters, digits, dot, dash or underscore; received ${JSON.stringify(input.label)}`);
+      if (!(input.plaintext instanceof Uint8Array) || input.plaintext.length === 0) return fail('malformed', what, 'plaintext must be a non-empty Uint8Array — the whole state, not a delta.');
+      if (manifest.keyRegistryId === null) return fail('unconfigured', what, 'PROJECTX_SOCIAL_KEY_REGISTRY_ID is not set; a mind is encrypted to the key the registry names, so there is nothing to encrypt to.');
+      const pair = await mindPair();
+      if (!pair.ok) return pair;
+      /*
+        The registry is read before anything is encrypted. A blob encrypted to a key the registry
+        does not name is one the agent's next device cannot open — and cannot prove is its own.
+      */
+      const state = await registryStateFor({ client, keyRegistryId: manifest.keyRegistryId, address, x25519Public: pair.value.x25519Public });
+      if (!state.ok) return state;
+      if (state.value.kind === 'absent') return fail('unconfigured', what, 'this address has published no encryption key; call publishMindKey() first.');
+      if (state.value.kind === 'different') {
+        return fail('malformed', what, `the registry holds a different key (version ${state.value.version}) than this signer derives; publishMindKey() to rotate, knowing older blobs then need the older secret.`);
+      }
+      const sealed = sealMind({ address, x25519Public: pair.value.x25519Public, plaintext: input.plaintext });
+      const signed = await signAction(key.keypair, { kind: 'remember', label, sha256: sealed.sha256, bytes: String(sealed.bytes) }, manifest.baseUrl);
+      const response = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: '/api/agents/mind',
+        method: 'POST',
+        what,
+        body: {
+          address: signed.address,
+          label,
+          timestampMs: signed.timestampMs,
+          signature: signed.signature,
+          payload: sealed.payload,
+        },
+      });
+      if (!response.ok) return response;
+      const row = rememberedFrom(response.value['mind'], what);
+      if (!row.ok) return row;
+      if (row.value.sha256 !== sealed.sha256 || row.value.bytes !== sealed.bytes) {
+        return fail('malformed', what, `the server recorded sha256 ${row.value.sha256} (${row.value.bytes} bytes); this agent sent ${sealed.sha256} (${sealed.bytes} bytes).`);
+      }
+      return row;
+    },
+
+    async recall(input: { label: string }): Promise<Reading<Recalled>> {
+      const what = 'recall';
+      const label = input.label.trim();
+      if (!LABEL.test(label)) return fail('malformed', what, `a label is 1–64 characters of letters, digits, dot, dash or underscore; received ${JSON.stringify(input.label)}`);
+      const pair = await mindPair();
+      if (!pair.ok) return pair;
+      const query = new URLSearchParams({ address, label });
+      const response = await httpRead({ doFetch, baseUrl: manifest.baseUrl, path: `/api/agents/mind?${query.toString()}`, method: 'GET', what });
+      if (!response.ok) return response;
+      const row = rememberedFrom(response.value['mind'], what);
+      if (!row.ok) return row;
+      const raw = response.value['mind'] as Record<string, unknown>;
+      const nonce = raw['nonce'];
+      const envelope = raw['envelope'] as Record<string, unknown> | undefined;
+      if (
+        typeof nonce !== 'string' ||
+        envelope === undefined ||
+        typeof envelope['recipient'] !== 'string' ||
+        typeof envelope['ephemeralPublic'] !== 'string' ||
+        typeof envelope['nonce'] !== 'string' ||
+        typeof envelope['wrappedKey'] !== 'string'
+      ) {
+        return fail('malformed', what, 'the record carries no envelope to open.');
+      }
+      const fetcher = doFetch ?? (globalThis.fetch as FetchLike | undefined);
+      if (fetcher === undefined) return fail('unconfigured', what, 'no fetch implementation is available in this runtime.');
+      const blob = await fetchBlob({ blobId: row.value.blobId, aggregators, doFetch: fetcher });
+      if (!blob.ok) return blob;
+      const opened = openMind({
+        address,
+        secret: pair.value.secret,
+        ciphertext: blob.value,
+        expectedSha256: row.value.sha256,
+        nonce,
+        envelope: {
+          recipient: envelope['recipient'],
+          ephemeralPublic: envelope['ephemeralPublic'],
+          nonce: envelope['nonce'],
+          wrappedKey: envelope['wrappedKey'],
+        },
+      });
+      if (!opened.ok) return opened;
+      return ok({ ...row.value, plaintext: opened.value });
     },
     async read(input: { postId: string }): Promise<Reading<ReadPost>> {
       const id = input.postId.trim();
@@ -1478,6 +1674,29 @@ async function httpRead(input: {
     return fail(response.status === 404 ? 'not-found' : 'malformed', what, detail);
   }
   return ok(parsed ?? {});
+}
+
+/** The row `/api/agents/mind` answers with, or why it is not one. */
+function rememberedFrom(value: unknown, what: string): Reading<Remembered> {
+  if (typeof value !== 'object' || value === null) return fail('malformed', what, 'the server answered without a mind record.');
+  const r = value as Record<string, unknown>;
+  const label = r['label'];
+  const blobId = r['blobId'];
+  const endEpoch = r['endEpoch'];
+  const sha256 = r['sha256'];
+  const bytes = r['bytes'];
+  const createdAtMs = r['createdAtMs'];
+  if (
+    typeof label !== 'string' ||
+    typeof blobId !== 'string' ||
+    typeof endEpoch !== 'number' ||
+    typeof sha256 !== 'string' ||
+    typeof bytes !== 'number' ||
+    typeof createdAtMs !== 'number'
+  ) {
+    return fail('malformed', what, 'the mind record is missing label, blobId, endEpoch, sha256, bytes or createdAtMs.');
+  }
+  return ok({ label, blobId, endEpoch, sha256, bytes, createdAtMs });
 }
 
 /** A manifest, or an environment to load one from. Distinguished structurally, not by a flag. */

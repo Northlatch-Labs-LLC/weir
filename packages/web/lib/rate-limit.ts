@@ -588,11 +588,14 @@ async function sweep(nowMs: number): Promise<void> {
     // Bounded, so one unlucky request does not pay for every idle row ever written. Same shape as
     // the `used_signatures` sweep in `lib/identity.ts`.
     await db().query(
+      // Constant buckets only: a configured bucket's refill may be longer than the cutoff, and a
+      // swept row is a refilled one. See `CONFIGURED_BUCKETS`.
       `DELETE FROM agent_quotas
         WHERE (address, bucket) IN (
-          SELECT address, bucket FROM agent_quotas WHERE refilled_at_ms < $1 LIMIT 500
+          SELECT address, bucket FROM agent_quotas
+           WHERE refilled_at_ms < $1 AND bucket = ANY($2::text[]) LIMIT 500
         )`,
-      [nowMs - SWEEP_AFTER_MS],
+      [nowMs - SWEEP_AFTER_MS, Object.keys(QUOTAS)],
     );
   } catch {
     // A failed sweep is storage, not correctness. It must never turn a permitted request into a
@@ -623,7 +626,7 @@ export async function spendQuota(
   } catch {
     return { allowed: false, kind: 'unavailable', reason: 'that is not an address' };
   }
-  return spendBucketKey(key, name, options);
+  return spendBucketKey(key, name, QUOTAS[name], options);
 }
 
 /**
@@ -705,15 +708,52 @@ export async function spendShared(
   name: QuotaName,
   options: { cost?: number; now?: number } = {},
 ): Promise<QuotaOutcome> {
-  return spendBucketKey(`ip:${clientKeyValue}`, name, options);
+  return spendBucketKey(`ip:${clientKeyValue}`, name, QUOTAS[name], options);
 }
+
+/**
+ * A bucket whose numbers come from configuration rather than from {@link QUOTAS}.
+ *
+ * The mind route (`/api/agents/mind`) is the first: the platform pays WAL per blob, so its
+ * capacity and refill are the deployment's decision (`lib/mind.ts`), and a bucket with a default
+ * would be a spend nobody chose. The row shares the table, the statement and the lock behaviour
+ * with every other bucket; only the numbers come from elsewhere.
+ *
+ * Deliberately NOT covered by the deployment-wide breaker (`tripBreaker` is keyed on
+ * {@link QuotaName}, and the breaker tables are `as const` over it). The route still spends
+ * `write` through `rateLimit`, so the write breaker bounds it as it bounds every signed write;
+ * what this bucket adds is the per-address ceiling on paid storage.
+ */
+export async function spendConfiguredQuota(
+  address: string,
+  bucket: ConfiguredBucket,
+  quota: Quota,
+  options: { cost?: number; now?: number } = {},
+): Promise<QuotaOutcome> {
+  let key: string;
+  try {
+    key = normaliseAddress(address);
+  } catch {
+    return { allowed: false, kind: 'unavailable', reason: 'that is not an address' };
+  }
+  return spendBucketKey(key, bucket, quota, options);
+}
+
+/**
+ * Buckets whose numbers are configured, not constant. Listed so the sweep can leave them alone:
+ * `SWEEP_AFTER_MS` is computed from {@link QUOTAS} and would delete — and therefore refill — a
+ * configured bucket with a longer refill than any constant one, forgiving exactly the limit it
+ * was set to hold. A configured bucket's rows are one per address per bucket and are never swept.
+ */
+export const CONFIGURED_BUCKETS = ['mind'] as const;
+export type ConfiguredBucket = (typeof CONFIGURED_BUCKETS)[number];
 
 async function spendBucketKey(
   key: string,
-  name: QuotaName,
+  name: QuotaName | ConfiguredBucket,
+  quota: Quota,
   options: { cost?: number; now?: number } = {},
 ): Promise<QuotaOutcome> {
-  const quota = QUOTAS[name];
   const cost = options.cost ?? 1;
   const nowMs = options.now ?? Date.now();
 
@@ -829,6 +869,22 @@ export async function quotaLimit(
   if (breaker.tripped) return breakerResponse(name, breaker);
 
   const outcome = await spendQuota(address, name, options);
+  return quotaRefusal(name, quota, outcome);
+}
+
+/** {@link quotaLimit} for a {@link ConfiguredBucket}: no breaker (see `spendConfiguredQuota`), same refusal. */
+export async function quotaLimitConfigured(
+  address: string,
+  bucket: ConfiguredBucket,
+  quota: Quota,
+  options: { cost?: number; now?: number } = {},
+): Promise<Response | null> {
+  const outcome = await spendConfiguredQuota(address, bucket, quota, options);
+  return quotaRefusal(bucket, quota, outcome);
+}
+
+/** The one shape a refused caller sees, whichever bucket refused them. */
+function quotaRefusal(name: string, quota: Quota, outcome: QuotaOutcome): Response | null {
   if (outcome.allowed) return null;
 
   if (outcome.kind === 'unavailable') {

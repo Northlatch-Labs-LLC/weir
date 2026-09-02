@@ -13,6 +13,130 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-02 · B16 MIND v0 BUILT on branch feat/mind-v0 (one push, PR to follow): SDK e2e.ts hoisted from web (byte API added, tests moved), 'remember' statement in the catalogue; agent mind.ts — mindKey/publishMindKey/remember/recall, MindSigner seam for keystore keys, registry gate (publish first; a rotated key is named with its version), hash checked before decrypt; web db/036_agent_minds (RLS+REVOKE named), lib/mind.ts (three env numbers, no defaults, 501 until set), POST/GET /api/agents/mind (declared agents only, configured 'mind' quota bucket that the sweep never touches, replay refused before a token is spent, signature spent with the row), manifest revision 8 with a mind block. Tests on this laptop: sdk 286, agent 256 (13 new), web unit 1866, web db 146 (9 new); 8 predicted mutants red. Staged on the dev server: manifest v8, 400/404/403/401 seen, no WAL spent. NOT run: publishMindKey (gas) and a real remember (~0.347 WAL) — both wait for the Master's word. Local test DB was two migrations behind (034, 035): applied by hand with ledger rows; migrate.mjs refuses this laptop's DBs over a pre-existing 011 checksum mismatch.
+
+---
+
+## 2026-09-02 · FILED IN PRODUCTION: kaela_ai declared in the register at 2026-09-02T09:09:06.971Z (issued 1788340146971) — operator ProjectX-Dev 0xda78…1715d signed at weir.social/agents/declare with his real wallet; /api/agents/0x8b1e…9d92 answers, /agents/kaela_ai 200, waiting room empty. Window stays ten minutes: the one-day window was parked unmerged on branch fix/a-declaration-waits-a-day (the ten minutes is intended).
+
+---
+
+## 2026-09-02 · LIVE: main 1193598 on weir.social (deployment dpl_8HprQdpo… created from the git source, Vercel missed the merge a fourth time). Manifest revision 7. /agents/declare answers 200. kaela_ai's half posted to the production waiting room for ProjectX-Dev at 08:53Z; the Master presses the button when he chooses (10-minute window per post; re-post on his word).
+
+---
+
+## 2026-09-02 · #140 merged on his word ('push it, publish it, deliver'): main 1193598. Deploying to Vercel; then kaela_ai's half is posted to the production waiting room and the Master presses the button at weir.social/agents/declare when he chooses. Dev server stopped. Note for the desk: the declaration is OFF-CHAIN by design (two verifiable signatures in the register, no transaction); an on-chain anchor is a possible later module, my call, not built.
+
+---
+
+## 2026-09-02 · STAGED AND SEEN by the Master on the dev server (branch feat/operator-signs-in-the-browser, PR #140, local Postgres): kaela_ai's half posted to the local waiting room; the Master connected ProjectX-Dev in his own browser at localhost:3111/agents/declare and pressed the one button; POST /api/agents/declare answered 201 at 08:39:18Z; /agents/kaela_ai rendered both statements and both signatures, operator 0xda78…1715d, issued 1788338207827. First declaration ever filed through the page. Merge waits for his word.
+
+---
+
+## 2026-09-02 · OPERATOR SCREEN built (PR feat/operator-signs-in-the-browser): agent half -> POST /api/agents/declare/pending (verified, not spent, 10-min window, one live request per agent, db/035 applied to Supabase as web_035_declaration_requests); operator opens /agents/declare with the named wallet, one button signs the operator statement over the agent's instant and files both halves via the unchanged declare route. lib/identity.proveActionWithoutSpending named for what it does not do (spend-pairing rule intact). Agent library requestDeclaration; manifest revision 7; demo script 13-request-declaration.ts. Tests on the dev machine: db 5 new, render 4 new, agent 3 new; web unit 1852 / db 123; agent 243; mcp 22/22.
+
+---
+
+## 2026-09-02 · B15 merged (#139, main e64e37b): /agents/{handle} record page; lib/agent-record.ts folds every reading into a Fact; explore cards + creator identity line link to it; manifest revision 6. PROVEN END TO END on the dev machine: dev server on :3111 against the local Postgres (migrations brought to 034), two throwaway keys declared through the real POST /api/agents/declare (201), /agents/demo_agent rendered both statements, both signatures, the recovery line, 'no vault yet' for every vault figure, measured 0 purchases. Script: operations/demo/local-declare.ts. Vercel missed the merge a third time; deployment dpl_CGUTTiTZ… created from the git source.
+
+---
+
+## 2026-09-02 · Hosted MCP rolled to main 19636c6: Cloud Build 78ad3089 (1m07s, new recipe builds the five libraries, entry node packages/mcp/dist/index.js), Cloud Run weir-mcp revision 00005-q9b at 100%, door /mcp 200, no error logs in 10 min. Mutation checks on B14 (each restored): harvest policy with allowedObjects emptied -> 2 tests red; allowedTargets widened -> 2 red; recovery with the threshold comparison dropped -> 1 red; membership replaced by the first key -> 1 red. Vercel missed the merge again; deployment dpl_58htaYCU… of 19636c6 created from the git source.
+
+---
+
+## 2026-09-02 · #137 and #138 merged: main 19636c6. daemon_audit_anchors applied to Supabase pykerpxszoaocxtfyrzm (migration daemon_002_audit_anchor, RLS on) — note daemon_runs holds 0 rows there, so the live daemon's journal may point elsewhere (secret projectx-social-journal-url); confirm before the daemon roll. MCP image 19636c6 building; Vercel deployment of 19636c6 requested.
+
+---
+
+## 2026-09-02 · B14 built, PR open on top of #137 (packaging). Register: recovery decoded from the stored agent signature (lib/agent-recovery.ts), manifest revision 5. Daemon: harvest signs through policySigner with a per-vault policy, one AuditLog per run, head anchored in daemon_audit_anchors (db/002_audit_anchor.sql; apply to the production journal DB — secret projectx-social-journal-url — before rolling the daemon). #137 also switched policy/signer/agent/mcp to dist exports with prepare builds, root build:libs, both Dockerfiles build what they run (MCP image entry is node dist/index.js), LICENSE+NOTICE Apache-2.0 in the six libraries per counsel, web UNLICENSED+private, room private. Tests on the dev machine: web register 130, daemon unit 97 + db 23, mcp 22/22, signer 106, agent 240, policy 62.
+
+---
+
+## 2026-09-02 · NPM, state: all five packages pack cleanly (sdk 96K, policy 40K, signer 56K, agent 104K, mcp 96K; dist+README+LICENSE only; secret-pattern hits are the documented suiprivkey1 placeholder). Names @projectx-social/{sdk,policy,signer,agent,mcp} are free on the registry (E404). Branch feat/installable-libraries. TWO things block the publish, both his: (1) LICENCE — the root LICENSE puts policy/signer/agent/mcp in the proprietary tier while their package.json says Apache-2.0; pnpm packs the tiered root text into them; desk recommendation: Apache-2.0 for all four, same as the sdk, because an installable library under 'no licence granted' cannot be used by anyone. (2) REGISTRY CREDENTIALS — npm whoami answers ENEEDAUTH on this machine; the desk cannot create an account or type a password; he logs in once (npm login) or hands a granular publish token for the vault. Then: pnpm -r publish --access public, provenance later from CI.
+
+---
+
+## 2026-09-01 · DEMONSTRATION READ DONE on production: buyer 0x133ee622…37ee4 read post pmtjoiec5GORL6x5GTqXa via Agent.read — entitledVia=unlock, edition=machine, 5245 bytes, hash checked, key released by the one Seal server (threshold 1, PROJECTX_SOCIAL_SEAL_THRESHOLD added to operations/demo/env.sh). Vercel had not deployed main after #132/#136; production deployment dpl_By4WE3ESYTHpLTuWTFjZitDKK2hs of 0eb63a4 was created from the git source through the API (built on Vercel) and is READY. Remaining demo step: the declaration (09/10) needs the Master's operator signature.
+
+---
+
+## 2026-09-01 · Hosted MCP rolled to main 0eb63a4: Cloud Build ce608c41 (1m13s, inside the free build minutes), Cloud Run weir-mcp revision 00004-lrp at 100%, door https://mcp.weir.social/mcp answers 200. operations/demo/11-read.ts written: the buyer reads its bought machine edition through Agent.read + SealDecryptor; waits on Vercel deploying main (no deployment seen for 6f53e04/0eb63a4 yet).
+
+---
+
+## 2026-09-01 · B10-B13 on main at 0eb63a4 (PRs #132-#135 + #136). LESSON: gh pr merge --delete-branch on a stacked PR aborts the remote delete when a worktree holds the branch, so GitHub never retargets the children — #133/#134/#135 merged into their parent feature branches, not main. #136 (feat/one-object-decoder -> main) carried the whole stack. Next time: merge stacked PRs from the top with an explicit base retarget (gh pr edit --base main) before each merge, or merge only the stack head. Vercel builds main now; hosted MCP image roll follows.
+
+---
+
+## 2026-09-01 · B10-B13 stack proven on the dev machine per the Master's ruling (tests run locally, never in CI while GitHub minutes are blocked): sdk 258, agent 240, mcp all files, web unit 1815, web database 118 pass. Fixes committed to their own branches and pushed once each: #133 9342628 (title pairs deduped, coin judged after the proof, fixtures carry the coin), #134 a147864 (bigint-safe test message), #135 (proven reader from the fold, manifest proof=session). CORRECTION of the #133 commit message: the three env-reading test files (relay, replay, spend-with-the-write) and vault-denomination were NOT run — the worktree has no .env.local and linking the checkout's file was denied; they fail at import only. Message stands, history is not rewritten. CI on the four PRs is red for billing, not code.
+
+---
+
+## 2026-09-01 · B13 OPENED as PR #135 (feat/agent-reads-what-it-bought, stacked on #134): GET /api/posts/{id} hands a proven entitled reader the sealed reference (blob id, wrapped key, nonce, sha256, approval; machine edition for a machine Unlock; words never served); Agent.read(postId) opens it through the bound SealDecryptor with the hash verified. Found by the demonstration: the buyer held Unlock 0x3ed7ce6cd93caa90b6c9c766d7813b661482ce873d6267786db641adc24c5ba1 and no route would hand it the reference. Tests: web database sealed-read (5), agent read (4). Note: one commit message on this branch lost a backticked word to the shell (zsh) — history stands as written.
+
+---
+
+## 2026-09-01 · B12 OPENED as PR #134 (feat/one-object-decoder, stacked on #133). The Master, through the website desk, asked Kaela which footer brand line replaces 'Support that stays yours.' now that agents are citizens; answer given to him directly, footer unchanged until his word.
+
+---
+
+## 2026-09-01 · B9 #130 MERGED (fd2de9c): GET /api/posts/{id} and GET /api/agents on main, readPreview on the agent, weir_read (public preview only) registers on the hosted server after the next image roll. B10 #132 retargeted to main and revised per CHECK-B10 (gate after the cheap refusals, feed filter pure + tested); B11 #133 carries both. B12 in a worktree: the five SDK object readers delegate to decodeObjectBytes; ABORT_EXPLANATIONS completed for creator codes 8-10, 15-19 from creator.move; addTier's period doc corrected (thirty days, whole Seal periods); isSingleUse's stale paragraph rewritten; test/one-decoder.test.ts (base64 and array platform read, malformed refused, source pins).
+
+---
+
+## 2026-09-01 · Footer social links #131 MERGED (f4bce55) on the Master's word: X @weirsocial, GitHub Northlatch-Labs-LLC, Moltbook u/weirsocial (measured as our account). B11 OPENED as PR #133 (feat/receipts-and-labels, stacked on #132): prepareUnlock quotes from the live chain price with price-moved / not-for-sale blocks, titles keyed by (vault, key), /api/creator/profile verifies coinType against the vault's type parameter, purchases and the composer scale by the vault's own decimals and symbol. The website desk delivered operations/DEMONSTRATION-RUNBOOK.md (files only) and is writing CHECK-B9.md / CHECK-B10.md. CI on B9/B10 re-running after three test fixes (sealed-tier seed, sponsor proof pin, gate assertion).
+
+---
+
+## 2026-09-01 · B8 #129 MERGED (53df54e): policy-compatible payments and the PolicySigner seam are on main. B10 OPENED as PR #132 (feat/agent-filters-and-seat-gate, stacked on #130): feed view=people|agents with the hidden count, the declared-agent mark on explore, /api/agents/sponsor requires the signed agent half of the declaration (D-14). Footer social links PR #131 opened by the website desk on the Master's direct instruction (X @weirsocial, GitHub Northlatch-Labs-LLC; Moltbook u/weirsocial to be added). B9 #130 retargeted to main; two of its tests failing in CI — being read.
+
+---
+
+## 2026-09-01 · B9 OPENED as PR #130 (feat/public-read-surface, stacked on #129): GET /api/posts/{id} (public body with entitledVia public; gated → body null; 404), GET /api/agents (?operator=; 400 on a malformed operator), both catalogued in the manifest; agent readPreview on the read surface; MCP adapter binds it so read-preview / weir_read register on the hosted server for the first time. Tests: web database public-read (6), agent read-preview (4), mcp agent-port (+2).
+
+---
+
+## 2026-09-01 · B6 #127 MERGED (8edb11f) and B7 #128 MERGED — main now carries manifest revision 4 with custody read from chain and tiered sealing. B8 OPENED as PR #129 (feat/policy-compatible-payment): PaymentSource gas|object|merge in the agent's builders (SplitCoins from gas or from PROJECTX_SOCIAL_AGENT_PAYMENT_COIN — the only shapes a policy can allow-list), TransactionSigner seam in simulateAndExecute (a bound signer signs, the key never does), merged shape refused under a signer before any chain read, MCP reads WEIR_AGENT_POLICY and binds a policySigner over the key; policyAvailable now means a policy is applied. Tests: agent payment-and-signer (6), mcp policy-doc (4). The Master's word 'you may' stands for the demonstration once B8 lands.
+
+---
+
+## 2026-09-01 · B7 OPENED as PR #128 (feat/tiered-sealing, stacked on #127): the subscriber tier rides on the request and inside the signature via the SDK's accessStatement ('subscribers:2'), validated against the vault's tiers in /api/posts (past-the-end and retired refused), sealed to that tier; PostAccess carries tier; the card names it; composer tier selector; agent post and weir_post take tier. Tests: web database tiered-sealing (5), sdk statements (3), agent (1). B5 #126 all green → merged.
+
+---
+
+## 2026-09-01 · B6 OPENED as PR #127 (feat/manifest-truth, stacked on #126): manifest session entry returns address+expiresAtMs and names bearerHeader x-weir-bearer: 1 (adds token); new custody section — UpgradeCap 0x895e…ed08 and PlatformCap 0x2390…b683 from PROJECTX_SOCIAL_UPGRADE_CAP_ID / PROJECTX_SOCIAL_PLATFORM_CAP_ID (set on Vercel production), each holder read from chain at build time (both held by 0x00e7…1605 as of tonight's read); /agents renders the ids and holders or says they are not published; revision 4. Fact for the record: 0xd117…bbab, listed in an older record as a PlatformCap, is the RAFFLE package's PlatformCap (raffle_v1) held by the Master's address — not the social platform's. B4 #125 all green.
+
+---
+
+## 2026-09-01 · B5 OPENED as PR #126 (feat/settling-and-one-session, stacked on #125): SealedBody and the agent's seal-node classify a settling refusal by instanceof (the regex matched a name @mysten/seal never sets and a phrase it never says — 'not yet exist' vs 'not yet seen'); lib/seal-session.ts shares one SessionKey per signer per tab across SealedBody and SealedMedia (one wallet prompt per page, not per card). Tests: web seal-session (6), agent seal-node settling test rewritten to the verbatim InvalidParameterError. B3 #124 all green.
+
+---
+
+## 2026-09-01 · B4 OPENED as PR #125 (feat/purchase-quota-at-submit, stacked on #124): /api/checkout/submit verifies the signature locally, keys the bucket on the proven signer, spends QUOTAS.purchase for creator::unlock/subscribe/tip/renew (lib/tx-shape.ts) and write otherwise, before submitSigned; manifest publishes rateLimits.quotas (revision 3), pinned by test; test/checkout-submit-quota.test.ts. B3 #124: eight checks green, typecheck/tests running.
+
+---
+
+## 2026-09-01 · B3 OPENED as PR #124 (feat/idempotency-end-to-end, off main 06c40d4): lib/idempotent-route.ts wraps /api/posts, /api/messages and /api/checkout/submit — claim on (caller, Idempotency-Key) before any side effect, 2xx recorded and replayed verbatim with idempotency-replayed: true, any other status releases the claim; header optional so browsers are unchanged. Agent post/send send the key; MCP adapter passes the tool's key. FOUND AND FIXED on the way: the agent read a top-level postId while the route answers { post: { id } } — every accepted agent publish was reported malformed. Tests: web database idempotency-routes (5), agent idempotency-header (3), mcp agent-port (+1). Typecheck clean in web/agent/mcp; CI running.
+
+---
+
+## 2026-09-01 · B2 MERGED → 06c40d4 (#123, all nine checks green): packages/mcp/src/agent-port.ts adapts the agent library to the port method by method; a failed Reading is a refusal carrying the agent's kind/source; ceilings are carried, never applied; receipts say what the agent can report (object ids null, tier price null); weir_send reports sent:true; test/agent-port.ts crosses the seam with a keyed stub through the production binding and the real tools. Main is 06c40d4. Vercel has produced NO production deployment since #119 (1db79d1) despite four merges — being investigated; the hosted MCP image is being rebuilt from 06c40d4 in Cloud Build.
+
+---
+
+## 2026-09-01 · MIGRATION 034 APPLIED TO PRODUCTION on the Master's word ("Proceed with migration"): Supabase project pykerpxszoaocxtfyrzm via the management API (the runner could not be used — PROJECTX_DATABASE_URL is a sensitive Vercel variable and pulls as [SENSITIVE]; .env.local points at the LOCAL cluster). Verified after: 6 machine_* columns on posts, CHECK posts_machine_body_complete validated, partial index present, 0 pre-034 paid posts with a sealed human body, ledger row inserted with the file's sha256 ddac8be5… so the runner's dry run stays consistent. Production ledger before: 001-033 applied, checksums match the repo (031-033 verified).
+
+---
+
+## 2026-09-01 · Merged on the Master's word: #120 (45072c0), #121 B1 (1fc3500), #122 announce hosted MCP (ed3f30e). Main ed3f30e. #123 B2 retargeted to main, CI running. Pending: migration 034 on production (additive) before paid posts publish on main.
+
+---
+
+## 2026-09-01 · B1 PR #121 (feat/seal-machine-edition, c9f74ab) ALL NINE CHECKS GREEN in GitHub CI — Secret scan, Move tests, Digest guard, Typecheck/tests/build, five PVS gates. Every paid post is sealed to both editions at publish (migration 034 additive), entitlement accepts either key, machine-key pricing is guarded in studio/price, the composer and weir_price (edition input; hand-typed marker still refused), untrimmed paid keys refused with 400. Tests written by the website desk, one stale exact-shape test updated by the desk after CI. Mutation runs NOT performed (no runs on the laptop by the Master's law; a build box or CI job for mutation loops is not yet stood up). Awaiting the Master's merge click — the desk's permission layer refuses gh pr merge.
+
+---
+
 ## 2026-09-01 · MERGED on the Master's word: #114 (packages/agent priceContent — findCreatorCap returns only the cap whose vault matches; buildSetContentPrice; pricing is an authority question for the policy layer, never a spend question; 12 tests, cap-match mutation exactly two), #115 (the four partner marks in SiteFooter, the one Built-on list every visitor sees — #100 had shipped them only behind the waitlist gate; 9/9). #116 (weir_price MCP tool, gated as a spend; weir_post's unpriced refusal now names next: weir_price; 12 checks, armed-gate mutation exactly two) verified, merges on CI. #117 OPEN: the survivor pass — 71 tests, no source changed, 131→202. Re-run against the pass branch (operations/mutation/RERUN-2026-09-02.md): 82 survivors before → 11 after among measured rows, all by design, no real gap measured; rows 1–88 measured live in a run lost to a Claude Code process restart that wiped the session scratchpad (harness, list, 88 rows, worktree) — the desk rebuilt the list from the report's table and the harness from scratch, mis-rendered the 18 'check call removed' rows as literal text (its own defect, corrected), and those 18 run now under the named wrapper weir-mutation-rerun; harness.py now traps SIGTERM so a stop unwinds restores. His rulings tonight: nothing new on his laptop without asking (no nameless processes; one named dispatch that returns once), reflect-then-wait when he is thinking aloud, local Postgres killed then restarted on his order. Finding from the website desk, untouched: test/idempotency-namespace.test.ts and test/quotas.test.ts reach Postgres outside useTestDatabase and outside the serialised list. Moltbook: first VERIFIED post since the flag (m/general, 4e820eca…) after two helper defects (a post's response shape; content-type not forced) were fixed with tests.
 
 ---

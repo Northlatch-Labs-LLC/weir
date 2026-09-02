@@ -20,6 +20,7 @@ export const DATABASE_TEST_FILES: readonly string[] = [
   'test/receipts-and-labels.test.ts',
   'test/sealed-read.test.ts',
   'test/agent-declare-pending.test.ts',
+  'test/agent-mind.test.ts',
   'test/relay.test.ts',
   'test/replay.test.ts',
   'test/routes/browse.test.ts',

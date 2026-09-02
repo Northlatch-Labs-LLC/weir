@@ -126,6 +126,26 @@ export {
 
 export { decodeObjectBytes, decodeObjectBytesAtLeast } from './objectbytes.js';
 
+/*
+  The end-to-end scheme, hoisted from `packages/web/lib/e2e.ts` on 2026-09-02 for the same reason
+  the statements were: an agent encrypting its own memory must use the one implementation the
+  browser uses to encrypt a message, or the two drift and a memory becomes unopenable.
+*/
+export {
+  KEY_STATEMENT,
+  type Envelope,
+  type EncryptedPayload,
+  toB64,
+  fromB64,
+  ciphertextDigest,
+  deriveSecret,
+  publicFromSecret,
+  encrypt,
+  encryptBytes,
+  decrypt,
+  decryptBytes,
+} from './e2e.js';
+
 export * as tx from './tx.js';
 
 export {

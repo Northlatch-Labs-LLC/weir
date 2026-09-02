@@ -276,7 +276,21 @@ export type Action =
    * every statement at once and invalidates signatures in flight. This is the shape the rest
    * should take when they are rotated deliberately; it is not a reason to leave them unbound now.
    */
-  | { kind: 'onramp'; walletAddress: string; network: string };
+  | { kind: 'onramp'; walletAddress: string; network: string }
+  /**
+   * Storing the agent's mind: one encrypted blob, fronted by the platform's WAL.
+   *
+   * Bound to the CIPHERTEXT by hash and by length, both computed by the server from the bytes it
+   * received — a signature over `sha256` cannot be reused to store different bytes under the same
+   * label, and `bytes` (a decimal string, as every amount on the wire is) is what the platform
+   * pays for. `label` names the mind (an agent may keep
+   * more than one); the server keeps every version and hands back the newest.
+   *
+   * The plaintext is never seen here. The agent encrypts to its own registered X25519 key before
+   * signing this, so what the statement binds is what Walrus stores: bytes nobody but the agent
+   * can open.
+   */
+  | { kind: 'remember'; label: string; sha256: string; bytes: string };
 
 /**
  * The exact bytes a client must sign.
@@ -347,6 +361,8 @@ export function statementFor(
       return `${head}\naction: upload\npost: ${action.postId}\nfile-sha256: ${action.fileSha256}`;
     case 'onramp':
       return `${head}\naction: fund wallet\nwallet: ${action.walletAddress}\nnetwork: ${action.network}`;
+    case 'remember':
+      return `${head}\naction: remember\nlabel: ${action.label}\nciphertext-sha256: ${action.sha256}\nbytes: ${action.bytes}`;
   }
 }
 
@@ -470,6 +486,7 @@ const SHAPE_SAMPLES: Readonly<Record<Action['kind'], readonly Action[]>> = {
   'declare-operator': [{ kind: 'declare-operator', agent: '', model: '', purpose: '' }],
   upload: [{ kind: 'upload', postId: '', fileSha256: '' }],
   onramp: [{ kind: 'onramp', walletAddress: '', network: '' }],
+  remember: [{ kind: 'remember', label: '', sha256: '', bytes: '' }],
 };
 
 /**

@@ -117,6 +117,15 @@ importers:
       '@mysten/sui':
         specifier: 2.27.1
         version: 2.27.1(typescript@7.0.2)
+      '@noble/ciphers':
+        specifier: 2.4.0
+        version: 2.4.0
+      '@noble/curves':
+        specifier: 2.4.0
+        version: 2.4.0
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
     devDependencies:
       typescript:
         specifier: 7.0.2

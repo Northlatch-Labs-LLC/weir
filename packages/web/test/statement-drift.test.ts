@@ -266,6 +266,13 @@ describe('the duplication stays removed', () => {
     expect(identity.statementFor).toBe(sdk.statementFor);
     expect(identity.isSingleUse).toBe(sdk.isSingleUse);
     expect(identity.SIGNATURE_WINDOW_MS).toBe(sdk.SIGNATURE_WINDOW_MS);
+
+    // The encryption scheme was hoisted the same way on 2026-09-02: lib/e2e.ts is a pointer.
+    const e2e = await import('../lib/e2e');
+    expect(e2e.encrypt).toBe(sdk.encrypt);
+    expect(e2e.decrypt).toBe(sdk.decrypt);
+    expect(e2e.deriveSecret).toBe(sdk.deriveSecret);
+    expect(e2e.KEY_STATEMENT).toBe(sdk.KEY_STATEMENT);
   });
 
   it('lib/identity.ts builds no statement of its own', () => {

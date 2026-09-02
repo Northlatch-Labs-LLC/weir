@@ -278,6 +278,25 @@ export async function spendSignature(
 }
 
 /**
+ * Whether a proved signature is already in the ledger — a courtesy read, not the decision.
+ *
+ * The decision is `spendSignature`'s atomic insert, and it stays there. This exists for a route
+ * that must spend something ELSE scarce before it writes — the mind route spends a per-address
+ * storage token and then WAL — so that a replay is told "already used" before it costs the
+ * address a token it did not mean to spend. A replay that slips between this read and the insert
+ * is still refused by the insert; it has merely paid for the lookup.
+ */
+export async function isSignatureSpent(pending: PendingSpend): Promise<Reading<boolean>> {
+  const source = 'signature';
+  try {
+    const found = await db().query('SELECT 1 FROM used_signatures WHERE digest = $1', [pending.digest]);
+    return ok((found.rowCount ?? 0) > 0);
+  } catch (error) {
+    return fail('transport', source, `could not consult the signature ledger: ${opaqueDetail(source, error)}`);
+  }
+}
+
+/**
  * Sweep what can no longer matter.
  *
  * Opportunistic rather than scheduled: this application has no cron, and a table that only grows

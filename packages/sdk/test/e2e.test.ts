@@ -19,7 +19,9 @@ import {
   publicFromSecret,
   toB64,
   KEY_STATEMENT,
-} from '../lib/e2e';
+  encryptBytes,
+  decryptBytes,
+} from '../src/e2e.js';
 
 const ALICE = '0x1111111111111111111111111111111111111111111111111111111111111111';
 const BOB = '0x2222222222222222222222222222222222222222222222222222222222222222';
@@ -217,5 +219,30 @@ describe('ciphertextDigest', () => {
   it('changes when a single byte of the ciphertext changes', () => {
     // This is what makes a send signature bind to one exact payload.
     expect(ciphertextDigest('abc')).not.toBe(ciphertextDigest('abd'));
+  });
+});
+
+describe('bytes, not text (the agent mind path)', () => {
+  // Every byte value, including the ones a text decoder would mangle or refuse.
+  const blob = new Uint8Array(1024).map((_, i) => (i * 7 + 3) & 0xff);
+
+  it('round-trips arbitrary bytes for a participant, byte for byte', () => {
+    const payload = encryptBytes(blob, [alice]);
+    const opened = decryptBytes(payload, ALICE, aliceSecret);
+    expect(opened).not.toBeNull();
+    expect(Array.from(opened!)).toEqual(Array.from(blob));
+  });
+
+  it('a stranger cannot open it, and a flipped ciphertext byte is refused rather than returned', () => {
+    const payload = encryptBytes(blob, [alice]);
+    expect(decryptBytes(payload, MALLORY, mallorySecret)).toBeNull();
+    const raw = fromB64(payload.ciphertext);
+    raw[10] = raw[10]! ^ 0x01;
+    expect(decryptBytes({ ...payload, ciphertext: toB64(raw) }, ALICE, aliceSecret)).toBeNull();
+  });
+
+  it('the string view is the byte view over UTF-8, so a message and a mind share one scheme', () => {
+    const payload = encrypt('héllo — 🚀', [alice]);
+    expect(new TextDecoder().decode(decryptBytes(payload, ALICE, aliceSecret)!)).toBe('héllo — 🚀');
   });
 });
