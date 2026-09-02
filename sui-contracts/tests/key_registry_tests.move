@@ -438,3 +438,19 @@ fun revoking_without_a_key_aborts() {
     };
     sc.end();
 }
+
+#[test]
+#[expected_failure(abort_code = key_registry::ENoKey)]
+/// Kills key_registry.move:285 — the third read on an absent entry, skipped when its two siblings
+/// above were written. Without the guard the table borrow aborts inside `sui::dynamic_field`
+/// instead, which a caller cannot tell from any other missing field.
+fun updated_at_ms_of_aborts_when_there_is_none() {
+    let mut sc = setup();
+    sc.next_tx(ALICE);
+    {
+        let registry = sc.take_shared<KeyRegistry>();
+        key_registry::updated_at_ms_of(&registry, BOB);
+        ts::return_shared(registry);
+    };
+    sc.end();
+}
