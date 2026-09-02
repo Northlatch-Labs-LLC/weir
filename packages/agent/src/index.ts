@@ -62,8 +62,11 @@ import {
   buildTip,
   buildUnlock,
   buildOpenAccount,
+  buildSetContentPrice,
   findAgentAccount,
+  findCreatorCap,
   guardPrice,
+  MACHINE_EDITION_MARKER,
   livePriceOfContent,
   readPayableVault,
   refusePrecondition,
@@ -105,14 +108,17 @@ export {
   ABORT_CLASSIFICATION,
   PRECONDITION_MARKER,
   buildOpenAccount,
+  buildSetContentPrice,
   buildSubscribe,
   buildTip,
   buildUnlock,
   classificationOf,
   classifyAbort,
   findAgentAccount,
+  findCreatorCap,
   guardPrice,
   livePriceOfContent,
+  MACHINE_EDITION_MARKER,
   preconditionOf,
   readPayableVault,
   refusePrecondition,
@@ -418,6 +424,20 @@ export interface Agent extends ReadOnlyAgent {
 
   /** This agent's own spendable balance of the manifest's coin type, in minor units. */
   balance: (coinType?: string) => Promise<Reading<bigint>>;
+
+  /**
+   * Put one content key of this agent's own vault up for sale, or reprice it.
+   *
+   * The call that makes a paid post buyable: `/api/posts` refuses a `paid` post whose key has no
+   * price on the vault, and `creator::unlock` reads the price from there. Moves no coin — see
+   * `buildSetContentPrice` for what the operator's policy must therefore allow instead.
+   *
+   * Refused before anything is read: an empty key (`EEmptyName`), a price that is not positive
+   * (`EZeroPrice` — unpriced means not for sale, never free), and a key carrying the reserved
+   * `#machine` marker. Then the cap for THIS vault is found, the transaction built once, simulated
+   * on those bytes, signed and executed, like every other call here.
+   */
+  priceContent: (input: { vaultId: string; contentKey: string; price: bigint }) => Promise<Reading<Executed>>;
 }
 
 export interface CreateAgentInput {
@@ -836,6 +856,36 @@ export function createAgent(
       });
       if (!response.ok) return response;
       return ok({ sent: true });
+    },
+
+    async priceContent(input: { vaultId: string; contentKey: string; price: bigint }): Promise<Reading<Executed>> {
+      const key_ = input.contentKey.trim();
+      const source = `creator::set_content_price "${key_}"`;
+      if (key_ === '') {
+        return fail('malformed', source, 'a content key cannot be empty; the contract refuses it (EEmptyName), so nothing is sent.');
+      }
+      if (key_.includes(MACHINE_EDITION_MARKER)) {
+        return fail(
+          'malformed',
+          source,
+          `"${MACHINE_EDITION_MARKER}" is reserved: it names the machine edition of a key and is appended by the ` +
+            'platform. A key containing it could collide with another post’s machine edition, and an Unlock ' +
+            'cannot be withdrawn once someone holds it.',
+        );
+      }
+      if (input.price <= 0n) {
+        return fail('malformed', source, 'a price must be greater than zero — free posts are public, and the contract refuses zero (EZeroPrice).');
+      }
+      const cap = await findCreatorCap(client, manifest.config, agent.address, input.vaultId);
+      if (!cap.ok) return cap;
+      const tx = buildSetContentPrice(manifest.config, {
+        coinType: manifest.coinType,
+        vaultId: input.vaultId,
+        capId: cap.value,
+        contentKey: key_,
+        price: input.price,
+      });
+      return simulateAndExecute({ client, transaction: tx, key, gasBudgetMist: manifest.gasBudgetMist, what: source });
     },
 
     async balance(coinType?: string): Promise<Reading<bigint>> {
