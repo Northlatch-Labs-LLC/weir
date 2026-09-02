@@ -82,6 +82,11 @@ export const AGENT_ENV = {
   secret: 'PROJECTX_SOCIAL_AGENT_SECRET',
   /** Where the weir HTTP surface lives, for the calls that are not chain calls. */
   baseUrl: 'PROJECTX_SOCIAL_AGENT_BASE_URL',
+  /**
+   * Optional. The object id of ONE coin of `coinType` this agent owns and pays from, by splitting.
+   * Needed only when a policy signer is bound and the vault's coin is not SUI. See `PaymentSource`.
+   */
+  paymentCoin: 'PROJECTX_SOCIAL_AGENT_PAYMENT_COIN',
 } as const;
 
 /**
@@ -111,6 +116,11 @@ export interface AgentManifest {
   baseUrl: string;
   /** Ceiling on gas for every transaction built by this agent. */
   gasBudgetMist: bigint;
+  /**
+   * `PROJECTX_SOCIAL_AGENT_PAYMENT_COIN`: the one owned coin of `coinType` payments are split from,
+   * or null. Required only under a policy signer for a non-SUI coin; see `PaymentSource`.
+   */
+  paymentCoin: string | null;
 }
 
 /**
@@ -174,7 +184,16 @@ export function loadAgentManifest(
     return fail('unconfigured', source, 'the gas budget must be a positive number of MIST.');
   }
 
-  return ok({ config: config.value, coinType, baseUrl, gasBudgetMist });
+  const rawPaymentCoin = env[AGENT_ENV.paymentCoin]?.trim();
+  let paymentCoin: string | null = null;
+  if (rawPaymentCoin !== undefined && rawPaymentCoin !== '') {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(rawPaymentCoin)) {
+      return fail('unconfigured', source, `${AGENT_ENV.paymentCoin} is "${rawPaymentCoin}", which is not a 32-byte object id.`);
+    }
+    paymentCoin = rawPaymentCoin.toLowerCase();
+  }
+
+  return ok({ config: config.value, coinType, baseUrl, gasBudgetMist, paymentCoin });
 }
 
 /**
