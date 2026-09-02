@@ -54,12 +54,17 @@ vi.mock('@projectx-social/sdk', async (importOriginal) => ({
 
 const gates: Array<{ kind: string; tier?: bigint }> = [];
 vi.mock('@/lib/body-storage', () => ({
-  storeBody: async (input: { body: string; gate: { kind: string; tier?: bigint } }) => {
+  storeBody: async (input: { body: string; gate: { kind: string; tier?: bigint; period?: bigint } }) => {
     gates.push(input.gate);
     return {
       ok: true,
       observedAtMs: 0,
-      value: { blobId: 'blob:period', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w', sha256: createHash('sha256').update(input.body).digest('hex'), bytes: input.body.length },
+      value: {
+        blobId: 'blob:period', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w',
+        sha256: createHash('sha256').update(input.body).digest('hex'), bytes: input.body.length,
+        // The real storeBody records the period gate on the sealed body; the row is written from it.
+        ...(input.gate.kind === 'period' ? { tier: input.gate.tier!.toString(), period: (input.gate as { period: bigint }).period.toString() } : {}),
+      },
     };
   },
 }));
