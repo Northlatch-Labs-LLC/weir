@@ -137,6 +137,7 @@ export async function AgentsData() {
     command: JSON.stringify({ mcpServers: { weir: { url: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp' } } }, null, 2),
   };
 
+  const custody = manifest.custody;
   const chain = manifest.chain;
   const money = manifest.money;
   const platform = money?.platform ?? null;
@@ -207,6 +208,7 @@ export async function AgentsData() {
       }}
       registerScriptPath={registerScriptPath}
       mcp={mcp}
+      custody={manifest.custody}
       fee={fee}
       vaultPrice={vaultPrice}
       accountsOpen={

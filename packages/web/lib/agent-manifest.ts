@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 3;
+export const AGENT_MANIFEST_REVISION = 4;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -404,6 +404,8 @@ export interface AgentManifest {
     session: {
       mint: { method: string; path: string; body: string[]; action: string };
       returns: string[];
+      /** The request header that adds `token` to the body; without it a program gets the cookie only. */
+      bearerHeader: { name: string; value: string; adds: string };
       cookie: string;
       bearer: string;
       ttlMs: number;
@@ -447,6 +449,19 @@ export interface AgentManifest {
     tools: string[];
     note: string;
   };
+  /**
+   * Who can upgrade the package and who holds the platform's administrative capability — the two
+   * objects that, between them, could rewrite the approval policy or the fee. Ids come from this
+   * deployment's configuration; the holder of each is READ FROM CHAIN at document time, so the
+   * sentence "held by a 2-of-3 multisig" on /agents is checkable against this rather than taken on
+   * trust. `null` with `custodyUnavailable` set when not configured or not readable. Revision 4.
+   */
+  custody: {
+    upgradeCap: { objectId: string; holder: string | null; holderUnavailable: string | null };
+    platformCap: { objectId: string; holder: string | null; holderUnavailable: string | null };
+    note: string;
+  } | null;
+  custodyUnavailable: string | null;
 }
 
 /**
@@ -952,6 +967,13 @@ export interface ManifestInputs {
   packageLineage?: Reading<PackageLineage>;
   /** The configured committee as the chain reports it. Optional for the same reason. */
   keyServerStates?: Reading<KeyServerState[]>;
+  custody?: Reading<CustodyReading>;
+}
+
+/** The two capabilities and, for each, the address that holds it as read from chain. */
+export interface CustodyReading {
+  upgradeCap: { objectId: string; holder: Reading<string> };
+  platformCap: { objectId: string; holder: Reading<string> };
 }
 
 /**
@@ -983,6 +1005,18 @@ const NULL_CONVENTION =
  * `rateLimit`: every branch below — unconfigured chain, unreadable platform, absent committee — is
  * a shape somebody's agent will parse, and none of them should need a fullnode to test.
  */
+function capEntry(cap: { objectId: string; holder: Reading<string> }): {
+  objectId: string;
+  holder: string | null;
+  holderUnavailable: string | null;
+} {
+  return {
+    objectId: cap.objectId,
+    holder: cap.holder.ok ? cap.holder.value : null,
+    holderUnavailable: cap.holder.ok ? null : cap.holder.failure.detail,
+  };
+}
+
 export function manifestFrom(input: ManifestInputs): AgentManifest {
   const statements = statementCatalogue(input.origin);
   /*
@@ -1088,7 +1122,14 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
           body: ['address', 'signature', 'timestampMs'],
           action: 'read-content',
         },
-        returns: ['address', 'expiresAtMs', 'token'],
+        returns: ['address', 'expiresAtMs'],
+        /*
+          The token is ASKED FOR, never handed out by default: a browser gets the cookie and no
+          body token, a program sends this header and gets `token` in the body as well. Until
+          revision 4 this document promised `token` unconditionally, and an agent built from it
+          read as anonymous.
+        */
+        bearerHeader: { name: 'x-weir-bearer', value: '1', adds: 'token' },
         cookie: READ_SESSION_COOKIE,
         bearer: 'Authorization: Bearer <token>',
         ttlMs: READ_SESSION_TTL_MS,
@@ -1171,6 +1212,25 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         'only tools that read, and it exits before listening if a key is placed in its environment. ' +
         'Spending tools exist only in a copy you run yourself with your own key.',
     },
+    custody:
+      input.custody !== undefined && input.custody.ok
+        ? {
+            upgradeCap: capEntry(input.custody.value.upgradeCap),
+            platformCap: capEntry(input.custody.value.platformCap),
+            note:
+              'The UpgradeCap is the object that can publish a new version of the package, which ' +
+              'is the only power that can change what the key servers approve. The PlatformCap ' +
+              'sets the platform fee for NEW vaults only (an existing vault keeps its snapshot). ' +
+              'Each holder is the object\'s owner as the chain reported it when this document was ' +
+              'built; read the objects yourself rather than trusting this line.',
+          }
+        : null,
+    custodyUnavailable:
+      input.custody === undefined
+        ? 'this deployment has not configured its capability ids'
+        : input.custody.ok
+          ? null
+          : input.custody.failure.detail,
   };
 
   if (!input.config.ok) {
@@ -1360,10 +1420,13 @@ export async function agentManifest(origin: string): Promise<AgentManifest> {
       : resolveKeyServers(client, seal.value.keyServers).then((states) => ok(states)),
   ]);
 
+  const custody = await readCustody(env, client);
+
   return manifestFrom({
     origin,
     observedAtMs: Date.now(),
     config,
+    custody,
     keyRegistryId: loadKeyRegistryId(env),
     seal,
     coinTypes: vaultCoinTypes(env),
@@ -1711,4 +1774,45 @@ export async function signManifest(
 export async function servedManifest(origin: string): Promise<ServedManifest> {
   const env = process.env as Record<string, string | undefined>;
   return signManifest(await agentManifest(origin), loadManifestSigner(env));
+}
+
+/**
+ * The capability ids from configuration and their holders from chain.
+ *
+ * Absent configuration is `unconfigured`, calmly — a deployment that has not named its caps
+ * publishes no custody claim rather than a guessed one. A holder that cannot be read is reported
+ * per capability, so one unreadable object does not erase the other.
+ */
+async function readCustody(
+  env: Record<string, string | undefined>,
+  client: ReturnType<typeof createClient> | null,
+): Promise<Reading<CustodyReading>> {
+  const upgradeCapId = (env['PROJECTX_SOCIAL_UPGRADE_CAP_ID'] ?? '').trim();
+  const platformCapId = (env['PROJECTX_SOCIAL_PLATFORM_CAP_ID'] ?? '').trim();
+  if (upgradeCapId === '' || platformCapId === '') {
+    return fail('unconfigured', 'custody', 'PROJECTX_SOCIAL_UPGRADE_CAP_ID and PROJECTX_SOCIAL_PLATFORM_CAP_ID are not both set');
+  }
+  if (client === null) {
+    return fail('unconfigured', 'custody', 'this deployment is not configured');
+  }
+  const holderOf = async (objectId: string): Promise<Reading<string>> => {
+    try {
+      const response = await client.getObject({ objectId });
+      const object = (response as { object?: { owner?: { address?: unknown; kind?: unknown } | null } }).object;
+      if (object === undefined || object === null) return fail('not-found', `owner of ${objectId}`, 'no object at that id');
+      const address = object.owner?.address;
+      if (typeof address !== 'string' || address === '') {
+        return fail('malformed', `owner of ${objectId}`, `the object is not address-owned (owner kind ${String(object.owner?.kind ?? 'unknown')})`);
+      }
+      return ok(address);
+    } catch (error) {
+      const failure = classify(error, `owner of ${objectId}`);
+      return fail(failure.kind, `owner of ${objectId}`, failure.detail);
+    }
+  };
+  const [upgradeHolder, platformHolder] = await Promise.all([holderOf(upgradeCapId), holderOf(platformCapId)]);
+  return ok({
+    upgradeCap: { objectId: upgradeCapId, holder: upgradeHolder },
+    platformCap: { objectId: platformCapId, holder: platformHolder },
+  });
 }

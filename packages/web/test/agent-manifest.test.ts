@@ -98,6 +98,10 @@ function inputs(overrides: Partial<ManifestInputs> = {}): ManifestInputs {
     seal: ok(SEAL),
     coinTypes: [`0x${'a7'.repeat(32)}::usdc::USDC`],
     platform: ok(PLATFORM),
+    custody: ok({
+      upgradeCap: { objectId: `0x${'0a'.repeat(32)}`, holder: ok(`0x${'0b'.repeat(32)}`) },
+      platformCap: { objectId: `0x${'0c'.repeat(32)}`, holder: ok(`0x${'0b'.repeat(32)}`) },
+    }),
     ...overrides,
   };
 }
@@ -388,6 +392,8 @@ describe('the document as a whole', () => {
       'rateLimits',
       'disclosure',
       'mcp',
+      'custody',
+      'custodyUnavailable',
     ];
     expect(Object.keys(manifest).sort()).toEqual([...required].sort());
 
@@ -517,7 +523,9 @@ describe('the document as a whole', () => {
 
     expect(source).toContain(`export const READ_SESSION_COOKIE = '${session.cookie}'`);
     expect(session.bearer).toBe('Authorization: Bearer <token>');
-    expect(session.returns).toEqual(['address', 'expiresAtMs', 'token']);
+    // The token is asked for with a header, never returned by default — revision 4.
+    expect(session.returns).toEqual(['address', 'expiresAtMs']);
+    expect(session.bearerHeader.adds).toBe('token');
     // And the mint route really does return all three.
     const route = read('app/api/session/route.ts');
     for (const field of session.returns) expect(route).toContain(field);
@@ -564,5 +572,40 @@ describe('the published quotas', () => {
       expect(manifest.rateLimits.quotas[name]).toEqual({ capacity: quota.capacity, msPerToken: quota.msPerToken });
     }
     expect(manifest.rateLimits.quotasNote).toContain('/api/checkout/submit');
+  });
+});
+
+describe('custody and the session token, told truthfully', () => {
+  it('publishes both capability ids and the holder the chain reported', () => {
+    const manifest = manifestFrom(inputs());
+    expect(manifest.custody?.upgradeCap.objectId).toBe(`0x${'0a'.repeat(32)}`);
+    expect(manifest.custody?.upgradeCap.holder).toBe(`0x${'0b'.repeat(32)}`);
+    expect(manifest.custody?.platformCap.holder).toBe(`0x${'0b'.repeat(32)}`);
+    expect(manifest.custodyUnavailable).toBeNull();
+  });
+
+  it('an unreadable holder is null with its reason, never a guessed address', () => {
+    const manifest = manifestFrom(
+      inputs({
+        custody: ok({
+          upgradeCap: { objectId: `0x${'0a'.repeat(32)}`, holder: fail('transport', 'owner', 'node down') },
+          platformCap: { objectId: `0x${'0c'.repeat(32)}`, holder: ok(`0x${'0b'.repeat(32)}`) },
+        }),
+      }),
+    );
+    expect(manifest.custody?.upgradeCap.holder).toBeNull();
+    expect(manifest.custody?.upgradeCap.holderUnavailable).toContain('node down');
+  });
+
+  it('says calmly when no capability ids are configured', () => {
+    const manifest = manifestFrom({ ...inputs(), custody: undefined });
+    expect(manifest.custody).toBeNull();
+    expect(manifest.custodyUnavailable).toMatch(/not configured/);
+  });
+
+  it('does not promise a session token by default, and names the header that adds it', () => {
+    const manifest = manifestFrom(inputs());
+    expect(manifest.authentication.session.returns).not.toContain('token');
+    expect(manifest.authentication.session.bearerHeader).toEqual({ name: 'x-weir-bearer', value: '1', adds: 'token' });
   });
 });
