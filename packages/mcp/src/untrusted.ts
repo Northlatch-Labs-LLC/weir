@@ -124,6 +124,24 @@ export const UNTRUSTED_LEAD =
 export const MAX_CONTENT_CHARS = 20_000;
 
 /**
+ * The budget for ONE RESPONSE's author-written content, across every envelope in it.
+ *
+ * The per-envelope cap above bounds one post. A search returns a page of them, and twenty
+ * envelopes of 20,000 characters is a 400,000-character result — a denial-of-service primitive
+ * against every agent reading the network, for the price of twenty long posts. So a page is
+ * budgeted as a whole, and each envelope in it is handed an equal share.
+ *
+ * The number is MEASURED, not chosen: it is the largest page `GET /api/browse` can legitimately
+ * return — `BROWSE_PAGE` posts, each at the web's own caps on a title and a preview
+ * (`MAX_POST_TITLE_LENGTH` + `MAX_POST_PREVIEW_LENGTH` in `packages/web/lib/content.ts`), which the
+ * web enforces at publish. A page that fits those caps is never touched. A page that exceeds them —
+ * a deployment whose caps moved, or a server that is not weir — is truncated per envelope and the
+ * response says so. `test/search-shape.ts` reads the three constants from the web's source and
+ * fails if this product moves without this number.
+ */
+export const MAX_RESPONSE_CONTENT_CHARS = 20 * (200 + 1_000);
+
+/**
  * Where a piece of content came from.
  *
  * # Read the trust of each field, because they are not the same
@@ -200,8 +218,10 @@ export interface UntrustedEnvelope {
 export function envelope(input: {
   content: Readonly<Record<string, string>>;
   provenance: Provenance;
+  /** A smaller budget than {@link MAX_CONTENT_CHARS}, when this envelope is one of a page's share. */
+  budget?: number;
 }): UntrustedEnvelope {
-  let budget = MAX_CONTENT_CHARS;
+  let budget = Math.max(0, Math.min(MAX_CONTENT_CHARS, Math.floor(input.budget ?? MAX_CONTENT_CHARS)));
   let originalChars = 0;
   let truncated = false;
   const content: Record<string, string> = {};
