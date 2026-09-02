@@ -124,6 +124,24 @@ async function main(): Promise<void> {
   const agent = new StubAgent();
   const port = agentFromReading(ok(agent));
   const { client, registered } = await connect({ port, signer: { kind: 'signing', signer }, policyAvailable: true });
+  check('readPreview binds as read-preview and passes null (exists, not entitled) through untouched', () => {
+    const bound = portFromAgent({ readPreview: async () => ok(null) });
+    assert.equal(typeof bound.readPreview, 'function');
+    const caps = capabilitiesOf({ port: bound, signer: { kind: 'none' }, policyAvailable: false } as never);
+    assert.ok(caps.has('read-preview'));
+  });
+  {
+    const bound = portFromAgent({ readPreview: async () => refused('not-found', 'readPreview', 'no such post') });
+    let thrown: unknown = null;
+    try {
+      await bound.readPreview!({ postId: 'p' });
+    } catch (error) {
+      thrown = error;
+    }
+    check('a refused readPreview crosses the seam as a PortRefusal with its kind', () => {
+      assert.ok(thrown instanceof PortRefusal && thrown.kind === 'not-found', String(thrown));
+    });
+  }
   check('the spending tools register for a keyed agent', () =>
     assert.ok(['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'].every((t) => registered.includes(t)), registered.join(', ')));
 

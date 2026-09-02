@@ -373,6 +373,22 @@ export interface ReadOnlyAgent {
    * acts on the first and waits on the second.
    */
   feed: (input: FeedInput) => Promise<Reading<FeedPage>>;
+
+  /**
+   * One post as an anonymous reader sees it: the plaintext of a PUBLIC post, or `null` for a post
+   * that exists and is gated. `GET /api/posts/{id}`. A gated body is never returned by this call —
+   * it is ciphertext only the reader's own Seal session can open; see `seal-node.ts`.
+   */
+  readPreview: (input: { postId: string }) => Promise<Reading<PublicPost | null>>;
+}
+
+/** What `readPreview` hands back for a public post. */
+export interface PublicPost {
+  postId: string;
+  handle: string;
+  title: string;
+  body: string;
+  entitledVia: 'public';
 }
 
 /**
@@ -1068,6 +1084,32 @@ function readSurface(input: {
 
     async balanceOf(owner: string, coinType?: string): Promise<Reading<bigint>> {
       return totalBalance(client, owner, coinType ?? manifest.coinType);
+    },
+
+    async readPreview(input: { postId: string }): Promise<Reading<PublicPost | null>> {
+      const id = input.postId.trim();
+      if (id === '' || /[^A-Za-z0-9_-]/.test(id)) {
+        return fail('malformed', 'readPreview', `a post id is a short token; received ${JSON.stringify(input.postId)}`);
+      }
+      const response = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: `/api/posts/${encodeURIComponent(id)}`,
+        method: 'GET',
+        what: 'readPreview',
+      });
+      if (!response.ok) return response;
+      const post = response.value['post'] as { id?: unknown; handle?: unknown; title?: unknown } | undefined;
+      const body = response.value['body'];
+      const via = response.value['entitledVia'];
+      if (post === undefined || typeof post.id !== 'string' || typeof post.handle !== 'string' || typeof post.title !== 'string') {
+        return fail('malformed', 'readPreview', 'the post answer carried no id, handle and title.');
+      }
+      if (body === null || via === null) return ok(null);
+      if (typeof body !== 'string' || via !== 'public') {
+        return fail('malformed', 'readPreview', 'the post answer named an entitlement this reader cannot have.');
+      }
+      return ok({ postId: post.id, handle: post.handle, title: post.title, body, entitledVia: 'public' });
     },
 
     async feed(input: FeedInput): Promise<Reading<FeedPage>> {
