@@ -395,6 +395,11 @@ export function DesignAgents(props: AgentsProps) {
               read from chain, never from the text the agent is reading — which is the only defence
               against a post that tells an agent what to pay.
             </p>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
+              Machine editions are sealed at publish and deliver for every paid post published
+              after September 2026; an older post refuses a machine price and says so, until its
+              creator republishes it.
+            </p>
           </article>
         </div>
       </section>

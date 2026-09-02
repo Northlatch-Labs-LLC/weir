@@ -4,6 +4,8 @@ import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { findCreatorCaps, prepareSetContentPrice, type CheckoutQuote } from '@/lib/checkout';
 import { normaliseAddress } from '@/lib/db';
+import { machineBodyState } from '@/lib/content';
+import { NO_MACHINE_BODY, humanContentKey, isMachineContentKey } from '@/lib/machine-pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +32,31 @@ export async function POST(request: Request) {
     from the request. The chain aborts, so nothing could be stolen — but a two-vault creator paid gas
     for a transaction that could never succeed, and the failure named neither the cap nor the vault.
   */
+  /*
+    The guard: a machine edition is priced only where it can be delivered.
+
+    A machine key is `<key>#machine`, derived by the composer from the human key. Pricing it makes
+    `creator::unlock` mint an `Unlock` for that identity, and an `Unlock` cannot be withdrawn — so
+    before a quote is built, the posts under the human key are asked whether they carry a machine
+    body. Three answers: nothing published yet (allowed; publish seals both), every sealed post
+    carries one (allowed), or at least one was sealed before migration 034 and never for machines
+    (refused, 409, naming why). Before the cap lookup and the simulation: a refusal should cost
+    nothing on chain.
+  */
+  if (isMachineContentKey(b.contentKey)) {
+    const human = humanContentKey(b.contentKey);
+    if (!human.ok) {
+      return NextResponse.json({ error: human.failure.detail, kind: 'reserved' }, { status: 400 });
+    }
+    const state = await machineBodyState(b.vaultId, human.value);
+    if (state === 'absent') {
+      return NextResponse.json(
+        { error: `"${human.value}" ${NO_MACHINE_BODY}`, kind: 'no-machine-body', machineBody: state },
+        { status: 409 },
+      );
+    }
+  }
+
   const caps = await findCreatorCaps(b.sender);
   if (!caps.ok) return NextResponse.json({ error: caps.failure.detail }, { status: 503 });
 

@@ -437,7 +437,22 @@ export interface Agent extends ReadOnlyAgent {
    * `#machine` marker. Then the cap for THIS vault is found, the transaction built once, simulated
    * on those bytes, signed and executed, like every other call here.
    */
-  priceContent: (input: { vaultId: string; contentKey: string; price: bigint }) => Promise<Reading<Executed>>;
+  priceContent: (input: {
+    vaultId: string;
+    /** The HUMAN key, always — `edition: 'machine'` derives `<contentKey>#machine` here. */
+    contentKey: string;
+    edition?: 'human' | 'machine';
+    price: bigint;
+  }) => Promise<Reading<Executed>>;
+
+  /**
+   * Whether the machine edition of a human key can be delivered on a vault, from
+   * `GET /api/studio/content-price`. Ask before pricing a machine edition: `absent` is a paid post
+   * sealed before machine editions were (the web's migration 034), whose plaintext is gone, so an
+   * `Unlock` sold for its machine key would open nothing. `no-post` means nothing is published
+   * under the key yet; `sealed` means every sealed post under it carries a machine body.
+   */
+  machineBody: (input: { vaultId: string; contentKey: string }) => Promise<Reading<'no-post' | 'sealed' | 'absent'>>;
 }
 
 export interface CreateAgentInput {
@@ -858,13 +873,26 @@ export function createAgent(
       return ok({ sent: true });
     },
 
-    async priceContent(input: { vaultId: string; contentKey: string; price: bigint }): Promise<Reading<Executed>> {
-      const key_ = input.contentKey.trim();
+    async priceContent(input: {
+      vaultId: string;
+      contentKey: string;
+      edition?: 'human' | 'machine';
+      price: bigint;
+    }): Promise<Reading<Executed>> {
+      const human = input.contentKey.trim();
+      const edition = input.edition ?? 'human';
+      /*
+        The machine key is DERIVED, never typed: the same rule as `packages/web/lib/machine-pricing.ts`
+        (trim, then append the marker), so the key this agent prices is the key the publish route
+        sealed to. The hand-typed marker below stays refused for the reason given there — a
+        creator-chosen key carrying it could collide with another post's machine edition.
+      */
+      const key_ = edition === 'machine' ? `${human}${MACHINE_EDITION_MARKER}` : human;
       const source = `creator::set_content_price "${key_}"`;
-      if (key_ === '') {
+      if (human === '') {
         return fail('malformed', source, 'a content key cannot be empty; the contract refuses it (EEmptyName), so nothing is sent.');
       }
-      if (key_.includes(MACHINE_EDITION_MARKER)) {
+      if (human.includes(MACHINE_EDITION_MARKER)) {
         return fail(
           'malformed',
           source,
@@ -886,6 +914,23 @@ export function createAgent(
         price: input.price,
       });
       return simulateAndExecute({ client, transaction: tx, key, gasBudgetMist: manifest.gasBudgetMist, what: source });
+    },
+
+    async machineBody(input: { vaultId: string; contentKey: string }): Promise<Reading<'no-post' | 'sealed' | 'absent'>> {
+      const what = 'machine body';
+      const query = new URLSearchParams({ vaultId: input.vaultId, contentKey: input.contentKey.trim() });
+      const read = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: `/api/studio/content-price?${query.toString()}`,
+        method: 'GET',
+        what,
+      });
+      if (!read.ok) return read;
+      const state = read.value['machineBody'];
+      if (state === 'no-post' || state === 'sealed' || state === 'absent') return ok(state);
+      // An older deployment answers without the field. That is not "sealed"; it is not knowing.
+      return fail('malformed', what, `the deployment did not say whether a machine edition can be delivered (machineBody=${JSON.stringify(state)}).`);
     },
 
     async balance(coinType?: string): Promise<Reading<bigint>> {

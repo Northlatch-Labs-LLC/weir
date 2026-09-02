@@ -13,7 +13,8 @@ import {
   type PostAccess,
 } from '@/lib/content';
 import { siteConfig } from '@/lib/chain';
-import { storeBody, type BodyGate } from '@/lib/body-storage';
+import { storeBody, type SealedBody } from '@/lib/body-storage';
+import { sealBothEditions } from '@/lib/machine-pricing';
 import { spendSignature, sweepUsedSignatures, verifyActionDeferringSpend } from '@/lib/identity';
 import { db } from '@/lib/db';
 
@@ -88,6 +89,23 @@ export async function POST(request: Request) {
           ? `body exceeds ${MAX_POST_BODY_LENGTH} characters`
           : null;
   if (tooLong !== null) return NextResponse.json({ error: tooLong }, { status: 400 });
+
+  /*
+    A paid content key is stored exactly as it is sealed, or it is refused.
+
+    The seal derives the machine key from the TRIMMED human key (`lib/machine-pricing.ts` trims,
+    as the pricing routes do), so a key arriving with surrounding whitespace would be sealed under
+    one name and written to the row under another — the B1 defect in miniature: an `Unlock` for a
+    key nothing was sealed to. The composer trims before it prices, so nothing live reaches this;
+    it is here for every other writer. Before the signature, like the length checks, so a refusal
+    costs no signature.
+  */
+  if (access === 'paid' && body.contentKey !== undefined && body.contentKey !== body.contentKey.trim()) {
+    return NextResponse.json(
+      { error: 'a paid contentKey must carry no leading or trailing whitespace' },
+      { status: 400 },
+    );
+  }
 
   const profile = await findProfile(handle);
   if (profile === null) return NextResponse.json({ error: 'no such creator' }, { status: 404 });
@@ -260,9 +278,48 @@ export async function POST(request: Request) {
   */
   const publishedAtMs = Date.now();
 
-  let gate: BodyGate | null = null;
+  let sealedBody: SealedBody | null = null;
+  let machineBody: (SealedBody & { contentKey: string }) | null = null;
+
   if (postAccess.kind === 'paid') {
-    gate = { kind: 'unlock', contentKey: postAccess.contentKey };
+    /*
+      Both editions, unconditionally, for every paid post.
+
+      A paid post can be sold a second time to machines under `<key>#machine`, and the composer has
+      been able to PRICE that key since the machine block shipped. Nothing ever SEALED to it: this
+      route sealed one body, to the human identity, and `sealBothEditions` had no caller. A machine
+      buyer therefore paid for an `Unlock` whose identity nothing was encrypted to.
+
+      Unconditional rather than opt-in, because the choice is irreversible in one direction only:
+      `addPost` writes '' for a sealed body, so the plaintext is gone the moment this returns. A
+      creator who did not tick a box at publish could never offer a machine edition later, and
+      "price it later" would be a lie for every such post. Sealing both costs one extra durable
+      blob per paid post — measured at roughly 0.347 WAL each (`lib/storage-retention.ts`), fronted
+      by the platform — and buys the creator the right to decide later, or never.
+
+      The same `text` reaches both seals through one argument: two calls each naming "the body"
+      would be two chances to seal a machine buyer something a human buyer did not get.
+
+      Either failure refuses the whole publish. A half-published row would sell a machine `Unlock`
+      for nothing, which is the defect itself; an orphaned human blob costs a lease and sells
+      nothing. `lib/machine-pricing.ts` states the trade-off beside the function.
+    */
+    const both = await sealBothEditions({ humanKey: postAccess.contentKey, body: text }, (gate) =>
+      storeBody({
+        body: gate.body,
+        vaultId: profile.vaultId!,
+        gate: { kind: 'unlock', contentKey: gate.contentKey },
+        owner: vault.value.owner,
+      }),
+    );
+    if (!both.ok) {
+      return NextResponse.json(
+        { error: `the body could not be sealed: ${both.failure.detail}` },
+        { status: 503 },
+      );
+    }
+    sealedBody = both.value.human.sealed;
+    machineBody = { ...both.value.machine.sealed, contentKey: both.value.machine.contentKey };
   } else if (postAccess.kind === 'subscribers') {
     /*
       Tier 0, and the period this post is published in.
@@ -277,25 +334,21 @@ export async function POST(request: Request) {
       the deliberate under-grant, taken because a derived key cannot be withdrawn and the creator
       can always sell the missing period as an `Unlock`.
     */
-    gate = { kind: 'period', tier: 0n, period: periodOf(BigInt(publishedAtMs)) };
-  }
-
-  let sealedBody: Awaited<ReturnType<typeof storeBody>> | null = null;
-  if (gate !== null) {
-    sealedBody = await storeBody({
+    const stored = await storeBody({
       body: text,
       vaultId: profile.vaultId,
-      gate,
+      gate: { kind: 'period', tier: 0n, period: periodOf(BigInt(publishedAtMs)) },
       owner: vault.value.owner,
     });
-    if (!sealedBody.ok) {
+    if (!stored.ok) {
       // Nothing is written. A gated post whose body failed to seal must not fall back to storing
       // the words in the clear — that is the exact state this change exists to end.
       return NextResponse.json(
-        { error: `the body could not be sealed: ${sealedBody.failure.detail}` },
+        { error: `the body could not be sealed: ${stored.failure.detail}` },
         { status: 503 },
       );
     }
+    sealedBody = stored.value;
   }
 
   const post = {
@@ -307,7 +360,8 @@ export async function POST(request: Request) {
     preview,
     body: text,
     access: postAccess,
-    ...(sealedBody?.ok ? { sealedBody: sealedBody.value } : {}),
+    ...(sealedBody === null ? {} : { sealedBody }),
+    ...(machineBody === null ? {} : { machineBody }),
   };
 
   /*

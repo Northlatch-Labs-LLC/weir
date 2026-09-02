@@ -98,6 +98,18 @@ import { fail, ok, unlockIdentity, type Reading } from '@projectx-social/sdk';
 export const MACHINE_EDITION_MARKER = '#machine';
 
 /**
+ * The sentence a creator reads when a machine edition cannot be sold.
+ *
+ * Read by `studio/price` (the 409), by the composer (in place of the price field) and by the test
+ * that pins both, so the refusal is one sentence everywhere and not three paraphrases. It follows
+ * the quoted human key. Here rather than in the route because the composer is a client component
+ * and must not import a route module.
+ */
+export const NO_MACHINE_BODY =
+  'was published before machine editions existed; its words were never sealed to this key and ' +
+  'cannot be now — republish it, and the new post carries both editions.';
+
+/**
  * Why this key may not be used as a human (creator-chosen) content key, or `null` if it may.
  *
  * Returns a sentence for a creator, not an error code: the composer prints it under the field and

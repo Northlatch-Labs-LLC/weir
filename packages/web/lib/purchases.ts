@@ -35,6 +35,7 @@ import {
 } from '@projectx-social/sdk';
 import { siteConfig } from './chain';
 import { listProfiles } from './content';
+import { humanContentKey, isMachineContentKey } from './machine-pricing';
 
 const SubscriptionBcs = bcs.struct('Subscription', {
   id: bcs.Address,
@@ -85,6 +86,11 @@ export interface UnlockRecord {
   contentKey: string;
   /** The post's title, when the content key names a post this deployment stores. */
   title: string | null;
+  /**
+   * Which edition the `Unlock` bought. A machine `Unlock` carries `<key>#machine`; its title is
+   * looked up under the human key, because that is the post it opens, and the receipt says so.
+   */
+  edition: 'human' | 'machine';
   pricePaid: bigint;
   purchasedAtMs: number;
 }
@@ -181,6 +187,7 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
         handle: handleOf.get(vaultId) ?? null,
         contentKey,
         title: null,
+        edition: isMachineContentKey(contentKey) ? 'machine' : 'human',
         pricePaid: BigInt(u.pricePaid),
         purchasedAtMs: Number(u.purchasedAtMs),
       });
@@ -196,9 +203,15 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
     */
     if (unlockRecords.length > 0) {
       const { titlesForContentKeys } = await import('./content');
-      const titleOf = await titlesForContentKeys(unlockRecords.map((u) => u.contentKey));
+      // A machine `Unlock` is titled by the post it opens: the row is stored under the HUMAN key,
+      // and `<key>#machine` names no row of its own.
+      const humanKeyOf = (key: string): string => {
+        const human = humanContentKey(key);
+        return human.ok ? human.value : key;
+      };
+      const titleOf = await titlesForContentKeys(unlockRecords.map((u) => humanKeyOf(u.contentKey)));
       for (const record of unlockRecords) {
-        record.title = titleOf.get(record.contentKey) ?? null;
+        record.title = titleOf.get(humanKeyOf(record.contentKey)) ?? null;
       }
     }
 

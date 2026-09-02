@@ -88,7 +88,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { Capability, Ceiling, Currency, WeirBinding, WeirPort } from './transport.js';
+import type { Capability, Ceiling, Currency, MachineBodyState, WeirBinding, WeirPort } from './transport.js';
 import { capabilitiesOf, log, parseAmount } from './transport.js';
 import { CallLedger, idempotencyKeyFor, type RequestId } from './idempotency.js';
 import { MAX_RESPONSE_CONTENT_CHARS, envelope, renderUntrusted, type Provenance } from './untrusted.js';
@@ -914,6 +914,15 @@ function registerPrice(
       inputSchema: {
         vaultId: vaultIdSchema.describe('Your own creator vault — the one your CreatorCap governs.'),
         contentKey: contentKeySchema.describe('The vault-scoped key the post will be sold under. Must not contain "#machine".'),
+        edition: z
+          .enum(['human', 'machine'])
+          .optional()
+          .describe(
+            'Which edition to price. "human" (the default) prices contentKey itself. "machine" prices the ' +
+              'machine edition of the same post — the key is derived as contentKey + "#machine" for you; never ' +
+              'type the marker. A machine edition is priced only where it can be delivered: posts published ' +
+              'before machine editions were sealed refuse it (no_machine_body) until the creator republishes.',
+          ),
         price: z
           .string()
           .min(1)
@@ -945,16 +954,49 @@ function registerPrice(
             `string that fits in a u64. Received ${JSON.stringify(args.price)}. Unpriced means not for sale, never free.`,
         );
       }
+      const edition = args.edition ?? 'human';
+      if (edition === 'machine') {
+        /*
+          A machine edition is priced only where it can be delivered.
+
+          Pricing mints nothing, but it makes `creator::unlock` mint an `Unlock` for `<key>#machine`
+          on the next purchase, and an `Unlock` cannot be withdrawn. A paid post published before
+          machine editions were sealed at publish has no machine body and never will — the platform
+          kept no plaintext — so the deployment is asked first, and only `no-post` (nothing published
+          yet; publish seals both) or `sealed` lets the price through. `unreadable` concludes nothing:
+          refused, and the agent may ask again. A port with no way to ask is treated the same way.
+        */
+        const state = await machineBodyOf(weir, args.vaultId, key_);
+        if (state === 'absent') {
+          return refuse(
+            'no_machine_body',
+            `"${key_}" was published before machine editions existed; its words were never sealed to the ` +
+              'machine key and cannot be now. Republish the post — the new one carries both editions — then price it.',
+            { next: { tool: toolName('post') } },
+          );
+        }
+        if (state === 'unreadable') {
+          return refuse(
+            'unreadable',
+            `whether "${key_}" can deliver a machine edition could not be read, so nothing was priced. Not the same ` +
+              'as it being unsellable; ask again.',
+          );
+        }
+      }
       return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
         try {
           const priced = await weir.priceContent!({
             vaultId: args.vaultId,
             contentKey: key_,
+            edition,
             price: price.toString(),
             currency: args.currency,
             idempotencyKey: key,
           });
-          return succeed({ txDigest: priced.txDigest, vaultId: args.vaultId, contentKey: key_, price: price.toString(), idempotencyKey: key });
+          // The key that was priced: derived here by the same rule the port derives it, so the
+          // receipt names the key a buyer will unlock.
+          const pricedKey = edition === 'machine' ? `${key_}${MACHINE_EDITION_MARKER}` : key_;
+          return succeed({ txDigest: priced.txDigest, vaultId: args.vaultId, contentKey: pricedKey, price: price.toString(), idempotencyKey: key });
         } catch (error) {
           return fromThrown(name, error);
         }
@@ -962,6 +1004,34 @@ function registerPrice(
     },
   );
   return name;
+}
+
+/**
+ * The port's answer to "can this key's machine edition be delivered", flattened.
+ *
+ * The port may be the agent package, which answers with a `Reading`, or a stub answering with the
+ * bare state. Anything that is not one of the three states — a failed reading, a throw, a port with
+ * no such method — is `unreadable`: nothing is concluded, and `weir_price` refuses on it rather than
+ * treating not-knowing as sellable.
+ */
+async function machineBodyOf(
+  weir: WeirPort,
+  vaultId: string,
+  contentKey: string,
+): Promise<MachineBodyState | 'unreadable'> {
+  if (weir.machineBody === undefined) return 'unreadable';
+  try {
+    const answer: unknown = await weir.machineBody({ vaultId, contentKey });
+    const state =
+      typeof answer === 'object' && answer !== null && 'ok' in answer
+        ? (answer as { ok: boolean; value?: unknown }).ok
+          ? (answer as { value?: unknown }).value
+          : undefined
+        : answer;
+    return state === 'no-post' || state === 'sealed' || state === 'absent' ? state : 'unreadable';
+  } catch {
+    return 'unreadable';
+  }
 }
 
 function registerSend(

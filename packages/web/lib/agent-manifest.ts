@@ -757,7 +757,10 @@ const ENDPOINTS: ManifestEndpoint[] = [
     budget: 'read',
     purpose:
       'What a vault already charges for a content key, in the smallest units of the vault coin. ' +
-      'A key with a price already set does not need setting again.',
+      'A key with a price already set does not need setting again. Also answers for the machine ' +
+      'edition of the key: `machine` carries its price, and `machineBody` says whether it can be ' +
+      'delivered — `sealed`, `no-post`, or `absent` for a post published before machine editions ' +
+      'were sealed, which refuses a machine price until the creator republishes.',
     query: ['vaultId', 'contentKey'],
     body: [],
   },
