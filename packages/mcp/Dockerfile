@@ -1,6 +1,6 @@
 # The hosted, keyless weir-mcp — public, read-only, no secrets anywhere in this image.
 #
-# Shape: operations/MCP-HOSTING-SHAPE.md. Same construction as packages/daemon/Dockerfile —
+# Same construction as packages/daemon/Dockerfile —
 # multi-stage, corepack-pinned pnpm, manifests before sources, never root — with one deliberate
 # difference: this image must never receive a key. `WEIR_AGENT_KEY` set under `--http` makes the
 # server exit 78 before it listens (packages/mcp/src/transport.ts resolveOptions), and nothing here

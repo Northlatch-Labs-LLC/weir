@@ -16,7 +16,7 @@
  * # What this does not do
  *
  * It does not build the image and it does not start the server. Both are processes on the machine
- * this runs on and are exercised only on the Master's word; `scripts/acceptance-probes.sh` is what
+ * this runs on and are exercised only against a real deployment; `scripts/acceptance-probes.sh` is what
  * runs against the deployed URL. The PR that carries these files says so.
  */
 
