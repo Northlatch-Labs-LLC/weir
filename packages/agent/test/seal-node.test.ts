@@ -993,7 +993,7 @@ describe('the settling window after a purchase', () => {
       },
       recoverKey: async () => {
         attempts += 1;
-        if (attempts < 3) throw new Error('NoAccess: User does not have access to one or more keys');
+        if (attempts < 3) throw new NoAccessError('User does not have access to one or more keys');
         return blob.key;
       },
     });
@@ -1013,7 +1013,7 @@ describe('the settling window after a purchase', () => {
       sleep: async () => {},
       recoverKey: async () => {
         attempts += 1;
-        throw new Error('NoAccess: User does not have access to one or more keys');
+        throw new NoAccessError('User does not have access to one or more keys');
       },
     });
 
