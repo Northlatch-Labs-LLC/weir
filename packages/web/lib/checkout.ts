@@ -33,6 +33,7 @@ import {
   fail,
   ok,
   handleProblem,
+  readContentPrice,
   readCreatorVault,
   tx as txBuilders,
   type DecodedAbort,
@@ -570,6 +571,10 @@ export type SubscribeBlocker =
   | { kind: 'no-account' }
   | { kind: 'self-payment' }
   | { kind: 'insufficient-balance'; have: string; need: string }
+  /** The key is not priced on the vault (any more); nothing can be bought. */
+  | { kind: 'not-for-sale' }
+  /** The chain's price differs from what the page listed. The buyer must see the live one first. */
+  | { kind: 'price-moved'; listed: string; live: string }
   | { kind: 'tier-inactive' };
 
 /**
@@ -870,7 +875,26 @@ export async function prepareUnlock(input: {
       what it listed the post at, and if that disagrees with the chain the contract aborts, which
       is the correct authority. Looking the price up first would be the same read done twice.
     */
-    const price = BigInt(input.expectedPrice);
+    /*
+      The live price IS read here, since 2026-09-02, and it is the number the quote reports.
+
+      `expectedPrice` is what the page listed when the row was written. The contract takes the
+      vault's live price and returns change, so a listing that had gone stale still executed — at
+      the live price — while the quote below reported `creatorReceives` and `platformReceives` for
+      a price nobody paid, and the manifest claimed the two were checked against each other. Now
+      they are: a lower or higher live price is a `price-moved` block (a measured fact, 200), and
+      the buyer confirms the number that will actually leave their wallet. An unpriced key is
+      `not-for-sale`, before any coin is touched.
+    */
+    const listed = BigInt(input.expectedPrice);
+    const live = await readContentPrice(client, vault.value.contentPricesTableId, input.contentKey);
+    if (!live.ok) return live;
+    if (live.value === null) return ok({ blocked: { kind: 'not-for-sale' } });
+    if (live.value !== listed) {
+      return ok({ blocked: { kind: 'price-moved', listed: listed.toString(), live: live.value.toString() } });
+    }
+    const price = live.value;
+
     const balance = await totalBalance(client, input.sender, input.coinType);
     if (!balance.ok) return balance;
     if (balance.value < price) {

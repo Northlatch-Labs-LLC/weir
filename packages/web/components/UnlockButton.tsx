@@ -33,6 +33,8 @@ type Blocker =
   | { kind: 'no-account' }
   | { kind: 'self-payment' }
   | { kind: 'insufficient-balance'; have: string; need: string }
+  | { kind: 'not-for-sale' }
+  | { kind: 'price-moved'; listed: string; live: string }
   | { kind: 'tier-inactive' };
 
 interface Quote {
@@ -157,6 +159,8 @@ export function UnlockButton({
           'This is your own vault, so there is nothing to buy.'
         ) : blocked.kind === 'insufficient-balance' ? (
           `Not enough to cover ${priceLabel}.`
+        ) : blocked.kind === 'price-moved' ? (
+          `The creator changed the price since this page was loaded: it is now ${blocked.live} units, not ${blocked.listed}. Reload to see the current price before buying.`
         ) : (
           'This post is not currently for sale.'
         )}

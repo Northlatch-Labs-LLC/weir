@@ -6,6 +6,7 @@ import { siteConfig } from '@/lib/chain';
 import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
 import { verifyAction } from '@/lib/identity';
+import { coinTypeOf } from '@/lib/creator-setup';
 
 /**
  * What a creator may write about themselves.
@@ -50,11 +51,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: config.failure.detail }, { status: 503 });
   }
 
-  const vault = await readCreatorVault(createClient(config.value), b.vaultId);
+  const client = createClient(config.value);
+  const vault = await readCreatorVault(client, b.vaultId);
   if (!vault.ok) {
     return NextResponse.json(
       { error: `the vault could not be read: ${vault.failure.detail}` },
       { status: 424 },
+    );
+  }
+  /*
+    The coin type is the vault's type parameter, read from chain, and the body must agree with it.
+    This route's own rule is "ownership is read from chain, never taken from the request", and the
+    coin was the one field it took from the request: a creator who signed the wrong coin type
+    stored a denomination every buyer's subscribe/tip/unlock was then built with, and every one
+    of those simulations failed with a type mismatch until somebody read the row.
+  */
+  const onChainCoin = await coinTypeOf(client, b.vaultId);
+  if (onChainCoin === null) {
+    return NextResponse.json({ error: 'the vault\'s coin type could not be read from chain' }, { status: 424 });
+  }
+  if (normaliseCoinType(onChainCoin) !== normaliseCoinType(b.coinType)) {
+    return NextResponse.json(
+      { error: `coinType does not match the vault: the vault is denominated in ${onChainCoin}` },
+      { status: 400 },
     );
   }
   /*
@@ -188,4 +207,11 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ handle: slug });
+}
+
+/** `0x2::sui::SUI` and its 64-hex spelling are one coin; compare with the address padded. */
+function normaliseCoinType(coinType: string): string {
+  const [pkg, ...rest] = coinType.trim().split('::');
+  const hex = (pkg ?? '').replace(/^0x/i, '').padStart(64, '0').toLowerCase();
+  return `0x${hex}::${rest.join('::')}`;
 }

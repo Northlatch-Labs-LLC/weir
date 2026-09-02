@@ -106,12 +106,18 @@ describe('listPosts is bounded at the database', () => {
 describe('naming unlocks does not read the archive', () => {
   it('asks for the keys it holds, not for every post', async () => {
     const { titlesForContentKeys } = await import('../lib/content');
-    await titlesForContentKeys(['key-1', 'key-2', 'key-1', '']);
+    const vaultId = `0x${'a1'.repeat(32)}`;
+    await titlesForContentKeys([
+      { vaultId, contentKey: 'key-1' },
+      { vaultId, contentKey: 'key-2' },
+      { vaultId, contentKey: 'key-1' },
+      { vaultId, contentKey: '' },
+    ]);
 
     const sql = lastSql();
-    // Two columns, for named keys. Not bodies, not assets, not everything.
-    expect(sql).toMatch(/SELECT content_key, title FROM posts/i);
-    expect(sql).toMatch(/content_key = ANY/i);
+    // Three columns, for named (vault, key) pairs. Not bodies, not assets, not everything.
+    expect(sql).toMatch(/SELECT vault_id, content_key, title FROM posts/i);
+    expect(sql).toMatch(/\(vault_id, content_key\) IN/i);
     expect(sql).not.toMatch(/p\.body/i);
 
     // Deduplicated, and the empty key never reaches the database.

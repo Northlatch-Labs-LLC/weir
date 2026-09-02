@@ -17,6 +17,7 @@ export const DATABASE_TEST_FILES: readonly string[] = [
   'test/machine-edition.test.ts',
   'test/prices-are-whole-numbers.test.ts',
   'test/public-read.test.ts',
+  'test/receipts-and-labels.test.ts',
   'test/relay.test.ts',
   'test/replay.test.ts',
   'test/routes/browse.test.ts',
