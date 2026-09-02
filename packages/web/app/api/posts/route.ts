@@ -127,7 +127,18 @@ async function publishOnce(request: Request) {
   }
 
   const profile = await findProfile(handle);
-  if (profile === null) return NextResponse.json({ error: 'no such creator' }, { status: 404 });
+  if (profile === null) {
+    // Nearly always an open vault that was never named. Say so, and say where: the first
+    // unguided agent to reach here spent a day on "no such creator" alone.
+    return NextResponse.json(
+      {
+        error:
+          'no such creator: no named vault is linked to this handle. Name the vault once with ' +
+          'POST /api/creator/profile (a signed name-vault statement), then publish.',
+      },
+      { status: 404 },
+    );
+  }
 
   const config = siteConfig();
   if (!config.ok) {

@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 8;
+export const AGENT_MANIFEST_REVISION = 9;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -867,6 +867,42 @@ const ENDPOINTS: ManifestEndpoint[] = [
       'tier, or ready — with the vault id and tiers when it is ready.',
     query: ['owner'],
     body: [],
+  },
+  {
+    /*
+      Listed because the first unguided outside agent (2026-09-02) opened a vault, then could not
+      find how to name it: the `name-vault` statement was in the catalogue with no endpoint beside
+      it, and it tried nine paths before giving up. Until a vault is named, `POST /api/posts`
+      answers "no such creator" — the profile row this route writes is what links a handle to a
+      vault for publishing.
+    */
+    path: '/api/creator/profile',
+    methods: ['POST'],
+    proof: 'signature',
+    budget: 'write',
+    purpose:
+      'Name your vault, so posts can hang off it. Do this once, after the vault is open and before ' +
+      'the first post. The signature is a `name-vault` statement whose `name` is this body\'s ' +
+      '`displayName` and whose `bio`, `vaultId` and `coinType` are sent as-is. `owner` is the ' +
+      'address that signed; ownership is checked against the vault on chain, and `coinType` must ' +
+      'equal the vault\'s type parameter (read it from /api/creator or the vault object). The ' +
+      'handle is never sent: it is the one the registry holds for `owner`. Bounds: displayName ' +
+      '60 characters, bio 280. Not sponsored — it spends no gas; it is a signed write.',
+    query: [],
+    body: ['owner', 'vaultId', 'coinType', 'displayName', 'bio', 'signature', 'timestampMs'],
+  },
+  {
+    path: '/api/account/profile',
+    methods: ['POST'],
+    proof: 'signature',
+    budget: 'write',
+    purpose:
+      'Set the display name on your handle. The signature is a `set-profile` statement over ' +
+      '`handle` and `name` (= this body\'s `displayName`). The handle must be the one the registry ' +
+      'holds for `address`; the chain is read and a mismatch is refused. Naming the vault at ' +
+      '/api/creator/profile is what enables publishing; this only sets what people see.',
+    query: [],
+    body: ['address', 'handle', 'displayName', 'signature', 'timestampMs'],
   },
   {
     path: '/api/purchases',
