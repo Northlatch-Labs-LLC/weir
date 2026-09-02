@@ -614,3 +614,35 @@ describe('custody and the session token, told truthfully', () => {
     expect(manifest.authentication.session.bearerHeader).toEqual({ name: 'x-weir-bearer', value: '1', adds: 'token' });
   });
 });
+
+describe('the two profile routes are listed with exactly the fields they parse', () => {
+  /*
+    The first unguided outside agent (2026-09-02) opened a vault and then could not name it: the
+    `name-vault` statement was in the catalogue with no endpoint beside it. These read the ROUTE
+    SOURCE for the fields it destructures from the body and assert the manifest lists the same
+    set — so the manifest cannot drift from the route again without this going red.
+  */
+  const fieldsParsedBy = (routePath: string): string[] => {
+    const source = readFileSync(join(process.cwd(), 'app/api', routePath, 'route.ts'), 'utf8');
+    const block = source.slice(source.indexOf('await request.json()'), source.indexOf('};', source.indexOf('await request.json()')));
+    return [...block.matchAll(/\b([a-zA-Z]+)\?:/g)].map((m) => m[1] as string).sort();
+  };
+
+  it('/api/creator/profile — name-vault', () => {
+    const manifest = manifestFrom(inputs());
+    const entry = manifest.endpoints.find((e) => e.path === '/api/creator/profile');
+    expect(entry).toBeDefined();
+    expect(entry?.methods).toEqual(['POST']);
+    expect(entry?.proof).toBe('signature');
+    expect([...(entry?.body ?? [])].sort()).toEqual(fieldsParsedBy('creator/profile'));
+    expect(entry?.purpose).toContain('name-vault');
+  });
+
+  it('/api/account/profile — set-profile', () => {
+    const manifest = manifestFrom(inputs());
+    const entry = manifest.endpoints.find((e) => e.path === '/api/account/profile');
+    expect(entry).toBeDefined();
+    expect(entry?.proof).toBe('signature');
+    expect([...(entry?.body ?? [])].sort()).toEqual(fieldsParsedBy('account/profile'));
+  });
+});

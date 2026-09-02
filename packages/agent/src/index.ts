@@ -462,6 +462,21 @@ export interface Agent extends ReadOnlyAgent {
   /** `account::open` — claim a handle on chain. */
   openAccount: (handle: string, referrer?: string | null) => Promise<Reading<Executed>>;
 
+  /**
+   * Name an open vault, so posts can hang off it. Once, after the vault is open, before the first
+   * post: until then `POST /api/posts` answers "no such creator". A signed write, no gas, no seat.
+   * `coinType` is read from the vault when not given; the route refuses one that disagrees with it.
+   */
+  nameVault: (input: {
+    vaultId: string;
+    displayName: string;
+    bio?: string;
+    coinType?: string;
+  }) => Promise<Reading<{ handle: string }>>;
+
+  /** Set the display name on the handle the registry holds for this address. */
+  setProfile: (input: { handle: string; displayName: string }) => Promise<Reading<{ handle: string }>>;
+
   /** Buy permanent access to one content key. Refuses over `maxPrice`. */
   unlock: (
     input: { vaultId: string; contentKey: string; priceMinorUnits: bigint } & SpendCeiling,
@@ -800,6 +815,88 @@ export function createAgent(
         gasBudgetMist: manifest.gasBudgetMist,
         what: `account::open "${handle}"`,
       });
+    },
+
+    async nameVault(input: {
+      vaultId: string;
+      displayName: string;
+      bio?: string;
+      coinType?: string;
+    }): Promise<Reading<{ handle: string }>> {
+      const what = 'name vault';
+      if (!/^0x[0-9a-f]{64}$/i.test(input.vaultId)) {
+        return fail('malformed', what, `vaultId must be a Sui object id; received ${JSON.stringify(input.vaultId)}`);
+      }
+      if (typeof input.displayName !== 'string' || input.displayName.length === 0 || input.displayName.length > 60) {
+        return fail('malformed', what, 'displayName is 1–60 characters; it is signed into the statement.');
+      }
+      const bio = input.bio ?? '';
+      if (bio.length > 280) return fail('malformed', what, 'bio is at most 280 characters; it is signed into the statement.');
+      /*
+        The coin type is bound into the signature and the route compares it with the vault's own
+        type parameter read from chain. Reading it here rather than guessing is the same rule the
+        route applies: a signed wrong coin would be refused, and a refused single-use signature has
+        to be signed again to find out why.
+      */
+      const coinType = input.coinType ?? (await vaultCoinTypeOf(input.vaultId));
+      if (coinType === '') {
+        return fail('transport', what, `the vault ${input.vaultId} could not be read, so its coin type is unknown; pass coinType or retry.`);
+      }
+      // `app/api/creator/profile/route.ts` rebuilds exactly this: name = displayName, bio, coinType.
+      const signed = await signAction(key.keypair, {
+        kind: 'name-vault',
+        vaultId: input.vaultId,
+        name: input.displayName,
+        bio,
+        coinType,
+      }, manifest.baseUrl);
+      const response = await authorisedFetch({
+        agent,
+        doFetch,
+        path: '/api/creator/profile',
+        method: 'POST',
+        what,
+        body: {
+          owner: signed.address,
+          vaultId: input.vaultId,
+          coinType,
+          displayName: input.displayName,
+          bio,
+          signature: signed.signature,
+          timestampMs: signed.timestampMs,
+        },
+      });
+      if (!response.ok) return response;
+      const handle = response.value['handle'];
+      if (typeof handle !== 'string' || handle === '') {
+        return fail('malformed', what, 'the vault was named but the route returned no handle.');
+      }
+      return ok({ handle });
+    },
+
+    async setProfile(input: { handle: string; displayName: string }): Promise<Reading<{ handle: string }>> {
+      const what = 'set profile';
+      if (typeof input.displayName !== 'string' || input.displayName.length === 0 || input.displayName.length > 60) {
+        return fail('malformed', what, 'displayName is 1–60 characters; it is signed into the statement.');
+      }
+      // `app/api/account/profile/route.ts` rebuilds `{ kind: 'set-profile', handle, name: displayName }`.
+      const signed = await signAction(key.keypair, { kind: 'set-profile', handle: input.handle, name: input.displayName }, manifest.baseUrl);
+      const response = await authorisedFetch({
+        agent,
+        doFetch,
+        path: '/api/account/profile',
+        method: 'POST',
+        what,
+        body: {
+          address: signed.address,
+          handle: input.handle,
+          displayName: input.displayName,
+          signature: signed.signature,
+          timestampMs: signed.timestampMs,
+        },
+      });
+      if (!response.ok) return response;
+      return ok({ handle: input.handle });
     },
 
     async unlock(

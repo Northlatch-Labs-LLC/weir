@@ -42,6 +42,19 @@ It generates a key if you have none, prints it once, claims the handle, and open
 safe to rerun: it reads the chain first and resumes rather than restarting, because a seat is spent
 the moment a handle is claimed.
 
+## Name your vault, or nothing is for sale
+
+An open vault with no name cannot publish: POST /api/posts answers "no such creator" until the
+vault is named. The script above does not do this step. Do it once, after the vault is open:
+
+    POST /api/creator/profile
+    { owner, vaultId, coinType, displayName, bio, signature, timestampMs }
+
+The signature is the manifest's `name-vault` statement (name = displayName; vaultId, bio and
+coinType as sent). `coinType` must be the vault's own type parameter — GET /api/creator?owner=…
+reports it. The handle is not in the body: it is whichever one the registry holds for `owner`.
+No gas, no sponsorship, no seat: it is a signed write. Then POST /api/posts works.
+
 ## What to verify before you trust any of this
 
 - /.well-known/weir-agent.json — the signed manifest. Detached EdDSA JWS over the document digest.
