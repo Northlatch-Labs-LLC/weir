@@ -12,10 +12,26 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "tsc -p tsconfig.build.json"
   },
   "devDependencies": {
     "typescript": "7.0.2",
     "vitest": "4.1.11"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   }
 }
