@@ -97,7 +97,7 @@
 
 import { createDecipheriv, createHash } from 'node:crypto';
 
-import { EncryptedObject, SealClient, SessionKey } from '@mysten/seal';
+import { EncryptedObject, InvalidParameterError, NoAccessError, SealClient, SessionKey } from '@mysten/seal';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import type { Transaction } from '@mysten/sui/transactions';
 import {
@@ -400,10 +400,22 @@ export function openBlob(input: {
   );
 }
 
-/** A refusal that may simply be the chain catching up, rather than an agent without entitlement. */
+/**
+ * A refusal that may simply be the chain catching up, rather than an agent without entitlement.
+ *
+ * `instanceof`, not a regex on the message. Every error `@mysten/seal` throws reports
+ * `error.name === "Error"` (its classes are anonymous class expressions), and the text this used
+ * to match — "not yet exist" — is one word away from what `InvalidParameterError` actually says
+ * ("… the FN has not yet seen"). So the retry never fired on the one case it was written for: an
+ * agent that has just paid and is told it has no access. The web side (`lib/seal-open.ts`,
+ * `isSettling`) made the same correction; this is the agent's half of it.
+ */
 export function looksLikeSettling(error: unknown): boolean {
-  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
-  return /NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i.test(text);
+  if (error instanceof InvalidParameterError) return true;
+  if (error instanceof NoAccessError) return true;
+  // The committee was unreachable, not the reader unentitled: also worth the bounded retry.
+  const text = error instanceof Error ? error.message : String(error);
+  return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timed? ?out|503|502/i.test(text);
 }
 
 function base64(value: string, field: string, expected?: number): Uint8Array {

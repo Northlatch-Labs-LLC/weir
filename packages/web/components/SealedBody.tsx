@@ -23,12 +23,13 @@
  */
 
 import { useEffect, useState } from 'react';
-import { SealClient, SessionKey } from '@mysten/seal';
+import { SealClient } from '@mysten/seal';
 import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
 import { PostBody } from '@/components/PostBody';
-import { approvalFor, openBlob, sha256Hex } from '@/lib/seal-open';
+import { approvalFor, isSettling, openBlob, sha256Hex } from '@/lib/seal-open';
+import { sessionKeyFor } from '@/lib/seal-session';
 
 export interface SealedBodyRef {
   blobId: string;
@@ -87,10 +88,6 @@ function sealSettingsOnce(): Promise<SealSettings> {
   return settingsRequest;
 }
 
-function looksLikeSettling(error: unknown): boolean {
-  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
-  return /NoAccess|does not have access|InvalidParameter|NotFound|not yet exist/i.test(text);
-}
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type State =
@@ -136,13 +133,9 @@ export function SealedBody({
         }
 
         const suiClient = createClient(config);
-        const sessionKey = await SessionKey.create({
-          address: signer.address, packageId: config.packageId,
-          ttlMin: SESSION_TTL_MIN, suiClient,
-        });
-        const signature = await signer.signPersonalMessage(sessionKey.getPersonalMessage());
+        // One session per signer per tab, shared with every other sealed card (`lib/seal-session.ts`).
+        const sessionKey = await sessionKeyFor({ signer, packageId: config.packageId, ttlMin: SESSION_TTL_MIN, suiClient });
         if (cancelled) return;
-        await sessionKey.setPersonalMessageSignature(signature);
 
         const seal = new SealClient({
           suiClient,
@@ -205,7 +198,7 @@ export function SealedBody({
             break;
           } catch (error) {
             last = error;
-            if (cancelled || !looksLikeSettling(error)) throw error;
+            if (cancelled || !isSettling(error)) throw error;
             const backoff = SETTLING_BACKOFF_MS[attempt];
             if (backoff === undefined) break;
             if (!cancelled) setState({ phase: 'settling' });

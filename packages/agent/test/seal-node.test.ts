@@ -34,7 +34,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
-import { EncryptedObject } from '@mysten/seal';
+import { EncryptedObject, InvalidParameterError, NoAccessError } from '@mysten/seal';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromBase64, toBase58 } from '@mysten/sui/utils';
 import {
@@ -1039,16 +1039,24 @@ describe('the settling window after a purchase', () => {
     expect(attempts).toBe(1);
   });
 
-  it('recognises the refusals a key server actually sends', () => {
-    for (const text of [
-      'NoAccess',
-      'User does not have access to one or more keys',
-      'InvalidParameter',
-      'NotFound',
-      'Object does not yet exist',
-    ]) {
-      expect(looksLikeSettling(new Error(text))).toBe(true);
-    }
+  it('recognises the refusals a key server actually sends — by class, not by prose', () => {
+    /*
+      The case the old regex missed, verbatim from @mysten/seal: a freshly minted Unlock the
+      fullnode has "not yet seen". The regex looked for "not yet exist" and never fired on it, so
+      an agent that had just paid recorded the refusal as fact. Mutation predicted: put the regex
+      back → this assertion goes red.
+    */
+    const justPaid = new InvalidParameterError(
+      'PTB contains an invalid parameter, possibly a newly created object that the FN has not yet seen',
+    );
+    expect(justPaid.name).toBe('Error'); // the library's classes carry no name; a regex on it matches nothing
+    expect(looksLikeSettling(justPaid)).toBe(true);
+    expect(looksLikeSettling(new NoAccessError('User does not have access to one or more keys'))).toBe(true);
+    // The committee unreachable is also worth the bounded retry.
+    expect(looksLikeSettling(new Error('fetch failed'))).toBe(true);
+    // Prose that merely contains the old words is not a settling window.
+    expect(looksLikeSettling(new Error('NoAccess'))).toBe(false);
+    expect(looksLikeSettling(new Error('Object does not yet exist'))).toBe(false);
     expect(looksLikeSettling(new Error('the network is on fire'))).toBe(false);
   });
 });
