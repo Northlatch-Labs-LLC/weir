@@ -29,23 +29,28 @@ export {
   type SealKeyServer,
   loadConfig,
   loadKeyRegistryId,
+  loadMindPackageId,
   loadSealConfig,
   REQUIRED_ENV,
   KEY_REGISTRY_ENV,
+  MIND_PACKAGE_ENV,
   SEAL_ENV,
 } from './config.js';
 
 export {
   SEAL_UNLOCK,
   SEAL_SUBSCRIPTION,
+  SEAL_MIND,
   SEAL_PERIOD_MS,
   unlockIdentity,
   periodIdentity,
+  mindIdentity,
   periodOf,
   sealId,
   sealPackageId,
   approveUnlock,
   approveSubscription,
+  approveMind,
   approvalBytes,
 } from './seal.js';
 

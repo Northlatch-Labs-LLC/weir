@@ -102,6 +102,38 @@ export function loadKeyRegistryId(env: Record<string, string | undefined>): Read
 }
 
 /**
+ * The `agent_mind` package, loaded separately for the same reason as the key registry.
+ *
+ * It is a different package from `projectx_social` — published on its own, with its own id and
+ * its own digest file — and only the agent's mind feature calls it. Putting it in
+ * {@link REQUIRED_ENV} would stop every other consumer until an unrelated id was set. Unset, or
+ * not a 32-byte hex id, is `unconfigured`, exactly as {@link loadKeyRegistryId}.
+ */
+export const MIND_PACKAGE_ENV = 'PROJECTX_SOCIAL_MIND_PACKAGE_ID';
+
+export function loadMindPackageId(env: Record<string, string | undefined>): Reading<string> {
+  const value = env[MIND_PACKAGE_ENV]?.trim();
+  if (value === undefined || value === '') {
+    return fail(
+      'unconfigured',
+      'MindPackage',
+      `${MIND_PACKAGE_ENV} is not set. The agent's mind is approved by the agent_mind package and ` +
+        `there is no default. Its mainnet id is recorded in sui-contracts/deploy/mainnet.json ` +
+        `under agentMindPackage once it is published.`,
+    );
+  }
+  if (!OBJECT_ID.test(value)) {
+    return fail(
+      'unconfigured',
+      'MindPackage',
+      `${MIND_PACKAGE_ENV} is "${value}", which is not a 32-byte hex object id ` +
+        `(expected 0x followed by 64 lowercase hex characters).`,
+    );
+  }
+  return ok(value);
+}
+
+/**
  * A 32-byte hex object id.
  *
  * Length is checked, not just the prefix. `0x1234` parses as a valid-looking id in most tooling

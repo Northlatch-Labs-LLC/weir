@@ -96,6 +96,12 @@ export interface AgentManifest {
      * or null. Required only under a policy signer for a non-SUI coin; see `PaymentSource`.
      */
     paymentCoin: string | null;
+    /**
+     * `PROJECTX_SOCIAL_KEY_REGISTRY_ID`: the on-chain `key_registry` object, or null when unset.
+     * Needed only by the mind (`publishMindKey`, `remember`); every other call ignores it. Loaded
+     * through the SDK's `loadKeyRegistryId`, so it is validated as the browser validates it.
+     */
+    keyRegistryId: string | null;
 }
 /**
  * Build a manifest from an environment.

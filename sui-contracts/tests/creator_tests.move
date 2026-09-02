@@ -1341,7 +1341,7 @@ fun a_subscription_cannot_be_renewed_at_another_vault() {
 }
 
 #[test]
-#[expected_failure(abort_code = ::projectx_social::creator::ESubscriptionVaultMismatch)]
+#[expected_failure(abort_code = ::projectx_social::creator::ENotSubscriber)]
 /// Kills creator.move:679 — somebody else's subscription renewed from the renewer's own account.
 /// `Subscription` is soulbound, so the scenario constructs the impossible holder deliberately, as
 /// `a_fan_cannot_pay_with_somebody_elses_account` does with the account.

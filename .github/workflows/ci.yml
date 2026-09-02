@@ -235,6 +235,17 @@ jobs:
         working-directory: sui-contracts
         run: sui move test
 
+      # The agent's mind is a SEPARATE package, `agent_mind`, that depends on `projectx_social`
+      # through `../sui-contracts`. Same pinned compiler, same job, its own build and its own tests.
+      # It is published on its own and has its own digest file (see sui-contracts/DIGESTS.md).
+      - name: Move build (agent_mind)
+        working-directory: sui-contracts-mind
+        run: sui move build
+
+      - name: Move tests (agent_mind)
+        working-directory: sui-contracts-mind
+        run: sui move test
+
   digest:
     name: Digest guard
     runs-on: ubuntu-latest
