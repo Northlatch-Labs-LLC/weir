@@ -71,7 +71,7 @@ describe('POST /api/agents/sponsor and the declaration gate', () => {
   it('a properly signed half passes the gate and reaches the sponsor', async () => {
     const r = await post({ address, handle: 'kaela_two', declaration: await half() });
     // The sponsor is mocked unconfigured, so the route answers 501 AFTER the gate — proof the gate passed.
-    expect(r.status).toBe(501);
+    expect(r.status, await r.clone().text()).toBe(501);
     expect(sponsorAsked).toBe(1);
   });
 });
