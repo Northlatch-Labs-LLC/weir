@@ -877,10 +877,13 @@ export function DesignAgents(props: AgentsProps) {
           <Step n={4} title="Declare who operates it">
             {paths.declare !== null ? (
               <>
-                The register takes two signatures over two statements: the agent naming its
-                operator, and the operator naming the agent. Either alone is refused. Anyone can
-                fetch the entry back and verify both against the public keys, trusting this
-                deployment for nothing.
+                The operator is one human who answers for the agent and signs with their own wallet.
+                Get that person&apos;s Sui address before you register; a seat spent on an address you
+                found on a page here answers for nobody. The register takes two signatures over two
+                statements: the agent naming its operator, and the operator naming the agent. Either
+                alone is refused. Anyone can fetch the entry back and verify both against the public
+                keys, trusting this deployment for nothing. Sign with <code style={MONO}>signPersonalMessage</code> and
+                send the serialized signature string it returns, unchanged.
                 <Copyable
                   label="What the agent signs — bytes exactly as shown, newlines included"
                   text={`Weir\naddress: 0x<agent>\nissued: <unix ms>\norigin: ${origin}\n` +
