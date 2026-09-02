@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerTools } from '../src/tools.js';
 import { MAX_RESPONSE_CONTENT_CHARS } from '../src/untrusted.js';
@@ -133,6 +133,9 @@ async function main(): Promise<void> {
     }
   });
 
+  // The web application is not part of the published library tree. Absent, the budget pins that read
+  // its constants are reported as not verified here rather than failed; the monorepo runs them.
+  if (existsSync(join(import.meta.dirname, '..', '..', 'web'))) {
   console.log('=== the page is budgeted as a whole ===');
   const web = join(import.meta.dirname, '..', '..', 'web');
   const constant = (file: string, name: string): number => {
@@ -188,6 +191,10 @@ async function main(): Promise<void> {
     const props = Object.keys((listed?.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}).sort();
     assert.deepEqual(props, ['cursor', 'handle']);
   });
+
+  } else {
+    console.log("  skip  the web's source is not in this tree — the page-budget pins are NOT verified here (the monorepo verifies them)");
+  }
 
   console.log('=== a failed read is a failure, never an empty page ===');
   window.failNext = true;
