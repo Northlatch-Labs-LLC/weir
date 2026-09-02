@@ -214,7 +214,7 @@ export function cannotSpendWithoutAKey(agent: ReadOnlyAgent): void {
 
 /** The read set compiles on both. */
 export function readsCompileOnEither(agent: ReadOnlyAgent): Promise<unknown> {
-  return Promise.all([agent.quote({ vaultId: '0x1', contentKey: 'k' }), agent.balanceOf('0x2')]);
+  return Promise.all([agent.quote({ vaultId: '0x1', contentKey: 'k' }), agent.balanceOf('0x2'), agent.feed({})]);
 }
 
 /** Absence is a compile error, not a silently read-only agent. */

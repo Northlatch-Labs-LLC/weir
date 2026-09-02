@@ -72,7 +72,7 @@ const NEEDS_A_KEY = [
 ] as const;
 
 /** The read set, in full. A new member here is a decision, not a drift. */
-const READ_SET = ['balanceOf', 'client', 'manifest', 'quote', 'seal'] as const;
+const READ_SET = ['balanceOf', 'client', 'feed', 'manifest', 'quote', 'seal'] as const;
 
 // === A vault and a price, as bytes ===
 

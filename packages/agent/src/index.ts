@@ -291,6 +291,41 @@ export interface Quote {
  *   - `post`, `send` — signed writes.
  *   - `balance` — the agent's OWN balance, which needs an address. `balanceOf` takes one instead.
  */
+/**
+ * One post as the shop window shows it — `GET /api/browse` — with the author-written strings
+ * carried as they came. Whoever renders `title` or `preview` to a model frames them first; this
+ * package does not, because it does not know who is reading.
+ */
+export interface FeedPost {
+  postId: string;
+  handle: string;
+  title: string;
+  preview: string;
+  access: 'public' | 'paid' | 'subscribers';
+  /** Smallest on-chain unit as a decimal string. `null` when not individually for sale. */
+  price: string | null;
+  /** The manifest coin's symbol (`USDC`, `SUI`) when the post has a price; `null` otherwise. */
+  currency: string | null;
+}
+
+/**
+ * One page of the shop window. `truncated` is the server's word — it fetched one row past the page
+ * to know — and `nextCursor` is opaque and goes back exactly as it came. The page size is the
+ * server's too; there is no way to ask for a bigger one, by design.
+ */
+export interface FeedPage {
+  posts: FeedPost[];
+  truncated: boolean;
+  nextCursor: string | null;
+}
+
+export interface FeedInput {
+  /** One creator's posts only. Omit for everybody's. */
+  handle?: string;
+  /** `nextCursor` from a previous page, verbatim. Omit for the first page. */
+  cursor?: string;
+}
+
 export interface ReadOnlyAgent {
   /** What it is pointed at and what it may spend. */
   readonly manifest: AgentManifest;
@@ -317,6 +352,17 @@ export interface ReadOnlyAgent {
    * keyless agent can offer: `balance()` means "mine", and a read-only agent has no "mine".
    */
   balanceOf: (owner: string, coinType?: string) => Promise<Reading<bigint>>;
+
+  /**
+   * Browse the shop window: one page of posts, newest first, optionally one creator's, optionally
+   * continuing from a cursor. The one HTTP read on this surface, and it is unauthenticated — the
+   * endpoint is public and shows nothing a session would add.
+   *
+   * A failed read is a failure kind (`transport`, `not-found`, `malformed`), never `ok` with an
+   * empty page: "there is nothing here" and "we could not look" are different facts and a caller
+   * acts on the first and waits on the second.
+   */
+  feed: (input: FeedInput) => Promise<Reading<FeedPage>>;
 }
 
 /**
@@ -409,9 +455,9 @@ export interface CreateAgentInput {
  * is a compile error. At run time an `undefined` that a JavaScript caller slips past the types is
  * refused with a `Reading` that says which of the two to write; see {@link createAgent}.
  *
- * There is no `fetchImpl`, because nothing on the read surface makes an HTTP call: `quote` and
- * `balanceOf` read the chain, and the one HTTP path this package has — the read session — is
- * minted by signing. An input nothing consumes would be a guard nobody calls.
+ * `fetchImpl` exists because the read surface makes exactly one HTTP call: `feed`, an
+ * unauthenticated `GET /api/browse`. `quote` and `balanceOf` read the chain. The read session —
+ * the other HTTP path this package has — is minted by signing and is not on this surface.
  */
 export interface CreateReadOnlyAgentInput {
   /** `null`, written out. See the type's doc block for why it is not optional. */
@@ -424,6 +470,8 @@ export interface CreateReadOnlyAgentInput {
   seal?: SealDecryptor;
   /** Injected for tests, and for a caller who already holds a client for this deployment. */
   client?: SuiGrpcClient;
+  /** Injected for tests, and for a caller who wants their own retry policy. Used by `feed` only. */
+  fetchImpl?: FetchLike;
 }
 
 /**
@@ -458,7 +506,8 @@ export function createAgent(
   const client = input.client ?? createClient(manifest.config);
 
   if (input.keypair === null) {
-    return ok(readSurface({ client, manifest, seal: input.seal ?? null, payer: null }));
+    const doFetch = input.fetchImpl ?? (globalThis.fetch as FetchLike | undefined);
+    return ok(readSurface({ client, manifest, seal: input.seal ?? null, payer: null, doFetch }));
   }
 
   /*
@@ -499,7 +548,7 @@ export function createAgent(
     // The read set is built once, by the same function the keyless path uses, so the two surfaces
     // cannot drift: a keyed agent quotes and reads balances exactly as a keyless one does, with its
     // own address as the payer a quote is checked against.
-    ...readSurface({ client, manifest, seal: input.seal ?? null, payer: address }),
+    ...readSurface({ client, manifest, seal: input.seal ?? null, payer: address, doFetch }),
     address,
 
     async sign(action: Action): Promise<SignedAction> {
@@ -824,8 +873,9 @@ function readSurface(input: {
   manifest: AgentManifest;
   seal: SealDecryptor | null;
   payer: string | null;
+  doFetch: FetchLike | undefined;
 }): ReadOnlyAgent {
-  const { client, manifest, seal, payer } = input;
+  const { client, manifest, seal, payer, doFetch } = input;
   return {
     manifest,
     client,
@@ -863,7 +913,73 @@ function readSurface(input: {
     async balanceOf(owner: string, coinType?: string): Promise<Reading<bigint>> {
       return totalBalance(client, owner, coinType ?? manifest.coinType);
     },
+
+    async feed(input: FeedInput): Promise<Reading<FeedPage>> {
+      const what = 'feed';
+      /*
+        Exactly the parameters the endpoint defines: `kind`, `handle`, `cursor`. No `limit` is
+        sent because none is accepted — the server's page is the page — and none is offered here
+        because a caller-raisable ceiling is not a ceiling. `URLSearchParams` encodes the cursor,
+        which is base64url and survives it unchanged.
+      */
+      const query = new URLSearchParams({ kind: 'posts' });
+      if (input.handle !== undefined) query.set('handle', input.handle);
+      if (input.cursor !== undefined) query.set('cursor', input.cursor);
+      const read = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: `/api/browse?${query.toString()}`,
+        method: 'GET',
+        what,
+      });
+      if (!read.ok) return read;
+      return feedPageFrom(read.value, manifest.coinType, what);
+    },
   };
+}
+
+/**
+ * The response, checked field by field before it becomes a page.
+ *
+ * Every field the page carries is asserted to be the type the endpoint documents, and a response
+ * that is not — an `items` that is not an array, a `truncated` that is not a boolean, a post with
+ * no id — is `malformed`, never a partial page. A partial page would be a page that lies about
+ * what is there.
+ */
+function feedPageFrom(body: Record<string, unknown>, coinType: string, what: string): Reading<FeedPage> {
+  const items = body['items'];
+  const truncated = body['truncated'];
+  const nextCursor = body['nextCursor'];
+  if (!Array.isArray(items) || typeof truncated !== 'boolean' || (nextCursor !== null && typeof nextCursor !== 'string')) {
+    return fail('malformed', what, 'GET /api/browse answered 200 without items, truncated and nextCursor in the documented shapes.');
+  }
+  const symbol = coinType.split('::').pop() ?? null;
+  const posts: FeedPost[] = [];
+  for (const item of items) {
+    const row = item as Record<string, unknown>;
+    const access = row['access'] as Record<string, unknown> | undefined;
+    const kind = access?.['kind'];
+    if (
+      typeof row['id'] !== 'string' ||
+      typeof row['authorHandle'] !== 'string' ||
+      typeof row['title'] !== 'string' ||
+      typeof row['preview'] !== 'string' ||
+      (kind !== 'public' && kind !== 'paid' && kind !== 'subscribers')
+    ) {
+      return fail('malformed', what, `GET /api/browse returned a post that is not one: ${JSON.stringify(row).slice(0, 200)}`);
+    }
+    const price = kind === 'paid' && typeof access?.['price'] === 'string' ? access['price'] : null;
+    posts.push({
+      postId: row['id'],
+      handle: row['authorHandle'],
+      title: row['title'],
+      preview: row['preview'],
+      access: kind,
+      price,
+      currency: price === null ? null : symbol,
+    });
+  }
+  return ok({ posts, truncated, nextCursor: nextCursor as string | null });
 }
 
 /**
@@ -915,11 +1031,7 @@ async function authorisedFetch(input: {
   what: string;
   body?: Record<string, unknown>;
 }): Promise<Reading<Record<string, unknown>>> {
-  const { agent, what } = input;
-  const doFetch = input.doFetch ?? (globalThis.fetch as FetchLike | undefined);
-  if (doFetch === undefined) {
-    return fail('unconfigured', what, 'no fetch implementation is available in this runtime.');
-  }
+  const { agent, what, doFetch } = input;
 
   /*
     The session is attached to writes as well as reads, and it authorises none of them.
@@ -933,12 +1045,43 @@ async function authorisedFetch(input: {
   const session = await agent.session();
   const auth = session.ok ? session.value.headers() : {};
 
+  return httpRead({
+    doFetch,
+    baseUrl: agent.manifest.baseUrl,
+    path: input.path,
+    method: input.method,
+    what,
+    headers: auth,
+    ...(input.body === undefined ? {} : { body: input.body }),
+  });
+}
+
+/**
+ * One HTTP round trip against the weir deployment, and the one mapping from its answer to a
+ * `Reading`. `authorisedFetch` adds the session; `feed` adds nothing. Both end here so a status
+ * code means the same thing on every path this package has.
+ */
+async function httpRead(input: {
+  doFetch: FetchLike | undefined;
+  baseUrl: string;
+  path: string;
+  method: 'GET' | 'POST';
+  what: string;
+  headers?: Record<string, string>;
+  body?: Record<string, unknown>;
+}): Promise<Reading<Record<string, unknown>>> {
+  const { what } = input;
+  const doFetch = input.doFetch ?? (globalThis.fetch as FetchLike | undefined);
+  if (doFetch === undefined) {
+    return fail('unconfigured', what, 'no fetch implementation is available in this runtime.');
+  }
+
   let response: Response;
   try {
-    response = await doFetch(`${agent.manifest.baseUrl}${input.path}`, {
+    response = await doFetch(`${input.baseUrl}${input.path}`, {
       method: input.method,
       headers: {
-        ...auth,
+        ...(input.headers ?? {}),
         ...(input.body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
@@ -947,7 +1090,7 @@ async function authorisedFetch(input: {
     return fail(
       'transport',
       what,
-      `could not reach ${agent.manifest.baseUrl}${input.path}: ${
+      `could not reach ${input.baseUrl}${input.path}: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
