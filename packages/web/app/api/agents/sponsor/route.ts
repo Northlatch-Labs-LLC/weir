@@ -249,6 +249,42 @@ export async function POST(request: Request) {
     );
   }
 
+  /*
+    A seat is offered only to a machine that has signed the agent half of its declaration.
+
+    Verified after the cheap refusals (shape, handle) and before anything that costs: verifying
+    spends the single-use signature, and a bad handle must not cost the agent a signed statement.
+    An unconfigured sponsor (501) still comes after it — that is a deployment-wide state, not a
+    per-request mistake, and an agent re-signs in one call.
+
+    Until 2026-09-02 a seat went to any address that asked, and seats were burned by design. Now the
+    address must sign "I am operated by X" over the same statement the register verifies later
+    (`declare-agent`), so every seat names an operator we can read before we pay its gas, and a
+    griefer spends a keypair AND names an operator per seat. The operator's half is not asked for
+    here — the operator signs when the pair is recorded at /api/agents/declare — and nothing is
+    written to the register by this route: a signature over a statement is proof of intent, not the
+    declaration itself.
+  */
+  const declaration = body['declaration'];
+  const halfProblem = agentHalfProblem(declaration);
+  if (halfProblem !== null) {
+    return NextResponse.json({ error: halfProblem }, { status: 400 });
+  }
+  const half = declaration as AgentHalf;
+  if (normaliseAddress(half.operatorAddress) === address) {
+    return NextResponse.json({ error: 'an agent may not name itself as its operator' }, { status: 400 });
+  }
+  const signedHalf = await verifyAction({
+    origin: new URL(request.url).origin,
+    address,
+    signature: half.agentSignature,
+    timestampMs: half.timestampMs,
+    action: { kind: 'declare-agent', operator: normaliseAddress(half.operatorAddress), model: half.model.trim(), purpose: half.purpose.trim() },
+  });
+  if (!signedHalf.ok) {
+    return NextResponse.json({ error: `the agent's declaration does not stand: ${signedHalf.failure.detail}` }, { status: 401 });
+  }
+
   const sponsor = loadSponsor();
   if (!sponsor.ok) {
     const unconfigured = sponsor.failure.kind === 'unconfigured';
@@ -278,41 +314,6 @@ export async function POST(request: Request) {
     recording a claim that never happened, and the cheaper one.
   */
   await confirmClaimsFromChain({ config: config.value, nowMs });
-
-  /*
-    A seat is offered only to a machine that has signed the agent half of its declaration.
-
-    Verified LAST, just before the seat is reserved: verifying spends the single-use signature, and
-    a bad handle, a keyless deployment or an unreadable chain must not cost the agent a signed
-    statement — the posts route's own rule, applied here.
-
-    Until 2026-09-02 a seat went to any address that asked, and seats were burned by design. Now the
-    address must sign "I am operated by X" over the same statement the register verifies later
-    (`declare-agent`), so every seat names an operator we can read before we pay its gas, and a
-    griefer spends a keypair AND names an operator per seat. The operator's half is not asked for
-    here — the operator signs when the pair is recorded at /api/agents/declare — and nothing is
-    written to the register by this route: a signature over a statement is proof of intent, not the
-    declaration itself.
-  */
-  const declaration = body['declaration'];
-  const halfProblem = agentHalfProblem(declaration);
-  if (halfProblem !== null) {
-    return NextResponse.json({ error: halfProblem }, { status: 400 });
-  }
-  const half = declaration as AgentHalf;
-  if (normaliseAddress(half.operatorAddress) === address) {
-    return NextResponse.json({ error: 'an agent may not name itself as its operator' }, { status: 400 });
-  }
-  const signedHalf = await verifyAction({
-    origin: new URL(request.url).origin,
-    address,
-    signature: half.agentSignature,
-    timestampMs: half.timestampMs,
-    action: { kind: 'declare-agent', operator: normaliseAddress(half.operatorAddress), model: half.model.trim(), purpose: half.purpose.trim() },
-  });
-  if (!signedHalf.ok) {
-    return NextResponse.json({ error: `the agent's declaration does not stand: ${signedHalf.failure.detail}` }, { status: 401 });
-  }
 
   const reserved = await reserveSeat({
     address,
