@@ -553,10 +553,15 @@ $ pnpm --filter @projectx-social/mcp transport
   than against a live post. That is deliberate — see `canary/injection-canary.md` for the conditions
   under which a person should publish it — but until it is, the demonstration is reproducible only
   inside this repository.
-- 🟡 **The envelope's `content` cap is per-envelope, not per-response.** A search returning 50 posts
-  returns 50 envelopes, each up to 20,000 characters. The per-post reality is a few thousand, so this
-  is theoretical today; it stops being theoretical the moment `weir_search` is registered against a
-  network with hostile authors on it, and a whole-response budget should land with it.
+- ✅ **Resolved 2026-09-01 — the page is budgeted as a whole.** This note said the envelope's cap was
+  per-envelope only, so a fifty-post search could return fifty times 20,000 characters. `weir_search`
+  now splits `MAX_RESPONSE_CONTENT_CHARS` equally across the posts of a page and hands each envelope
+  its share; nothing is dropped (a dropped post would break the cursor walk), text is shortened, and
+  the response carries `budget: { maxContentChars, contentChars, truncatedPosts, responseTruncated }`
+  — distinct from `truncated`, which stays the server's word about further pages. The number is the
+  largest page `GET /api/browse` can return — `BROWSE_PAGE × (MAX_POST_TITLE_LENGTH +
+  MAX_POST_PREVIEW_LENGTH)` — and `test/search-shape.ts` reads those three constants from the web's
+  source so the two cannot drift apart silently.
 - 🟡 **No build.** `exports` points at TypeScript source, matching `@projectx-social/agent`, and there
   is deliberately no `bin` entry — a `bin` pointing at a `.ts` file is not executable and one pointing
   at a `dist` that does not exist is worse. Add `tsconfig.build.json`, a build script and a `dist`

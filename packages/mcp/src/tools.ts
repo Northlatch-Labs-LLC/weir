@@ -91,7 +91,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Capability, Ceiling, Currency, WeirBinding, WeirPort } from './transport.js';
 import { capabilitiesOf, log, parseAmount } from './transport.js';
 import { CallLedger, idempotencyKeyFor, type RequestId } from './idempotency.js';
-import { envelope, renderUntrusted, type Provenance } from './untrusted.js';
+import { MAX_RESPONSE_CONTENT_CHARS, envelope, renderUntrusted, type Provenance } from './untrusted.js';
 
 /* ------------------------------------------------------------------------------------------------
  * Names
@@ -414,6 +414,17 @@ function registerSearch(server: McpServer, weir: WeirPort): string {
         truncated: z.boolean(),
         /** Opaque; hand it back as `cursor`. `null` when `truncated` is false. */
         nextCursor: z.string().nullable(),
+        /**
+         * The response-wide content budget and whether it bit. Distinct from `truncated`, which is
+         * the server's word about further pages. When `responseTruncated` is true every post is
+         * still present — only text was shortened — so a cursor walk stays complete.
+         */
+        budget: z.object({
+          maxContentChars: z.number(),
+          contentChars: z.number(),
+          truncatedPosts: z.number(),
+          responseTruncated: z.boolean(),
+        }),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -441,23 +452,40 @@ function registerSearch(server: McpServer, weir: WeirPort): string {
           Title AND preview are framed, not just the preview. A title is a hundred characters an
           attacker chose exactly as much as a body is, and a result that framed one and passed the
           other through bare would have framed the less dangerous half.
+
+          The page is budgeted as a whole: MAX_RESPONSE_CONTENT_CHARS, split equally across its
+          posts, and each envelope is capped at its share. Nothing is dropped — dropping a post
+          would break the cursor walk, since `nextCursor` still points past it — so a page over
+          budget keeps every post and shortens the text of the ones that exceed their share. The
+          response says it did, separately from `truncated`, which is the SERVER's word about
+          further pages and is never touched here.
         */
+        const share = posts.length === 0 ? MAX_RESPONSE_CONTENT_CHARS : Math.floor(MAX_RESPONSE_CONTENT_CHARS / posts.length);
+        const framed = posts.map((post) => ({
+          postId: post.postId,
+          handle: post.handle,
+          access: post.access,
+          price: post.price,
+          currency: post.currency,
+          authored: envelope({
+            content: { title: post.title, preview: post.preview },
+            provenance: freeProvenance(post.postId, post.handle),
+            budget: share,
+          }),
+        }));
+        const cut = framed.filter((p) => p.authored.truncated).length;
         return succeed(
           {
-            posts: posts.map((post) => ({
-              postId: post.postId,
-              handle: post.handle,
-              access: post.access,
-              price: post.price,
-              currency: post.currency,
-              authored: envelope({
-                content: { title: post.title, preview: post.preview },
-                provenance: freeProvenance(post.postId, post.handle),
-              }),
-            })),
+            posts: framed,
             count: posts.length,
             truncated,
             nextCursor,
+            budget: {
+              maxContentChars: MAX_RESPONSE_CONTENT_CHARS,
+              contentChars: framed.reduce((sum, p) => sum + p.authored.originalChars, 0),
+              truncatedPosts: cut,
+              responseTruncated: cut > 0,
+            },
           },
           true,
         );
