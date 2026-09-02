@@ -134,9 +134,19 @@ const eight = start({ ...SIX, ...COIN, ...BASE });
 check('with all eight set, none of the three configuration refusals appears', () => {
   for (const sentence of [MISSING_SIX, MISSING_COIN, MISSING_BASE]) assert.ok(!eight.stderr.includes(sentence), eight.stderr);
 });
-check(`…and the process stops on exactly the agent library's key requirement — packages/agent's target`, () => {
-  assert.ok(eight.stderr.includes(STOPS_ON_KEY), eight.stderr);
-  assert.equal(eight.status, 1);
+check(`…and the keyless server LISTENS — the agent library's key requirement no longer stops it`, () => {
+  // Until packages/agent gained its read-only construction path (2026-09-02) this asserted the
+  // opposite: that the eight-variable start died on `Cannot read properties of null (reading
+  // 'address')`, exit 1, because the agent could not exist without a key. That was the measured
+  // truth then and the docblock above said this line would flip the day it changed. It changed:
+  // the server now announces itself and keeps running, so `start()`'s 30-second timeout is what
+  // ends it — a null status, not an exit code. The old sentence must be ABSENT, or the read-only
+  // path has regressed to the old failure.
+  assert.ok(eight.stderr.includes('listening on'), eight.stderr);
+  assert.ok(eight.stderr.includes('(stateless, keyless)'), eight.stderr);
+  assert.ok(!eight.stderr.includes(STOPS_ON_KEY), eight.stderr);
+  assert.notEqual(eight.status, 78, 'a configuration refusal is not a start');
+  assert.notEqual(eight.status, 1, 'the key requirement is not a start');
 });
 
 console.log(`${checks - failures}/${checks} checks passed, ${failures} failed`);

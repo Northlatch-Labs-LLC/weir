@@ -99,21 +99,46 @@ if (quote.ok) {
 }
 ```
 
+### Without a key
+
+```ts
+const made = createAgent({ keypair: null, config: process.env });   // null, written out
+if (!made.ok) throw new Error(made.failure.detail);
+const reader = made.value;                                           // ReadOnlyAgent
+
+await reader.quote({ vaultId, contentKey });   // priced from chain, as above
+await reader.balanceOf(someAddress);           // any address; there is no "mine" without a key
+```
+
+`ReadOnlyAgent` is a distinct type carrying **only the read set** — `manifest`, `client`, `seal`,
+`quote`, `balanceOf`. Every member that signs or spends is *absent* from the object, not present and
+refusing, and absent from the type, so `reader.unlock(…)` is a compile error. This is the agent a
+hosted `weir-mcp` binds: `packages/mcp` registers a tool for every member that is a function, so a
+spending method that merely threw would become a tool that always fails. The alternative — a
+throwaway keypair to satisfy the keyed signature — is rejected: a public server that can sign
+`publish` and `send` as an ephemeral identity is a capability increase bought for convenience.
+
+`keypair` must be a key or the literal `null`. A `string | undefined` from `process.env` is a
+compile error, so forgetting the key cannot silently produce an agent that cannot spend.
+
 ### Surface
 
 | Method | Kind | Notes |
 |---|---|---|
-| `.address` | — | Padded 32-byte form. Safe to log. |
+| `.address` | — | Padded 32-byte form. Safe to log. *Keyed only.* |
 | `.sign(action)` | local | `statementFor` + Ed25519 personal-message signature. Sends nothing. |
 | `.session()` | HTTP | Mints once, reuses until expiry. |
 | `.openAccount(handle)` | PTB | `account::open(Platform, Registry, handle, none, Clock)`. Takes no payment. |
-| `.quote({vaultId, contentKey})` | chain | **Price read from the vault.** No HTTP anywhere in it. |
+| `.quote({vaultId, contentKey})` | chain | **Price read from the vault.** No HTTP anywhere in it. *Read set.* |
 | `.unlock({vaultId, contentKey, priceMinorUnits, maxPrice})` | PTB | `creator::unlock<T>` |
 | `.subscribe({vaultId, tierIndex, maxPrice})` | PTB | `creator::subscribe<T>` |
 | `.tip({vaultId, amount, maxPrice})` | PTB | `creator::tip<T>` — takes the coin entire, no change |
 | `.post({...})` | HTTP | Signed `publish` |
 | `.send({to, text, preview, paid?})` | HTTP | Signed `send` |
-| `.balance(coinType?)` | chain | Minor units |
+| `.balance(coinType?)` | chain | This agent's own, minor units. *Keyed only.* |
+| `.balanceOf(owner, coinType?)` | chain | A named address, minor units. *Read set.* |
+
+Every method not marked *read set* needs the key and is absent from a `ReadOnlyAgent`.
 
 There is deliberately **no `.feed()`**, and `.quote()` does not take a post id. Both went through
 `GET /api/posts`, which does not exist — `packages/web/app/api/posts/route.ts` exports `POST` only —
@@ -186,6 +211,11 @@ Measured, not asserted. Against mainnet on 2026-08-31.
   *"This address already has an account. One account per address. (account abort 4)"*.
 - Platform read live: `fee_bps 290`, `creation_paused false`, 9 accounts, 17 vaults. Package
   `0xc5c833…` reads as **version 1**, `0xfa7eb1…` as **version 3**.
+
+- **An agent with no key builds, and has nothing on it that needs one.** `createAgent({ keypair:
+  null })` returns exactly `manifest`, `client`, `seal`, `quote`, `balanceOf` (asserted by
+  `Object.keys`), `quote` and `balanceOf` run against a fake node, and the compile-only file proves
+  `.unlock`, `.sign` and `.address` are type errors on it. `test/read-only-agent.test.ts`.
 
 **How to rerun all of it:** `pnpm --filter @projectx-social/agent test` and
 `pnpm --filter @projectx-social/agent typecheck`.

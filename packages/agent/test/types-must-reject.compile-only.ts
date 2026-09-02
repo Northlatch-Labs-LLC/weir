@@ -33,7 +33,8 @@
  * indistinguishable from this agent holding no entitlement at all.
  */
 
-import type { Agent, SealApproval, SealDecryptor, SealedRef } from '../src/index.js';
+import { createAgent } from '../src/index.js';
+import type { Agent, ReadOnlyAgent, Reading, SealApproval, SealDecryptor, SealedRef } from '../src/index.js';
 
 // === Machinery ===
 
@@ -167,3 +168,63 @@ export const goodApprovals: SealApproval[] = [
   { kind: 'unlock', vaultId: '0x1', contentKey: 'k', unlockId: '0x2' },
   { kind: 'subscription', vaultId: '0x1', tier: 0n, period: 689n, subscriptionId: '0x2' },
 ];
+
+// === 6. A read-only agent cannot be asked to sign or spend ===
+//
+// `createAgent({ keypair: null })` returns a DISTINCT type with no spending member on it. The
+// defect this closes was a runtime `TypeError` on a null key; the guarantee that replaces it is
+// that a caller holding the keyless agent cannot write the call at all.
+
+/** Every member of `Agent` that needs the key. Mirrors `NEEDS_A_KEY` in `read-only-agent.test.ts`. */
+type NeedsAKey =
+  | 'address'
+  | 'sign'
+  | 'session'
+  | 'openAccount'
+  | 'unlock'
+  | 'subscribe'
+  | 'tip'
+  | 'post'
+  | 'send'
+  | 'balance';
+
+/** None of those names is a key of `ReadOnlyAgent`. Add one to the interface and this stops instantiating. */
+export type _noSigningMemberOnReadOnly = AssertNever<Extract<keyof ReadOnlyAgent, NeedsAKey>>;
+
+/** And the keyed agent has all of them, so the union above is checked against something real. */
+export type _keyedAgentHasThemAll = AssertNever<Exclude<NeedsAKey, keyof Agent>>;
+
+/** The read set is a subset of the full agent: one builder, two surfaces. */
+export type _readSetIsOnAgent = AssertNever<Exclude<keyof ReadOnlyAgent, keyof Agent>>;
+
+declare const env: Record<string, string | undefined>;
+
+/** The overload chosen by a literal `null` is the read-only one, and nothing wider. */
+const keyless = createAgent({ keypair: null, config: env });
+export type _nullKeyGivesReadOnly = AssertTrue<Equal<typeof keyless, Reading<ReadOnlyAgent>>>;
+
+export function cannotSpendWithoutAKey(agent: ReadOnlyAgent): void {
+  // @ts-expect-error — no `unlock` on a read-only agent. A compile error, not a runtime throw.
+  void agent.unlock;
+  // @ts-expect-error — no `sign` either; a read session is minted by signing.
+  void agent.sign;
+  // @ts-expect-error — and no `address`, because there is no key to have one.
+  void agent.address;
+}
+
+/** The read set compiles on both. */
+export function readsCompileOnEither(agent: ReadOnlyAgent): Promise<unknown> {
+  return Promise.all([agent.quote({ vaultId: '0x1', contentKey: 'k' }), agent.balanceOf('0x2')]);
+}
+
+/** Absence is a compile error, not a silently read-only agent. */
+// @ts-expect-error — `keypair` must be given: a key, or `null` written out.
+export const forgotTheKey = createAgent({ config: env });
+
+// @ts-expect-error — `undefined` is refused; `process.env.X` is `string | undefined` and must be checked first.
+export const undefinedKey = createAgent({ keypair: env['PROJECTX_SOCIAL_AGENT_SECRET'], config: env });
+
+/** A value that MAY be null must be branched on. Neither overload accepts the union. */
+declare const maybeKey: string | null;
+// @ts-expect-error — `string | null` matches neither overload; decide which agent you are building.
+export const undecided = createAgent({ keypair: maybeKey, config: env });
