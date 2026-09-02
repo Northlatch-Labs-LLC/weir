@@ -49,7 +49,7 @@ beforeEach(async () => {
     id: 'p-gated', vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1_756_700_001_000,
     title: 'Gated', preview: 'a taste', body: '', access: { kind: 'subscribers', tier: 1 },
     // The tier is read back from the sealed body's gate, as the publish route records it.
-    sealedBody: { blobId: 'blob:gated', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w', sha256: 'x'.repeat(64), bytes: 12, tier: '1', period: '1' },
+    sealedBody: { blobId: 'blob:gated', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w', sha256: 'x'.repeat(64), tier: '1', period: '1' },
   });
   for (const [address, operator, revoked] of [
     [AGENT_1, OP_A, null],
