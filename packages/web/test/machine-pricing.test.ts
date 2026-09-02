@@ -443,6 +443,10 @@ describe('GET /api/studio/content-price', () => {
       priced: true,
       price: '10000',
       machine: { contentKey: 'post-7#machine', state: 'priced', price: '250000' },
+      // Added with migration 034: whether a machine body was sealed for this post. This suite
+      // stubs no post row, so the only truthful answers are the two that mean "no row / could
+      // not read", never `sealed`.
+      machineBody: expect.stringMatching(/^(no-post|unreadable|absent)$/),
     });
   });
 
