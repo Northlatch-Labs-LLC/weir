@@ -1,8 +1,8 @@
-# Cloud Run service for the hosted, keyless weir-mcp. Shape: operations/MCP-HOSTING-SHAPE.md.
+# Cloud Run service for the hosted, keyless weir-mcp.
 #
 # A template, not a deployed object: every ${…} is filled at deploy time from the web deployment's
 # own environment (the same ids the site runs on), never typed from memory. No project id, no image
-# digest and no secret is written here. Apply with, once the Master has ruled D-H1..D-H6:
+# digest and no secret is written here. Apply with:
 #   gcloud run services replace packages/mcp/deploy/cloudrun.service.yaml --region ${REGION}
 apiVersion: serving.knative.dev/v1
 kind: Service

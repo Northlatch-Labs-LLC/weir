@@ -17,7 +17,7 @@
  *   5. Nothing here is on the read-only surface: `priceContent` signs.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
@@ -169,8 +169,12 @@ describe('priceContent refuses before it reads', () => {
 });
 
 describe('the marker and the abort', () => {
-  it('uses the same reserved marker the web does, read from its source', () => {
-    const src = readFileSync(join(process.cwd(), '..', 'web', 'lib', 'machine-pricing.ts'), 'utf8');
+  // The web application is not part of the published tree. Where it is absent this mirror check is
+  // SKIPPED and says so, rather than failing a checkout that cannot contain the file; the monorepo
+  // still runs it on every commit, and a skipped pin is reported, never counted as a pass.
+  const webPricing = join(process.cwd(), '..', 'web', 'lib', 'machine-pricing.ts');
+  it.skipIf(!existsSync(webPricing))('uses the same reserved marker the web does, read from its source', () => {
+    const src = readFileSync(webPricing, 'utf8');
     const m = /export const MACHINE_EDITION_MARKER = '([^']+)';/.exec(src);
     expect(m?.[1]).toBe(MACHINE_EDITION_MARKER);
   });
