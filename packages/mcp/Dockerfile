@@ -24,7 +24,11 @@ COPY packages/mcp/package.json    packages/mcp/
 # devDependencies carry `tsx` — this package has no build of its own yet (README "No build") and
 # runs from source, so the runner must be present at run time.
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @projectx-social/mcp... --filter .
-COPY scripts/write-sdk-fingerprint.mjs scripts/
+# Both fingerprint scripts: the writer imports `./sdk-src-fingerprint.mjs`, and the first Cloud Build
+# of this image (2026-09-02, build 82ca11ed) failed at the SDK build step with ERR_MODULE_NOT_FOUND
+# because only the writer had been copied. A COPY line is a claim about a module graph; this one
+# now carries the whole graph the SDK build needs.
+COPY scripts/write-sdk-fingerprint.mjs scripts/sdk-src-fingerprint.mjs scripts/
 COPY packages/sdk    packages/sdk
 COPY packages/agent  packages/agent
 COPY packages/policy packages/policy
