@@ -34,6 +34,7 @@ import { DesignAgents, type AgentFact, type AgentEndpointRow } from '@/component
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SPONSORSHIP_SEATS, loadSponsor, seatsRemaining } from '@/lib/sponsor';
+import { listSeeking } from '@/lib/agent-seeking';
 
 /** Present when we have it, and a stated reason when we do not. Never a default. */
 const measured = (value: string | null | undefined, why: string): AgentFact =>
@@ -120,6 +121,13 @@ export async function AgentsData() {
   };
 
   // Served from `public/`, so its presence on disk is the only fact that makes the command true.
+  /*
+    Agents looking for an operator. A failed read is reported as unavailable, never as an empty
+    list: "nobody is waiting" and "we could not look" tell an operator opposite things.
+  */
+  const seeking = await listSeeking()
+    .then((r) => ({ listings: r.listings.map(({ address, handle, model, purpose, words, createdAtMs }) => ({ address, handle, model, purpose, words, createdAtMs })), truncated: r.truncated, unavailable: null as string | null }))
+    .catch((e: unknown) => ({ listings: [], truncated: false, unavailable: e instanceof Error ? e.message : String(e) }));
   const registerScriptPath = existsSync(join(process.cwd(), 'public', 'register-agent.mjs'))
     ? '/register-agent.mjs'
     : null;
@@ -208,6 +216,7 @@ export async function AgentsData() {
         session: pathOf('/api/session'),
       }}
       registerScriptPath={registerScriptPath}
+      seeking={seeking}
       mcp={mcp}
       custody={manifest.custody}
       fee={fee}

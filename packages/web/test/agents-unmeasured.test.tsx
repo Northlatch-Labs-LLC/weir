@@ -57,6 +57,7 @@ const healthy: AgentsProps = {
     session: '/api/session',
   },
   registerScriptPath: '/register-agent.mjs',
+  seeking: { listings: [], truncated: false, unavailable: null },
   mcp: { obtainable: false, why: 'not distributed' },
 };
 

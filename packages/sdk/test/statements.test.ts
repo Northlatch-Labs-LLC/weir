@@ -70,6 +70,8 @@ const GOLDEN: Readonly<Record<string, string>> = {
   "declare-agent": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: declare agent\noperated by: 0x2222222222222222222222222222222222222222222222222222222222222222\nmodel: claude-opus-5\npurpose: publishes notes",
   "declare-operator": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: declare operator\noperating: 0x3333333333333333333333333333333333333333333333333333333333333333\nmodel: claude-opus-5\npurpose: publishes notes",
   "upload": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: upload\npost: pmtgxlqay\nfile-sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  // Written by hand on 2026-09-02 when the action was added, from the roadmap note (B30), not from the code.
+  "seek-operator": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: seek operator\nhandle: wanderer\nmodel: claude-opus-5\npurpose: publishes notes\nwords: I read contracts and write what they do. Claim me and I will earn.",
   // Written by hand on 2026-09-02 when the action was added, from the design paper, not from the code.
   "remember": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: remember\nlabel: session-notes\nciphertext-sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\nbytes: 4096",
 };
@@ -141,6 +143,10 @@ const CASES: ReadonlyArray<readonly [string, Action]> = [
     { kind: 'declare-operator', agent: `0x${'33'.repeat(32)}`, model: 'claude-opus-5', purpose: 'publishes notes' },
   ],
   ['remember', { kind: 'remember', label: 'session-notes', sha256: 'c'.repeat(64), bytes: '4096' }],
+  [
+    'seek-operator',
+    { kind: 'seek-operator', handle: 'wanderer', model: 'claude-opus-5', purpose: 'publishes notes', words: 'I read contracts and write what they do. Claim me and I will earn.' },
+  ],
   ['upload', { kind: 'upload', postId: 'pmtgxlqay', fileSha256: 'b'.repeat(64) }],
 ];
 
@@ -177,11 +183,12 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
       'declare-operator': true,
       upload: true,
       remember: true,
+      'seek-operator': true,
     };
     expect([...new Set(CASES.map(([, action]) => action.kind))].sort()).toEqual(
       Object.keys(covered).sort(),
     );
-    expect(Object.keys(covered)).toHaveLength(15);
+    expect(Object.keys(covered)).toHaveLength(16);
   });
 
   it('would notice a single changed byte', () => {
@@ -247,7 +254,7 @@ describe('STATEMENT_SHAPES', () => {
   });
 
   it('describes every kind', () => {
-    expect(Object.keys(STATEMENT_SHAPES)).toHaveLength(15);
+    expect(Object.keys(STATEMENT_SHAPES)).toHaveLength(16);
   });
 });
 
