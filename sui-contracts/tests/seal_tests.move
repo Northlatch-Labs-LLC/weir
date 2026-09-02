@@ -609,3 +609,160 @@ fun an_unbroken_renewal_keeps_every_period_it_paid_for() {
     clock.destroy_for_testing();
     ts::end(scenario);
 }
+
+// === The aborting access rules ===
+//
+// `assert_subscribed` and `assert_unlocked` are the aborting twins of `is_active` and `unlocks`:
+// public, and the predicate any on-chain surface that gates content is meant to call. Until
+// 2026-09-01 the second had never been called by a test at all, and the mutation sweep deleted
+// every assert in both with the suite still green. A guard that is written must be called, and
+// something must prove it.
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::ENotHolder)]
+/// Kills entitlement.move:253 — `assert_subscribed` for somebody who does not hold it.
+fun assert_subscribed_refuses_somebody_else() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 0);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let subscription = ts::take_from_sender<Subscription>(&scenario);
+    entitlement::assert_subscribed(&subscription, vault, STRANGER, &clock);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::EWrongVault)]
+/// Kills entitlement.move:254 — `assert_subscribed` against a vault that did not issue it.
+fun assert_subscribed_refuses_another_vault() {
+    let mut scenario = ts::begin(CREATOR);
+    let mine = vault_id(&mut scenario);
+    let theirs = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 0);
+
+    entitlement::mint_subscription_for_testing(
+        mine, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let subscription = ts::take_from_sender<Subscription>(&scenario);
+    entitlement::assert_subscribed(&subscription, theirs, FAN, &clock);
+    abort 0
+}
+
+#[test]
+/// The accepted side of entitlement.move:255 — one millisecond before expiry is still subscribed.
+fun assert_subscribed_accepts_the_last_millisecond() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 0);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let subscription = ts::take_from_sender<Subscription>(&scenario);
+    assert!(entitlement::expires_at_ms(&subscription) == PERIOD_MS, 0);
+    let last = clock_at(&mut scenario, PERIOD_MS - 1);
+    entitlement::assert_subscribed(&subscription, vault, FAN, &last);
+
+    ts::return_to_sender(&scenario, subscription);
+    last.destroy_for_testing();
+    clock.destroy_for_testing();
+    ts::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::EExpired)]
+/// Kills the entitlement.move:255 boundary. `expires_at_ms` is exclusive, so the expiry millisecond
+/// itself is expired. `assert_subscribed_refuses_an_expired_subscription` sits one millisecond
+/// later and cannot see a `<` become `<=`; this one can.
+fun assert_subscribed_refuses_the_expiry_millisecond() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 0);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let subscription = ts::take_from_sender<Subscription>(&scenario);
+    let expiry = clock_at(&mut scenario, PERIOD_MS);
+    entitlement::assert_subscribed(&subscription, vault, FAN, &expiry);
+    abort 0
+}
+
+#[test]
+/// `assert_unlocked` accepts its own content. The first call any test has made to it.
+fun assert_unlocked_accepts_its_own_content() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 1_000);
+
+    entitlement::mint_unlock_for_testing(vault, FAN, b"issue-7", &clock, ts::ctx(&mut scenario));
+
+    ts::next_tx(&mut scenario, FAN);
+    let unlock = ts::take_from_sender<Unlock>(&scenario);
+    entitlement::assert_unlocked(&unlock, vault, FAN, b"issue-7");
+
+    ts::return_to_sender(&scenario, unlock);
+    clock.destroy_for_testing();
+    ts::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::ENotHolder)]
+/// Kills entitlement.move:268 — `assert_unlocked` for somebody who does not hold it.
+fun assert_unlocked_refuses_somebody_else() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 1_000);
+
+    entitlement::mint_unlock_for_testing(vault, FAN, b"issue-7", &clock, ts::ctx(&mut scenario));
+
+    ts::next_tx(&mut scenario, FAN);
+    let unlock = ts::take_from_sender<Unlock>(&scenario);
+    entitlement::assert_unlocked(&unlock, vault, STRANGER, b"issue-7");
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::EWrongVault)]
+/// Kills entitlement.move:269 — `assert_unlocked` against a vault that did not issue it.
+fun assert_unlocked_refuses_another_vault() {
+    let mut scenario = ts::begin(CREATOR);
+    let mine = vault_id(&mut scenario);
+    let theirs = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 1_000);
+
+    entitlement::mint_unlock_for_testing(mine, FAN, b"issue-7", &clock, ts::ctx(&mut scenario));
+
+    ts::next_tx(&mut scenario, FAN);
+    let unlock = ts::take_from_sender<Unlock>(&scenario);
+    entitlement::assert_unlocked(&unlock, theirs, FAN, b"issue-7");
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::entitlement::EWrongContent)]
+/// Kills entitlement.move:270 — an unlock for the cheap thing presented for the expensive one.
+/// Holder and vault both check out; only the content key says no.
+fun assert_unlocked_refuses_a_different_content_key() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 1_000);
+
+    entitlement::mint_unlock_for_testing(vault, FAN, b"cheap", &clock, ts::ctx(&mut scenario));
+
+    ts::next_tx(&mut scenario, FAN);
+    let unlock = ts::take_from_sender<Unlock>(&scenario);
+    entitlement::assert_unlocked(&unlock, vault, FAN, b"expensive");
+    abort 0
+}
