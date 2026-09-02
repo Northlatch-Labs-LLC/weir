@@ -35,6 +35,8 @@ const get = (path: string, id?: string): Promise<Response> =>
 
 beforeEach(async () => {
   await resetDatabase();
+  // The register is not part of the shared reset; this file owns its rows.
+  await testDb().query('DELETE FROM agent_accounts');
   await testDb().query(
     `INSERT INTO profiles (handle, vault_id, owner, display_name, bio, coin_type) VALUES ('alice', $1, $2, 'Alice', 'writes', $3)`,
     [normaliseAddress(VAULT), OWNER, '0xdba34672::usdc::USDC'],
