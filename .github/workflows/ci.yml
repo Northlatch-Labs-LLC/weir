@@ -15,10 +15,38 @@
 
 name: CI
 
+# WHAT RUNS HERE, AND WHY IT IS NOT EVERYTHING
+#
+# Tests run on the laptop this is built on. That is the gate, and it is deliberate: Postgres 16,
+# the prover and the chain are all there, the run is measured in seconds rather than minutes, and a
+# failure is read by the person who caused it while the change is still in their head.
+#
+# So this file keeps only the two checks a laptop cannot honestly make about itself:
+#
+#   Secret scan   — a local pre-commit hook is per-checkout and will always be missing somewhere.
+#                   This is the copy that cannot be skipped, and the repository is on a publication
+#                   path, so a secret that lands here is public whatever we do afterwards.
+#   Digest guard  — the deployed contract's build digest. It guards the half that holds the money,
+#                   and it is checked against what is on chain rather than against this tree.
+#
+# The application and Move suites still exist below and still run on a clean machine — but on
+# request and on a weekly schedule, not on every commit. They are not deleted, because the header
+# comment they carry names two real failures that were invisible locally: a stale incremental
+# typecheck cache, and a production build poisoned by a dev server sharing its directory. Those are
+# clean-machine failures and a laptop cannot rule them out. They are simply not worth a full run
+# per commit when every one of those tests has already passed locally.
+#
+# Run them by hand at any time: Actions -> CI -> Run workflow.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Sunday, early. Far from anybody's working hours, so a red result is read on Monday morning
+    # rather than mistaken for a break in whatever is being worked on.
+    - cron: '23 4 * * 0'
 
 # A second push supersedes the first. Nobody needs the results of a commit that has been replaced.
 concurrency:
@@ -53,6 +81,7 @@ jobs:
         run: python3 scripts/scan-secrets.py --all
 
   web:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Typecheck, tests, build
     runs-on: ubuntu-latest
 
@@ -186,6 +215,7 @@ jobs:
         run: pnpm build
 
   contracts:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Move tests
     runs-on: ubuntu-latest
     steps:

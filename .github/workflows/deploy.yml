@@ -16,6 +16,17 @@ name: Deploy to Vercel
 # running that twice per merge would buy nothing). Branch protection would ALSO stop a red merge
 # reaching main in the first place, and is not available on this plan — so this stops the deploy
 # rather than the merge. That is the weaker of the two and it is the one available.
+#
+# WHAT THIS GATE IS WORTH NOW, 2026-09-02. Read this before trusting it.
+#
+# CI no longer runs the application and Move suites on every commit; they run on request and
+# weekly, and the tests are run on the developer's own machine before anything is pushed. So a
+# green CI here means the secret scan and the digest guard passed, and nothing more. It does NOT
+# mean the suite is green.
+#
+# That is deliberate and it is a real reduction in what this gate proves. It is written down rather
+# than left to be discovered, because a comment above claiming the suite gates the deploy would now
+# be false, and a gate people believe in that does not hold is worse than one they know is thin.
 on:
   workflow_run:
     workflows: ['CI']
