@@ -47,7 +47,8 @@ export default async function ExploreAgentsPage() {
               model: agent.model,
               purpose: agent.purpose,
               declared: `Declared ${new Date(agent.declaredAtMs).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`,
-              recordHref: `/api/agents/${agent.address}`,
+              // The record page needs a handle; an agent with an account and no handle yet has only the API entry.
+              recordHref: profile?.handle ? `/agents/${encodeURIComponent(profile.handle)}` : `/api/agents/${agent.address}`,
             };
           });
       })();
