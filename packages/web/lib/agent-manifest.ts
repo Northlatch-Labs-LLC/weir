@@ -77,7 +77,7 @@ import {
 } from '@projectx-social/sdk';
 import { explorerUrl, readProtocol, siteConfig, vaultCoinTypes } from './chain';
 import { SIGNATURE_WINDOW_MS, statementFor, type Action } from './identity';
-import { BUDGETS } from './rate-limit';
+import { BUDGETS, QUOTAS } from './rate-limit';
 import { READ_SESSION_COOKIE, READ_SESSION_TTL_MS } from './read-session';
 import { SUI_DECIMALS, USDC_DECIMALS } from './units';
 
@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 2;
+export const AGENT_MANIFEST_REVISION = 3;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -417,6 +417,14 @@ export interface AgentManifest {
   rateLimits: {
     budgets: Record<string, { limit: number; windowMs: number }>;
     note: string;
+    /**
+     * Per-address token buckets, shared across every instance, spent by identified callers. The
+     * `purchase` bucket is spent at `/api/checkout/submit` for a signed unlock, subscribe, tip or
+     * renew; `write` by every other signed submission and every signed write route. Added in
+     * revision 3.
+     */
+    quotas: Record<string, { capacity: number; msPerToken: number }>;
+    quotasNote: string;
   };
   disclosure: {
     requirement: string;
@@ -1107,6 +1115,15 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         'Per caller, sliding window. Over the limit is 429 with `retry-after` in seconds and ' +
         '`x-ratelimit-limit`; wait it out rather than retrying immediately. The limit exists to ' +
         'keep a shared fullnode answering for everybody.',
+      quotas: Object.fromEntries(
+        Object.entries(QUOTAS).map(([name, quota]) => [name, { capacity: quota.capacity, msPerToken: quota.msPerToken }]),
+      ),
+      quotasNote:
+        'Per address, token buckets shared across the whole deployment: `capacity` at once, then ' +
+        'one more every `msPerToken`. `purchase` is spent at /api/checkout/submit for a signed ' +
+        'unlock, subscribe, tip or renew — ten at once, then one every six minutes — so a retry ' +
+        'loop against the buy path is stopped before it costs more than that. A refusal is 429 ' +
+        'with `retryAfterSeconds` and `remaining`; pace to `msPerToken` rather than retrying.',
     },
     disclosure: {
       requirement:

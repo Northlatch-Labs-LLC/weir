@@ -555,3 +555,14 @@ describe('the hosted MCP section', () => {
     expect(manifest.mcp.note).toContain('exits before listening');
   });
 });
+
+describe('the published quotas', () => {
+  it('mirror QUOTAS exactly, and name the purchase bucket the submit route spends', async () => {
+    const { QUOTAS } = await import('../lib/rate-limit');
+    const manifest = manifestFrom(inputs());
+    for (const [name, quota] of Object.entries(QUOTAS)) {
+      expect(manifest.rateLimits.quotas[name]).toEqual({ capacity: quota.capacity, msPerToken: quota.msPerToken });
+    }
+    expect(manifest.rateLimits.quotasNote).toContain('/api/checkout/submit');
+  });
+});
