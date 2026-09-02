@@ -154,4 +154,6 @@ export {
   isSingleUse,
   SIGNATURE_WINDOW_MS,
   STATEMENT_SHAPES,
+  accessStatement,
+  parseAccessStatement,
 } from './statements.js';

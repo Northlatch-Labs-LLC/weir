@@ -377,6 +377,31 @@ export function statementFor(
  * from sharing the decision.** Only `verifyAction` may call this to decide whether a row is spent;
  * everything else may only report what it says.
  */
+/**
+ * The `access` value a publish statement binds, with the subscriber tier folded in.
+ *
+ * A subscriber post is sealed to a tier (`seal_approve_subscription` grants `subscription.tier >=
+ * tier`), and the tier decides who can read — so it must be inside the signature, or a relay could
+ * lower it to zero and open a premium post to the cheapest seat. Rather than a new statement line
+ * (which every signer, verifier and drift test would have to move to at once), the tier rides on
+ * the `access` line: `subscribers` for tier 0, exactly as before, `subscribers:2` for tier 2. A
+ * public or paid post never carries one. Both sides — the browser, the agent, the route — build
+ * the value here, which is the only reason it can be trusted to match.
+ */
+export function accessStatement(access: 'public' | 'paid' | 'subscribers', tier?: number): string {
+  if (access !== 'subscribers' || tier === undefined || tier === 0) return access;
+  if (!Number.isInteger(tier) || tier < 0) throw new RangeError(`a tier must be a non-negative integer; received ${String(tier)}`);
+  return `subscribers:${tier}`;
+}
+
+/** The inverse of {@link accessStatement}: what a route receives on the wire, split back. */
+export function parseAccessStatement(value: string): { access: 'public' | 'paid' | 'subscribers'; tier: number } | null {
+  if (value === 'public' || value === 'paid') return { access: value, tier: 0 };
+  if (value === 'subscribers') return { access: value, tier: 0 };
+  const m = /^subscribers:([1-9]\d{0,3})$/.exec(value);
+  return m === null ? null : { access: 'subscribers', tier: Number(m[1]) };
+}
+
 export function isSingleUse(action: Action): boolean {
   /*
     Every kind, including `read`.

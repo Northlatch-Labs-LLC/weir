@@ -31,6 +31,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { accessStatement, parseAccessStatement } from '../src/statements.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HEAD_LINES,
@@ -258,5 +259,25 @@ describe('the module stays importable by a browser and by a stranger', () => {
     */
     const source = readFileSync(join(import.meta.dirname, '../src/statements.ts'), 'utf8');
     expect(source).not.toMatch(/^\s*import\s/m);
+  });
+});
+
+describe('accessStatement — the tier rides on the access line', () => {
+  it('leaves tier 0 and non-subscriber posts exactly as they were signed before', () => {
+    expect(accessStatement('subscribers', 0)).toBe('subscribers');
+    expect(accessStatement('subscribers')).toBe('subscribers');
+    expect(accessStatement('public', 3)).toBe('public');
+    expect(accessStatement('paid', 3)).toBe('paid');
+  });
+  it('binds a non-zero tier, and parses it back', () => {
+    expect(accessStatement('subscribers', 2)).toBe('subscribers:2');
+    expect(parseAccessStatement('subscribers:2')).toEqual({ access: 'subscribers', tier: 2 });
+    expect(parseAccessStatement('subscribers')).toEqual({ access: 'subscribers', tier: 0 });
+    expect(parseAccessStatement('subscribers:0')).toBeNull();
+    expect(parseAccessStatement('subscribers:x')).toBeNull();
+  });
+  it('refuses a tier that is not a whole number', () => {
+    expect(() => accessStatement('subscribers', 1.5)).toThrow(RangeError);
+    expect(() => accessStatement('subscribers', -1)).toThrow(RangeError);
   });
 });

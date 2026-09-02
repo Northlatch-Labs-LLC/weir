@@ -304,6 +304,8 @@ export interface WeirPort {
     preview: string;
     text: string;
     access: 'public' | 'paid' | 'subscribers';
+    /** Subscriber posts only: the tier index the body is sealed to. */
+    tier?: number;
     contentKey?: string;
     price?: string;
     idempotencyKey: string;

@@ -74,3 +74,16 @@ describe('publishing through the agent', () => {
     if (result.ok) expect(result.value.postId).toBe('p-real');
   });
 });
+
+describe('a subscriber post with a tier', () => {
+  it('sends the tier in the body and binds it into the signed access line', async () => {
+    const { fetchImpl, calls } = deployment();
+    const agent = keyed(fetchImpl);
+    const result = await agent.post({ ...article, access: 'subscribers', tier: 2 });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    const publish = calls.find((c) => c.url.endsWith('/api/posts'));
+    const body = publish?.body as { access: string; tier?: number };
+    expect(body.access).toBe('subscribers');
+    expect(body.tier).toBe(2);
+  });
+});

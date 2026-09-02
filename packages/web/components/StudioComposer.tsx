@@ -30,6 +30,7 @@
  * all, because posts hang off a profile handle and a vault without one has nowhere to file them.
  */
 
+import { accessStatement } from '@projectx-social/sdk';
 import { useEffect, useState } from 'react';
 import { formatUnits } from '@/lib/units';
 import { NO_MACHINE_BODY, machineContentKey, machineKeyProblem } from '@/lib/machine-pricing';
@@ -37,7 +38,7 @@ import { retentionDays } from '@/lib/storage-retention';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
 
-interface Target { vaultId: string; coinType: string; handle: string }
+interface Target { vaultId: string; coinType: string; handle: string; tiers: { index: number; name: string; active: boolean }[] }
 
 type Access = 'public' | 'subscribers' | 'paid';
 
@@ -103,7 +104,7 @@ function toMinor(input: string): bigint | null {
 /** The shape `/api/creator` answers with, narrowed to what publishing needs. */
 interface CreatorBody {
   stage?: 'no-account' | 'no-vault' | 'ready';
-  vaults?: { vaultId: string; coinType: string; handle: string | null }[];
+  vaults?: { vaultId: string; coinType: string; handle: string | null; tiers?: { index: number; name: string; active: boolean }[] }[];
 }
 
 export function StudioComposer() {
@@ -115,6 +116,8 @@ export function StudioComposer() {
   const [preview, setPreview] = useState('');
   const [text, setText] = useState('');
   const [access, setAccess] = useState<Access>('public');
+  /** Subscriber posts: the tier index the body is sealed to. 0 = every subscriber. */
+  const [tier, setTier] = useState(0);
   const [contentKey, setContentKey] = useState('');
   const [price, setPrice] = useState('0.10');
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
@@ -192,7 +195,7 @@ export function StudioComposer() {
         const publishable = (body.vaults ?? []).flatMap((vault) =>
           vault.handle === null
             ? []
-            : [{ vaultId: vault.vaultId, coinType: vault.coinType, handle: vault.handle }],
+            : [{ vaultId: vault.vaultId, coinType: vault.coinType, handle: vault.handle, tiers: vault.tiers ?? [] }],
         );
         setTargets(publishable);
         setSelected(publishable[0]?.vaultId ?? null);
@@ -447,7 +450,7 @@ export function StudioComposer() {
       const signedPrice = access === 'paid' ? (effectivePrice?.toString() ?? '') : '';
       const statement =
         `Weir\naddress: ${signer.address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
-        `\naction: publish\ncreator: ${target.handle}\naccess: ${access}\ntitle: ${title}\ncontent-sha256: ${contentSha256}\nkey: ${signedKey}\nprice: ${signedPrice}`;
+        `\naction: publish\ncreator: ${target.handle}\naccess: ${accessStatement(access, access === 'subscribers' ? tier : 0)}\ntitle: ${title}\ncontent-sha256: ${contentSha256}\nkey: ${signedKey}\nprice: ${signedPrice}`;
       const signature = await signer.signPersonalMessage(new TextEncoder().encode(statement));
 
       const response = await fetch('/api/posts', {
@@ -460,6 +463,7 @@ export function StudioComposer() {
           preview,
           text,
           access,
+          ...(access === 'subscribers' && tier > 0 ? { tier } : {}),
           signature,
           timestampMs,
           ...(access === 'paid'
@@ -720,6 +724,29 @@ export function StudioComposer() {
             <option value="paid">Paid — bought once</option>
           </select>
         </div>
+
+        {access === 'subscribers' && target !== null && target.tiers.filter((t) => t.active).length > 1 && (
+          <div>
+            <label className="k" htmlFor="tier">TIER — the lowest seat that can open this post</label>
+            <select
+              id="tier"
+              className="field"
+              value={tier}
+              onChange={(e) => {
+                setTier(Number(e.target.value));
+                setStage({ name: 'idle' });
+              }}
+            >
+              {target.tiers
+                .filter((t) => t.active)
+                .map((t) => (
+                  <option key={t.index} value={t.index}>
+                    {t.index === 0 ? `${t.name} — every subscriber` : `${t.name} and above`}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
         {access === 'paid' && (
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr' }}>

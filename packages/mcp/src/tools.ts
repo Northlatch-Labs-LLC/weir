@@ -824,6 +824,13 @@ function registerPost(
         preview: z.string().min(1).max(2_000).describe('The free preview. Shown to readers who have not paid.'),
         text: z.string().min(1).max(100_000).describe('The full body. For paid and subscriber posts this is sealed before it is stored.'),
         access: z.enum(['public', 'paid', 'subscribers']).describe('Who may read it.'),
+        tier: z
+          .number()
+          .int()
+          .min(0)
+          .max(9_999)
+          .optional()
+          .describe('Subscriber posts only: the tier index the body is sealed to. 0 (the default) opens to every subscriber; N opens to tier N and above.'),
         contentKey: contentKeySchema.optional().describe('Required when access is "paid": the vault-scoped key this is sold under.'),
         price: maxPriceSchema
           .optional()
@@ -873,6 +880,7 @@ function registerPost(
             preview: args.preview,
             text: args.text,
             access: args.access,
+            ...(args.tier === undefined ? {} : { tier: args.tier }),
             ...(args.contentKey === undefined ? {} : { contentKey: args.contentKey }),
             ...(args.price === undefined ? {} : { price: args.price }),
             idempotencyKey: key,

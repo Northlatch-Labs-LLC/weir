@@ -67,7 +67,7 @@ function subscriberPost(sealed: { tier: string; period: string } | null): Post {
     title: 't',
     preview: 'p',
     body: '',
-    access: { kind: 'subscribers' },
+    access: { kind: 'subscribers', tier: 0 },
     ...(sealed === null
       ? {}
       : {

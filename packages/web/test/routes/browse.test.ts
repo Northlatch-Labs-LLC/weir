@@ -70,7 +70,9 @@ async function seedPosts(n: number, handle = 'alice', vaultId = VAULT_A): Promis
       access:
         kind === 'paid'
           ? { kind, price: '250000', contentKey: `key-${i}` }
-          : { kind },
+          : kind === 'subscribers'
+            ? { kind, tier: 0 }
+            : { kind },
       ...(kind === 'paid'
         ? {
             sealedBody: {

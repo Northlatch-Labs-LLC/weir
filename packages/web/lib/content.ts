@@ -97,7 +97,8 @@ export interface Post {
 
 export type PostAccess =
   | { kind: 'public' }
-  | { kind: 'subscribers' }
+  /** `tier` is the index the body is sealed to: 0 opens to every subscriber, N to tier N and above. */
+  | { kind: 'subscribers'; tier: number }
   | { kind: 'paid'; price: string; contentKey: string };
 
 export interface Profile {
@@ -262,7 +263,7 @@ function toPost(row: PostRow): Post {
     row.access_kind === 'paid'
       ? paidAccess(row)
       : row.access_kind === 'subscribers'
-        ? { kind: 'subscribers' }
+        ? { kind: 'subscribers', tier: row.body_tier === null ? 0 : Number(row.body_tier) }
         : { kind: 'public' };
 
   const assetIds = row.asset_ids ?? [];
