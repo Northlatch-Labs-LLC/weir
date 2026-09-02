@@ -54,6 +54,8 @@ describe('the marker survives a round trip and nothing else does', () => {
       expect(preconditionOf(reading.failure)?.name).toBe('creation-paused');
       expect(preconditionOf(reading.failure)?.mayClear).toBe(true);
       expect(classificationOf(reading.failure)).toBe('precondition');
+      // The KIND is the classification since B17; the marker only names which condition.
+      expect(reading.failure.kind).toBe('precondition');
       // The marker is FIRST in the string, so a truncating log still carries it.
       expect(reading.failure.detail.startsWith(PRECONDITION_MARKER)).toBe(true);
       // And the sentence a human reads names what has to change.
@@ -70,12 +72,31 @@ describe('the marker survives a round trip and nothing else does', () => {
     ).toBe('permanent');
   });
 
+  it('the marker without the kind is NOT a precondition — the kind is authoritative', () => {
+    // A `malformed` failure whose text quotes a marker (a message about a message, say) must not
+    // hand a caller `mayClear: true`. Only the kind says what a refusal is.
+    const quoted = { kind: 'malformed' as const, source: 's', detail: '[precondition:creation-paused] quoted' };
+    expect(preconditionOf(quoted)).toBeNull();
+    expect(classificationOf(quoted)).toBe('permanent');
+  });
+
+  it('a precondition kind with no readable name still classifies as a precondition', () => {
+    // The loop may wait on it; `preconditionOf` just refuses to invent a `clearsWhen`.
+    const unnamed = { kind: 'precondition' as const, source: 's', detail: 'not yet' };
+    expect(preconditionOf(unnamed)).toBeNull();
+    expect(classificationOf(unnamed)).toBe('precondition');
+  });
+
+  it('`denied` is permanent for a loop: the answer was no', () => {
+    expect(classificationOf({ kind: 'denied', source: 's', detail: '403' })).toBe('permanent');
+  });
+
   it('an unrecognised name inside the marker is NOT reported as a precondition', () => {
     // Better to under-report than to hand a caller `mayClear: true` for a condition this package
     // cannot say anything about — a loop waiting for something that will never clear is worse than
     // a loop that gave up early, because nothing ever alerts on it.
     expect(
-      preconditionOf({ kind: 'malformed', source: 's', detail: '[precondition:invented] x' }),
+      preconditionOf({ kind: 'precondition', source: 's', detail: '[precondition:invented] x' }),
     ).toBeNull();
   });
 

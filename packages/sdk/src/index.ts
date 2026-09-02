@@ -13,6 +13,8 @@ export {
   type FailureKind,
   type ReaderHealth,
   type ReaderStats,
+  type RetryAdvice,
+  FAILURE_KINDS,
   ok,
   fail,
   fold,
@@ -20,6 +22,8 @@ export {
   orThrow,
   readerHealth,
   classify,
+  retryAdvice,
+  describeFailureKind,
 } from './reading.js';
 
 export {

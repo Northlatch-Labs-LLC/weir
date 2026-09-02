@@ -13,7 +13,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { classify, fold, ok, fail, readerHealth } from '../src/reading.js';
+import {
+  FAILURE_KINDS,
+  classify,
+  describeFailureKind,
+  fold,
+  ok,
+  fail,
+  readerHealth,
+  retryAdvice,
+  type FailureKind,
+} from '../src/reading.js';
 
 describe('classify', () => {
   it('recognises not-found in every spelling a node has produced', () => {
@@ -26,6 +36,24 @@ describe('classify', () => {
     for (const message of ['Deadline exceeded', 'request timeout', 'The operation was aborted']) {
       expect(classify(new Error(message), 'test').kind, message).toBe('timeout');
     }
+  });
+
+  it('recognises a refusal in the words HTTP, gRPC and Seal use for it', () => {
+    for (const message of [
+      '403 Forbidden',
+      'PERMISSION_DENIED: caller may not read this',
+      'User does not have access to one or more of the requested keys',
+      '401 Unauthorized',
+    ]) {
+      expect(classify(new Error(message), 'test').kind, message).toBe('denied');
+    }
+  });
+
+  it('never lets a refusal fold into an absence', () => {
+    // Seal's sentence contains no "not found", but a future one might mention the key it refused.
+    // The refusal words are checked FIRST so that "no access to key ... not found in bundle" is a
+    // denial, not a measured "there is none" that a caller would then trust.
+    expect(classify(new Error('permission denied: object not found for this caller'), 'test').kind).toBe('denied');
   });
 
   it('defaults to transport, not to not-found', () => {
@@ -72,5 +100,40 @@ describe('readerHealth', () => {
     expect(
       readerHealth({ attempts: 0, successes: 0, consecutiveFailures: 0, lastSuccessAtMs: null }),
     ).toBe('idle');
+  });
+});
+
+describe('every kind is classified, and the list is the union', () => {
+  it('walks FAILURE_KINDS through both exhaustive switches', () => {
+    // The `never` checks in reading.ts make the compiler refuse a missing case; this makes the
+    // test runner refuse one too, for the day somebody replaces the switch with a lookup table.
+    expect(FAILURE_KINDS.length).toBe(8);
+    for (const kind of FAILURE_KINDS) {
+      expect(['retry', 'wait', 'stop'], kind).toContain(retryAdvice(kind));
+      expect(describeFailureKind(kind).length, kind).toBeGreaterThan(10);
+    }
+  });
+
+  it('gives the advice a loop must act on', () => {
+    const expected: Record<FailureKind, ReturnType<typeof retryAdvice>> = {
+      transport: 'retry',
+      timeout: 'retry',
+      precondition: 'wait',
+      malformed: 'stop',
+      unconfigured: 'stop',
+      'not-found': 'stop',
+      'budget-exhausted': 'stop',
+      denied: 'stop',
+    };
+    for (const kind of FAILURE_KINDS) expect(retryAdvice(kind), kind).toBe(expected[kind]);
+  });
+
+  it('keeps a refusal and an absence distinct end to end', () => {
+    // The whole reason `denied` exists: a paywall must not become "this is gone".
+    const paywall = fail<number>('denied', 'seal', 'no access');
+    const gone = fail<number>('not-found', 'object', 'no such object');
+    expect(fold(paywall, () => 'value', (f) => f.kind)).toBe('denied');
+    expect(fold(gone, () => 'value', (f) => f.kind)).toBe('not-found');
+    expect(describeFailureKind('denied')).not.toBe(describeFailureKind('not-found'));
   });
 });

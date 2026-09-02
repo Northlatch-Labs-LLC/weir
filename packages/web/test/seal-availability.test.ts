@@ -201,16 +201,16 @@ describe('a committee that refuses', () => {
     expect((error as SealOpenError).cause).toBeInstanceOf(NoAccessError);
   });
 
-  it('leaves no `FailureKind` claiming a paywall is a missing object', () => {
+  it('maps a paywall to `denied` and an expired session to `precondition`, never to not-found', () => {
     /*
-      The gap in `packages/sdk/src/reading.ts`, named rather than papered over. That union has
-      `transport`, `timeout`, `malformed`, `unconfigured`, `not-found` and `budget-exhausted`, and
-      none of them means "we asked, we were understood, and the answer was no". `not-found` is the
-      nearest and is the wrong one: it would make a paywall and a deleted post identical in every
-      log line that groups by kind.
+      Before B17 the SDK union had no member meaning "we asked, we were understood, and the answer
+      was no", and this field was null for both. `not-found` was never an option: it would make a
+      paywall and a deleted post identical in every log line that groups by kind. Now the answer
+      "no" is `denied`, and "sign again first" is `precondition` — the loop may wait on the second
+      and must stop on the first.
     */
-    expect(classifySealFailure(new NoAccessError()).readingKind).toBeNull();
-    expect(classifySealFailure(new ExpiredSessionKeyError()).readingKind).toBeNull();
+    expect(classifySealFailure(new NoAccessError()).readingKind).toBe('denied');
+    expect(classifySealFailure(new ExpiredSessionKeyError()).readingKind).toBe('precondition');
   });
 });
 
