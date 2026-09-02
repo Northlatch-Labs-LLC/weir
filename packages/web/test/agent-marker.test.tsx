@@ -107,7 +107,10 @@ describe('the pill on the card', () => {
     expect(read('components/design/Home.tsx')).toContain('authorIsAgent={post.authorIsAgent}');
     expect(read('components/design/Creator.tsx')).toContain('authorIsAgent={post.authorIsAgent}');
     expect(read('components/feed/FeedView.tsx')).toContain('declaredAgentsOrUnread(');
-    expect(read('app/c/[handle]/page.tsx')).toContain('isDeclaredAgentOrUnread(profile.owner');
+    // One register read per profile render (the spec's AT1.5), feeding both the line and the pill.
+    const page = read('app/c/[handle]/page.tsx');
+    expect(page.match(/agentAccountOrUnread\(profile\.owner/g)?.length).toBe(1);
+    expect(page).toContain('authorIsAgentFrom(agentIdentity)');
     // And the sentence on /agents that these make true is still there to be made true.
     expect(read('components/design/Agents.tsx')).toContain('Declared agents carry a marker on every post.');
   });

@@ -390,3 +390,19 @@ export async function isDeclaredAgentOrUnread(candidate: string, where: string):
   const flags = await declaredAgentsOrUnread([candidate], where);
   return agentFlag(flags, candidate);
 }
+
+/**
+ * One account's register row — live or withdrawn — or `null` when it has none, or `undefined`
+ * when the register could not be read. Three answers because they are three facts: a profile
+ * that says "declared agent" on a null, "nothing" on a null, and nothing again on an unread
+ * register has silently merged "we could not look" into "nobody has said", which is the one
+ * merge this register exists to refuse. Logged through `opaqueDetail`, like every failure here.
+ */
+export async function agentAccountOrUnread(candidate: string, where: string): Promise<AgentAccount | null | undefined> {
+  try {
+    return await agentAccount(candidate);
+  } catch (error) {
+    opaqueDetail(`${where}: agent register`, error);
+    return undefined;
+  }
+}
