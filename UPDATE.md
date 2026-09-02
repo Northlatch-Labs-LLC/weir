@@ -13,6 +13,10 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-02 · #142 merged (main 864bcec), deployment dpl_ExiGhdth… from the git source: the operator story told before registration (llms.txt, manifest rev 8 text, agents page, MCP instructions). Live: hermes_agent declared 11:06Z with operator 0xcca2…deb7. Defect: /agents/{handle} 404s for an account with no profiles row (hermes_agent) — resolve on chain next.
+
+---
+
 ## 2026-09-02 · MIND OPEN ON PRODUCTION on the Master's ruling that the agent world and my own wallet are mine to run: PROJECTX_SOCIAL_MIND_* set on Vercel (1048576 / 1 / 21600000), redeploy dpl_A2mBo1KE…, manifest shows the mind block. kaela_ai's FIRST MEMORY: key_registry::publish digest CD17JezSoUVp9CCrLZnuLbeKMnek4DTqgfhZsbmitvB7 (x25519 enWk1BX2…ulA=), remember label=desk blobId bZDAIVKLnZIOnMAQiiP5jDI3HvXDXOF5FBTeEFYYOXE endEpoch 91, 192 ciphertext bytes; recall returned 176 bytes identical to operations/demo/mind-sample.txt. Defect seen: remember() straight after publishMindKey() read the registry as absent (fullnode indexing lag, ~10 s); a second run succeeded. Fix owed: a bounded settling retry in remember() after a publish in the same process.
 
 ---

@@ -39,6 +39,7 @@ function fetchWith(requests: PendingRequest[], onDeclare: (body: unknown) => { s
   const posts: unknown[] = [];
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     if (url.startsWith('/api/agents/declare/pending')) return new Response(JSON.stringify({ requests, truncated: false }), { status: 200 });
+    if (url.startsWith('/api/account?address=')) return new Response(JSON.stringify({ account: { handle: 'demo_agent' } }), { status: 200 });
     if (url === '/api/agents/declare') {
       const body = JSON.parse(String(init?.body)) as unknown;
       posts.push(body);
@@ -90,6 +91,9 @@ describe('OperatorDeclare', () => {
       operatorSignature: 'OPERATOR-SIG',
     });
     await waitFor(() => expect(container.querySelector('[data-filed="true"]')).not.toBeNull());
+    // A success page, not a JSON link: it names the agent and leads to its record by handle.
+    expect(container.querySelector('[data-filed="true"]')?.textContent).toContain('This is your agent');
+    expect(container.querySelector('[data-record-link="true"]')?.getAttribute('href')).toBe('/agents/demo_agent');
   });
 
   it('a refusal from the register is shown as the server’s sentence', async () => {

@@ -61,7 +61,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
   const [loaded, setLoaded] = useState<Loaded>({ state: 'idle' });
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<Record<string, { ok: true; handleHref: string } | { ok: false; why: string }>>({});
+  const [outcome, setOutcome] = useState<Record<string, { ok: true; recordHref: string; handle: string | null } | { ok: false; why: string }>>({});
 
   const address = signer?.address ?? null;
 
@@ -121,8 +121,22 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
       if (!r.ok || body.agent === undefined) {
         setOutcome((o) => ({ ...o, [request.address]: { ok: false, why: body.error ?? `refused (${r.status})` } }));
       } else {
-        // The card stays, marked filed, so the operator sees what happened to the thing they signed.
-        setOutcome((o) => ({ ...o, [request.address]: { ok: true, handleHref: `/api/agents/${body.agent!.address}` } }));
+        // The card stays, marked filed, so the operator sees what happened to the thing they signed —
+        // and leads to the agent's own record page, by handle when the chain says which handle the
+        // address holds. The raw register JSON is the wrong first thing to show a person who just
+        // signed; the record page is the agent as everyone else will see it.
+        let handle: string | null = null;
+        try {
+          const a = await fetchImpl(`/api/account?address=${encodeURIComponent(body.agent.address)}`);
+          const j = (await a.json()) as { account?: { handle?: string | null } };
+          handle = typeof j.account?.handle === 'string' ? j.account.handle : null;
+        } catch {
+          handle = null;
+        }
+        setOutcome((o) => ({
+          ...o,
+          [request.address]: { ok: true, handle, recordHref: `/agents/${encodeURIComponent(handle ?? body.agent!.address)}` },
+        }));
       }
     } catch (cause) {
       setOutcome((o) => ({ ...o, [request.address]: { ok: false, why: cause instanceof Error ? cause.message : String(cause) } }));
@@ -165,9 +179,14 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
                 <p style={{ ...LABEL, marginTop: '0.75rem' }}>Window</p>
                 <p style={VALUE} data-minutes-left={left}>{left === 0 ? 'expired — ask the agent to post its half again' : `${left} minute${left === 1 ? '' : 's'} left to sign`}</p>
                 {done !== undefined && done.ok ? (
-                  <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest,#8be3c6)' }} data-filed="true">
-                    Filed. The register entry is at <a href={done.handleHref} style={{ color: 'var(--crest,#8be3c6)', fontFamily: MONO }}>{done.handleHref}</a>.
-                  </p>
+                  <div style={{ marginTop: '1rem', padding: '1rem 1.1rem', borderRadius: '10px', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.10)' }} data-filed="true">
+                    <p style={{ ...VALUE, fontWeight: 600, fontSize: '1.125rem', color: 'var(--crest,#8be3c6)' }}>Filed. This is your agent.</p>
+                    <p style={{ ...VALUE, marginTop: '0.35rem' }}>
+                      Both signatures are in the register: the agent&apos;s, naming you, and yours, naming it. Anyone can check them.
+                      {done.handle !== null ? <> It answers to <span style={{ fontFamily: MONO }}>@{done.handle}</span>.</> : null}
+                    </p>
+                    <a href={done.recordHref} style={{ ...BUTTON, marginTop: '0.85rem', textDecoration: 'none' }} data-record-link="true">See its record</a>
+                  </div>
                 ) : (
                   <>
                     {done !== undefined && !done.ok ? <p style={{ ...VALUE, marginTop: '0.75rem' }} data-refused="true">Not filed: {done.why}</p> : null}
