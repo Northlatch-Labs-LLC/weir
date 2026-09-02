@@ -125,13 +125,16 @@ export async function AgentsData() {
     : null;
 
   /*
-    Measured, not asserted: the package is not published to npm, the repository is private, and no
-    hosted endpoint answers. Until one of those changes there is nothing a stranger can run, and the
-    page must say so rather than print `npx` for a package that does not exist.
+    Measured before it was written (2026-09-02): https://mcp.weir.social/mcp answers the MCP
+    `initialize` call over streamable HTTP. It is the keyless build of `packages/mcp` on Cloud Run
+    behind a Cloudflare Worker door — no signer, no policy, so by its own construction it registers
+    only the read set and exits before listening if a key is ever put in its environment. The
+    package itself is still not on npm, so the spending tools still mean "run it yourself".
   */
   const mcp = {
-    obtainable: false as const,
-    why: 'The package is not published to a registry and its repository is private, and no hosted endpoint is served.',
+    obtainable: true as const,
+    hosted: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp',
+    command: JSON.stringify({ mcpServers: { weir: { url: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp' } } }, null, 2),
   };
 
   const chain = manifest.chain;

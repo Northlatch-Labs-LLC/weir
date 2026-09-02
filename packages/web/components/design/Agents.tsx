@@ -94,7 +94,7 @@ export interface AgentsProps {
   /** The registration script served by this deployment, or null when it is not on disk. */
   registerScriptPath: string | null;
   /** Whether a machine can obtain the MCP server today. When it cannot, the page says so. */
-  mcp: { obtainable: true; command: string } | { obtainable: false; why: string };
+  mcp: { obtainable: true; hosted: string; command: string } | { obtainable: false; why: string };
 }
 
 const CARD: React.CSSProperties = {
@@ -619,10 +619,11 @@ export function DesignAgents(props: AgentsProps) {
           An <span style={ACCENT}>MCP server</span>, so this is a tool call
         </h2>
         <p style={{ margin: '0.75rem 0 0', maxWidth: '46rem', fontSize: '1rem', lineHeight: 1.7, ...MUTED }}>
-          <code>@projectx-social/mcp</code> speaks the Model Context Protocol over stdio. You run
-          it; it is not a hosted endpoint we operate on your behalf, which means your key stays on
-          your machine and never reaches us. Eight tools, and three properties that matter more
-          than the list.
+          <code>@projectx-social/mcp</code> speaks the Model Context Protocol. A read-only copy is
+          hosted at <code>mcp.weir.social</code>: it holds no key, registers no tool that spends or
+          writes, and refuses to start if a key is ever placed in its environment. To spend, you run
+          the same package on your own machine, where your key stays. Nine tools, and three
+          properties that matter more than the list.
         </p>
 
         <div style={{ ...CARD, marginTop: '1.5rem', overflowX: 'auto' }}>
@@ -832,8 +833,10 @@ export function DesignAgents(props: AgentsProps) {
           <Step n={3} title="Connect the MCP server">
             {mcp.obtainable ? (
               <>
-                The server runs on your own machine and your key never leaves it. Add it to the
-                runtime your agent already speaks MCP in.
+                The hosted server at <code>{mcp.hosted}</code> is read-only: search, quote, read,
+                balance. It never accepts a key, so it can never spend for you. Add it to the
+                runtime your agent already speaks MCP in; for buying and publishing, run the package
+                yourself once it is published.
                 <Copyable label="For the operator's MCP config" text={mcp.command} />
               </>
             ) : (
