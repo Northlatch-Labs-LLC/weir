@@ -10,6 +10,7 @@
  * amount of visual fidelity replaces.
  */
 
+import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-identity';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { Fragment, type ReactNode } from 'react';
 import { PostCard } from '@/components/PostCard';
@@ -79,6 +80,11 @@ export function DesignCreator({
     meta: string;
     /** The creator's .sui name when they hold one, else the handle — never a guess. */
     sui: string;
+    /**
+     * What the declaration register says about this account. Absent renders nothing, exactly as
+     * `none` does: a caller that did not look must not read as "looked, and no".
+     */
+    agent?: DesignAgentIdentity;
   };
   tiers: readonly DesignTier[];
   stats: readonly DesignStat[];
@@ -132,6 +138,30 @@ export function DesignCreator({
               <div className="weir-identity__text">
                 <h1 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', maxWidth: '36ch', textWrap: 'balance' }}>{profile.displayName}</h1>
                 <p style={{ margin: '0.25rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontWeight: '500', fontSize: '0.9375rem', color: 'var(--crest,#8be3c6)' }}>{profile.meta}</p>
+                {/*
+                  The declaration register's answer, in the register's three states. `declared`
+                  carries the same pill every post by this account carries, and the record a
+                  reader can verify without trusting this page. `unread` is one quiet sentence with
+                  no claim in it. `none` — and an absent prop — is nothing at all: no "human", no
+                  "unverified", because the register proves declarations, never their absence.
+                */}
+                {profile.agent?.state === 'declared' && (
+                  <div data-agent-identity="declared" style={{ margin: '0.625rem 0 0', maxWidth: '58ch' }}>
+                    <p style={{ margin: '0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.9375rem', color: 'var(--ink-2,#b9cdc9)' }}>
+                      <span className="pill" title="Declared as an agent — the account and its operator each signed for it">Agent</span>
+                      <span>Declared agent · verified by two signatures · <a href={profile.agent.recordPath} style={{ color: 'var(--crest,#8be3c6)' }}>the record</a></span>
+                    </p>
+                    <details style={{ margin: '0.375rem 0 0', fontSize: '0.875rem', color: 'var(--dim,#a3bcb8)' }}>
+                      <summary style={{ cursor: 'pointer', color: 'var(--dim,#a3bcb8)' }}>What it declared</summary>
+                      <p style={{ margin: '0.375rem 0 0', lineHeight: '1.6', textWrap: 'pretty' }}>
+                        Model: {profile.agent.model}. Purpose: {profile.agent.purpose}. {profile.agent.declared}. The two statements and signatures are at <a href={profile.agent.recordPath} style={{ color: 'var(--crest,#8be3c6)' }}>{profile.agent.recordPath}</a>; anyone can verify them without trusting this site.
+                      </p>
+                    </details>
+                  </div>
+                )}
+                {profile.agent?.state === 'unread' && (
+                  <p data-agent-identity="unread" style={{ margin: '0.625rem 0 0', fontSize: '0.875rem', fontStyle: 'italic', color: 'var(--alert,#f2a29b)' }}>{REGISTER_UNREAD_LINE}</p>
+                )}
                 {profile.bio !== '' && (<p style={{ margin: '0.875rem 0 0', maxWidth: '58ch', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', fontSize: '0.9375rem' }}>{profile.bio}</p>)}
               </div>
               {subscribeSlot}
