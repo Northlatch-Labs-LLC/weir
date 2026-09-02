@@ -30,7 +30,14 @@ export const dynamic = 'force-dynamic';
  * different split of the same characters — a collision a signer could exploit to move text from
  * the public preview into the withheld body after signing.
  */
-function contentDigest(preview: string, text: string): string {
+/**
+ * The digest a `publish` signature binds.
+ *
+ * Exported so `test/agent-manifest.test.ts` can check the recipe published in the manifest against
+ * the function that actually decides whether a signature stands. The manifest is where agents learn
+ * this; if the two ever disagree, agents are told how to build bytes this route will refuse.
+ */
+export function contentDigest(preview: string, text: string): string {
   return createHash('sha256')
     .update(`${preview.length}:${preview}${text.length}:${text}`)
     .digest('hex');
@@ -193,8 +200,15 @@ async function publishOnce(request: Request) {
     a free one, or reused for different words. `verifyAction` binds the recovered key to `author`
     and enforces the freshness window.
   */
+  /*
+    Held rather than inlined, because the same two values go into the verification AND into the
+    retained proof below. Deriving them twice is how the stored record and the verified bytes drift.
+  */
+  const origin = new URL(request.url).origin;
+  const contentSha256 = contentDigest(preview, text);
+
   const proof = await verifyActionDeferringSpend({
-    origin: new URL(request.url).origin,
+    origin,
     address: author,
     signature: signature ?? '',
     timestampMs: timestampMs ?? 0,
@@ -205,7 +219,7 @@ async function publishOnce(request: Request) {
       // The tier rides on the access line of the statement; see `accessStatement` in the SDK. The
       // value is validated against the vault below, after the proof and before anything is sealed.
       access: accessStatement(access as 'public' | 'paid' | 'subscribers', requestedTier),
-      contentSha256: contentDigest(preview, text),
+      contentSha256,
       /*
         Bound as sent, before the paid branch below reads them.
 
@@ -415,6 +429,24 @@ async function publishOnce(request: Request) {
     access: postAccess,
     ...(sealedBody === null ? {} : { sealedBody }),
     ...(machineBody === null ? {} : { machineBody }),
+    /*
+      The proof, kept — see `db/038_authorship_proof.sql`.
+
+      These are the exact values `verifyActionDeferringSpend` just accepted, not a re-derivation:
+      `origin` and `contentSha256` are the ones it verified, and the signature is the string as it
+      arrived. Anything rebuilt here could differ from what was checked, and a proof that differs
+      from what was checked is not a proof.
+
+      `signature` and `timestampMs` are non-null past this point: the proof above returns 401 for a
+      missing either, so the `?? ''` and `?? 0` in that call are unreachable by the time we are here.
+    */
+    authorship: {
+      address: author,
+      issuedAtMs: timestampMs ?? 0,
+      origin,
+      contentSha256,
+      signature: signature ?? '',
+    },
   };
 
   /*

@@ -39,6 +39,20 @@ export interface Post {
   vaultId: string;
   authorHandle: string;
   createdAtMs: number;
+  /**
+   * What lets somebody who is not us check who wrote this — see `db/038_authorship_proof.sql`.
+   *
+   * Absent on every post published before 2026-09-02, and that absence is the honest answer rather
+   * than a gap to be filled in: those posts were signed, verified, and the proof was discarded.
+   * Never default it. "We did not keep it" and "this was not signed" must stay distinguishable.
+   */
+  authorship?: {
+    address: string;
+    issuedAtMs: number;
+    origin: string;
+    contentSha256: string;
+    signature: string;
+  };
   title: string;
   preview: string;
   /**
@@ -229,6 +243,11 @@ export interface PostRow {
   machine_seal_wrapped_key: string | null;
   machine_sha256: string | null;
   machine_content_key: string | null;
+  author_address: string | null;
+  issued_at_ms: string | number | null;
+  origin: string | null;
+  content_sha256: string | null;
+  signature: string | null;
   price: string | null;
   content_key: string | null;
   asset_ids: string[] | null;
@@ -267,9 +286,30 @@ function toPost(row: PostRow): Post {
         : { kind: 'public' };
 
   const assetIds = row.asset_ids ?? [];
+  /*
+    All five or none. A partial row cannot be verified and must not be presented as if it could:
+    the route that serves this says "no proof was kept" for a post without it, and that sentence
+    has to be true of every post it is said about.
+  */
+  const authorship =
+    row.author_address !== null &&
+    row.issued_at_ms !== null &&
+    row.origin !== null &&
+    row.content_sha256 !== null &&
+    row.signature !== null
+      ? {
+          address: row.author_address,
+          issuedAtMs: Number(row.issued_at_ms),
+          origin: row.origin,
+          contentSha256: row.content_sha256,
+          signature: row.signature,
+        }
+      : undefined;
+
   return {
     id: row.id,
     vaultId: row.vault_id,
+    ...(authorship === undefined ? {} : { authorship }),
     authorHandle: row.author_handle,
     createdAtMs: Number(row.created_at_ms),
     title: row.title,
@@ -351,6 +391,7 @@ const POST_SELECT = `
          p.body_tier, p.body_period,
          p.machine_blob_id, p.machine_end_epoch, p.machine_nonce, p.machine_seal_wrapped_key,
          p.machine_sha256, p.machine_content_key,
+         p.author_address, p.issued_at_ms, p.origin, p.content_sha256, p.signature,
          COALESCE(
            (SELECT array_agg(a.id ORDER BY a.id) FROM assets a WHERE a.post_id = p.id),
            '{}'
@@ -782,9 +823,10 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
                         body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256,
                         body_tier, body_period,
                         machine_blob_id, machine_end_epoch, machine_nonce, machine_seal_wrapped_key,
-                        machine_sha256, machine_content_key)
+                        machine_sha256, machine_content_key,
+                        author_address, issued_at_ms, origin, content_sha256, signature)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-             $18, $19, $20, $21, $22, $23)`,
+             $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
     [
       post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
       /*
@@ -803,6 +845,13 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
       post.machineBody?.blobId ?? null, post.machineBody?.endEpoch ?? null,
       post.machineBody?.nonce ?? null, post.machineBody?.sealWrappedKey ?? null,
       post.machineBody?.sha256 ?? null, post.machineBody?.contentKey ?? null,
+      /*
+        Null together or not at all. A row with an address and no signature would read as a proof
+        and verify as nothing, which is worse than the honest absence these columns are for.
+      */
+      post.authorship?.address ?? null, post.authorship?.issuedAtMs ?? null,
+      post.authorship?.origin ?? null, post.authorship?.contentSha256 ?? null,
+      post.authorship?.signature ?? null,
     ],
   );
 }

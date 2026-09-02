@@ -30,6 +30,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { bcs } from '@mysten/sui/bcs';
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
@@ -212,6 +213,54 @@ beforeEach(async () => {
   capsHeld = new Map([[normaliseAddress(VAULT), CAP]]);
 });
 afterAll(closeDatabase);
+
+/*
+  The proof of authorship is written BY THE ROUTE, not by a test that constructs a row.
+
+  `test/authorship-proof.test.ts` proves the endpoint serves a verifiable proof, but it builds its
+  post directly — so it passed unchanged when the route was mutated to store an empty author. This
+  is the test that mutation should have failed. It drives the real publish path and then verifies
+  the stored bytes against the Sui library, which is the only combination that proves the chain from
+  a signed request to a checkable receipt.
+*/
+describe('publishing keeps the proof of who signed it', () => {
+  it('stores the exact signature and bytes the route verified', async () => {
+    // `alice` is seeded by the file's beforeEach; seeding again is a duplicate key.
+    await priceQuote('proof-key');
+    const body = await signedPublish({ contentKey: 'proof-key', title: 'Kept its receipt' });
+    const res = await post(body);
+    expect(res.status).toBe(200);
+
+    const { rows } = await testDb().query(
+      `SELECT author_address, issued_at_ms, origin, content_sha256, signature FROM posts WHERE title = $1`,
+      ['Kept its receipt'],
+    );
+    expect(rows).toHaveLength(1);
+    const row = rows[0] as Record<string, string>;
+    // Not "something was stored" — the same values that were signed and sent.
+    expect(row['author_address']).toBe(address);
+    expect(String(row['issued_at_ms'])).toBe(String(body['timestampMs']));
+    expect(row['origin']).toBe(ORIGIN);
+    expect(row['signature']).toBe(body['signature']);
+    expect(row['content_sha256']).toBe(digestOf('the same words', 'The same words, sold twice.'));
+
+    // And it is a real signature over the real statement, checked without any code of ours.
+    const statement = statementFor(
+      {
+        kind: 'publish', handle: 'alice', title: 'Kept its receipt', access: 'paid',
+        contentSha256: row['content_sha256'] as string, contentKey: 'proof-key', price: '250000',
+      },
+      row['author_address'] as string,
+      Number(row['issued_at_ms']),
+      row['origin'] as string,
+    );
+    const key = await verifyPersonalMessageSignature(
+      new TextEncoder().encode(statement),
+      row['signature'] as string,
+    );
+    expect(key.toSuiAddress()).toBe(address);
+  });
+});
 
 describe('publishing a paid post', () => {
   it('seals both editions of one body, to two identities, and records the machine one', async () => {
