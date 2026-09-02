@@ -17,11 +17,11 @@ steps:
     args:
       - build
       - --file=packages/daemon/Dockerfile
-      - --tag=europe-west2-docker.pkg.dev/projectx-daemon-prod/projectx/social-harvest:v3
+      - --tag=europe-west2-docker.pkg.dev/projectx-daemon-prod/projectx/social-harvest:v5
       - .
 
 images:
-  - europe-west2-docker.pkg.dev/projectx-daemon-prod/projectx/social-harvest:v3
+  - europe-west2-docker.pkg.dev/projectx-daemon-prod/projectx/social-harvest:v5
 
 # The default is ten minutes. A cold pnpm install plus two TypeScript builds runs close enough to
 # that for a timeout to be a coin flip, and a build that fails on the clock reads like a broken
