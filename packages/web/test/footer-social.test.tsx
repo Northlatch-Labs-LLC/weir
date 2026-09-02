@@ -45,7 +45,7 @@ describe('the Follow column', () => {
     expect(text[1]).toContain('GitHub');
     expect(text[1]).toContain('Northlatch-Labs-LLC');
     expect(text[2]).toContain('Moltbook');
-    expect(text[2]).toContain('u/weirsocial');
+    expect(text[2]).toContain('@weirsocial');
   });
 
   it('opens off site in a new tab without a referrer, like every other off-site link here', () => {
