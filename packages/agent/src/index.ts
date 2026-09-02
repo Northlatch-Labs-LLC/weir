@@ -263,16 +263,73 @@ export interface Quote {
  *
  * `test/interface-variance.test.ts` fails on any method-syntax member it finds anywhere in `src/`,
  * so this does not depend on the next author reading this paragraph.
+ *
+ * # Two surfaces, one shape: the read set, and the read set plus the key
+ *
+ * `ReadOnlyAgent` is what `createAgent({ keypair: null, … })` returns. A hosted `weir-mcp` holds
+ * no key by construction — `packages/mcp/src/transport.ts` `openWeir` passes `keypair: null` under
+ * `--http`, and a set `WEIR_AGENT_KEY` there is a startup refusal — and until this type existed
+ * `createAgent` required a key and read `key.address` at construction. The keyless deployment that
+ * package is designed around therefore died with `TypeError: Cannot read properties of null
+ * (reading 'address')` before it could serve a single read.
+ *
+ * The shape follows `WeirPort` in that package rather than inventing a second mechanism: **a
+ * capability that does not exist is a member that is not there.** `capabilitiesOf` decides what
+ * to register by `typeof port[name] === 'function'`, so a spending method that was
+ * present-and-throwing would be registered as a tool that always fails — exactly what that package
+ * refuses to ship. And because the two are distinct types, a caller holding a `ReadOnlyAgent` who
+ * writes `.unlock(…)` gets a compile error, not a refusal at run time.
+ *
+ * The alternative — minting a throwaway keypair to satisfy the old signature — is rejected and
+ * stays rejected. A public server that can sign `publish` and `send` statements as an ephemeral
+ * identity is a capability increase bought for convenience.
+ *
+ * What a `ReadOnlyAgent` does NOT have, and why each is absent rather than refusing:
+ *   - `address` — no key, no address.
+ *   - `sign`, `session` — a read session is minted by signing a statement (`session.ts`).
+ *   - `openAccount`, `unlock`, `subscribe`, `tip` — transactions; each signs.
+ *   - `post`, `send` — signed writes.
+ *   - `balance` — the agent's OWN balance, which needs an address. `balanceOf` takes one instead.
  */
-export interface Agent {
-  /** The agent's Sui address, padded. Safe to log. */
-  readonly address: string;
+export interface ReadOnlyAgent {
   /** What it is pointed at and what it may spend. */
   readonly manifest: AgentManifest;
   /** The gRPC client, exposed so a caller can make reads this surface does not cover. */
   readonly client: SuiGrpcClient;
   /** The Seal implementation, if one was supplied. `null` means sealed content stays sealed. */
   readonly seal: SealDecryptor | null;
+
+  /**
+   * What one content key costs, read from the chain.
+   *
+   * Takes the vault and the key, never a post id. See the note above `Quote` for why the post-id
+   * form was removed rather than left to fail.
+   *
+   * On an agent that holds a key, a quote for a vault that key owns is refused, because the
+   * purchase would be (`ESelfPayment`). A read-only agent has no address to compare, so it prices
+   * every vault; the refusal it keeps is the one about the vault itself, `vault-not-accepting`.
+   */
+  quote: (post: { vaultId: string; contentKey: string }) => Promise<Reading<Quote>>;
+
+  /**
+   * Spendable balance of a named address, in minor units of the manifest's coin type unless
+   * another is given. This is `balance` with the address said out loud, and it is the only form a
+   * keyless agent can offer: `balance()` means "mine", and a read-only agent has no "mine".
+   */
+  balanceOf: (owner: string, coinType?: string) => Promise<Reading<bigint>>;
+}
+
+/**
+ * The full surface: everything above, plus everything that needs the key.
+ *
+ * `extends` rather than a union, so a function written against `ReadOnlyAgent` accepts either and
+ * a function written against `Agent` accepts only the one that can sign. That is the direction
+ * that matters: code that only reads should not demand a key, and code that spends must not be
+ * handed an agent that cannot.
+ */
+export interface Agent extends ReadOnlyAgent {
+  /** The agent's Sui address, padded. Safe to log. */
+  readonly address: string;
 
   /** Sign a statement. The bytes match `identity.ts` exactly; nothing is sent. */
   sign: (action: Action) => Promise<SignedAction>;
@@ -282,14 +339,6 @@ export interface Agent {
 
   /** `account::open` — claim a handle on chain. */
   openAccount: (handle: string, referrer?: string | null) => Promise<Reading<Executed>>;
-
-  /**
-   * What one content key costs, read from the chain.
-   *
-   * Takes the vault and the key, never a post id. See the note above `Quote` for why the post-id
-   * form was removed rather than left to fail.
-   */
-  quote: (post: { vaultId: string; contentKey: string }) => Promise<Reading<Quote>>;
 
   /** Buy permanent access to one content key. Refuses over `maxPrice`. */
   unlock: (
@@ -321,12 +370,16 @@ export interface Agent {
     paid?: { handle: string; contentKey: string; price: string };
   }) => Promise<Reading<{ sent: true }>>;
 
-  /** Spendable balance of the manifest's coin type, in minor units. */
+  /** This agent's own spendable balance of the manifest's coin type, in minor units. */
   balance: (coinType?: string) => Promise<Reading<bigint>>;
 }
 
 export interface CreateAgentInput {
-  /** The agent's key. Accepts a loaded {@link AgentKey} or a bech32 `suiprivkey1…` secret. */
+  /**
+   * The agent's key. Accepts a loaded {@link AgentKey} or a bech32 `suiprivkey1…` secret.
+   *
+   * For an agent with no key, pass `null` — written out — and see {@link CreateReadOnlyAgentInput}.
+   */
   keypair: AgentKey | string;
   /** Origin of the weir deployment. Overrides the manifest's, when both are given. */
   baseUrl?: string;
@@ -342,6 +395,35 @@ export interface CreateAgentInput {
   seal?: SealDecryptor;
   /** Injected for tests, and for a caller who wants their own retry policy. */
   fetchImpl?: FetchLike;
+  /** Injected for tests, and for a caller who already holds a client for this deployment. */
+  client?: SuiGrpcClient;
+}
+
+/**
+ * The input that builds a {@link ReadOnlyAgent}.
+ *
+ * `keypair` is `null` and it is **required**, not optional. Absence would let a caller who forgot
+ * the key build a silently read-only agent, and a `string | undefined` read from `process.env`
+ * would compile straight into one. Neither is accepted: the only value that opens the read-only
+ * path is the literal `null` that `openWeir` passes under `--http`, and a missing or undefined key
+ * is a compile error. At run time an `undefined` that a JavaScript caller slips past the types is
+ * refused with a `Reading` that says which of the two to write; see {@link createAgent}.
+ *
+ * There is no `fetchImpl`, because nothing on the read surface makes an HTTP call: `quote` and
+ * `balanceOf` read the chain, and the one HTTP path this package has — the read session — is
+ * minted by signing. An input nothing consumes would be a guard nobody calls.
+ */
+export interface CreateReadOnlyAgentInput {
+  /** `null`, written out. See the type's doc block for why it is not optional. */
+  keypair: null;
+  /** Origin of the weir deployment. Overrides the manifest's, when both are given. */
+  baseUrl?: string;
+  /** As on {@link CreateAgentInput}: a manifest or an environment, and no default. */
+  config: AgentManifest | Record<string, string | undefined>;
+  /** Optional. Without it, sealed content is reported as sealed rather than silently skipped. */
+  seal?: SealDecryptor;
+  /** Injected for tests, and for a caller who already holds a client for this deployment. */
+  client?: SuiGrpcClient;
 }
 
 /**
@@ -351,8 +433,19 @@ export interface CreateAgentInput {
  * problem an operator has to read: a missing variable, an unparseable key, a coin type that is not
  * one. A constructor that threw would make the first line of every agent a try/catch whose only
  * job is to print the message this already carries.
+ *
+ * # Two overloads, chosen by the type of `keypair`
+ *
+ * A key produces an {@link Agent}; an explicit `null` produces a {@link ReadOnlyAgent}. The
+ * overloads are what make the second a distinct type at the call site: a caller who passed `null`
+ * cannot call `unlock`, because the compiler never gave them one. A caller with a value of type
+ * `AgentKey | null` must branch first, which is the point.
  */
-export function createAgent(input: CreateAgentInput): Reading<Agent> {
+export function createAgent(input: CreateAgentInput): Reading<Agent>;
+export function createAgent(input: CreateReadOnlyAgentInput): Reading<ReadOnlyAgent>;
+export function createAgent(
+  input: CreateAgentInput | CreateReadOnlyAgentInput,
+): Reading<Agent> | Reading<ReadOnlyAgent> {
   const manifestReading = isManifest(input.config)
     ? ok(input.config)
     : loadAgentManifest(input.config);
@@ -362,12 +455,34 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
   const manifest: AgentManifest =
     input.baseUrl === undefined ? base : { ...base, baseUrl: stripSlash(input.baseUrl) };
 
+  const client = input.client ?? createClient(manifest.config);
+
+  if (input.keypair === null) {
+    return ok(readSurface({ client, manifest, seal: input.seal ?? null, payer: null }));
+  }
+
+  /*
+    Not reachable through the types — neither overload accepts `undefined` — and reachable from
+    JavaScript in one keystroke. Before this branch existed, an `undefined` here reached
+    `key.address` below and threw `TypeError: Cannot read properties of undefined`, which names a
+    line in this file rather than the missing key. A `null` did the same, and that is the failure
+    the read-only path closes; this is the same failure's other spelling.
+  */
+  if (input.keypair === undefined) {
+    return fail(
+      'unconfigured',
+      'createAgent',
+      'keypair is undefined. Pass a loaded AgentKey or a bech32 secret to build an agent that can ' +
+        'sign and spend, or pass null — written out — to build a read-only agent that cannot.',
+    );
+  }
+
   const keyReading =
     typeof input.keypair === 'string' ? agentKeyFromSecret(input.keypair) : ok(input.keypair);
   if (!keyReading.ok) return keyReading;
   const key = keyReading.value;
+  const address = normaliseAddress(key.address);
 
-  const client = createClient(manifest.config);
   const doFetch = input.fetchImpl ?? (globalThis.fetch as FetchLike | undefined);
 
   /*
@@ -381,10 +496,11 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
   let live: SessionCredential | null = null;
 
   const agent: Agent = {
-    address: normaliseAddress(key.address),
-    manifest,
-    client,
-    seal: input.seal ?? null,
+    // The read set is built once, by the same function the keyless path uses, so the two surfaces
+    // cannot drift: a keyed agent quotes and reads balances exactly as a keyless one does, with its
+    // own address as the payer a quote is checked against.
+    ...readSurface({ client, manifest, seal: input.seal ?? null, payer: address }),
+    address,
 
     async sign(action: Action): Promise<SignedAction> {
       // Bound to the deployment this agent was opened against. An agent that talks to two services
@@ -422,35 +538,6 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
         key,
         gasBudgetMist: manifest.gasBudgetMist,
         what: `account::open "${handle}"`,
-      });
-    },
-
-    async quote(post: { vaultId: string; contentKey: string }): Promise<Reading<Quote>> {
-      /*
-        A quote is priced from the chain, always, even when the caller handed us a post id and the
-        HTTP API would happily have reported a price alongside it.
-
-        This is the injection guard's foundation rather than an efficiency question. The API's
-        price is a number that travelled through the same channel as the content, and content is
-        what an agent is being manipulated by. The vault is the authority — it is the authority for
-        `creator::unlock` too, which reads the price itself and takes exactly that.
-      */
-      const target = post;
-
-      const vault = await readPayableVault(client, target.vaultId, agent.address);
-      if (!vault.ok) return vault;
-
-      const price = await livePriceOfContent(client, vault.value, target.contentKey);
-      if (!price.ok) return price;
-
-      return ok({
-        vaultId: target.vaultId,
-        contentKey: target.contentKey,
-        coinType: manifest.coinType,
-        priceMinorUnits: price.value,
-        owner: vault.value.owner,
-        accepting: vault.value.accepting,
-        observedAtMs: Date.now(),
       });
     },
 
@@ -710,7 +797,74 @@ export function createAgent(input: CreateAgentInput): Reading<Agent> {
   return ok(agent);
 }
 
+/**
+ * Whether an agent can sign — the agent-side twin of `capabilitiesOf` in `packages/mcp`.
+ *
+ * Decided by the presence of `sign`, not by a flag, for the reason that package gives: a flag says
+ * what a constructor intended, and presence says what the object can do. The two surfaces here are
+ * built so that they cannot disagree, but a guard that reads the object is right even if that
+ * changes.
+ */
+export function canSign(agent: ReadOnlyAgent): agent is Agent {
+  return typeof (agent as Partial<Agent>).sign === 'function';
+}
+
 // === Internals ===
+
+/**
+ * The read set — the members an agent has whether or not it holds a key.
+ *
+ * One builder for both surfaces. `createAgent` spreads this into the full agent and returns it
+ * bare for the keyless one, so there is exactly one `quote` and one `balanceOf` and the two paths
+ * cannot drift. `payer` is the address a quote is checked against for self-payment; `null` means
+ * there is no such address, and only that check is skipped.
+ */
+function readSurface(input: {
+  client: SuiGrpcClient;
+  manifest: AgentManifest;
+  seal: SealDecryptor | null;
+  payer: string | null;
+}): ReadOnlyAgent {
+  const { client, manifest, seal, payer } = input;
+  return {
+    manifest,
+    client,
+    seal,
+
+    async quote(post: { vaultId: string; contentKey: string }): Promise<Reading<Quote>> {
+      /*
+        A quote is priced from the chain, always, even when the caller handed us a post id and the
+        HTTP API would happily have reported a price alongside it.
+
+        This is the injection guard's foundation rather than an efficiency question. The API's
+        price is a number that travelled through the same channel as the content, and content is
+        what an agent is being manipulated by. The vault is the authority — it is the authority for
+        `creator::unlock` too, which reads the price itself and takes exactly that.
+      */
+      const target = post;
+
+      const vault = await readPayableVault(client, target.vaultId, payer);
+      if (!vault.ok) return vault;
+
+      const price = await livePriceOfContent(client, vault.value, target.contentKey);
+      if (!price.ok) return price;
+
+      return ok({
+        vaultId: target.vaultId,
+        contentKey: target.contentKey,
+        coinType: manifest.coinType,
+        priceMinorUnits: price.value,
+        owner: vault.value.owner,
+        accepting: vault.value.accepting,
+        observedAtMs: Date.now(),
+      });
+    },
+
+    async balanceOf(owner: string, coinType?: string): Promise<Reading<bigint>> {
+      return totalBalance(client, owner, coinType ?? manifest.coinType);
+    },
+  };
+}
 
 /**
  * The agent's account id, plus a balance check, before a payment is built.

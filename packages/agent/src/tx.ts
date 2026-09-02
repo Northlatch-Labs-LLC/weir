@@ -649,18 +649,24 @@ export function tierAt(vault: CreatorVaultState, tierIndex: number): Reading<Tie
   return ok(tier);
 }
 
-/** Read a vault, refusing early on the two conditions that make any payment to it pointless. */
+/**
+ * Read a vault, refusing early on the two conditions that make any payment to it pointless.
+ *
+ * `payer` is `null` for a read-only agent, which has no address: the self-payment refusal has no
+ * subject and is skipped, and nothing else is. The not-accepting refusal is about the vault, not
+ * the payer, and applies to both.
+ */
 export async function readPayableVault(
   client: SuiGrpcClient,
   vaultId: string,
-  payer: string,
+  payer: string | null,
 ): Promise<Reading<CreatorVaultState>> {
   const vault = await readCreatorVault(client, vaultId);
   if (!vault.ok) return vault;
 
   // ESelfPayment, code 13. An agent operated by a creator will try this — it is the obvious way to
   // test a purchase flow — and the abort code explains nothing.
-  if (sameAddress(payer, vault.value.owner)) {
+  if (payer !== null && sameAddress(payer, vault.value.owner)) {
     return fail(
       'malformed',
       `vault ${vaultId}`,
