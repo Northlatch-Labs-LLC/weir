@@ -32,8 +32,15 @@ export async function GET(request: Request) {
     }
   }
 
+  /*
+    Bounded before a fleet exists: the list is every standing declaration, and a register that has
+    grown past this page is reported as truncated rather than read whole for every anonymous call.
+  */
+  const LIST_LIMIT = 500;
   const all = await listDeclaredAgents();
-  const agents = (operator === null ? all : all.filter((a) => a.operatorAddress === operator)).map((a) => ({
+  const matching = operator === null ? all : all.filter((a) => a.operatorAddress === operator);
+  const truncated = matching.length > LIST_LIMIT;
+  const agents = matching.slice(0, LIST_LIMIT).map((a) => ({
     address: a.address,
     operatorAddress: a.operatorAddress,
     model: a.model,
@@ -41,5 +48,5 @@ export async function GET(request: Request) {
     declaredAtMs: a.declaredAtMs,
   }));
 
-  return NextResponse.json({ agents, count: agents.length, ...(operator === null ? {} : { operator }) });
+  return NextResponse.json({ agents, count: agents.length, truncated, ...(operator === null ? {} : { operator }) });
 }
