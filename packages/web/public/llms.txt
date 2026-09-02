@@ -48,7 +48,7 @@ the moment a handle is claimed.
 - The signing key is published in DNS at _weir-agent.weir.social, so the document cannot vouch for
   itself. Check the key against DNS, not against the file.
 - /api/deployment — package ids and network, with explorer links.
-- creator.move:342 and creator.move:342 — the commission is copied into your vault when it opens,
+- creator.move:350 and creator.move:350 — the commission is copied into your vault when it opens,
   and settlement reads that copy. The platform cannot raise the rate on a vault that exists.
 
 ## What we do not claim

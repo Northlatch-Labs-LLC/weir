@@ -20,15 +20,20 @@
  * under the old layout becomes permanently unreadable.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   approvalBytes,
+  approveMind,
   approveSubscription,
   approveUnlock,
+  mindIdentity,
   periodIdentity,
   periodOf,
   sealId,
   sealPackageId,
+  SEAL_MIND,
   SEAL_PERIOD_MS,
   SEAL_SUBSCRIPTION,
   SEAL_UNLOCK,
@@ -109,6 +114,45 @@ describe('the identity bytes agree with entitlement.move', () => {
       5, 0, 0, 0, 0, 0, 0, 0,
     ]);
     expect(hex(unlockIdentity(VAULT, crafted))).not.toBe(hex(periodIdentity(VAULT, 3n, 5n)));
+  });
+});
+
+describe('the mind identity agrees with agent_mind.move', () => {
+  /*
+    The mind lives in a SEPARATE package (`sui-contracts-mind`), so its tag is pinned against that
+    source rather than against `entitlement.move`. The vector is the same shape of literal as the
+    two above: the raw 32 bytes of the id, then the tag, and nothing after it.
+  */
+  const ACCOUNT = '0xffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100';
+  const ACCOUNT_HEX = 'ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100';
+
+  it('derives a mind identity as <account> ‖ 0x02, and nothing else', () => {
+    expect(hex(mindIdentity(ACCOUNT))).toBe(`${ACCOUNT_HEX}02`);
+    expect(mindIdentity(ACCOUNT)).toHaveLength(33);
+  });
+
+  it('pins SEAL_MIND to the constant in agent_mind.move', () => {
+    const source = readFileSync(
+      join(process.cwd(), '..', '..', 'sui-contracts-mind', 'sources', 'agent_mind.move'),
+      'utf8',
+    );
+    expect(source).toContain('module agent_mind::agent_mind');
+    expect(source).toContain('const SEAL_MIND: u8 = 2;');
+    expect(SEAL_MIND).toBe(2);
+  });
+
+  it('keeps the three tags pairwise distinct', () => {
+    expect(SEAL_UNLOCK).not.toBe(SEAL_SUBSCRIPTION);
+    expect(SEAL_UNLOCK).not.toBe(SEAL_MIND);
+    expect(SEAL_SUBSCRIPTION).not.toBe(SEAL_MIND);
+  });
+
+  it('accepts a short-form account id by normalising it, as the vault identities do', () => {
+    expect(hex(mindIdentity('0x6'))).toBe(hex(mindIdentity(`0x${'0'.repeat(63)}6`)));
+  });
+
+  it('refuses an account id that is not an object id at all', () => {
+    expect(() => mindIdentity('not-an-id')).toThrow(/32-byte hex object id/);
   });
 });
 
@@ -204,6 +248,40 @@ describe('the approval transactions', () => {
       then refuses with an identity mismatch, at the key server, a long way from the mistake.
     */
     expect(call.arguments).toHaveLength(4);
+  });
+
+  it('calls seal_approve_mind on the mind package with the identity, then the account object', () => {
+    const MIND_PACKAGE = `0x${'55'.repeat(32)}`;
+    const ACCOUNT = `0x${'66'.repeat(32)}`;
+    const tx = approveMind(CONFIG, {
+      identity: mindIdentity(ACCOUNT),
+      accountId: ACCOUNT,
+      mindPackageId: MIND_PACKAGE,
+    });
+    const data = tx.getData();
+    expect(data.commands).toHaveLength(1);
+    const call = data.commands[0]!.MoveCall!;
+    // A different package from every other approval: the mind is not in `projectx_social`.
+    expect(call.package).toBe(MIND_PACKAGE);
+    expect(call.package).not.toBe(CONFIG.latestPackageId);
+    expect(call.module).toBe('agent_mind');
+    expect(call.function).toBe('seal_approve_mind');
+    expect(call.arguments).toHaveLength(2);
+    /*
+      The order is the Move signature's: `(id: vector<u8>, account: &SocialAccount)`. The first
+      argument resolves to a pure input holding the identity bytes; the second to an object input
+      named by the account id — and, as for the entitlements, with no `mutable` on it, because
+      `SocialAccount` is owned.
+    */
+    const [first, second] = call.arguments as Array<{ $kind: string; Input?: number }>;
+    expect(first!.$kind).toBe('Input');
+    expect(second!.$kind).toBe('Input');
+    const firstInput = data.inputs[first!.Input!] as { Pure?: { bytes: string } };
+    const secondInput = data.inputs[second!.Input!] as { UnresolvedObject?: { objectId: string } };
+    expect(firstInput.Pure).toBeDefined();
+    expect(secondInput.UnresolvedObject).toBeDefined();
+    expect(secondInput.UnresolvedObject!.objectId).toBe(ACCOUNT);
+    expect(secondInput.UnresolvedObject).not.toHaveProperty('mutable');
   });
 
   it('composes into one transaction when a reader opens several assets at once', () => {

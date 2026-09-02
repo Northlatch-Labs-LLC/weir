@@ -243,6 +243,13 @@ export const ABORT_CLASSIFICATION = {
         17: 'permanent', // ENotUpgraded — migrate with nothing to migrate. See platform:8 above.
         18: 'permanent', // EPeriodNotWholeSealPeriods
         19: 'permanent', // ETierPriceNotAscending — a tier must cost more than the one before it; the same call never succeeds.
+        /*
+          20: ENotSubscriber. `renew` presented somebody else's Subscription. Permanent for the same
+          reason entitlement's ENotHolder is: the holder of the object is fixed at mint and the object
+          cannot be transferred, so no wait and no retry changes who is allowed to renew it. Until this
+          code existed the same refusal came back as 15, indistinguishable from the wrong vault.
+        */
+        20: 'permanent',
     },
 };
 /** The abort a raw error names, with its classification. `null` when there is no abort in it. */

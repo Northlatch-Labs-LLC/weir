@@ -476,13 +476,14 @@ export const ABORT_EXPLANATIONS: Record<string, Record<number, string>> = {
     12: 'This content is not for sale.',
     13: 'A creator cannot pay their own vault.',
     14: 'The balance holds less than the amount claimed.',
-    // The contract reports a non-holder presenting someone else's Subscription under this same
-    // code (creator.move `renew`), so the sentence names both readings rather than only one.
-    15: 'That subscription belongs to a different vault, or it is not yours to renew.',
+    // Until v4 the contract reported a non-holder presenting someone else's Subscription under this
+    // same code (creator.move `renew`); that reading now has its own code, 20, below.
+    15: 'That subscription belongs to a different vault.',
     16: 'A name or content key cannot be empty.',
     17: 'Nothing to migrate: this vault already matches the package version.',
     18: 'A tier period must be a whole number of 30-day Seal periods.',
     19: 'Tier prices must ascend with the tier index: a higher tier cannot cost less than a lower one.',
+    20: 'That subscription is not yours to renew.',
   },
   stake_vault: {
     4: 'This vault is not accepting new deposits. Withdrawals are unaffected.',

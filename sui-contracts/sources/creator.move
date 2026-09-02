@@ -135,6 +135,14 @@ const EPeriodNotWholeSealPeriods: u64 = 18;
 /// by an ordinary repricing rather than only at launch.
 const ETierPriceNotAscending: u64 = 19;
 
+/// The subscription presented for renewal is held by somebody other than the payer.
+///
+/// `renew` used to raise `ESubscriptionVaultMismatch` (15) here, which told a caller that the
+/// subscription belonged to a different vault when in fact it belonged to a different person.
+/// The two refusals now carry different codes, so a client can tell "wrong vault" from
+/// "not yours" without re-deriving the check.
+const ENotSubscriber: u64 = 20;
+
 // === Types ===
 
 /// One purchasable subscription level.
@@ -676,7 +684,7 @@ public fun renew<T>(
     let payer = assert_payable(platform, vault, buyer, ctx);
 
     assert!(entitlement::subscription_vault(subscription) == object::id(vault), ESubscriptionVaultMismatch);
-    assert!(entitlement::subscriber(subscription) == payer, ESubscriptionVaultMismatch);
+    assert!(entitlement::subscriber(subscription) == payer, ENotSubscriber);
 
     let tier_index = entitlement::tier(subscription);
     assert!(tier_index < vault.tiers.length(), ENoSuchTier);

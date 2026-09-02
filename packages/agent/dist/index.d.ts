@@ -44,12 +44,14 @@ import { type Action, type SignedAction } from './statements.js';
 import { type FetchLike, type SessionCredential } from './session.js';
 import { type Executed, type SpendCeiling, type PaymentSource, type TransactionSigner } from './tx.js';
 import { type AgentManifest } from './manifest.js';
+import { type MindSigner, type Recalled, type Remembered } from './mind.js';
 export { agentKeyFromEnv, agentKeyFromSecret, generateAgentKey, normaliseAddress, sameAddress, type AgentKey, } from './keys.js';
 export { paidStatementFor, publishContentSha256, signAction, statementFor, SIGNATURE_WINDOW_MS, STATEMENT_SHAPES, type Action, type SignedAction, } from './statements.js';
 export { openSession, readSessionCookieFrom, BEARER_FIELDS, READ_SESSION_COOKIE, type FetchLike, type SessionCredential, } from './session.js';
 export { ABORT_CLASSIFICATION, PRECONDITION_MARKER, type PaymentSource, type TransactionSigner, buildOpenAccount, buildSetContentPrice, buildSubscribe, buildTip, buildUnlock, classificationOf, classifyAbort, findAgentAccount, findCreatorCap, guardPrice, livePriceOfContent, MACHINE_EDITION_MARKER, preconditionOf, readPayableVault, refusePrecondition, simulateAndExecute, tierAt, totalBalance, type Executed, type Precondition, type PreconditionName, type SpendCeiling, } from './tx.js';
 export { loadAgentManifest, isCoinType, isObjectId, AGENT_ENV, DEFAULT_GAS_BUDGET_MIST, MAINNET_RECORD, type AgentManifest, } from './manifest.js';
 export type { SealApproval, SealedRef } from './seal-node.js';
+export { deriveMindKey, registryStateFor, buildPublishKey, sealMind, openMind, fetchBlob, sha256Hex, LABEL as MIND_LABEL, AGGREGATOR_TIMEOUT_MS, type MindSigner, type MindKeyPair, type Remembered, type Recalled, type RegistryState, } from './mind.js';
 import type { SealedRef } from './seal-node.js';
 /**
  * Turning sealed bytes back into content. **This package's `index` does not implement it.**
@@ -305,6 +307,48 @@ export interface Agent extends ReadOnlyAgent {
         model: string;
         purpose: string;
     }) => Promise<Reading<DeclarationRequested>>;
+    /**
+     * The public half of this agent's mind key, derived from a signature over `KEY_STATEMENT`.
+     * The secret is never returned. See `mind.ts` for what the key is and what it is not.
+     */
+    mindKey: () => Promise<Reading<{
+        x25519Public: string;
+    }>>;
+    /**
+     * Put the derived key in the on-chain `key_registry`, or confirm it is already there.
+     *
+     * One transaction, gas only, the agent's own, simulated first. Needs
+     * `PROJECTX_SOCIAL_KEY_REGISTRY_ID`. A registry already holding this exact key is left alone
+     * (`alreadyPublished: true`, no transaction); one holding a DIFFERENT key is replaced, which is a
+     * rotation — every blob remembered under the old key then needs the old secret to open.
+     */
+    publishMindKey: () => Promise<Reading<{
+        x25519Public: string;
+        alreadyPublished: boolean;
+        digest: string | null;
+    }>>;
+    /**
+     * Store the whole state under a label. Encrypted here to the agent's registered key (one
+     * envelope, its own), signed as a `remember` statement over the ciphertext's hash and length,
+     * posted to `POST /api/agents/mind`, which fronts the WAL and returns the blob and its lease.
+     * Refused when the registry does not hold the derived key: publish first.
+     *
+     * Whole state, not a delta — the platform pays per blob and the route's per-address quota is
+     * sized for one blob per working session. The size ceiling is the deployment's, returned in the
+     * refusal when it is hit.
+     */
+    remember: (input: {
+        label: string;
+        plaintext: Uint8Array;
+    }) => Promise<Reading<Remembered>>;
+    /**
+     * The newest blob under a label: `GET /api/agents/mind`, the bytes from a public aggregator,
+     * the hash checked, the envelope opened with the derived secret. A hash mismatch or a key that
+     * cannot open it is a `malformed` reading, never a partial plaintext.
+     */
+    recall: (input: {
+        label: string;
+    }) => Promise<Reading<Recalled>>;
     /** Publish a post under a handle this agent's address owns the vault for. */
     post: (input: {
         handle: string;
@@ -405,6 +449,14 @@ export interface CreateAgentInput {
     fetchImpl?: FetchLike;
     /** Injected for tests, and for a caller who already holds a client for this deployment. */
     client?: SuiGrpcClient;
+    /**
+     * How the mind key's derivation signature is produced. Default: the keypair above, in process.
+     * An agent whose key lives in the Sui keystore passes a function that runs `sui keytool sign`
+     * and returns the printed signature — this package never reads a keystore. See `mind.ts`.
+     */
+    mindSigner?: MindSigner;
+    /** Walrus aggregators `recall` reads from, in order. Default: the public mainnet list. */
+    aggregators?: readonly string[];
 }
 /**
  * The input that builds a {@link ReadOnlyAgent}.

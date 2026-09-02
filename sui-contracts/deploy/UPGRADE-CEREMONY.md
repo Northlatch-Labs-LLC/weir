@@ -179,3 +179,102 @@ So the honest rollback is: **do not repoint, or repoint back.** Nothing on chain
 
 If the change in front of you needs any of those, this file is not the procedure. Write the one that
 is, before the night of.
+
+---
+
+## 8. This window: v4 of `projectx_social`, then the `agent_mind` package
+
+Two things go out in this window, in this order, as two separate transactions. The second depends
+on the first having landed and on `Published.toml` having been updated to say so.
+
+### 8a. v4 of `projectx_social` — six modules, no `VERSION` change, no `migrate`
+
+Since the v3 ceremony commit (`eaf1215`) six modules changed: `account`, `creator`, `entitlement`,
+`key_registry`, `platform`, `stake_vault`. None of them raises `VERSION`, so the whole of section 7's
+first two exclusions stay excluded: **no `migrate` call, no creator action.** Verify it rather than
+trust it — section 0's grep, extended to the three modules that carry a version:
+
+```bash
+grep -c "assert_version\|VERSION" sui-contracts/sources/account.move sui-contracts/sources/key_registry.move
+grep -n "const VERSION" sui-contracts/sources/platform.move sui-contracts/sources/creator.move sui-contracts/sources/stake_vault.move
+```
+
+The first must print `0` for both files. The second must print exactly three lines, each ending in
+`const VERSION: u64 = 1;`. Anything else, stop: this section does not cover it.
+
+The digest the ceremony must see, from section 1's dump command with the pinned compiler
+(`./assert-toolchain.sh` first), is the content of `sui-contracts/ci-next-digest`:
+
+```
+e1254bc4cbb1a5a83e143047386aa2bc30b17ef7bb3d08da75a44f9c0d0a94cd
+```
+
+If the dump on the night prints anything else, the source in front of you is not the reviewed
+source. Stop and find out why before section 2.
+
+Sections 2 to 5 then apply unchanged. The post-upgrade commit copies `ci-next-digest` into
+`ci-expected-digest`, deletes `ci-next-digest`, bumps `Published.toml` (`published-at`, `version = 4`)
+and repoints `PROJECTX_SOCIAL_LATEST_PACKAGE_ID`.
+
+### 8b. The `agent_mind` package — a publish, not an upgrade, and a separate step
+
+`sui-contracts-mind/` is a NEW package. It is not touched by the `UpgradeCap`; it has no cap of its
+own to worry about yet, and it depends on `projectx_social` through `../sui-contracts` — so it must be
+built **after** 8a's `Published.toml` change, because the dependency's published-at address is baked
+into the package and into its digest.
+
+Build, test, and record the digest with the pinned compiler:
+
+```bash
+cd sui-contracts-mind
+sui move build
+sui move test                      # 4 tests, 0 failed
+sui move build --dump-bytecode-as-base64 --no-tree-shaking > /tmp/mind-dump.json
+python3 -c "import json;print(bytes(json.load(open('/tmp/mind-dump.json'))['digest']).hex())"
+```
+
+Write that digest into `sui-contracts-mind/ci-next-digest` (it supersedes the value recorded on the
+branch, which was built against v3 — see `sui-contracts/DIGESTS.md`). It is what the published
+package must match.
+
+Dry-run the publish. The sender is chosen at the ceremony; both forms are written out. The
+**publisher/dev address** form signs and executes in one step from the keystore that holds it:
+
+```bash
+sui client publish --gas-budget 500000000 --dry-run
+```
+
+The **multisig** form serialises for the same two-signature path as sections 2 to 4:
+
+```bash
+sui client publish --gas-budget 500000000 \
+  --sender 0x00e734d54be45c002579f36698823eaf2410b59eb30a398fd6c8af9e1b111605 \
+  --dry-run
+sui client publish --gas-budget 500000000 \
+  --sender 0x00e734d54be45c002579f36698823eaf2410b59eb30a398fd6c8af9e1b111605 \
+  --serialize-unsigned-transaction > /tmp/mind-publish-tx.txt
+```
+
+The dry run must succeed. Then the real publish — the first form without `--dry-run`, or the
+multisig form signed and combined exactly as sections 3 and 4 do it and executed with
+`sui client execute-signed-tx`. Record the transaction digest, the new package id, and the
+`UpgradeCap` the publish mints (it goes to the sender; where it is kept afterwards is decided at the
+ceremony and written down, not left to the keystore that happened to sign).
+
+Then the record, in one commit:
+
+1. **`sui-contracts-mind/Published.toml`** — create it in the same shape as
+   `sui-contracts/Published.toml`, with `chain-id = "35834a8a"`, `published-at` and `original-id`
+   both the new package id, `version = 1`, `toolchain-version = "1.78.1"`,
+   `build-config = { flavor = "sui", edition = "2024" }`, and the `upgrade-capability` id.
+2. **`sui-contracts/deploy/mainnet.json`** — a new top-level key `agentMindPackage` holding the
+   package id, the publish transaction digest and the sender.
+3. **`sui-contracts-mind/ci-expected-digest`** — the digest from above; delete
+   `sui-contracts-mind/ci-next-digest`.
+4. **`PROJECTX_SOCIAL_MIND_PACKAGE_ID`** — set to the new package id in the web and the agent
+   environments. The SDK reads it through `loadMindPackageId`; unset, the mind feature reports
+   itself unconfigured and nothing else is affected.
+
+Verify as section 5 does: the digest on chain matches, and one real `seal_approve_mind` dry run with
+an account holder as sender succeeds while the same identity with a different sender aborts with
+`EWrongIdentity` (1) or a missing-object error.

@@ -37,7 +37,7 @@
  * `moveCall` strings. Reusing that module is not tidiness; it is how this agent inherits a
  * decision it would otherwise have to remember.
  */
-import { fail, ok, loadConfig } from '@projectx-social/sdk';
+import { fail, ok, loadConfig, loadKeyRegistryId, KEY_REGISTRY_ENV, } from '@projectx-social/sdk';
 /**
  * A 32-byte hex object id, and a coin type's package half.
  *
@@ -147,7 +147,13 @@ export function loadAgentManifest(env, overrides) {
         }
         paymentCoin = rawPaymentCoin.toLowerCase();
     }
-    return ok({ config: config.value, coinType, baseUrl, gasBudgetMist, paymentCoin });
+    // Absent is a calm state (an agent with no mind); present-but-malformed is not, and the SDK says why.
+    const registry = loadKeyRegistryId(env);
+    const rawRegistry = env[KEY_REGISTRY_ENV]?.trim();
+    if (!registry.ok && rawRegistry !== undefined && rawRegistry !== '')
+        return registry;
+    const keyRegistryId = registry.ok ? registry.value : null;
+    return ok({ config: config.value, coinType, baseUrl, gasBudgetMist, paymentCoin, keyRegistryId });
 }
 /**
  * Strip the trailing slash and refuse anything that is not an http(s) origin.

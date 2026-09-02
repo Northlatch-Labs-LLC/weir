@@ -48,6 +48,18 @@ export const SEAL_UNLOCK = 0x00;
 export const SEAL_SUBSCRIPTION = 0x01;
 
 /**
+ * The agent's mind, sealed to its account object rather than to a key it registered.
+ *
+ * Lives in a SEPARATE package, `agent_mind` (`sui-contracts-mind/sources/agent_mind.move`):
+ * `const SEAL_MIND: u8 = 2;` — pinned against that source in `test/seal-identity.test.ts`.
+ *
+ * Disjoint from the two tags above by value, and by prefix as well: a mind identity is prefixed by
+ * an ACCOUNT id where the other two are prefixed by a VAULT id, so the families cannot collide even
+ * before the tag is compared.
+ */
+export const SEAL_MIND = 0x02;
+
+/**
  * The window one subscription identity covers. Thirty days, fixed.
  *
  * `entitlement.move`: `const PERIOD_MS: u64 = 30 * 24 * 60 * 60 * 1000;`
@@ -59,16 +71,20 @@ export const SEAL_SUBSCRIPTION = 0x01;
  */
 export const SEAL_PERIOD_MS = 2_592_000_000n;
 
-/** A vault id as 32 raw bytes — Move's `object::id_to_bytes`, which has no length prefix. */
-function vaultBytes(vaultId: string): Uint8Array {
-  const normalised = normalizeSuiObjectId(vaultId);
+/** An object id as 32 raw bytes — Move's `object::id_to_bytes`, which has no length prefix. */
+function objectBytes(objectId: string, what: string): Uint8Array {
+  const normalised = normalizeSuiObjectId(objectId);
   if (!isValidSuiObjectId(normalised)) {
     // Refused rather than padded. A short id that silently becomes a valid-looking 32 bytes is an
     // identity nobody chose, and the encryption under it succeeds — the failure surfaces later, as
     // a reader who cannot open content they paid for.
-    throw new Error(`a vault id must be a 32-byte hex object id; this one is "${vaultId}"`);
+    throw new Error(`${what} must be a 32-byte hex object id; this one is "${objectId}"`);
   }
   return fromHex(normalised);
+}
+
+function vaultBytes(vaultId: string): Uint8Array {
+  return objectBytes(vaultId, 'a vault id');
 }
 
 /** Move's `std::bcs::to_bytes(&x)` for a `u64`: eight bytes, little-endian. */
@@ -132,6 +148,24 @@ export function periodIdentity(vaultId: string, tier: bigint, period: bigint): U
     u64LittleEndian(tier, 'tier'),
     u64LittleEndian(period, 'period'),
   ]);
+}
+
+/**
+ * The identity one account's mind is encrypted to.
+ *
+ * ```move
+ * public fun mind_identity(account: ID): vector<u8> {
+ *     let mut identity = object::id_to_bytes(&account);
+ *     identity.push_back(SEAL_MIND);
+ *     identity
+ * }
+ * ```
+ *
+ * Prefixed by the ACCOUNT id, not a vault id — the `SocialAccount` object is what
+ * `seal_approve_mind` takes, so the identity names the object the key servers will ask for.
+ */
+export function mindIdentity(accountId: string): Uint8Array {
+  return concat([objectBytes(accountId, 'an account id'), Uint8Array.of(SEAL_MIND)]);
 }
 
 /**
@@ -280,6 +314,39 @@ export function approveSubscription(
       tx.pure.u64(args.tier),
       tx.pure.u64(args.period),
       tx.object(entitlementRef(args.subscriptionId)),
+    ],
+  });
+  return tx;
+}
+
+/**
+ * Prove a right to an account's mind key.
+ *
+ * ```move
+ * entry fun seal_approve_mind(id: vector<u8>, account: &SocialAccount)
+ * ```
+ *
+ * The target is the `agent_mind` package, which is separate from `projectx_social` and so is not
+ * in {@link ProjectXSocialConfig}; it is passed in, read from `PROJECTX_SOCIAL_MIND_PACKAGE_ID` by
+ * `loadMindPackageId`. `config` is taken for symmetry with the other approvals and so a caller
+ * cannot build one without a deployment in hand.
+ *
+ * `SocialAccount` is an owned object like `Unlock` and `Subscription`, so it is named through the
+ * same {@link entitlementRef} — see that function for why the reference carries no `mutable`.
+ * Passing it is the whole policy: only the holder of the object can put it in a transaction, and
+ * the object cannot change hands.
+ */
+export function approveMind(
+  config: ProjectXSocialConfig,
+  args: { identity: Uint8Array; accountId: string; mindPackageId: string },
+  tx: Transaction = new Transaction(),
+): Transaction {
+  void config;
+  tx.moveCall({
+    target: `${args.mindPackageId}::agent_mind::seal_approve_mind`,
+    arguments: [
+      tx.pure.vector('u8', Array.from(args.identity)),
+      tx.object(entitlementRef(args.accountId)),
     ],
   });
   return tx;
