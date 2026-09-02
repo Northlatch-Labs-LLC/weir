@@ -7,7 +7,11 @@
 #
 # **If it is not in this file, it does not survive a reboot.**
 #
-# Instance metadata is durable. This file is that metadata.
+# Instance metadata is durable. This file is that metadata — in the shape it was written for a VM
+# that runs ProjectX Social alone. The live `projectx-daemon` VM (read 2026-09-02) carries a
+# COMBINED startup script for both products (the prize-vault engine and this harvest tick), so this
+# file is a reference for the Social half, not a verbatim copy of what boots there. When the two
+# disagree, the live metadata wins; edit that, and keep a dated copy under operations/backups.
 #
 # # No secret appears here
 #
