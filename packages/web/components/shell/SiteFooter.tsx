@@ -30,6 +30,19 @@ const BUILT_ON = [
   { name: 'USDC', mark: '$', note: 'One of two denominations', href: 'https://www.circle.com/usdc' },
 ] as const;
 
+/**
+ * Where to follow the work, off site.
+ *
+ * Two channels and no more: Weir's own voice on X, and the organisation's code on GitHub. The
+ * handles are the ones the estate publishes under — the same account that posts as Weir, and the
+ * organisation every repository here lives in — so a reader who follows either lands on us and
+ * not on a lookalike. Shown in every state, gated included: a shut door still says where we are.
+ */
+export const SOCIAL = [
+  { name: 'X', handle: '@weirsocial', mark: 'X', href: 'https://x.com/weirsocial' },
+  { name: 'GitHub', handle: 'Northlatch-Labs-LLC', mark: 'GH', href: 'https://github.com/Northlatch-Labs-LLC' },
+] as const;
+
 interface Deployment {
   packageId: string;
   explorer: string;
@@ -127,6 +140,16 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
               </span>
               {b.name}
               <span className="sf__note">{b.note}</span>
+            </a>
+          ))}
+        </nav>
+        <nav aria-label="Follow" className="sf__col">
+          <p className="sf__k">Follow</p>
+          {SOCIAL.map((s) => (
+            <a key={s.href} href={s.href} className="sf__link" rel="noreferrer" target="_blank">
+              <span className="sf__mark" aria-hidden>{s.mark}</span>
+              {s.name}
+              <span className="sf__note">{s.handle}</span>
             </a>
           ))}
         </nav>
