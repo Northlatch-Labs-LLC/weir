@@ -38,7 +38,7 @@
  * unattended, and the SDK's own reason applies with force: a failure flattened to a plausible zero
  * is an outage that looks like an observation, and the process acts on the observation.
  */
-import { accessStatement, createClient, fail, ok } from '@projectx-social/sdk';
+import { accessStatement, createClient, fail, ok, readVaultCoinType } from '@projectx-social/sdk';
 import { agentKeyFromEnv, agentKeyFromSecret, generateAgentKey, normaliseAddress, sameAddress, } from './keys.js';
 import { paidStatementFor, publishContentSha256, signAction, } from './statements.js';
 import { openSession } from './session.js';
@@ -108,6 +108,11 @@ export function createAgent(input) {
         if (pair.ok)
             derived = pair.value;
         return pair;
+    }
+    /** The vault's coin type from chain, or '' when it cannot be read (reported as malformed by the caller). */
+    async function vaultCoinTypeOf(vaultId) {
+        const read = await readVaultCoinType(client, vaultId);
+        return read.ok ? read.value : '';
     }
     const agent = {
         // The read set is built once, by the same function the keyless path uses, so the two surfaces
@@ -481,8 +486,20 @@ export function createAgent(input) {
             const approval = a['kind'] === 'unlock' && typeof a['vaultId'] === 'string' && typeof a['contentKey'] === 'string' && typeof a['unlockId'] === 'string'
                 ? { kind: 'unlock', vaultId: a['vaultId'], contentKey: a['contentKey'], unlockId: a['unlockId'] }
                 : a['kind'] === 'subscription' && typeof a['vaultId'] === 'string' && typeof a['subscriptionId'] === 'string'
-                    ? { kind: 'subscription', vaultId: a['vaultId'], tier: BigInt(String(a['tier'])), period: BigInt(String(a['period'])), subscriptionId: a['subscriptionId'] }
+                    ? {
+                        kind: 'subscription',
+                        vaultId: a['vaultId'],
+                        tier: BigInt(String(a['tier'])),
+                        period: BigInt(String(a['period'])),
+                        subscriptionId: a['subscriptionId'],
+                        // v5: the approval names CreatorVault<T>. The route sends the coin when it knows
+                        // it; otherwise the vault's own type on chain is the authority.
+                        coinType: typeof a['coinType'] === 'string' ? a['coinType'] : await vaultCoinTypeOf(a['vaultId']),
+                    }
                     : null;
+            if (approval !== null && approval.kind === 'subscription' && approval.coinType === '') {
+                return fail('malformed', 'read', 'the vault\'s coin type could not be read, so the subscription approval cannot be built.');
+            }
             if (approval === null || typeof sealed.blobId !== 'string' || typeof sealed.sealWrappedKey !== 'string' || typeof sealed.nonce !== 'string' || typeof sealed.sha256 !== 'string') {
                 return fail('malformed', 'read', 'the sealed reference is missing a field.');
             }

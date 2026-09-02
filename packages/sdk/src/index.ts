@@ -160,6 +160,7 @@ export {
   readCreatorVault,
   readContentPrice,
   CREATOR_VAULT_BCS_FIELDS,
+  readVaultCoinType,
 } from './creator.js';
 
 /*

@@ -304,15 +304,40 @@ export function approveUnlock(
  */
 export function approveSubscription(
   config: ProjectXSocialConfig,
-  args: { identity: Uint8Array; tier: bigint; period: bigint; subscriptionId: string },
+  args: {
+    identity: Uint8Array;
+    tier: bigint;
+    period: bigint;
+    subscriptionId: string;
+    /** The vault the subscription is to, because the tier's PRICE lives there (v5, C3). */
+    vaultId: string;
+    /** The vault's coin type — `CreatorVault<T>` is generic and the call must name `T`. */
+    coinType: string;
+  },
   tx: Transaction = new Transaction(),
 ): Transaction {
+  /*
+    Since v5 (2026-09-02) the policy lives in `creator`, not `entitlement`:
+
+    ```move
+    entry fun seal_approve_subscription<T>(
+        id: vector<u8>, tier: u64, period: u64, vault: &CreatorVault<T>, subscription: &Subscription, ctx: &TxContext,
+    )
+    ```
+
+    It ranks by the price the subscriber paid against the price of the tier asked for, which is
+    why it needs the vault. `entitlement::seal_approve_subscription` still exists on chain and
+    aborts unconditionally (EDeprecatedApproval = 8): a client that still called it would get no
+    key, never a wrong one.
+  */
   tx.moveCall({
-    target: `${config.latestPackageId}::entitlement::seal_approve_subscription`,
+    target: `${config.latestPackageId}::creator::seal_approve_subscription`,
+    typeArguments: [args.coinType],
     arguments: [
       tx.pure.vector('u8', Array.from(args.identity)),
       tx.pure.u64(args.tier),
       tx.pure.u64(args.period),
+      tx.object(args.vaultId),
       tx.object(entitlementRef(args.subscriptionId)),
     ],
   });

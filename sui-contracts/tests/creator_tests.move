@@ -1892,21 +1892,22 @@ fun approve_as(sc: &mut Scenario, who: address, vault_id: ID, tier: u64, period:
 /// C3 itself: the 0.50 tier sits at index 1, above the 10.00 tier at index 0. Under the retired
 /// index comparison this subscriber read Monthly content; under the price rule they do not.
 fun a_cheap_tier_at_a_higher_index_cannot_read_the_expensive_tier() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_vault_expensive_then_cheap(&mut sc);
     let vault_id = the_vault(&mut sc);
     subscribe_to_tier(&mut sc, FAN, vault_id, 1, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
-    approve_as(&mut sc, FAN, vault_id, 0, period);
+    approve_as(&mut sc, FAN, vault_id, 0, 11);
     abort 0
 }
 
 #[test]
 /// The same subscriber reads their own tier, and an expensive subscriber reads the cheap one.
 fun a_subscriber_reads_every_tier_priced_at_or_below_what_they_paid() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
@@ -1914,10 +1915,9 @@ fun a_subscriber_reads_every_tier_priced_at_or_below_what_they_paid() {
     let vault_id = the_vault(&mut sc);
     subscribe_to_tier(&mut sc, FAN, vault_id, 1, &clock);
     subscribe_to_tier(&mut sc, OTHER_FAN, vault_id, 0, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
-    approve_as(&mut sc, FAN, vault_id, 1, period);
-    approve_as(&mut sc, OTHER_FAN, vault_id, 0, period);
-    approve_as(&mut sc, OTHER_FAN, vault_id, 1, period);
+    approve_as(&mut sc, FAN, vault_id, 1, 11);
+    approve_as(&mut sc, OTHER_FAN, vault_id, 0, 11);
+    approve_as(&mut sc, OTHER_FAN, vault_id, 1, 11);
     clock.destroy_for_testing();
     sc.end();
 }
@@ -1925,36 +1925,38 @@ fun a_subscriber_reads_every_tier_priced_at_or_below_what_they_paid() {
 #[test]
 #[expected_failure(abort_code = ::projectx_social::creator::EPeriodNotPaid)]
 fun a_subscription_key_is_refused_for_a_period_before_it_started() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_vault_with_tier(&mut sc, 10_000_000);
     let vault_id = the_vault(&mut sc);
     subscribe_to(&mut sc, FAN, vault_id, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms());
-    // The running period started before the subscription: back catalogue, not included.
-    approve_as(&mut sc, FAN, vault_id, 0, period);
+    // Period 10 started before the subscription: back catalogue, not included.
+    approve_as(&mut sc, FAN, vault_id, 0, 10);
     abort 0
 }
 
 #[test]
 #[expected_failure(abort_code = ::projectx_social::creator::EPeriodNotPaid)]
 fun a_subscription_key_is_refused_for_a_period_after_it_expires() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_vault_with_tier(&mut sc, 10_000_000);
     let vault_id = the_vault(&mut sc);
     subscribe_to(&mut sc, FAN, vault_id, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms()) + 2;
-    approve_as(&mut sc, FAN, vault_id, 0, period);
+    // Paid until 11P+1, so period 12 (starting 12P) is not included.
+    approve_as(&mut sc, FAN, vault_id, 0, 12);
     abort 0
 }
 
 #[test]
 #[expected_failure(abort_code = ::projectx_social::creator::ESubscriptionVaultMismatch)]
 fun a_subscription_to_one_vault_cannot_present_against_another() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
@@ -1962,7 +1964,7 @@ fun a_subscription_to_one_vault_cannot_present_against_another() {
     let vault_id = the_vault(&mut sc);
     let other_vault = open_vault_for(&mut sc, OTHER_FAN);
     subscribe_to(&mut sc, FAN, vault_id, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    let period = 11;
     sc.next_tx(FAN);
     let vault = sc.take_shared_by_id<CreatorVault<USD>>(other_vault);
     let sub = sc.take_from_sender<Subscription>();
@@ -1975,14 +1977,15 @@ fun a_subscription_to_one_vault_cannot_present_against_another() {
 #[test]
 #[expected_failure(abort_code = ::projectx_social::creator::ENotSubscriber)]
 fun somebody_else_cannot_present_a_subscription_they_do_not_hold() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
     open_vault_with_tier(&mut sc, 10_000_000);
     let vault_id = the_vault(&mut sc);
     subscribe_to(&mut sc, FAN, vault_id, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    let period = 11;
     sc.next_tx(OTHER_FAN);
     let vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
     let sub = sc.take_from_address<Subscription>(FAN);
@@ -1995,13 +1998,14 @@ fun somebody_else_cannot_present_a_subscription_they_do_not_hold() {
 #[test]
 #[expected_failure(abort_code = ::projectx_social::creator::EWrongIdentity)]
 fun a_subscription_key_is_refused_for_an_identity_naming_another_tier() {
-    let (mut sc, clock) = setup();
+    let (mut sc, mut clock) = setup();
+    clock.set_for_testing(10 * MONTH_MS + 1);
     open_account(&mut sc, CREATOR, b"creator", option::none());
     open_account(&mut sc, FAN, b"fan", option::none());
     open_vault_expensive_then_cheap(&mut sc);
     let vault_id = the_vault(&mut sc);
     subscribe_to_tier(&mut sc, FAN, vault_id, 1, &clock);
-    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    let period = 11;
     sc.next_tx(FAN);
     let vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
     let sub = sc.take_from_sender<Subscription>();

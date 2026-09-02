@@ -276,3 +276,30 @@ export async function readCreatorVault(
     return fail(failure.kind, source, failure.detail);
   }
 }
+
+/**
+ * The coin a vault is denominated in, read from the object's type on chain: `CreatorVault<T>`.
+ *
+ * Needed since v5 because `creator::seal_approve_subscription<T>` must name `T`. Read rather than
+ * configured or guessed: a vault takes payment in the coin it was opened in, and a client that
+ * assumed USDC would build an approval the key servers refuse for a SUI vault in a way that reads
+ * exactly like having no subscription.
+ */
+export async function readVaultCoinType(client: SuiGrpcClient, vaultId: string): Promise<Reading<string>> {
+  const source = `CreatorVault ${vaultId}`;
+  try {
+    // `type` rides along with the content on this transport (measured 2026-09-02 against a live
+    // vault); it is the full type tag, generic argument included.
+    const response = await client.getObject({ objectId: vaultId, include: { content: true } });
+    const object = (response as { object?: { type?: unknown } | null }).object;
+    if (object === undefined || object === null) return fail('not-found', source, 'no object exists at that id on this network');
+    const type = typeof object.type === 'string' ? object.type : null;
+    if (type === null) return fail('malformed', source, 'the node did not report the object type');
+    const m = /::creator::CreatorVault<(.+)>$/.exec(type);
+    if (m === null || m[1] === undefined || m[1] === '') return fail('malformed', source, `${type} is not a CreatorVault`);
+    return ok(m[1]);
+  } catch (error) {
+    const failure = classify(error, source);
+    return fail(failure.kind, source, failure.detail);
+  }
+}

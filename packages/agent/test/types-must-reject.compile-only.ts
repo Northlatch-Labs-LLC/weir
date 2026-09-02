@@ -166,7 +166,7 @@ export const missingPeriod: SealApproval = {
 /** The complete shapes, which must keep compiling. */
 export const goodApprovals: SealApproval[] = [
   { kind: 'unlock', vaultId: '0x1', contentKey: 'k', unlockId: '0x2' },
-  { kind: 'subscription', vaultId: '0x1', tier: 0n, period: 689n, subscriptionId: '0x2' },
+  { kind: 'subscription', vaultId: '0x1', tier: 0n, period: 689n, subscriptionId: '0x2', coinType: '0x2::sui::SUI' },
 ];
 
 // === 6. A read-only agent cannot be asked to sign or spend ===

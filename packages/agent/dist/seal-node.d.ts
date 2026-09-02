@@ -151,6 +151,12 @@ export type SealApproval = {
     tier: bigint;
     period: bigint;
     subscriptionId: string;
+    /**
+     * The vault's coin type: `creator::seal_approve_subscription<T>` must name `T` (v5). Required
+     * here by the same rule as every other field — a caller that lacks it reads it from the vault
+     * on chain (`readVaultCoinType`) before building the approval, as `Agent.read` does.
+     */
+    coinType: string;
 };
 /**
  * One piece of sealed content, as the API and the database describe it.
