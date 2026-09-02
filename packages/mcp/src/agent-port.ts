@@ -91,6 +91,7 @@ interface AgentLike {
   >;
   balance?: (coinType?: string) => Promise<Reading<bigint>>;
   feed?: WeirPort['feed'];
+  readPreview?: (input: { postId: string }) => Promise<Reading<{ postId: string; handle: string; title: string; body: string; entitledVia: 'public' } | null>>;
   unlock?: (input: { vaultId: string; contentKey: string; priceMinorUnits: bigint; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   subscribe?: (input: { vaultId: string; tierIndex: number; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   post?: (input: {
@@ -124,6 +125,10 @@ export function portFromAgent(candidate: unknown): WeirPort {
   const port: WeirPort = {};
 
   if (has(agent, 'feed')) port.feed = (input) => agent.feed(input);
+  if (has(agent, 'readPreview')) {
+    // `null` means "exists, not entitled" on both sides; a failed Reading is a refusal, as everywhere.
+    port.readPreview = async (input) => unwrap(await agent.readPreview(input), 'readPreview');
+  }
   if (has(agent, 'machineBody')) port.machineBody = (input) => agent.machineBody(input);
 
   if (has(agent, 'quote')) {
