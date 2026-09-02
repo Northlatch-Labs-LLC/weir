@@ -47,7 +47,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { SealClient, SessionKey } from '@mysten/seal';
+import { SealClient } from '@mysten/seal';
+import { sessionKeyFor } from '@/lib/seal-session';
 import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
@@ -237,15 +238,9 @@ export function SealedMedia({
           cannot open a creator's paid media. `SessionKey.create` reads the package object, which is
           why the browser holds a chain client at all.
         */
-        const sessionKey = await SessionKey.create({
-          address: signer.address,
-          packageId: config.packageId,
-          ttlMin: SESSION_TTL_MIN,
-          suiClient,
-        });
-        const signature = await signer.signPersonalMessage(sessionKey.getPersonalMessage());
+        // One session per signer per tab, shared with every other sealed card (`lib/seal-session.ts`).
+        const sessionKey = await sessionKeyFor({ signer, packageId: config.packageId, ttlMin: SESSION_TTL_MIN, suiClient });
         if (cancelled) return;
-        await sessionKey.setPersonalMessageSignature(signature);
 
         const seal = new SealClient({
           suiClient,
