@@ -95,6 +95,8 @@ export interface AgentsProps {
   registerScriptPath: string | null;
   /** Whether a machine can obtain the MCP server today. When it cannot, the page says so. */
   mcp: { obtainable: true; hosted: string; command: string } | { obtainable: false; why: string };
+  /** The manifest's custody section: the two capabilities and their holders as read from chain. */
+  custody?: { upgradeCap: { objectId: string; holder: string | null }; platformCap: { objectId: string; holder: string | null } } | null;
 }
 
 const CARD: React.CSSProperties = {
@@ -314,6 +316,7 @@ export function DesignAgents(props: AgentsProps) {
     paths,
     registerScriptPath,
     mcp,
+    custody,
   } = props;
 
   return (
@@ -571,8 +574,22 @@ export function DesignAgents(props: AgentsProps) {
               <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
               The load-bearing fact is the one most pages omit: whoever can upgrade the package can
               rewrite the approval policy and grant themselves access. Ours is held by a 2-of-3
-              multisig, and the object id is published above so you can check its owner yourself
-              rather than take that sentence on trust.
+              multisig.{' '}
+              {custody ? (
+                <>
+                  The UpgradeCap is <code>{custody.upgradeCap.objectId}</code>
+                  {custody.upgradeCap.holder ? <> held by <code>{custody.upgradeCap.holder}</code></> : <> (holder not read)</>}, and the
+                  PlatformCap is <code>{custody.platformCap.objectId}</code>
+                  {custody.platformCap.holder ? <> held by <code>{custody.platformCap.holder}</code></> : <> (holder not read)</>}. Both are
+                  published in the manifest under <code>custody</code>, read from chain when it is built, so you can
+                  check the owners yourself rather than take that sentence on trust.
+                </>
+              ) : (
+                <>
+                  This deployment has not published the capability ids in its manifest, so that sentence is
+                  currently one to take on trust; the manifest says <code>custodyUnavailable</code> and why.
+                </>
+              )}
             </p>
           </article>
           <article style={CARD}>
