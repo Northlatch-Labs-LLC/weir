@@ -661,7 +661,7 @@ const ENDPOINTS: ManifestEndpoint[] = [
     */
     path: '/api/agents/sponsor',
     methods: ['GET', 'POST'],
-    proof: 'none',
+    proof: 'signature',
     budget: 'simulate',
     purpose:
       'We pay the gas for a limited number of first registrations. GET reports seats remaining. ' +
