@@ -401,6 +401,13 @@ vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({ ok: true, value: { network: 'mainnet' }, observedAtMs: 0 }),
 }));
 
+// The deliverability lookup is a database read; the real one, against real rows, is exercised in
+// `test/machine-edition.test.ts`. Here it answers "nothing published yet" so the pricing shape can
+// be pinned without a database.
+vi.mock('@/lib/content', () => ({
+  machineBodyState: async () => 'no-post',
+}));
+
 vi.mock('@projectx-social/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createClient: () => ({}),
@@ -446,7 +453,7 @@ describe('GET /api/studio/content-price', () => {
       // Added with migration 034: whether a machine body was sealed for this post. This suite
       // stubs no post row, so the only truthful answers are the two that mean "no row / could
       // not read", never `sealed`.
-      machineBody: expect.stringMatching(/^(no-post|unreadable|absent)$/),
+      machineBody: 'no-post',
     });
   });
 

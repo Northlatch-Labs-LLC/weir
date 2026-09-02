@@ -187,3 +187,77 @@ describe('the marker and the abort', () => {
     expect(made.ok && 'priceContent' in made.value).toBe(false);
   });
 });
+
+/*
+  The machine edition — one input on two packages, ruled by the desk for B1.
+
+  `edition: 'machine'` prices `<key>#machine`, derived here from the HUMAN key by the web's rule
+  (trim, then append the marker); the hand-typed marker stays refused. `machineBody` asks the
+  deployment whether that edition can be delivered before anything is priced. Mutation predicted:
+  derive the machine key by NOT appending the marker → "derives the machine key" red (the cap read
+  happens under the human key's source); return `sealed` for a missing field → "does not read an
+  absent field as sealed" red.
+*/
+describe('the machine edition', () => {
+  const fetchAnswering = (body: unknown, ok = true) =>
+    (async () => ({ ok, status: ok ? 200 : 503, json: async () => body })) as unknown as NonNullable<Parameters<typeof createAgent>[0]['fetchImpl']>;
+
+  function keyedWithFetch(client: SuiGrpcClient, fetchImpl: NonNullable<Parameters<typeof createAgent>[0]['fetchImpl']>): Agent {
+    const { key } = generateAgentKey();
+    const made = createAgent({ keypair: key, config: FULL_ENV, client, fetchImpl });
+    if (!made.ok) throw new Error(made.failure.detail);
+    return made.value;
+  }
+
+  it('still refuses a hand-typed marker under edition machine, with zero calls to the chain', async () => {
+    const { client, seen } = fakeClient([]);
+    const result = await keyed(client).priceContent({ vaultId: VAULT, contentKey: `chapter-1${MACHINE_EDITION_MARKER}`, edition: 'machine', price: 250_000n });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.detail).toContain('reserved');
+    expect(seen.calls).toEqual([]);
+  });
+
+  it('derives the machine key and reaches the cap read under it', async () => {
+    // No cap for this vault, so the call stops at the cap read — after the derived key passed every
+    // refusal a hand-typed one would fail. The source of that reading names the vault; the key it
+    // was derived for is pinned through the MCP receipt and the web, which share the rule.
+    const { client, seen } = fakeClient([{ objectId: CAP_FOR_OTHER, content: capBytes(CAP_FOR_OTHER, OTHER_VAULT) }]);
+    const result = await keyed(client).priceContent({ vaultId: VAULT, contentKey: 'chapter-1', edition: 'machine', price: 250_000n });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.kind).toBe('not-found');
+      // The refusal is sourced under the call, and the call names the DERIVED key.
+      expect(result.failure.source).toContain(`chapter-1${MACHINE_EDITION_MARKER}`);
+    }
+    expect(seen.calls).toEqual(['listOwnedObjects creator::CreatorCap']);
+  });
+
+  for (const state of ['no-post', 'sealed', 'absent'] as const) {
+    it(`reads ${state} from the deployment, asking with the human key`, async () => {
+      const asked: string[] = [];
+      const fetchImpl = (async (url: string) => {
+        asked.push(url);
+        return { ok: true, status: 200, json: async () => ({ priced: false, price: null, machineBody: state }) };
+      }) as unknown as NonNullable<Parameters<typeof createAgent>[0]['fetchImpl']>;
+      const result = await keyedWithFetch(fakeClient([]).client, fetchImpl).machineBody({ vaultId: VAULT, contentKey: ' chapter-1 ' });
+      expect(result.ok && result.value).toBe(state);
+      expect(asked).toHaveLength(1);
+      const url = new URL(asked[0]!);
+      expect(url.pathname).toBe('/api/studio/content-price');
+      expect(url.searchParams.get('contentKey')).toBe('chapter-1');
+      expect(url.searchParams.get('vaultId')).toBe(VAULT);
+    });
+  }
+
+  it('does not read an absent field as sealed', async () => {
+    // An older deployment answers without `machineBody`. Not knowing is not "can be sold".
+    const result = await keyedWithFetch(fakeClient([]).client, fetchAnswering({ priced: false, price: null })).machineBody({ vaultId: VAULT, contentKey: 'chapter-1' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.kind).toBe('malformed');
+  });
+
+  it('reports an unreachable deployment as a failure, not as a state', async () => {
+    const result = await keyedWithFetch(fakeClient([]).client, fetchAnswering({ error: 'down' }, false)).machineBody({ vaultId: VAULT, contentKey: 'chapter-1' });
+    expect(result.ok).toBe(false);
+  });
+});

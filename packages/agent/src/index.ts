@@ -905,7 +905,9 @@ export function createAgent(
         return fail('malformed', source, 'a price must be greater than zero — free posts are public, and the contract refuses zero (EZeroPrice).');
       }
       const cap = await findCreatorCap(client, manifest.config, agent.address, input.vaultId);
-      if (!cap.ok) return cap;
+      // Re-sourced under THIS call, so a refusal names the key that was about to be priced — the
+      // derived machine key included — rather than only the cap lookup that stopped it.
+      if (!cap.ok) return fail(cap.failure.kind, source, cap.failure.detail);
       const tx = buildSetContentPrice(manifest.config, {
         coinType: manifest.coinType,
         vaultId: input.vaultId,
