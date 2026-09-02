@@ -1806,7 +1806,8 @@ async function readCustody(
       }
       return ok(address);
     } catch (error) {
-      return fail(classify(error, `owner of ${objectId}`).kind, `owner of ${objectId}`, error instanceof Error ? error.message : String(error));
+      const failure = classify(error, `owner of ${objectId}`);
+      return fail(failure.kind, `owner of ${objectId}`, failure.detail);
     }
   };
   const [upgradeHolder, platformHolder] = await Promise.all([holderOf(upgradeCapId), holderOf(platformCapId)]);

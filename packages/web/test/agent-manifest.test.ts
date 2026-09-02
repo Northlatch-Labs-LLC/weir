@@ -523,7 +523,9 @@ describe('the document as a whole', () => {
 
     expect(source).toContain(`export const READ_SESSION_COOKIE = '${session.cookie}'`);
     expect(session.bearer).toBe('Authorization: Bearer <token>');
-    expect(session.returns).toEqual(['address', 'expiresAtMs', 'token']);
+    // The token is asked for with a header, never returned by default — revision 4.
+    expect(session.returns).toEqual(['address', 'expiresAtMs']);
+    expect(session.bearerHeader.adds).toBe('token');
     // And the mint route really does return all three.
     const route = read('app/api/session/route.ts');
     for (const field of session.returns) expect(route).toContain(field);
