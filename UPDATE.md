@@ -13,6 +13,26 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-02 · CEREMONY DONE 2026-09-02 (second): projectx_social v5 published — package 0xdc6dbb96…2884b5, tx ErwqNnZHR8cJVLLwZ5KNejjRzxvXujPodrPv89wRFqJE, sender the 2-of-3 multisig (msig-laptop + msig-offsite signed by the Master; combined signature re-derived 0x00e7…1605), gas 0.217 SUI, sui 1.78.1, digest bf494c13…. verify-source: 'Source verification succeeded'. v5 carries C3: creator::seal_approve_subscription<T> ranks by Subscription.price_paid + covers_period; the old entitlement entry aborts EDeprecatedApproval (8). Repointed PROJECTX_SOCIAL_LATEST_PACKAGE_ID: Vercel production (deployment dpl_9ESXLUXP… READY; live manifest reports v5), Cloud Run weir-mcp-00007-fxg, .env.local, demo env.sh. Records: Published.toml v5, ci-expected-digest ← bf494c13…, mainnet.json upgrades.v5. Folder: operations/ceremony/2026-09-02-v5. Next per his word: he returns the platform cap to the multisig, then a development pause. agent_mind publish still not done (recompute its ci-next-digest first).
+
+---
+
+## 2026-09-02 · CEREMONY DONE 2026-09-02: projectx_social v4 published — package 0x3d9f167f…3078391, tx 9CwwuNQNFVWJnWLf2LLMewKahVsDVtB5DJz6y4s2B7Lz, sender the 2-of-3 multisig (msig-laptop + msig-offsite signed by the Master; combined signature re-derived the address), gas 0.214 SUI, sui 1.78.1. verify-source: 'Source verification succeeded'. #145 merged (Published.toml v4, ci-expected-digest e1254bc4…, ci-next-digest removed, mainnet.json v4). Repointed: Vercel PROJECTX_SOCIAL_LATEST_PACKAGE_ID (deployment dpl_8xsnj2pd…), hosted MCP revision weir-mcp-00006-t6d (door 200), dev .env.local and demo env.sh. NOT yet: the daemon VM (part of the daemon roll) and agent_mind's publish (§8b: sender to choose — multisig for custody parity, another two-signature round). Ceremony folder: operations/ceremony/2026-09-02.
+
+---
+
+## 2026-09-02 · CEREMONY READY: sui client upgrade --dry-run as the multisig sender 0x00e7…1605 with sui 1.78.1 (protocol 135) → 'Dry run completed, execution status: success' (dry-run digest AbNJR4SU…), compatibility verified by the CLI, signed nothing. What remains is the ceremony itself per UPGRADE-CEREMONY.md §2–§5: serialize the unsigned bytes, two committee signatures, combine, execute, repoint PROJECTX_SOCIAL_LATEST_PACKAGE_ID, copy next→expected, then §8b agent_mind publish. Main 25dee58 deploying.
+
+---
+
+## 2026-09-02 · #144 merged: the ceremony bundle. creator::renew refuses a non-holder with ENotSubscriber (20); ci-next-digest e1254bc4… (sui 1.78.1) is the digest the v4 ceremony must see; agent_mind (sui-contracts-mind, identity = account id ‖ 0x02, seal_approve_mind(&SocialAccount)) builds, 4 Move tests; its ci-next-digest bc1cd000… changes after v4 lands (depends on the published-at) — recompute before its publish; SDK: SEAL_MIND, mindIdentity, approveMind, PROJECTX_SOCIAL_MIND_PACKAGE_ID; runbook UPGRADE-CEREMONY.md §8 (v4 raises no VERSION → no migrate; agent_mind publish as a separate step); CI builds/tests the mind package. Move 202/202 + 4/4, sdk 292, agent 256, web 1866 + 147. Built by a delegated session; reviewed and merged by this desk.
+
+---
+
+## 2026-09-02 · #143 merged (main 2a88c23), deployment dpl_Gbap2ki4… from the git source, LIVE: /agents/hermes_agent 200 (record resolved from the chain, no profiles row), /agents/<address> 308 → the handle; the operator's filed card now reads 'Filed. This is your agent.' and leads to the record page. Handoff written: operations/HANDOFF-2026-09-02-hermes.md (exact commands; Hermes on the free Nous model). Hermes run 4 (free to act, no hints) is opening a vault, setting a profile and publishing a priced post on its own — his intent: buy something Hermes makes.
+
+---
+
 ## 2026-09-02 · #142 merged (main 864bcec), deployment dpl_ExiGhdth… from the git source: the operator story told before registration (llms.txt, manifest rev 8 text, agents page, MCP instructions). Live: hermes_agent declared 11:06Z with operator 0xcca2…deb7. Defect: /agents/{handle} 404s for an account with no profiles row (hermes_agent) — resolve on chain next.
 
 ---
