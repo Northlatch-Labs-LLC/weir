@@ -5,6 +5,7 @@
  * # gRPC is not a preference
  */
 
+import { decodeObjectBytes } from './objectbytes.js';
 import { bcs } from '@mysten/sui/bcs';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import type { Transaction } from '@mysten/sui/transactions';
@@ -75,16 +76,18 @@ export const PLATFORM_BCS_FIELDS = [
  * keys. Both are accepted; anything else is a shape this SDK does not understand and is reported
  * as `malformed` rather than coerced into an empty buffer that would decode to all zeros.
  */
+/**
+ * One decoder for every object read in this package — `decodeObjectBytes` in objectbytes.ts —
+ * so a transport that answers base64, a byte array or an array-like object is read the same way
+ * here as everywhere else. Until 2026-09-02 this file carried its own reader that accepted a
+ * subset of those shapes, and a platform answered as the other shape was reported "malformed:
+ * no decodable content" (the read fails CLOSED, never wrong, but a page said "not measured" for a
+ * value the node had sent). A decode failure is `null` here, which every caller below already
+ * reports as malformed with the source named.
+ */
 function toBytes(content: unknown): Uint8Array | null {
-  if (content instanceof Uint8Array) return content;
-  if (Array.isArray(content)) return Uint8Array.from(content as number[]);
-  if (typeof content === 'object' && content !== null) {
-    const values = Object.values(content as Record<string, unknown>);
-    if (values.length > 0 && values.every((v) => typeof v === 'number')) {
-      return Uint8Array.from(values as number[]);
-    }
-  }
-  return null;
+  const decoded = decodeObjectBytes(content, 'platform');
+  return decoded.ok ? decoded.value : null;
 }
 
 /** Fields of `platform::Platform`, as they appear on chain. */
@@ -466,10 +469,20 @@ export const ABORT_EXPLANATIONS: Record<string, Record<number, string>> = {
     5: 'The coin supplied does not cover the price.',
     6: 'No tier exists at that index.',
     7: 'That tier has been retired by the creator.',
+    8: 'This vault already has the maximum number of tiers.',
+    9: 'The tier period is outside the allowed range: at least thirty days, at most about ten years.',
+    10: 'A price must be greater than zero. Unpriced means not for sale, never free.',
     11: 'The tip is below this creator’s minimum.',
     12: 'This content is not for sale.',
     13: 'A creator cannot pay their own vault.',
     14: 'The balance holds less than the amount claimed.',
+    // The contract reports a non-holder presenting someone else's Subscription under this same
+    // code (creator.move `renew`), so the sentence names both readings rather than only one.
+    15: 'That subscription belongs to a different vault, or it is not yours to renew.',
+    16: 'A name or content key cannot be empty.',
+    17: 'Nothing to migrate: this vault already matches the package version.',
+    18: 'A tier period must be a whole number of 30-day Seal periods.',
+    19: 'Tier prices must ascend with the tier index: a higher tier cannot cost less than a lower one.',
   },
   stake_vault: {
     4: 'This vault is not accepting new deposits. Withdrawals are unaffected.',

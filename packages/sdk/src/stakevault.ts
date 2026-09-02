@@ -28,6 +28,7 @@
  * anything.
  */
 
+import { decodeObjectBytes } from './objectbytes.js';
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { deriveDynamicFieldID } from '@mysten/sui/utils';
@@ -167,16 +168,18 @@ export interface StakePosition {
   rebateDebt: bigint;
 }
 
+/**
+ * One decoder for every object read in this package — `decodeObjectBytes` in objectbytes.ts —
+ * so a transport that answers base64, a byte array or an array-like object is read the same way
+ * here as everywhere else. Until 2026-09-02 this file carried its own reader that accepted a
+ * subset of those shapes, and a stake vault answered as the other shape was reported "malformed:
+ * no decodable content" (the read fails CLOSED, never wrong, but a page said "not measured" for a
+ * value the node had sent). A decode failure is `null` here, which every caller below already
+ * reports as malformed with the source named.
+ */
 function toBytes(content: unknown): Uint8Array | null {
-  if (content instanceof Uint8Array) return content;
-  if (Array.isArray(content)) return Uint8Array.from(content as number[]);
-  if (typeof content === 'object' && content !== null) {
-    const values = Object.values(content as Record<string, unknown>);
-    if (values.length > 0 && values.every((v) => typeof v === 'number')) {
-      return Uint8Array.from(values as number[]);
-    }
-  }
-  return null;
+  const decoded = decodeObjectBytes(content, 'stake vault');
+  return decoded.ok ? decoded.value : null;
 }
 
 /** Decode a raw BCS buffer into vault state. Exported so the layout test can drive it directly. */

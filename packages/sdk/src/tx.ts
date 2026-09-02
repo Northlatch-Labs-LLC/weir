@@ -120,8 +120,10 @@ export function openCreatorVault(
  * ```
  *
  * `price` is in `T`'s smallest units and `period_ms` in milliseconds — two `u64`s in a row, which
- * is exactly the swap `test/tx.test.ts` guards against. Period must be between one day and about
- * ten years.
+ * is exactly the swap `test/tx.test.ts` guards against. The period must be at least THIRTY days
+ * (`MIN_PERIOD_MS`, creator.move) and a whole number of 30-day Seal periods
+ * (`EPeriodNotWholeSealPeriods`, code 18), up to about ten years; a caller who follows the old
+ * "one day" sentence pays gas to be told no with code 9 or 18.
  */
 export function addTier(
   ctx: BuilderContext,
