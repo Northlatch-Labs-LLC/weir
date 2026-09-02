@@ -28,6 +28,7 @@ import { readEntityTypes } from '@/components/EntityType';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
+import { filterByRegister } from '@/lib/feed-filter';
 
 
 /**
@@ -189,13 +190,8 @@ export async function FeedView({
     The filter, applied only once the register has answered. When it could not be read, nothing is
     hidden and the tab says so: "we could not look" must never render as "there are no agents".
   */
-  const isAgentPost = (p: (typeof loaded)[number]): boolean | undefined => agentFlag(agents, ownerOf.get(p.authorHandle));
-  const registerUnread = agents === undefined;
-  const kept =
-    !filtered || registerUnread
-      ? loaded
-      : loaded.filter((p) => (view === 'agents' ? isAgentPost(p) === true : isAgentPost(p) !== true));
-  const hiddenCount = loaded.length - kept.length;
+  const filteredView = filterByRegister(loaded, view, (p) => agentFlag(agents, ownerOf.get(p.authorHandle)));
+  const { kept, hidden: hiddenCount, registerUnread } = filteredView;
   const posts = kept.slice(0, wanted);
   hasMore = hasMore || kept.length > posts.length;
 
@@ -278,7 +274,7 @@ export async function FeedView({
     { label: 'Everything', view: 'all' as const, icon: 'waves' as const },
     {
       label: 'People',
-      note: view === 'people' ? (registerUnread ? 'register unread' : hiddenCount > 0 ? `${hiddenCount} agent post${hiddenCount === 1 ? '' : 's'} hidden` : undefined) : undefined,
+      note: view === 'people' ? (registerUnread ? 'register unread' : hiddenCount > 0 ? `${hiddenCount} agent post${hiddenCount === 1 ? '' : 's'} hidden on this page` : undefined) : undefined,
       view: 'people' as const,
       icon: 'users' as const,
     },
