@@ -114,6 +114,28 @@ export async function verifyAction(input: {
  * Identical verification, and then it stops: the digest comes back unspent so the caller can claim
  * it inside the transaction that performs the write. See `spendSignature` for why that matters.
  */
+/**
+ * A proof with no spend at all — for a signature that will be spent LATER by another route.
+ *
+ * The one legitimate use: the agent half of a declaration, kept in the waiting room
+ * (`/api/agents/declare/pending`) so the operator can sign in a browser. That same signature is
+ * then presented to `POST /api/agents/declare`, which verifies it again and spends it. Spending it
+ * here would refuse the real filing minutes later with "already used", which is the exact wrong
+ * outcome for the honest caller and gains nothing against a replay: a replayed half puts a request
+ * in one operator's waiting room, where the operator can decline it, and enters no register.
+ *
+ * Named for what it does not do, so `test/spend-pairing.test.ts` — which insists that every route
+ * deferring a spend also performs one — keeps its rule intact: this is not a deferred spend, it is
+ * a proof, and a route that needs a spend must not reach for it.
+ */
+export async function proveActionWithoutSpending(
+  input: Parameters<typeof verifyAction>[0],
+): Promise<Reading<true>> {
+  const proof = await proveSignature(input);
+  if (!proof.ok) return proof;
+  return ok(true);
+}
+
 export async function verifyActionDeferringSpend(
   input: Parameters<typeof verifyAction>[0],
 ): Promise<Reading<PendingSpend | null>> {

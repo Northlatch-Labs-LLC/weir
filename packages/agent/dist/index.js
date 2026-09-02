@@ -273,6 +273,45 @@ export function createAgent(input) {
                 what: `creator::tip ${guarded.value}`,
             });
         },
+        async requestDeclaration(input) {
+            const what = 'requestDeclaration';
+            const operator = input.operatorAddress.trim();
+            if (!/^0x[0-9a-fA-F]{1,64}$/.test(operator)) {
+                return fail('malformed', what, `operatorAddress must be a Sui address; received ${JSON.stringify(input.operatorAddress)}`);
+            }
+            if (BigInt(operator) === BigInt(key.address)) {
+                return fail('malformed', what, 'an agent cannot name itself as its operator — the register refuses one key signing both halves.');
+            }
+            const model = input.model.trim();
+            const purpose = input.purpose.trim();
+            if (model === '' || purpose === '' || /[\r\n]/.test(model) || /[\r\n]/.test(purpose)) {
+                return fail('malformed', what, 'model and purpose are each one non-empty line; they are signed into the statement.');
+            }
+            const signed = await signAction(key.keypair, { kind: 'declare-agent', operator, model, purpose }, manifest.baseUrl);
+            const response = await httpRead({
+                doFetch,
+                baseUrl: manifest.baseUrl,
+                path: '/api/agents/declare/pending',
+                method: 'POST',
+                what,
+                body: {
+                    address: signed.address,
+                    operatorAddress: operator,
+                    model,
+                    purpose,
+                    timestampMs: signed.timestampMs,
+                    agentSignature: signed.signature,
+                },
+            });
+            if (!response.ok)
+                return response;
+            const expiresAtMs = response.value['expiresAtMs'];
+            const operatorPage = response.value['operatorPage'];
+            if (typeof expiresAtMs !== 'number' || typeof operatorPage !== 'string') {
+                return fail('malformed', what, 'the waiting room answered without expiresAtMs and operatorPage.');
+            }
+            return ok({ issuedAtMs: signed.timestampMs, expiresAtMs, operatorPage: `${manifest.baseUrl}${operatorPage}` });
+        },
         async read(input) {
             const id = input.postId.trim();
             if (id === '' || /[^A-Za-z0-9_-]/.test(id)) {

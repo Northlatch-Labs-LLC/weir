@@ -57,6 +57,7 @@ const healthy: AgentsProps = {
   paths: {
     sponsor: '/api/agents/sponsor',
     declare: '/api/agents/declare',
+    pending: null,
     register: '/api/agents/{address}',
     session: '/api/session',
   },

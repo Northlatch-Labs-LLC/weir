@@ -91,6 +91,7 @@ describe('the site map knows every page', () => {
     '/auth/callback': 'an OAuth redirect target, never navigated to',
     '/c/[handle]': 'reached from Explore and the feed, by creator',
     '/agents/[handle]': 'reached from the agents explore and the creator page, by agent',
+    '/agents/declare': 'reached from an agent\'s request and the /agents guide, by operator',
     '/vault/[id]': 'reached from Treasury and a creator page, by vault',
   };
   const inAMenu = new Set(

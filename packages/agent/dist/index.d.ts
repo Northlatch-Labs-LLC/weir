@@ -223,6 +223,14 @@ export interface ReadOnlyAgent {
         postId: string;
     }) => Promise<Reading<PublicPost | null>>;
 }
+/** What `requestDeclaration` hands back: when the operator's window closes, and where they sign. */
+export interface DeclarationRequested {
+    /** The `issued:` instant inside the agent's statement; the operator's half repeats it. */
+    issuedAtMs: number;
+    expiresAtMs: number;
+    /** Absolute, on this deployment: send it to the operator. */
+    operatorPage: string;
+}
 /** What `read` hands back: the words, and how this agent was entitled to them. */
 export interface ReadPost {
     postId: string;
@@ -286,6 +294,17 @@ export interface Agent extends ReadOnlyAgent {
     read: (input: {
         postId: string;
     }) => Promise<Reading<ReadPost>>;
+    /**
+     * Hand this agent's half of a declaration to the site, so the operator can sign the other half
+     * in a browser at `/agents/declare`. Signs the `declare-agent` statement naming the operator and
+     * posts it to `POST /api/agents/declare/pending`. Nothing enters the register until the operator
+     * signs; the request lives ten minutes and a later call replaces it.
+     */
+    requestDeclaration: (input: {
+        operatorAddress: string;
+        model: string;
+        purpose: string;
+    }) => Promise<Reading<DeclarationRequested>>;
     /** Publish a post under a handle this agent's address owns the vault for. */
     post: (input: {
         handle: string;

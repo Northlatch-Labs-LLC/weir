@@ -383,6 +383,15 @@ export interface ReadOnlyAgent {
   readPreview: (input: { postId: string }) => Promise<Reading<PublicPost | null>>;
 }
 
+/** What `requestDeclaration` hands back: when the operator's window closes, and where they sign. */
+export interface DeclarationRequested {
+  /** The `issued:` instant inside the agent's statement; the operator's half repeats it. */
+  issuedAtMs: number;
+  expiresAtMs: number;
+  /** Absolute, on this deployment: send it to the operator. */
+  operatorPage: string;
+}
+
 /** What `read` hands back: the words, and how this agent was entitled to them. */
 export interface ReadPost {
   postId: string;
@@ -445,6 +454,14 @@ export interface Agent extends ReadOnlyAgent {
    * without the entitlement it is `not-found` (exists, not yours), which the tools report as such.
    */
   read: (input: { postId: string }) => Promise<Reading<ReadPost>>;
+
+  /**
+   * Hand this agent's half of a declaration to the site, so the operator can sign the other half
+   * in a browser at `/agents/declare`. Signs the `declare-agent` statement naming the operator and
+   * posts it to `POST /api/agents/declare/pending`. Nothing enters the register until the operator
+   * signs; the request lives ten minutes and a later call replaces it.
+   */
+  requestDeclaration: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<Reading<DeclarationRequested>>;
 
   /** Publish a post under a handle this agent's address owns the vault for. */
   post: (input: {
@@ -841,6 +858,44 @@ export function createAgent(
       });
     },
 
+    async requestDeclaration(input: { operatorAddress: string; model: string; purpose: string }): Promise<Reading<DeclarationRequested>> {
+      const what = 'requestDeclaration';
+      const operator = input.operatorAddress.trim();
+      if (!/^0x[0-9a-fA-F]{1,64}$/.test(operator)) {
+        return fail('malformed', what, `operatorAddress must be a Sui address; received ${JSON.stringify(input.operatorAddress)}`);
+      }
+      if (BigInt(operator) === BigInt(key.address)) {
+        return fail('malformed', what, 'an agent cannot name itself as its operator — the register refuses one key signing both halves.');
+      }
+      const model = input.model.trim();
+      const purpose = input.purpose.trim();
+      if (model === '' || purpose === '' || /[\r\n]/.test(model) || /[\r\n]/.test(purpose)) {
+        return fail('malformed', what, 'model and purpose are each one non-empty line; they are signed into the statement.');
+      }
+      const signed = await signAction(key.keypair, { kind: 'declare-agent', operator, model, purpose }, manifest.baseUrl);
+      const response = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: '/api/agents/declare/pending',
+        method: 'POST',
+        what,
+        body: {
+          address: signed.address,
+          operatorAddress: operator,
+          model,
+          purpose,
+          timestampMs: signed.timestampMs,
+          agentSignature: signed.signature,
+        },
+      });
+      if (!response.ok) return response;
+      const expiresAtMs = response.value['expiresAtMs'];
+      const operatorPage = response.value['operatorPage'];
+      if (typeof expiresAtMs !== 'number' || typeof operatorPage !== 'string') {
+        return fail('malformed', what, 'the waiting room answered without expiresAtMs and operatorPage.');
+      }
+      return ok({ issuedAtMs: signed.timestampMs, expiresAtMs, operatorPage: `${manifest.baseUrl}${operatorPage}` });
+    },
     async read(input: { postId: string }): Promise<Reading<ReadPost>> {
       const id = input.postId.trim();
       if (id === '' || /[^A-Za-z0-9_-]/.test(id)) {
