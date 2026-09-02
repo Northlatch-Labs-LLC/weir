@@ -47,7 +47,8 @@ beforeEach(async () => {
   });
   await addPost({
     id: 'p-gated', vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1_756_700_001_000,
-    title: 'Gated', preview: 'a taste', body: '', access: { kind: 'subscribers', tier: 1 },
+    // Words in the row on purpose: the test proves they are WITHHELD, not merely that nothing was stored.
+    title: 'Gated', preview: 'a taste', body: 'the words a stranger must not see', access: { kind: 'subscribers', tier: 1 },
     // The tier is read back from the sealed body's gate, as the publish route records it.
     sealedBody: { blobId: 'blob:gated', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w', sha256: 'x'.repeat(64), tier: '1', period: '1' },
   });
@@ -82,6 +83,7 @@ describe('GET /api/posts/{id}', () => {
     expect(body.post.access).toEqual({ kind: 'subscribers', tier: 1 });
     expect(body.body).toBeNull();
     expect(body.entitledVia).toBeNull();
+    expect(JSON.stringify(body)).not.toContain('a stranger must not see');
   });
 
   it('404 for an unknown id', async () => {
