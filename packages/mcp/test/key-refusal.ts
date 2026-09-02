@@ -54,6 +54,7 @@ function optionsWith(secretKey: string | null): Parameters<typeof openWeir>[0] {
     mode: 'stdio',
     baseUrl: 'https://weir.social',
     secretKey,
+    policyPath: null,
     httpHost: '127.0.0.1',
     httpPort: 0,
     allowedOrigins: [],

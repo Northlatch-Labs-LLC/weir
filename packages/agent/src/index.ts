@@ -75,6 +75,8 @@ import {
   totalBalance,
   type Executed,
   type SpendCeiling,
+  type PaymentSource,
+  type TransactionSigner,
 } from './tx.js';
 import { loadAgentManifest, type AgentManifest } from './manifest.js';
 
@@ -107,6 +109,8 @@ export {
 export {
   ABORT_CLASSIFICATION,
   PRECONDITION_MARKER,
+  type PaymentSource,
+  type TransactionSigner,
   buildOpenAccount,
   buildSetContentPrice,
   buildSubscribe,
@@ -467,6 +471,15 @@ export interface Agent extends ReadOnlyAgent {
 
 export interface CreateAgentInput {
   /**
+   * A signer that applies the operator's policy before signing — a `PolicySigner` from
+   * `@projectx-social/signer`, or a factory given the agent's chain client. When bound, the bare
+   * key signs statements and Seal sessions only; every transaction goes through this. With it,
+   * payments are built as `SplitCoins` from gas or from `PROJECTX_SOCIAL_AGENT_PAYMENT_COIN`, the
+   * only shapes a policy can allow-list (`PaymentSource` in tx.ts); a spend that would need the
+   * merged shape is refused before anything is built.
+   */
+  transactionSigner?: TransactionSigner | ((client: SuiGrpcClient) => TransactionSigner);
+  /**
    * The agent's key. Accepts a loaded {@link AgentKey} or a bech32 `suiprivkey1…` secret.
    *
    * For an agent with no key, pass `null` — written out — and see {@link CreateReadOnlyAgentInput}.
@@ -549,6 +562,9 @@ export function createAgent(
     input.baseUrl === undefined ? base : { ...base, baseUrl: stripSlash(input.baseUrl) };
 
   const client = input.client ?? createClient(manifest.config);
+  const boundSigner = 'transactionSigner' in input ? input.transactionSigner : undefined;
+  const transactionSigner = typeof boundSigner === 'function' ? boundSigner(client) : boundSigner;
+  const payment = paymentSourceFor(manifest);
 
   if (input.keypair === null) {
     const doFetch = input.fetchImpl ?? (globalThis.fetch as FetchLike | undefined);
@@ -630,6 +646,7 @@ export function createAgent(
         client,
         transaction: tx,
         key,
+        transactionSigner,
         gasBudgetMist: manifest.gasBudgetMist,
         what: `account::open "${handle}"`,
       });
@@ -638,6 +655,10 @@ export function createAgent(
     async unlock(
       spend: { vaultId: string; contentKey: string; priceMinorUnits: bigint } & SpendCeiling,
     ): Promise<Reading<Executed>> {
+      // Before any read: a spend a policy can never approve is refused without touching the chain.
+      const shaped = policyShaped(payment, transactionSigner, `creator::unlock "${spend.contentKey}"`);
+      if (!shaped.ok) return shaped;
+
       const vault = await readPayableVault(client, spend.vaultId, agent.address);
       if (!vault.ok) return vault;
 
@@ -664,11 +685,13 @@ export function createAgent(
         contentKey: spend.contentKey,
         price: guarded.value,
         sender: agent.address,
+        payment,
       });
       return simulateAndExecute({
         client,
         transaction: tx,
         key,
+        transactionSigner,
         gasBudgetMist: manifest.gasBudgetMist,
         what: `creator::unlock "${spend.contentKey}"`,
       });
@@ -677,6 +700,9 @@ export function createAgent(
     async subscribe(
       spend: { vaultId: string; tierIndex: number } & SpendCeiling,
     ): Promise<Reading<Executed>> {
+      const shaped = policyShaped(payment, transactionSigner, `creator::subscribe tier ${spend.tierIndex}`);
+      if (!shaped.ok) return shaped;
+
       const vault = await readPayableVault(client, spend.vaultId, agent.address);
       if (!vault.ok) return vault;
 
@@ -709,17 +735,22 @@ export function createAgent(
         tierIndex: spend.tierIndex,
         price: guarded.value,
         sender: agent.address,
+        payment,
       });
       return simulateAndExecute({
         client,
         transaction: tx,
         key,
+        transactionSigner,
         gasBudgetMist: manifest.gasBudgetMist,
         what: `creator::subscribe tier ${spend.tierIndex}`,
       });
     },
 
     async tip(spend: { vaultId: string; amount: bigint } & SpendCeiling): Promise<Reading<Executed>> {
+      const shaped = policyShaped(payment, transactionSigner, `creator::tip ${spend.amount}`);
+      if (!shaped.ok) return shaped;
+
       const vault = await readPayableVault(client, spend.vaultId, agent.address);
       if (!vault.ok) return vault;
 
@@ -759,11 +790,13 @@ export function createAgent(
         vaultId: spend.vaultId,
         accountId: ready.value,
         amount: guarded.value,
+        payment,
       });
       return simulateAndExecute({
         client,
         transaction: tx,
         key,
+        transactionSigner,
         gasBudgetMist: manifest.gasBudgetMist,
         what: `creator::tip ${guarded.value}`,
       });
@@ -941,7 +974,7 @@ export function createAgent(
         contentKey: key_,
         price: input.price,
       });
-      return simulateAndExecute({ client, transaction: tx, key, gasBudgetMist: manifest.gasBudgetMist, what: source });
+      return simulateAndExecute({ client, transaction: tx, key, transactionSigner, gasBudgetMist: manifest.gasBudgetMist, what: source });
     },
 
     async machineBody(input: { vaultId: string; contentKey: string }): Promise<Reading<'no-post' | 'sealed' | 'absent'>> {
@@ -1112,6 +1145,32 @@ function feedPageFrom(body: Record<string, unknown>, coinType: string, what: str
  * an agent can act on: it means "fund me", and an abort code does not say that. Simulation would
  * catch it too, one round trip later, as `EInsufficientPayment` (code 5).
  */
+/**
+ * How this agent pays, decided once from its manifest.
+ *
+ * SUI splits from gas — the shape the policy fixture was recorded from. Any other coin splits from
+ * the one coin the operator named, when they named one; otherwise the merged shape, which no
+ * policy can allow-list and which {@link policyShaped} refuses the moment a policy signer is bound.
+ */
+export function paymentSourceFor(manifest: { coinType: string; paymentCoin: string | null }): PaymentSource {
+  if (/::sui::SUI$/.test(manifest.coinType)) return { kind: 'gas' };
+  if (manifest.paymentCoin !== null) return { kind: 'object', objectId: manifest.paymentCoin };
+  return { kind: 'merge' };
+}
+
+function policyShaped(payment: PaymentSource, signer: TransactionSigner | undefined, source: string): Reading<true> {
+  if (signer !== undefined && payment.kind === 'merge') {
+    return fail(
+      'unconfigured',
+      source,
+      'a policy signer is bound, and a merged payment (tx.coin) has object inputs whose ids rotate, so ' +
+        'no policy can allow-list them. Set PROJECTX_SOCIAL_AGENT_PAYMENT_COIN to one owned coin of the ' +
+        "vault's coin type and allow-list that id; payments are then split from it. Nothing was built.",
+    );
+  }
+  return ok(true);
+}
+
 async function payable(agent: Agent, needed: bigint): Promise<Reading<string>> {
   const account = await findAgentAccount(agent.client, agent.manifest.config, agent.address);
   if (!account.ok) return account;

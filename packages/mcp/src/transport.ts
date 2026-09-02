@@ -75,6 +75,7 @@
  * and exactly why.
  */
 
+import { readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SUI_PRIVATE_KEY_PREFIX } from '@mysten/sui/cryptography';
@@ -570,6 +571,8 @@ export interface ServerOptions {
   baseUrl: string;
   /** Present only in stdio mode. `resolveOptions` refuses to produce a non-null value under HTTP. */
   secretKey: string | null;
+  /** `WEIR_AGENT_POLICY`, stdio mode only; null otherwise. */
+  policyPath: string | null;
   httpHost: string;
   httpPort: number;
   /** Browser origins permitted to drive the HTTP endpoint. Empty means no browser may. */
@@ -594,6 +597,12 @@ export const ENV = {
   httpPort: 'WEIR_MCP_HTTP_PORT',
   allowedOrigins: 'WEIR_MCP_ALLOWED_ORIGINS',
   allowedHosts: 'WEIR_MCP_ALLOWED_HOSTS',
+  /**
+   * Path to the operator's policy document (`@projectx-social/policy` `PolicyDoc` as JSON). Read
+   * only in stdio mode with a key, like the key itself. When present, every transaction the agent
+   * signs goes through a `PolicySigner` built from it, and that is what `policyAvailable` means.
+   */
+  policy: 'WEIR_AGENT_POLICY',
 } as const;
 
 /**
@@ -735,6 +744,7 @@ export function resolveOptions(argv: readonly string[], env: NodeJS.ProcessEnv):
     mode,
     baseUrl,
     secretKey: mode === 'stdio' && hasKey && rawKey !== undefined ? rawKey : null,
+    policyPath: mode === 'stdio' && hasKey ? (env[ENV.policy]?.trim() || null) : null,
     httpHost,
     httpPort,
     allowedOrigins,
@@ -959,11 +969,24 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
     }
   }
 
+  /*
+    The signer and the policy are bound BEFORE the agent, because the agent is handed the policy
+    signer at construction. Until 2026-09-02 `policyAvailable` meant "the policy package could be
+    imported" — a package that loads and is never consulted — and the ceiling on a live purchase
+    was the number the model wrote in the tool arguments. Now it means a policy document was read,
+    its address matched the signer, and a PolicySigner wrapping the key was handed to the agent, so
+    every transaction the agent signs is simulated, evaluated and recorded under the operator's
+    document first. The three are inseparable: a signer without a policy registers the read set.
+  */
+  const signer = await bindSigner(options);
+  const policyBinding = await bindPolicy(options, signer);
+
   const created: unknown = await (createAgent as (input: unknown) => unknown)({
     keypair,
     baseUrl: options.baseUrl,
     // The projection, never `process.env`. See `AGENT_ENVIRONMENT`.
     config: options.agentEnvironment,
+    ...(policyBinding === null ? {} : { transactionSigner: policyBinding.factory }),
   });
 
   if (created === null || typeof created !== 'object') {
@@ -978,8 +1001,7 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
     a policy this process never reads. Binding them separately means a deployment can hold the first
     without the second, which is exactly what a read-only hosted endpoint is.
   */
-  const signer = await bindSigner(options);
-  const policyAvailable = (await loadOptional(POLICY_PACKAGE)) !== null;
+  const policyAvailable = policyBinding !== null;
 
   return { port, signer, policyAvailable };
 }
@@ -1001,6 +1023,72 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
  * is no secret and therefore no signer at all — `readOnlySigner` needs an address to be read-only
  * *about*, and without a key there is not one. Then it probes, and reports.
  */
+/**
+ * Read the operator's policy document and validate the two things a wrong file would get past:
+ * shape, and WHOSE policy it is. A document for another address bound to this key would either
+ * refuse everything (harmless) or, worse, allow-list the wrong agent's own account and vault.
+ */
+export function loadPolicyDoc(text: string, signerAddress: string): { ok: true; policy: Record<string, unknown> } | { ok: false; reason: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: 'the policy file is not JSON' };
+  }
+  if (parsed === null || typeof parsed !== 'object') return { ok: false, reason: 'the policy file is not an object' };
+  const doc = parsed as Record<string, unknown>;
+  if (doc['version'] !== 1) return { ok: false, reason: `the policy file has version ${JSON.stringify(doc['version'])}; this server reads version 1` };
+  const address = doc['agentAddress'];
+  if (typeof address !== 'string' || address.toLowerCase() !== signerAddress.toLowerCase()) {
+    return { ok: false, reason: 'the policy file names a different agentAddress than the bound signer; refusing to apply another agent\'s policy' };
+  }
+  for (const field of ['outflowCeilings', 'allowedTargets', 'allowedTypeArguments', 'allowedRecipients', 'allowedObjects']) {
+    if (!Array.isArray(doc[field])) return { ok: false, reason: `the policy file lacks the ${field} list` };
+  }
+  return { ok: true, policy: doc };
+}
+
+interface PolicyBinding {
+  factory: (client: unknown) => unknown;
+}
+
+/**
+ * A `PolicySigner` factory for the agent, or null when no policy is configured. A CONFIGURED
+ * policy that cannot be bound is a startup refusal, never a silent fallback to the bare key: an
+ * operator who wrote a policy file did so to bound this process.
+ */
+async function bindPolicy(options: ServerOptions, signer: SignerBinding): Promise<PolicyBinding | null> {
+  if (options.policyPath === null) return null;
+  if (signer.kind !== 'signing') {
+    throw new StartupRefusal(`${ENV.policy} is set but no signing key is bound; a policy needs a key to bound.`);
+  }
+  let text: string;
+  try {
+    text = readFileSync(options.policyPath, 'utf8');
+  } catch (error) {
+    throw new StartupRefusal(`${ENV.policy} names ${options.policyPath}, which could not be read: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const loaded = loadPolicyDoc(text, signer.signer.address);
+  if (!loaded.ok) throw new StartupRefusal(`${ENV.policy}: ${loaded.reason}`);
+
+  const signerModule = await loadOptional(SIGNER_PACKAGE);
+  const make = signerModule?.['policySigner'];
+  if (typeof make !== 'function') {
+    throw new StartupRefusal(`${ENV.policy} is set but ${SIGNER_PACKAGE} exports no policySigner(); nothing can apply it.`);
+  }
+  /*
+    The ledger is the spend this process has seen, in memory, for the life of the process. A
+    restarted server starts its rolling window empty — stated here because an operator sizing a
+    ceiling should know the window is per process until a durable ledger (roadmap B21) lands.
+  */
+  const spend: Array<Record<string, unknown>> = [];
+  const ledger = () => ({ nowMs: Date.now(), spend });
+  const policy = loaded.policy;
+  return {
+    factory: (client: unknown) => (make as (o: unknown) => unknown)({ inner: signer.signer, policy, client, ledger }),
+  };
+}
+
 async function bindSigner(options: ServerOptions): Promise<SignerBinding> {
   if (options.secretKey === null) return { kind: 'none' };
 

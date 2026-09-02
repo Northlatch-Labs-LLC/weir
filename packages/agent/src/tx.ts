@@ -79,7 +79,7 @@
  * full at {@link PRECONDITION_MARKER}.
  */
 
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, type TransactionObjectArgument } from '@mysten/sui/transactions';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import {
   classify,
@@ -770,6 +770,17 @@ export interface Executed {
  * also means `build()` performs no dry run of its own, which makes the simulation below the single
  * gate between this agent and a signature. See this file's header for the measurement.
  */
+/**
+ * A signer that applies the operator's standing policy before it signs — `@projectx-social/signer`'s
+ * `PolicySigner`, structurally. When one is bound, the agent's bare key never signs a transaction:
+ * the bytes go to the signer, which simulates, evaluates, records and then signs, and the agent
+ * only submits what came back. That is what makes "the ceiling is applied by the signer" true.
+ */
+export interface TransactionSigner {
+  readonly address: string;
+  signTransaction: (bytes: Uint8Array) => Promise<Reading<{ signature: string; bytes: Uint8Array; txDigest: string }>>;
+}
+
 export async function simulateAndExecute(input: {
   client: SuiGrpcClient;
   transaction: Transaction;
@@ -777,6 +788,8 @@ export async function simulateAndExecute(input: {
   gasBudgetMist: bigint;
   /** Named in every failure so an agent's log says which call was refused. */
   what: string;
+  /** When bound, signs instead of `key`; see {@link TransactionSigner}. */
+  transactionSigner?: TransactionSigner | undefined;
 }): Promise<Reading<Executed>> {
   const source = input.what;
   try {
@@ -830,10 +843,26 @@ export async function simulateAndExecute(input: {
     }
 
     // --- Simulation passed. Only now do we sign. ---
-    const result = await input.client.signAndExecuteTransaction({
-      transaction: bytes,
-      signer: input.key.keypair,
-    });
+    let result: unknown;
+    if (input.transactionSigner !== undefined) {
+      /*
+        The policy path. The signer simulates and evaluates the SAME bytes again under the
+        operator's document — a second simulation is the price of a bound that lives in a separate
+        package, and it is paid on purpose — then signs or refuses. Its refusal passes through
+        with its own kind, so "the policy said no" never reads as "the network failed".
+      */
+      const signed = await input.transactionSigner.signTransaction(bytes);
+      if (!signed.ok) return fail(signed.failure.kind, source, signed.failure.detail);
+      if (!sameBytes(signed.value.bytes, bytes)) {
+        return fail('malformed', source, 'the signer returned a signature over different bytes than it was given; nothing was submitted.');
+      }
+      result = await input.client.executeTransaction({ transaction: bytes, signatures: [signed.value.signature] });
+    } else {
+      result = await input.client.signAndExecuteTransaction({
+        transaction: bytes,
+        signer: input.key.keypair,
+      });
+    }
 
     const digest = digestOf(result);
     if (digest === null) {
@@ -941,6 +970,50 @@ export function buildOpenAccount(
 }
 
 /**
+ * Where a payment coin comes from — the one decision that decides whether an operator's policy
+ * can ever approve a purchase.
+ *
+ * `packages/policy` refuses any object input whose id is not on its allow-list, and a coin's
+ * object id changes every time it is split or merged. So a payment sourced by `tx.coin({ type,
+ * balance })` — which resolves and merges the sender's coins as OBJECT INPUTS — is refused by a
+ * `PolicySigner` every time, for any coin, and the refusal reads as "policy too strict" when the
+ * truth is "payment built the wrong way". The policy's own text prescribes the shape that passes:
+ * `SplitCoins` on a source, whose result is a command result and never an input.
+ *
+ * - `gas`: split the amount off the gas coin. Correct for a SUI-denominated vault, and the shape
+ *   the policy's baseline fixture was recorded from.
+ * - `object`: split the amount off ONE named coin the operator owns and allow-listed. A coin that
+ *   is only ever split from keeps its id (it is mutated, not consumed), so the id is stable until
+ *   the coin is drained. This is how a USDC-denominated vault is paid under a policy.
+ * - `merge`: the old `tx.coin` merge. Kept for an agent that signs with its own bare key and holds
+ *   no policy; refused before anything is built when a policy signer is bound.
+ */
+export type PaymentSource = { kind: 'gas' } | { kind: 'object'; objectId: string } | { kind: 'merge' };
+
+function paymentFor(
+  tx: Transaction,
+  source: PaymentSource,
+  coinType: string,
+  amount: bigint,
+): TransactionObjectArgument {
+  if (amount <= 0n) throw new RangeError(`a payment must be positive; got ${amount.toString()}`);
+  switch (source.kind) {
+    case 'gas': {
+      const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amount)]);
+      return coin!;
+    }
+    case 'object': {
+      const [coin] = tx.splitCoins(tx.object(source.objectId), [tx.pure.u64(amount)]);
+      return coin!;
+    }
+    case 'merge': {
+      const [coin] = tx.coin({ type: coinType, balance: amount });
+      return coin!;
+    }
+  }
+}
+
+/**
  * `creator::unlock<T>` — buy permanent access to one content key.
  *
  * The coin is sourced for **exactly** the guarded price. `tx.coin({ type, balance })` resolves and
@@ -957,10 +1030,11 @@ export function buildUnlock(
     contentKey: string;
     price: bigint;
     sender: string;
+    payment?: PaymentSource;
   },
 ): Transaction {
   const tx = new Transaction();
-  const [coin] = tx.coin({ type: args.coinType, balance: args.price });
+  const coin = paymentFor(tx, args.payment ?? { kind: 'merge' }, args.coinType, args.price);
   return build.unlockContent(
     { config, tx },
     {
@@ -968,7 +1042,7 @@ export function buildUnlock(
       vaultId: args.vaultId,
       accountId: args.accountId,
       contentKey: new TextEncoder().encode(args.contentKey),
-      paymentCoin: coin!,
+      paymentCoin: coin,
       sender: args.sender,
     },
   );
@@ -1020,10 +1094,11 @@ export function buildSubscribe(
     tierIndex: number;
     price: bigint;
     sender: string;
+    payment?: PaymentSource;
   },
 ): Transaction {
   const tx = new Transaction();
-  const [coin] = tx.coin({ type: args.coinType, balance: args.price });
+  const coin = paymentFor(tx, args.payment ?? { kind: 'merge' }, args.coinType, args.price);
   return build.subscribe(
     { config, tx },
     {
@@ -1031,7 +1106,7 @@ export function buildSubscribe(
       vaultId: args.vaultId,
       accountId: args.accountId,
       tierIndex: BigInt(args.tierIndex),
-      paymentCoin: coin!,
+      paymentCoin: coin,
       sender: args.sender,
     },
   );
@@ -1047,17 +1122,17 @@ export function buildSubscribe(
  */
 export function buildTip(
   config: ProjectXSocialConfig,
-  args: { coinType: string; vaultId: string; accountId: string; amount: bigint },
+  args: { coinType: string; vaultId: string; accountId: string; amount: bigint; payment?: PaymentSource },
 ): Transaction {
   const tx = new Transaction();
-  const [coin] = tx.coin({ type: args.coinType, balance: args.amount });
+  const coin = paymentFor(tx, args.payment ?? { kind: 'merge' }, args.coinType, args.amount);
   return build.tip(
     { config, tx },
     {
       coinType: args.coinType,
       vaultId: args.vaultId,
       accountId: args.accountId,
-      paymentCoin: coin!,
+      paymentCoin: coin,
     },
   );
 }
