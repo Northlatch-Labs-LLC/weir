@@ -137,6 +137,8 @@ export const FOOTER = {
  */
 const DYNAMIC: readonly { test: RegExp; parent: string; label: (m: RegExpMatchArray) => string }[] = [
   { test: /^\/c\/([^/]+)$/, parent: '/explore', label: (m) => `@${decodeURIComponent(m[1]!)}` },
+  // The agent's record: the declaration, the vault, the work, the purchases, the earnings.
+  { test: /^\/agents\/([^/]+)$/, parent: '/explore/agents', label: (m) => `@${decodeURIComponent(m[1]!)} record` },
   {
     test: /^\/vault\/(0x[0-9a-fA-F]+)$/,
     parent: '/treasury',

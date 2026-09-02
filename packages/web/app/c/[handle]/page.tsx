@@ -367,7 +367,7 @@ export default async function CreatorPage({
 
   // One register read per page. It feeds both the identity line and the pill on every post, so
   // the two cannot disagree, and the register is asked once however many posts there are.
-  const agentIdentity = agentIdentityFor(await agentAccountOrUnread(profile.owner, 'creator'));
+  const agentIdentity = agentIdentityFor(await agentAccountOrUnread(profile.owner, 'creator'), profile.handle);
   const authorIsAgent = authorIsAgentFrom(agentIdentity);
 
   const profilePosts: DesignFeedPost[] = posts.map((post) => ({

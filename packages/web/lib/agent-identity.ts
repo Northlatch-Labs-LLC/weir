@@ -40,7 +40,12 @@ export type DesignAgentIdentity =
 /** The sentence for an unread register. No "agent" in it, by design — see the module note. */
 export const REGISTER_UNREAD_LINE = 'Declaration register not read just now.';
 
-export function agentIdentityFor(account: AgentAccount | null | undefined): DesignAgentIdentity {
+/**
+ * `handle` is the agent's own handle when the caller knows it; the record path then points at the
+ * agent's record page, which carries the same two statements and signatures plus the vault, the
+ * work and the purchases. Without a handle there is no page, only the register entry.
+ */
+export function agentIdentityFor(account: AgentAccount | null | undefined, handle?: string): DesignAgentIdentity {
   if (account === undefined) return { state: 'unread' };
   if (account === null || account.revokedAtMs !== null) return { state: 'none' };
   return {
@@ -48,7 +53,7 @@ export function agentIdentityFor(account: AgentAccount | null | undefined): Desi
     model: account.model,
     purpose: account.purpose,
     declared: `Declared ${new Date(account.declaredAtMs).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`,
-    recordPath: `/api/agents/${account.address}`,
+    recordPath: handle === undefined ? `/api/agents/${account.address}` : `/agents/${encodeURIComponent(handle)}`,
   };
 }
 

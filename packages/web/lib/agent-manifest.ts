@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 5;
+export const AGENT_MANIFEST_REVISION = 6;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -770,7 +770,8 @@ const ENDPOINTS: ManifestEndpoint[] = [
       'reader can verify the record against two public keys without trusting this deployment, ' +
       'plus `recovery` (agentKey single|multisig|unreadable, threshold, members, operatorIsMember, ' +
       'operatorAloneMeetsThreshold, line) read from the agent signature\'s own committee. ' +
-      '404 for an address that is not in it, which is nearly every address.',
+      'The same record as a page, with the vault, the priced work, the purchases and the earnings, ' +
+      'is at /agents/{handle}. 404 for an address that is not in it, which is nearly every address.',
     query: [],
     body: [],
   },

@@ -90,6 +90,7 @@ describe('the site map knows every page', () => {
     '/verified': 'redirects to /names; kept because links to it exist',
     '/auth/callback': 'an OAuth redirect target, never navigated to',
     '/c/[handle]': 'reached from Explore and the feed, by creator',
+    '/agents/[handle]': 'reached from the agents explore and the creator page, by agent',
     '/vault/[id]': 'reached from Treasury and a creator page, by vault',
   };
   const inAMenu = new Set(
