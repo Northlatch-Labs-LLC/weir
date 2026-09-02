@@ -99,6 +99,14 @@ import { MAX_RESPONSE_CONTENT_CHARS, envelope, renderUntrusted, type Provenance 
 
 const NAMESPACE = 'weir';
 
+/**
+ * The reserved marker inside a content key — the same one `packages/agent` and the web refuse.
+ * Declared here rather than imported: this package loads the agent library dynamically and only in
+ * an armed deployment, and a static import for one string would put it in every address space.
+ * `test/price-tool.ts` pins it to the agent's export so the copies cannot drift.
+ */
+export const MACHINE_EDITION_MARKER = '#machine';
+
 /** See the note on tool naming above. Change here, and both the registered and logical names move. */
 function toolName(verb: string): string {
   return `${NAMESPACE}_${verb}`;
@@ -353,6 +361,7 @@ export function registerTools(server: McpServer, binding: WeirBinding): string[]
   when('subscribe', () => registerSubscribe(server, binding.port, ledger, principal));
   when('post', () => registerPost(server, binding.port, ledger, principal));
   when('send', () => registerSend(server, binding.port, ledger, principal));
+  when('price', () => registerPrice(server, binding.port, ledger, principal));
 
   return registered;
 }
@@ -822,10 +831,12 @@ function registerPost(
       */
       if (args.access === 'paid' && (args.price === undefined || args.contentKey === undefined)) {
         return refuse(
-          'price_required',
-          'access "paid" needs both a contentKey and a price. A paid post with neither is ' +
-            'published, listed, and impossible to buy: creator::unlock aborts with ' +
-            'EContentNotForSale for every reader who tries.',
+          'unpriced',
+          'access "paid" needs both a contentKey and a price, and the key must already be priced ' +
+            'on chain. A paid post without them is published, listed, and impossible to buy: ' +
+            'creator::unlock aborts with EContentNotForSale for every reader who tries. The order ' +
+            `is: ${toolName('price')} first, then ${name} with the same contentKey and price.`,
+          { next: { tool: toolName('price') } },
         );
       }
       if (args.access !== 'paid' && (args.price !== undefined || args.contentKey !== undefined)) {
@@ -856,6 +867,94 @@ function registerPost(
             idempotencyKey: key,
           });
           return succeed({ postId: created.postId, access: args.access, idempotencyKey: key });
+        } catch (error) {
+          /*
+            The route's own refusal for a paid post whose key carries no price on the vault. Named
+            rather than folded into `call_failed`, and pointed at the tool that fixes it, so a model
+            reading the refusal knows the order — price, then publish — instead of retrying the
+            publish. The signature is not spent on that 409, so the retry after pricing is clean.
+          */
+          const detail = error instanceof Error ? error.message : String(error);
+          if (detail.includes('has no price on this vault')) {
+            return refuse('unpriced', `${name} was refused: ${detail}`, { next: { tool: toolName('price') } });
+          }
+          return fromThrown(name, error);
+        }
+      });
+    },
+  );
+  return name;
+}
+
+/**
+ * `weir_price` — what makes an agent's paid post buyable.
+ *
+ * Registered only when armed: it moves no coin, but it changes what every future buyer pays, and
+ * whether THIS agent may do that to THIS vault is an authority question only the operator's policy
+ * answers (the target, the vault and the cap in its allow-lists). A read-only or unarmed deployment
+ * therefore does not have this tool at all, rather than having one that refuses.
+ */
+function registerPrice(
+  server: McpServer,
+  weir: WeirPort,
+  ledger: CallLedger,
+  principal: string | null,
+): string {
+  const name = toolName('price');
+  server.registerTool(
+    name,
+    {
+      title: logicalName('price'),
+      description:
+        'Puts one content key of YOUR OWN vault up for sale at a price, or reprices it, on chain ' +
+        '(creator::set_content_price). This is what makes a paid post buyable: publish a paid post ' +
+        'only after this succeeds, with the same contentKey and price. It moves no coin; it changes ' +
+        'what every future buyer pays. Your operator’s policy must allow the call, your vault and ' +
+        'your CreatorCap — a policy that only sets spending ceilings does not authorise this.',
+      inputSchema: {
+        vaultId: vaultIdSchema.describe('Your own creator vault — the one your CreatorCap governs.'),
+        contentKey: contentKeySchema.describe('The vault-scoped key the post will be sold under. Must not contain "#machine".'),
+        price: z
+          .string()
+          .min(1)
+          .max(32)
+          .describe('The per-unlock price as a whole number of the smallest on-chain unit, as a decimal string — "250000", never 0.25.'),
+        currency: currencySchema,
+      },
+      outputSchema: { txDigest: z.string(), vaultId: z.string(), contentKey: z.string(), price: z.string(), idempotencyKey: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args, extra) => {
+      const key_ = args.contentKey.trim();
+      if (key_ === '') {
+        return refuse('empty_key', 'a content key cannot be empty; the contract refuses it (EEmptyName), so nothing is sent.');
+      }
+      if (key_.includes(MACHINE_EDITION_MARKER)) {
+        return refuse(
+          'reserved',
+          `"${MACHINE_EDITION_MARKER}" is reserved: it names the machine edition of a key and is appended by the ` +
+            'platform. A key containing it could collide with another post’s machine edition, and an Unlock ' +
+            'cannot be withdrawn once someone holds it.',
+        );
+      }
+      const price = parseAmount(args.price);
+      if (price === null || price === 0n) {
+        return refuse(
+          'malformed_price',
+          'price must be a whole number of the smallest on-chain unit, greater than zero, as a decimal ' +
+            `string that fits in a u64. Received ${JSON.stringify(args.price)}. Unpriced means not for sale, never free.`,
+        );
+      }
+      return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
+        try {
+          const priced = await weir.priceContent!({
+            vaultId: args.vaultId,
+            contentKey: key_,
+            price: price.toString(),
+            currency: args.currency,
+            idempotencyKey: key,
+          });
+          return succeed({ txDigest: priced.txDigest, vaultId: args.vaultId, contentKey: key_, price: price.toString(), idempotencyKey: key });
         } catch (error) {
           return fromThrown(name, error);
         }
