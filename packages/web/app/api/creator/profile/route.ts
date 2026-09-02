@@ -59,6 +59,40 @@ export async function POST(request: Request) {
       { status: 424 },
     );
   }
+  const tooLong =
+    (b.displayName ?? '').length > MAX_DISPLAY_NAME_LENGTH
+      ? `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`
+      : (b.bio ?? '').length > MAX_BIO_LENGTH
+        ? `bio exceeds ${MAX_BIO_LENGTH} characters`
+        : null;
+  if (tooLong !== null) return NextResponse.json({ error: tooLong }, { status: 400 });
+
+  const proof = await verifyAction({
+    origin: new URL(request.url).origin,
+    address: b.owner,
+    signature: b.signature ?? '',
+    timestampMs: b.timestampMs ?? 0,
+    action: {
+      kind: 'name-vault',
+      vaultId: b.vaultId,
+      // Bound because it decides the generic type argument every later payment against this vault
+      // is built with, not because it is part of the name.
+      coinType: b.coinType,
+      name: b.displayName ?? '',
+      bio: b.bio ?? '',
+    },
+  });
+  if (!proof.ok) {
+    return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
+  }
+
+  if (vault.value.owner.toLowerCase() !== b.owner.toLowerCase()) {
+    return NextResponse.json(
+      { error: 'that vault belongs to a different address' },
+      { status: 403 },
+    );
+  }
+
   /*
     The coin type is the vault's type parameter, read from chain, and the body must agree with it.
     This route's own rule is "ownership is read from chain, never taken from the request", and the
@@ -100,39 +134,7 @@ export async function POST(request: Request) {
     to sign again to find out. The length reported is the one they actually sent, not one this
     route trimmed to.
   */
-  const tooLong =
-    (b.displayName ?? '').length > MAX_DISPLAY_NAME_LENGTH
-      ? `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`
-      : (b.bio ?? '').length > MAX_BIO_LENGTH
-        ? `bio exceeds ${MAX_BIO_LENGTH} characters`
-        : null;
-  if (tooLong !== null) return NextResponse.json({ error: tooLong }, { status: 400 });
 
-  const proof = await verifyAction({
-    origin: new URL(request.url).origin,
-    address: b.owner,
-    signature: b.signature ?? '',
-    timestampMs: b.timestampMs ?? 0,
-    action: {
-      kind: 'name-vault',
-      vaultId: b.vaultId,
-      // Bound because it decides the generic type argument every later payment against this vault
-      // is built with, not because it is part of the name.
-      coinType: b.coinType,
-      name: b.displayName ?? '',
-      bio: b.bio ?? '',
-    },
-  });
-  if (!proof.ok) {
-    return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
-  }
-
-  if (vault.value.owner.toLowerCase() !== b.owner.toLowerCase()) {
-    return NextResponse.json(
-      { error: 'that vault belongs to a different address' },
-      { status: 403 },
-    );
-  }
 
   const handle = await accountHandle(b.owner);
   if (!handle.ok) {

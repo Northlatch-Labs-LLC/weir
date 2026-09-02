@@ -45,7 +45,7 @@ describe('Purchases', () => {
   it('shows a subscription it did read', async () => {
     mockJson({
       subscriptions: [{
-        objectId: '0xs', vaultId: '0xv', handle: 'alice', tier: 0, pricePaid: '500000',
+        objectId: '0xs', vaultId: '0xv', handle: 'alice', tier: 0, pricePaid: '500000', decimals: 6, symbol: 'USDC',
         startedAtMs: 1_700_000_000_000, expiresAtMs: 4_100_000_000_000, renewals: 0, active: true,
       }],
       unlocks: [], truncated: false,
