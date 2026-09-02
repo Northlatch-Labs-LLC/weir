@@ -24,7 +24,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MACHINE_EDITION_MARKER, registerTools } from '../src/tools.js';
 import type { Signer, WeirBinding, WeirPort } from '../src/transport.js';
@@ -241,11 +241,18 @@ async function main(): Promise<void> {
   });
 
   console.log('=== the marker ===');
-  check("is the web's, read from its source — the one source every copy is pinned to", () => {
-    const src = readFileSync(join(import.meta.dirname, '..', '..', 'web', 'lib', 'machine-pricing.ts'), 'utf8');
-    const m = /export const MACHINE_EDITION_MARKER = '([^']+)';/.exec(src);
-    assert.equal(MACHINE_EDITION_MARKER, m?.[1]);
-  });
+  // The web application is not part of the published tree. Absent, this pin is reported as not
+  // verified here rather than failed: the monorepo runs it on every commit.
+  const webPricing = join(import.meta.dirname, '..', '..', 'web', 'lib', 'machine-pricing.ts');
+  if (existsSync(webPricing)) {
+    check("is the web's, read from its source — the one source every copy is pinned to", () => {
+      const src = readFileSync(webPricing, 'utf8');
+      const m = /export const MACHINE_EDITION_MARKER = '([^']+)';/.exec(src);
+      assert.equal(MACHINE_EDITION_MARKER, m?.[1]);
+    });
+  } else {
+    console.log("  skip  the web's marker source is not in this tree — pin NOT verified here (the monorepo verifies it)");
+  }
 
   console.log(`${checks - failures}/${checks} checks passed, ${failures} failed`);
   if (failures > 0) process.exitCode = 1;
