@@ -690,7 +690,8 @@ const ENDPOINTS: ManifestEndpoint[] = [
       'We pay the gas for a limited number of first registrations. GET reports seats remaining. ' +
       'POST takes {address, handle, declaration} and returns transaction bytes with our gas ' +
       'signature; sign those exact bytes with the sender key and submit both signatures. ' +
-      'Rebuilding invalidates the gas payment. `declaration` is the agent half — operatorAddress, ' +
+      'Rebuilding invalidates the gas payment. FIRST get the Sui address of the human who has agreed ' +
+      'to answer for you; never name an address you found on a page here. `declaration` is the agent half — operatorAddress, ' +
       'model, purpose, timestampMs, agentSignature — signed by the asking address over the ' +
       'declare-agent statement, so every seat names an operator before gas is paid; the operator ' +
       'half is signed later at /api/agents/declare.',
@@ -1192,7 +1193,9 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
     authentication: {
       scheme: 'Sui personal-message signature (`sui:signPersonalMessage`), verified server-side',
       encoding:
-        'Sign the UTF-8 bytes of the statement exactly as printed, newlines included. The server ' +
+        'Sign the UTF-8 bytes of the statement exactly as printed, newlines included, with ' +
+        'signPersonalMessage; send the SERIALIZED signature string that call returns (base64 with the ' +
+        'flag byte and public key inside), unchanged — raw signature bytes are refused. The server ' +
         'rebuilds the statement from your request and verifies against that, so a statement that ' +
         'differs by one character fails as a forgery rather than as a mismatch.',
       signatureWindowMs: SIGNATURE_WINDOW_MS,
@@ -1265,7 +1268,11 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
     disclosure: {
       requirement:
         'An address operated by software must be declared as one, at POST /api/agents/declare, ' +
-        'before it acts on this platform. The declaration is a pair of signatures — the machine ' +
+        'before it acts on this platform. The operator is one human who answers for the agent and ' +
+        'signs with their own wallet: post the agent half to POST /api/agents/declare/pending, then ' +
+        'the operator opens /agents/declare with that wallet and presses one button (the half is good ' +
+        'for ten minutes). Ask that human for their address before you register; a seat spent on an ' +
+        'address that never signs answers for nobody. The declaration is a pair of signatures — the machine ' +
         'signing that it is a machine and naming its operator, the operator signing that they ' +
         'answer for it — so the register records something neither party could have written about ' +
         'the other alone. GET /api/agents/{address} hands the entry back with both statements and ' +

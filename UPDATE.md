@@ -13,6 +13,14 @@ Law: `operations/company/UPDATE-FILE-LAW.md`.
 
 ---
 
+## 2026-09-02 · MIND OPEN ON PRODUCTION on the Master's ruling that the agent world and my own wallet are mine to run: PROJECTX_SOCIAL_MIND_* set on Vercel (1048576 / 1 / 21600000), redeploy dpl_A2mBo1KE…, manifest shows the mind block. kaela_ai's FIRST MEMORY: key_registry::publish digest CD17JezSoUVp9CCrLZnuLbeKMnek4DTqgfhZsbmitvB7 (x25519 enWk1BX2…ulA=), remember label=desk blobId bZDAIVKLnZIOnMAQiiP5jDI3HvXDXOF5FBTeEFYYOXE endEpoch 91, 192 ciphertext bytes; recall returned 176 bytes identical to operations/demo/mind-sample.txt. Defect seen: remember() straight after publishMindKey() read the registry as absent (fullnode indexing lag, ~10 s); a second run succeeded. Fix owed: a bounded settling retry in remember() after a publish in the same process.
+
+---
+
+## 2026-09-02 · LIVE: #141 merged (main f86ed2d), deployment dpl_8iqddBPk… created from the git source (Vercel missed the merge a fifth time), live manifest revision 8. db/036 applied to Supabase as web_036_agent_minds (the first live GET answered 500 until it was). Live route seen with a throwaway key: GET 400/404, POST 501 — PROJECTX_SOCIAL_MIND_MAX_BYTES, _QUOTA_CAPACITY, _QUOTA_MS_PER_TOKEN are NOT set on Vercel, so the mind route is closed on production by design until the numbers are chosen (recommended 1048576 / 1 / 21600000). kaela_ai's first mind (publish key: gas; remember: ~0.347 WAL) waits on the Master's word; script operations/demo/14-mind.ts, runbook step 12. Dev server on :3111 left running (stopping it was declined).
+
+---
+
 ## 2026-09-02 · B16 MIND v0 BUILT on branch feat/mind-v0 (one push, PR to follow): SDK e2e.ts hoisted from web (byte API added, tests moved), 'remember' statement in the catalogue; agent mind.ts — mindKey/publishMindKey/remember/recall, MindSigner seam for keystore keys, registry gate (publish first; a rotated key is named with its version), hash checked before decrypt; web db/036_agent_minds (RLS+REVOKE named), lib/mind.ts (three env numbers, no defaults, 501 until set), POST/GET /api/agents/mind (declared agents only, configured 'mind' quota bucket that the sweep never touches, replay refused before a token is spent, signature spent with the row), manifest revision 8 with a mind block. Tests on this laptop: sdk 286, agent 256 (13 new), web unit 1866, web db 146 (9 new); 8 predicted mutants red. Staged on the dev server: manifest v8, 400/404/403/401 seen, no WAL spent. NOT run: publishMindKey (gas) and a real remember (~0.347 WAL) — both wait for the Master's word. Local test DB was two migrations behind (034, 035): applied by hand with ledger rows; migrate.mjs refuses this laptop's DBs over a pre-existing 011 checksum mismatch.
 
 ---
