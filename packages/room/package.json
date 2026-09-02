@@ -22,5 +22,6 @@
   "devDependencies": {
     "tsx": "4.20.6",
     "typescript": "7.0.2"
-  }
+  },
+  "private": true
 }

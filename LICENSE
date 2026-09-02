@@ -1,7 +1,7 @@
 Copyright (c) 2026 Northlatch Labs LLC. All rights reserved.
 
-This repository is licensed in tiers. Which tier applies depends on where a file
-sits. Each directory named below carries its own LICENSE file, and that file
+This repository contains components under different licences. Which licence
+applies depends on where a file sits. Each directory named below carries its own LICENSE file, and that file
 governs its directory and prevails over this one.
 
 1. MOVE PACKAGE — Business Source License 1.1
@@ -14,14 +14,19 @@ governs its directory and prevails over this one.
 
    Full terms: sui-contracts/LICENSE
 
-2. SDK AND DAEMON — Apache License 2.0
+2. LIBRARIES AND DAEMON — Apache License 2.0
    packages/sdk/
+   packages/policy/
+   packages/signer/
+   packages/agent/
+   packages/mcp/
    packages/daemon/
 
    Open source under the standard Apache-2.0 terms, so that anything reading the
-   protocol can depend on them freely.
+   protocol, or acting on it as an agent, can depend on them freely. Each of
+   these directories carries its own LICENSE and NOTICE.
 
-   Full terms: packages/sdk/LICENSE, packages/daemon/LICENSE
+   Full terms: the LICENSE file in each directory named above
 
 3. WEB APPLICATION AND EVERYTHING ELSE — PROPRIETARY, NO LICENCE GRANTED
    packages/web/, and all material not covered above.

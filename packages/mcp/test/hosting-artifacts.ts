@@ -110,7 +110,7 @@ check('copies no .env and the build context excludes every .env*', () => {
   for (const line of ['.env', '.env.*', '**/.env', '**/.env.*']) assert.ok(ignore.split('\n').includes(line), `${line} missing from .dockerignore`);
 });
 check('starts the server in HTTP mode and nothing else', () => {
-  assert.ok(/ENTRYPOINT \["pnpm", "--filter", "@projectx-social\/mcp", "exec", "tsx", "src\/index\.ts", "--http"\]/.test(dockerfile));
+  assert.ok(/ENTRYPOINT \["node", "packages\/mcp\/dist\/index\.js", "--http"\]/.test(dockerfile));
   assert.ok(!/--stdio/.test(code(dockerfile)));
 });
 
