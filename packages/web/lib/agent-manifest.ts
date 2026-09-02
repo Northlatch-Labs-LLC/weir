@@ -734,7 +734,9 @@ const ENDPOINTS: ManifestEndpoint[] = [
       'One post as an anonymous reader sees it: title, preview, access and — for a PUBLIC post — ' +
       'the plaintext body with entitledVia "public". A gated post answers with body null: its words ' +
       'are ciphertext only the reader\'s own Seal session can open against an entitlement checked on ' +
-      'chain. 404 for an unknown id.',
+      'chain. 404 for an unknown id. Note the enumeration this opens: a paid post\'s content key, ' +
+      'price and a subscriber post\'s tier are readable by anyone with the id — they are public on ' +
+      'chain already, and this is a second, cheaper way to read them.',
     query: [],
     body: [],
   },
@@ -746,7 +748,7 @@ const ENDPOINTS: ManifestEndpoint[] = [
     purpose:
       'Every standing declaration in the register — address, operator, model, purpose, when — ' +
       'without the signatures; `?operator=` narrows to one operator\'s fleet. The per-address entry ' +
-      'carries both signatures for verification.',
+      'carries both signatures for verification. Bounded at 500 rows with `truncated`.',
     query: ['operator'],
     body: [],
   },
