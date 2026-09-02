@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { listDeclaredAgents } from '@/lib/agents';
+import { recoveryOf } from '@/lib/agent-recovery';
 import { normaliseAddress } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
     model: a.model,
     purpose: a.purpose,
     declaredAtMs: a.declaredAtMs,
+    recovery: recoveryOf(a.agentSignature, a.operatorAddress),
   }));
 
   return NextResponse.json({ agents, count: agents.length, truncated, ...(operator === null ? {} : { operator }) });

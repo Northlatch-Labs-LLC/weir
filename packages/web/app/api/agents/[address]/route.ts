@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { statementFor } from '@/lib/identity';
 import { agentAccount } from '@/lib/agents';
+import { recoveryOf } from '@/lib/agent-recovery';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,12 @@ export async function GET(
 
   return NextResponse.json({
     agent: account,
+    /*
+      Read from the stored agent signature, never from a claim: a multisig signature carries its
+      committee, so whether the operator holds one of the agent's keys is decodable by anyone who
+      has this record. See lib/agent-recovery.ts.
+    */
+    recovery: recoveryOf(account.agentSignature, account.operatorAddress),
     /*
       What each party signed, so the caller can verify rather than believe.
 
