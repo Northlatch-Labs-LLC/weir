@@ -11,6 +11,11 @@
 #   gcloud compute ssh projectx-daemon --zone europe-west2-c --command 'sudo bash /tmp/install-cos.sh'
 #
 # Idempotent: safe to re-run to pick up a new image tag or a changed public variable.
+#
+# What this does NOT make durable: /etc on COS is rebuilt at boot from the instance's metadata
+# startup script, which is the combined `projectx-startup` script for BOTH products on this VM (a
+# copy is kept under operations/backups in the estate; it is not `social-startup.sh` here). After
+# a roll, change the image tag in that script too, or the next reboot runs the old image.
 set -euo pipefail
 
 PROJECT=projectx-daemon-prod
@@ -69,13 +74,16 @@ chmod 644 "$LIB/harvest-public.env"
 # `--once` under a timer, not a long-lived loop. systemd is a better supervisor than an in-process
 # interval: it survives the process dying at 3am and it knows what a failure is from the exit code.
 #
-# Requires the Cloud SQL proxy, because the journal holds the single-instance lock. Starting without
-# it would not fail loudly — the daemon would refuse the tick, hourly, for ever.
+# The Cloud SQL proxy on this host is a CONTAINER (`projectx-sqlproxy`, started by the instance's
+# boot script), not a systemd unit. This unit once carried `Requires=projectx-sqlproxy.service`,
+# and on 2026-09-02 the first start after installing it failed with "Unit projectx-sqlproxy.service
+# not found" — a dependency on a unit that does not exist is a tick that never runs. If the proxy
+# is down the daemon still fails loudly: the journal cannot be opened, the tick is refused and the
+# exit code says so.
 cat > /etc/systemd/system/projectx-social-harvest.service <<UNIT
 [Unit]
 Description=ProjectX Social harvest daemon (one tick)
-After=projectx-sqlproxy.service network-online.target
-Requires=projectx-sqlproxy.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
