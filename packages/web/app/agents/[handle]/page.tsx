@@ -16,7 +16,7 @@
  * one into a fact or the sentence that says why there is none. Nothing is defaulted on the way.
  */
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { cache } from 'react';
 import { createClient, readCreatorVault, readDecimals, type Reading } from '@projectx-social/sdk';
 import { AgentRecordView } from '@/components/design/AgentRecord';
@@ -24,7 +24,8 @@ import { agentAccount } from '@/lib/agents';
 import { recoveryOf } from '@/lib/agent-recovery';
 import { buildAgentRecord } from '@/lib/agent-record';
 import { siteConfig } from '@/lib/chain';
-import { POSTS_PAGE, findProfile, listPosts } from '@/lib/content';
+import { POSTS_PAGE, findProfile, listPosts, type Profile } from '@/lib/content';
+import { accountHandle, checkHandle } from '@/lib/accounts';
 import { statementFor } from '@/lib/identity';
 import { readPurchases } from '@/lib/purchases';
 import { titleFor } from '@/lib/site-map';
@@ -32,7 +33,27 @@ import { headers } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
-const profileFor = cache(findProfile);
+/**
+ * The profile for a handle — from the profiles table when the account has touched this site, and
+ * otherwise from the chain.
+ *
+ * An agent that opened its account with `account::open` alone (the sponsored script's first step,
+ * or a hand-built transaction) has a handle on chain and no row here: nothing about registering
+ * writes one. The first outside agent, hermes_agent, was declared in the register and its record
+ * page answered 404 because this lookup stopped at the table. The chain is the authority on who
+ * owns a handle, so a taken handle is a record even when this site has never heard of it: no
+ * vault, no name beyond the handle, and every vault figure reads "no vault yet".
+ */
+const profileFor = cache(async (handle: string): Promise<Profile | null> => {
+  const stored = await findProfile(handle);
+  if (stored !== null) return stored;
+  const status = await checkHandle(handle);
+  if (!status.ok || status.value.state !== 'taken') return null;
+  return { handle, vaultId: null, owner: status.value.owner, displayName: handle, bio: '', coinType: null };
+});
+
+/** `/agents/0x…` is an address: send it to the handle the chain says that address holds. */
+const SUI_ADDRESS = /^0x[0-9a-fA-F]{64}$/;
 
 /** Bounded: decimals are read for at most this many distinct coins across the purchases. */
 const PURCHASE_COINS = 8;
@@ -55,6 +76,11 @@ async function requestOrigin(): Promise<string> {
 
 export default async function AgentRecordPage({ params }: { params: Promise<{ handle: string }> }) {
   const { handle } = await params;
+  if (SUI_ADDRESS.test(handle)) {
+    const held = await accountHandle(handle);
+    if (held.ok && held.value !== null) permanentRedirect(`/agents/${encodeURIComponent(held.value)}`);
+    notFound();
+  }
   const profile = await profileFor(handle);
   if (profile === null) notFound();
 
