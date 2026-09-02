@@ -23,6 +23,13 @@ const ROOT = join(import.meta.dirname, '..');
 const LISTS = {
   feed: join(ROOT, 'components', 'feed', 'FeedView.tsx'),
   rail: join(ROOT, 'components', 'shell', 'RightRail.tsx'),
+  /*
+    The footer is the list a VISITOR sees. The feed and the rail sit behind the waiting-list gate,
+    so for hours after the marks shipped the published site showed letters to everyone who was not
+    signed in. The footer is on every page, gated or not, and it is where the marks are actually
+    seen.
+  */
+  footer: join(ROOT, 'components', 'shell', 'SiteFooter.tsx'),
 };
 
 /** Every `{ name, logo }` pair in a source file's BUILT_ON list. */
@@ -48,19 +55,33 @@ describe('the partner marks', () => {
     });
   }
 
-  it('name the same partners in both places', () => {
+  it('name the same partners in all three places', () => {
     // The feed used to list three and the rail four. One site, one answer to "built on what".
+    // The footer also lists USDC, with a letter and no logo; the logo-bearing set is the same four.
     const feed = partnersIn(LISTS.feed).map((p) => p.name).sort();
     const rail = partnersIn(LISTS.rail).map((p) => p.name).sort();
+    const footer = partnersIn(LISTS.footer).map((p) => p.name).sort();
     expect(feed).toEqual(rail);
+    expect(footer).toEqual(feed);
     expect(feed).toEqual(['Seal', 'Sui', 'Walrus', 'zkLogin']);
   });
 
-  it('use the same file for the same partner in both places', () => {
+  it('use the same file for the same partner in all three places', () => {
     const feed = new Map(partnersIn(LISTS.feed).map((p) => [p.name, p.logo]));
-    for (const { name, logo } of partnersIn(LISTS.rail)) {
-      expect(feed.get(name), `${name} points at a different file in the two lists`).toBe(logo);
+    for (const path of [LISTS.rail, LISTS.footer]) {
+      for (const { name, logo } of partnersIn(path)) {
+        expect(feed.get(name), `${name} points at a different file in ${path}`).toBe(logo);
+      }
     }
+  });
+
+  it('reach every visitor: the footer that carries them is in the app shell every page renders through', () => {
+    const shell = readFileSync(join(ROOT, 'components', 'shell', 'AppShell.tsx'), 'utf8');
+    expect(shell).toContain('<SiteFooter');
+    const layout = readFileSync(join(ROOT, 'app', 'layout.tsx'), 'utf8');
+    expect(layout).toContain('AppShell');
+    const footer = readFileSync(LISTS.footer, 'utf8');
+    expect(footer).toContain("'logo' in b ? (");
   });
 });
 
@@ -68,6 +89,7 @@ describe('the image is decorative', () => {
   for (const [where, path] of [
     ['home list', join(ROOT, 'components', 'design', 'Home.tsx')],
     ['right rail', LISTS.rail],
+    ['site footer', LISTS.footer],
   ] as const) {
     it(`carries an empty alt in the ${where}, so the name is read once`, () => {
       const source = readFileSync(path, 'utf8')
