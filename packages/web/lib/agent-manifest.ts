@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 4;
+export const AGENT_MANIFEST_REVISION = 5;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -752,8 +752,11 @@ const ENDPOINTS: ManifestEndpoint[] = [
     budget: 'read',
     purpose:
       'Every standing declaration in the register — address, operator, model, purpose, when — ' +
-      'without the signatures; `?operator=` narrows to one operator\'s fleet. The per-address entry ' +
-      'carries both signatures for verification. Bounded at 500 rows with `truncated`.',
+      'without the signatures; `?operator=` narrows to one operator\'s fleet. Each row carries ' +
+      '`recovery`: whether the operator holds a key of the agent\'s multisig, decoded from the stored ' +
+      'agent signature, and the sentence "operator cannot recover this agent" when it does not or ' +
+      'the agent is a single key. The per-address entry carries both signatures for verification. ' +
+      'Bounded at 500 rows with `truncated`.',
     query: ['operator'],
     body: [],
   },
@@ -764,7 +767,9 @@ const ENDPOINTS: ManifestEndpoint[] = [
     budget: 'read',
     purpose:
       'One entry in the register, with both signatures and both statements as signed — so a ' +
-      'reader can verify the record against two public keys without trusting this deployment. ' +
+      'reader can verify the record against two public keys without trusting this deployment, ' +
+      'plus `recovery` (agentKey single|multisig|unreadable, threshold, members, operatorIsMember, ' +
+      'operatorAloneMeetsThreshold, line) read from the agent signature\'s own committee. ' +
       '404 for an address that is not in it, which is nearly every address.',
     query: [],
     body: [],

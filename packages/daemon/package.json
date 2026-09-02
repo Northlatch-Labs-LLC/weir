@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@mysten/sui": "2.27.1",
+    "@projectx-social/policy": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
+    "@projectx-social/signer": "workspace:*",
     "pg": "8.23.0"
   },
   "devDependencies": {

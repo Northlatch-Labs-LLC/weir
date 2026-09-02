@@ -62,7 +62,7 @@ fold(
       console.log('the journal was read and holds no runs — the daemon has never completed a tick');
       return null;
     }
-    console.log('when                      mode      epoch   seen  harv  skip  fail  outcome');
+    console.log('when                      mode      epoch   seen  harv  skip  fail  outcome  audit');
     for (const r of runs) {
       const when = new Date(r.startedAtMs).toISOString().replace('T', ' ').slice(0, 19);
       const epoch = r.epoch === null ? '—' : r.epoch.toString();
@@ -70,6 +70,9 @@ fold(
         `${when}  ${r.mode.padEnd(8)}  ${epoch.padStart(5)}  ${String(r.vaultsSeen).padStart(4)}  ` +
           `${String(r.harvested).padStart(4)}  ${String(r.skipped).padStart(4)}  ` +
           `${String(r.failed).padStart(4)}  ${r.outcome}${r.truncated ? ' (TRUNCATED)' : ''}` +
+          // The anchored chain head, so a reader can match a log to the run that produced it. A
+          // run with no anchor is older than db/002 or its anchor write failed; either is worth seeing.
+          `  ${r.auditHead === null ? 'unanchored' : `${r.auditHead.headHash.slice(0, 12)}… ×${r.auditHead.entries}${r.auditHead.intact ? '' : ' BROKEN'}`}` +
           `${r.failureDetail === null ? '' : ` — ${r.failureDetail}`}`,
       );
     }

@@ -52,6 +52,15 @@ export interface Journal {
   begin(input: { mode: 'live' | 'dry-run'; signer: string }): Promise<Reading<RunHandle>>;
   finish(run: RunHandle, result: TickResult & { discoveryTruncated: boolean }): Promise<Reading<true>>;
   abandon(run: RunHandle, failure: { kind: string; detail: string }): Promise<Reading<true>>;
+  /**
+   * Anchors the signer's audit chain head for a finished or abandoned run. One row per run; a second
+   * anchor for the same run is refused by the primary key rather than overwritten, because an anchor
+   * that can be replaced is not an anchor. See `db/002_audit_anchor.sql`.
+   */
+  anchorAudit(
+    run: RunHandle,
+    head: { signer: string; headHash: string; entries: number; intact: boolean },
+  ): Promise<Reading<true>>;
   /** Runs left `running` by a process that died. The only way to see a crash after the fact. */
   stuckRuns(olderThanMs: number): Promise<Reading<Array<{ id: number; startedAtMs: number }>>>;
   recentRuns(limit: number): Promise<Reading<RunSummary[]>>;
@@ -72,6 +81,8 @@ export interface RunSummary {
   outcome: string;
   failureDetail: string | null;
   truncated: boolean;
+  /** The anchored audit head, or `null` when the run wrote none (a daemon older than 002). */
+  auditHead: { headHash: string; entries: number; intact: boolean } | null;
 }
 
 /**
@@ -214,6 +225,15 @@ export async function openJournal(databaseUrl: string): Promise<Reading<Journal>
         return true as const;
       }),
 
+    anchorAudit: (run, head) =>
+      guard('anchorAudit', async () => {
+        await pool.query(
+          `INSERT INTO daemon_audit_anchors (run_id, signer, head_hash, entries, intact, recorded_at_ms)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [run.id, head.signer, head.headHash, head.entries, head.intact, Date.now()],
+        );
+        return true as const;
+      }),
     stuckRuns: (olderThanMs) =>
       guard('stuckRuns', async () => {
         const { rows } = await pool.query<{ id: string; started_at_ms: string }>(
@@ -232,8 +252,11 @@ export async function openJournal(databaseUrl: string): Promise<Reading<Journal>
           epoch: string | null; vaults_seen: number; harvested: number; skipped: number;
           failed: number; outcome: string; failure_detail: string | null;
           discovery_truncated: boolean; tick_truncated: boolean;
+          head_hash: string | null; entries: number | null; intact: boolean | null;
         }>(
-          `SELECT * FROM daemon_runs ORDER BY started_at_ms DESC LIMIT $1`,
+          `SELECT r.*, a.head_hash, a.entries, a.intact
+             FROM daemon_runs r LEFT JOIN daemon_audit_anchors a ON a.run_id = r.id
+            ORDER BY r.started_at_ms DESC LIMIT $1`,
           [Math.min(limit, 200)],
         );
         return rows.map((r) => ({
@@ -249,6 +272,10 @@ export async function openJournal(databaseUrl: string): Promise<Reading<Journal>
           outcome: r.outcome,
           failureDetail: r.failure_detail,
           truncated: r.discovery_truncated || r.tick_truncated,
+          auditHead:
+            r.head_hash === null || r.entries === null || r.intact === null
+              ? null
+              : { headHash: r.head_hash, entries: r.entries, intact: r.intact },
         }));
       }),
 

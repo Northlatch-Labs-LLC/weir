@@ -1,0 +1,140 @@
+/**
+ * Getting a read session, without a browser.
+ *
+ * # What a session is here, and what it very deliberately is not
+ *
+ * `packages/web/lib/read-session.ts` is unusually honest about this and the honesty is worth
+ * carrying across the boundary rather than restating loosely. The token minted by
+ * `POST /api/session` is a **bearer token**, and it is bounded on purpose:
+ *
+ *   - It grants **reads only**. Every write still needs a fresh single-use signature.
+ *   - It grants **only what the address already owns** — the chain is consulted per request; the
+ *     session merely settles *whose* entitlements to ask about.
+ *   - It expires after a day, and it is revocable.
+ *
+ * A stolen agent session therefore cannot publish, spend, unlock, follow or send. That containment
+ * is the reason a bearer token is acceptable at all, and it is why this module holds the token in
+ * memory and never writes it anywhere.
+ *
+ * # Why an agent needs one, when it could sign every read
+ *
+ * `read-content` is single-use and spent. `read` is not. An agent polling a feed could in principle
+ * sign each request — but a session is one signature a day instead of one per poll, and the
+ * signature it replaces is the *expensive* kind: the replay ledger writes a row per single-use
+ * signature, so a chatty agent signing every read would be writing to `used_signatures` on a timer
+ * for no gain in authority.
+ *
+ * # Bearer or cookie: both are supported and bearer wins
+ *
+ * A cookie is a browser's mechanism, and a headless client re-implementing cookie storage to talk to
+ * one endpoint is a jar with one entry in it. So the reader side now takes a header instead:
+ * `provenReaderFor` in `read-session.ts` accepts `Authorization: Bearer <token>` against the same
+ * row, the same expiry and the same revocation — verified by reading that file, not assumed. Its
+ * parser is strict in two ways this client satisfies by construction: the scheme is compared
+ * case-insensitively, and a credential containing **any** whitespace is refused outright, so the
+ * token is emitted with exactly one space after `Bearer` and never wrapped or padded.
+ *
+ * The other half landed too: `POST /api/session` answers `{ address, expiresAtMs }`, and adds
+ * `token` **only when the request asks for it** with `x-weir-bearer: 1`. This client asks — see the
+ * header set on the request below. Read from the route rather than assumed, which is why
+ * {@link BEARER_FIELDS} names exactly one field instead of guessing at several.
+ *
+ * This paragraph said the token came back unconditionally, which was true when it was written and
+ * false the moment the route began withholding it. It is corrected here rather than only at the
+ * request, because a reader looking for the SHAPE of the response reads the top of the file and a
+ * reader looking for the header reads the middle, and the two disagreed.
+ *
+ * The route is explicit about what that costs and it is repeated here rather than left behind a
+ * link, because a client author is entitled to know what they are holding: `HttpOnly` still stops
+ * script reading the *stored* cookie, but script running during the exchange can read the response,
+ * so cross-site scripting on that origin can carry a token away and use it for a day from
+ * somewhere else. Narrow, genuinely widened, and bounded by the same three things as ever — reads
+ * only, only of what the address already owns on chain, and `DELETE /api/session` withdraws every
+ * session at once.
+ *
+ * So {@link openSession} reads both and **prefers the bearer when one is present**, falling back to
+ * the cookie. The fallback is not dead code kept for symmetry: it is what runs against a deployment
+ * that has not shipped the body token yet, and the value it replays is the same token the header
+ * would have carried — one row, one expiry, one revocation, whichever carrier it travelled in.
+ *
+ * {@link BEARER_FIELDS} names exactly one field, `token`, because that is what the route returns.
+ * Resist widening it on a hunch: a probe list is a client that silently accepts a field nobody
+ * meant to publish, and the cost of being wrong here is reading as anonymous while believing
+ * otherwise — which is a paywall shown to somebody who paid.
+ *
+ * It never invents a session. A response with neither a cookie nor a recognised bearer is a
+ * failure, not an anonymous session that quietly reads less than the caller asked for — a paid post
+ * silently rendered as a paywall is the exact defect `read-session.ts` was written to end.
+ */
+import { type Reading } from '@projectx-social/sdk';
+import type { AgentKey } from './keys.js';
+/**
+ * The cookie `read-session.ts` sets.
+ *
+ * Mirrored, and mirrored with the same caveat the statement format carries: the `web` package
+ * exports nothing, so this cannot be imported. It is `projectx_read` and it is deliberately not
+ * called `session` — the original's words: "this is not one in the sense anybody expects. It
+ * authenticates a reader and authorises nothing."
+ */
+export declare const READ_SESSION_COOKIE = "projectx_read";
+/**
+ * The JSON field the bearer token arrives in.
+ *
+ * One entry, read from `packages/web/app/api/session/route.ts`, which answers
+ * `{ address, expiresAtMs, token }`. A list rather than a constant only because the fallback below
+ * iterates it — and because naming the shape makes a future rename a one-line change in a file that
+ * says why, rather than a string buried in a parser.
+ */
+export declare const BEARER_FIELDS: readonly ['token'];
+export interface SessionCredential {
+    /** How the token travels. `bearer` when the server offered one, `cookie` otherwise. */
+    readonly kind: 'bearer' | 'cookie';
+    /** The address this session speaks for, as the server reported it back. */
+    readonly address: string;
+    /**
+     * When it stops working, or `null` when the server did not say.
+     *
+     * `null` is not treated as "for ever". {@link isExpired} answers `false` for it — the session may
+     * well be live — and the caller is expected to handle a 401 by opening a new one, which is the
+     * only reliable expiry check against a server that can revoke.
+     */
+    readonly expiresAtMs: number | null;
+    /**
+     * Headers to attach to a request that should be made *as* this reader.
+     *
+     * Declared as a **property function**, not a method, and the same rule holds for every member of
+     * every interface in this package. Under `strictFunctionTypes` TypeScript checks method
+     * parameters bivariantly and property-function parameters contravariantly, so method syntax
+     * quietly accepts an implementation that demands more of its arguments than the interface
+     * promises. That unsoundness already shipped once here, on `SealDecryptor` — see the doc block
+     * there — and `test/interface-variance.test.ts` now fails on any method-syntax member found
+     * anywhere under `src/`.
+     */
+    headers: () => Record<string, string>;
+    isExpired: (nowMs?: number) => boolean;
+}
+/** Injected so tests need no network, and so a caller can supply their own retrying fetch. */
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+/**
+ * Prove control of the agent's address and take a read session for it.
+ *
+ * The signature is spent — `read-content` is single-use — so this is not idempotent and a failed
+ * call must be retried with a **new** signature, which is what calling this function again does.
+ * Retrying with the same one earns `this signature has already been used`.
+ */
+export declare function openSession(input: {
+    key: AgentKey;
+    /** Origin with no trailing slash, as {@link import('./manifest.js').AgentManifest} normalises it. */
+    baseUrl: string;
+    fetchImpl?: FetchLike;
+}): Promise<Reading<SessionCredential>>;
+/**
+ * Pull the read-session cookie out of a response.
+ *
+ * `getSetCookie()` first, because a response may legitimately carry several `Set-Cookie` headers
+ * and the single-header accessor folds them into one comma-joined string — from which a cookie
+ * value containing a comma cannot be recovered. The fallback exists for runtimes whose `Headers`
+ * predates that method, and it parses the folded form rather than pretending it cannot.
+ */
+export declare function readSessionCookieFrom(headers: Headers): string | null;
+//# sourceMappingURL=session.d.ts.map

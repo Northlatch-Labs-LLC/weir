@@ -44,6 +44,7 @@ asks to be trusted.
 ```bash
 createdb projectx_daemon
 psql -d projectx_daemon -f db/001_journal.sql
+psql -d projectx_daemon -f db/002_audit_anchor.sql
 ```
 
 **The gap between the two writes is the useful part.** A crash, an OOM kill or a power cut leaves a
