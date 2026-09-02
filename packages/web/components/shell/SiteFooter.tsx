@@ -17,11 +17,16 @@ import { Icon } from '@/components/design/icons';
 import { FOOTER } from '@/lib/site-map';
 import { WeirMark } from '@/components/shell/SiteHeader';
 
+/**
+ * The partners' own marks, from `public/brand/built-on/` — the same files the feed and the rail
+ * show. This footer is on every page a visitor can reach, including the waiting list, so it is
+ * where the marks are actually seen; the letter `mark` is the fallback when no file is supplied.
+ */
 const BUILT_ON = [
-  { name: 'Sui', mark: 'S', note: 'Settlement', href: 'https://sui.io' },
-  { name: 'Walrus', mark: 'W', note: 'Post bodies and media', href: 'https://www.walrus.xyz' },
-  { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app' },
-  { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin' },
+  { name: 'Sui', mark: 'S', note: 'Settlement', href: 'https://sui.io', logo: '/brand/built-on/sui-icon.png' },
+  { name: 'Walrus', mark: 'W', note: 'Post bodies and media', href: 'https://www.walrus.xyz', logo: '/brand/built-on/walrus-icon.png' },
+  { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app', logo: '/brand/built-on/seal-icon.png' },
+  { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin', logo: '/brand/built-on/zklogin-icon.png' },
   { name: 'USDC', mark: '$', note: 'One of two denominations', href: 'https://www.circle.com/usdc' },
 ] as const;
 
@@ -114,7 +119,11 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
           {BUILT_ON.map((b) => (
             <a key={b.name} href={b.href} className="sf__link" rel="noreferrer" target="_blank">
               <span className="sf__mark" aria-hidden>
-                {b.mark}
+                {'logo' in b ? (
+                  <img src={b.logo} alt="" width={18} height={18} style={{ width: '1.125rem', height: '1.125rem', objectFit: 'contain', display: 'block' }} />
+                ) : (
+                  b.mark
+                )}
               </span>
               {b.name}
               <span className="sf__note">{b.note}</span>
