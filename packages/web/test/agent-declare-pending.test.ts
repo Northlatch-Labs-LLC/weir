@@ -7,11 +7,12 @@
   Mutations predicted: skip the verification in POST pending → "a half that does not verify is
   refused" red; spend the signature in POST pending → "filing after a pending post succeeds" red
   (the register route would refuse the spent signature); drop the window filter in the list →
-  "an expired request is not listed" red.
+  "an expired request is not listed" red; hold a declaration half to SIGNATURE_WINDOW_MS instead of
+  DECLARATION_WINDOW_MS anywhere on the path → "a half signed an hour ago" red.
 */
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
+import { DECLARATION_WINDOW_MS, SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
 useTestDatabase();
@@ -65,12 +66,12 @@ describe('the waiting room', () => {
     const posted = await postPending(half);
     expect(posted.status, await posted.clone().text()).toBe(201);
     const body = (await posted.json()) as { expiresAtMs: number; operatorPage: string };
-    expect(body.expiresAtMs).toBe(issued + SIGNATURE_WINDOW_MS);
+    expect(body.expiresAtMs).toBe(issued + DECLARATION_WINDOW_MS);
     expect(body.operatorPage).toBe('/agents/declare');
 
     const listed = (await (await listPending(OPERATOR)).json()) as { requests: Array<{ address: string; agentSignature: string; expiresAtMs: number }> };
     expect(listed.requests).toHaveLength(1);
-    expect(listed.requests[0]).toMatchObject({ address: AGENT, agentSignature: half.agentSignature, expiresAtMs: issued + SIGNATURE_WINDOW_MS });
+    expect(listed.requests[0]).toMatchObject({ address: AGENT, agentSignature: half.agentSignature, expiresAtMs: issued + DECLARATION_WINDOW_MS });
 
     // Another operator sees nothing: the list is per wallet.
     const other = (await (await listPending(Ed25519Keypair.generate().toSuiAddress())).json()) as { requests: unknown[] };
@@ -102,7 +103,7 @@ describe('the waiting room', () => {
   });
 
   it('an expired request is not listed, and a second post by the same agent replaces the first', async () => {
-    const stale = Date.now() - SIGNATURE_WINDOW_MS - 1_000;
+    const stale = Date.now() - DECLARATION_WINDOW_MS - 1_000;
     // The route refuses a stale half outright — the window is checked at verification.
     expect((await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: stale, agentSignature: await agentHalf(stale) })).status).toBe(401);
 
@@ -118,6 +119,24 @@ describe('the waiting room', () => {
     await testDb().query('UPDATE agent_declaration_requests SET issued_at_ms = $2 WHERE address = $1', [AGENT, stale]);
     const aged = (await (await listPending(OPERATOR)).json()) as { requests: unknown[] };
     expect(aged.requests).toEqual([]);
+  });
+
+  it('a half signed an hour ago is kept, listed and filed — a declaration is not held to the ten-minute window', async () => {
+    // Older than SIGNATURE_WINDOW_MS by a wide margin, well inside DECLARATION_WINDOW_MS. This is the
+    // production case: the agent signed, the operator came to the page when they could.
+    const issued = Date.now() - 6 * SIGNATURE_WINDOW_MS;
+    const half = { address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) };
+    const posted = await postPending(half);
+    expect(posted.status, await posted.clone().text()).toBe(201);
+    const listed = (await (await listPending(OPERATOR)).json()) as { requests: Array<{ issuedAtMs: number }> };
+    expect(listed.requests.map((r) => r.issuedAtMs)).toEqual([issued]);
+
+    const filed = await postDeclare({ ...half, operatorSignature: await operatorHalf(issued) });
+    expect(filed.status, await filed.clone().text()).toBe(201);
+
+    // The replay ledger holds both digests for the rest of the day: filing the same pair again is refused.
+    const again = await postDeclare({ ...half, operatorSignature: await operatorHalf(issued) });
+    expect(again.status).toBe(401);
   });
 
   it('GET needs an operator and refuses a non-address', async () => {

@@ -196,7 +196,8 @@ export function validateDeclaration(
 
     The cost is that the two parties must agree on the instant. They are already agreeing on the
     model, the purpose and each other's addresses — this is one act performed together, and it has
-    one time. `verifyAction` still applies the ten-minute window to each half independently.
+    one time. `verifyAction` still applies the declaration window (`DECLARATION_WINDOW_MS`, one
+    day — the two parties are not in the same room) to each half independently.
   */
   if (typeof timestampMs !== 'number' || !Number.isSafeInteger(timestampMs) || timestampMs <= 0) {
     return { ok: false, why: 'timestampMs must be the epoch millisecond both parties signed' };

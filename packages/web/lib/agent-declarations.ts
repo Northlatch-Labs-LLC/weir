@@ -6,7 +6,7 @@
  * that table and nothing else; verification lives in the routes, with the rest of the register's
  * checks.
  */
-import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
+import { DECLARATION_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 
 export interface DeclarationRequest {
@@ -48,7 +48,7 @@ function toRequest(row: RequestRow): DeclarationRequest {
 
 /** The instant after which the declare route would refuse the agent's signature as expired. */
 export function requestExpiresAtMs(request: Pick<DeclarationRequest, 'issuedAtMs'>): number {
-  return request.issuedAtMs + SIGNATURE_WINDOW_MS;
+  return request.issuedAtMs + DECLARATION_WINDOW_MS;
 }
 
 /** Keep (or replace) the one live request for an agent. Call only after the agent half verified. */
@@ -106,7 +106,7 @@ export async function pendingDeclarationsFor(
       WHERE operator_address = $1 AND filed_at_ms IS NULL AND issued_at_ms > $2
       ORDER BY issued_at_ms DESC
       LIMIT $3`,
-    [normaliseAddress(operatorAddress), nowMs - SIGNATURE_WINDOW_MS, REQUESTS_PAGE + 1],
+    [normaliseAddress(operatorAddress), nowMs - DECLARATION_WINDOW_MS, REQUESTS_PAGE + 1],
   );
   const truncated = rows.length > REQUESTS_PAGE;
   return { requests: rows.slice(0, REQUESTS_PAGE).map(toRequest), truncated };

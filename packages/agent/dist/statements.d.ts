@@ -34,7 +34,7 @@
  */
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { type Action } from '@projectx-social/sdk';
-export { statementFor, isSingleUse, SIGNATURE_WINDOW_MS, STATEMENT_SHAPES, type Action, } from '@projectx-social/sdk';
+export { statementFor, isSingleUse, SIGNATURE_WINDOW_MS, DECLARATION_WINDOW_MS, windowFor, STATEMENT_SHAPES, type Action, } from '@projectx-social/sdk';
 /** A signature, with everything the server needs to rebuild the statement it verifies against. */
 export interface SignedAction {
     /** The signer. The server binds the recovered key to this, so it must be the agent's own. */

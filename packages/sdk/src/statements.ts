@@ -55,6 +55,35 @@
 export const SIGNATURE_WINDOW_MS = 10 * 60 * 1000;
 
 /**
+ * How long the two halves of a declaration stay valid: one day.
+ *
+ * A declaration is signed by two parties who are not in the same place. The agent signs whenever it
+ * likes; the operator is a person who opens `/agents/declare` when they get to it — an hour later,
+ * or the next morning. Under the ten-minute window every half posted while the operator was away
+ * expired unsigned, which was observed in production on the first real declaration: the request
+ * expired at the second the operator was told about it.
+ *
+ * What a longer window does NOT loosen: both halves are still single-use (spent in `used_signatures`
+ * the moment they are filed), both statements still bind both addresses, the model and the purpose,
+ * and a future-dated half is still refused. The only thing that widens is how long an UNFILED half
+ * may wait — and an unfiled half grants nothing, marks nothing and appears only in its operator's
+ * waiting room. The register stores the shared `issued:` instant as `declared_at_ms`, so a
+ * declaration filed a day after the agent signed is dated to the moment the agent asked.
+ */
+export const DECLARATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The freshness window that applies to an action — the one rule that decides which of the two
+ * constants above a verifier compares against. Every verifier goes through here so that no route
+ * can hold a declaration to the ten-minute window by reading the wrong constant.
+ */
+export function windowFor(action: Pick<Action, 'kind'>): number {
+  return action.kind === 'declare-agent' || action.kind === 'declare-operator'
+    ? DECLARATION_WINDOW_MS
+    : SIGNATURE_WINDOW_MS;
+}
+
+/**
  * Every action a signature can authorise.
  *
  * Each member's doc block says what the binding closes — the replay it makes impossible. Read them

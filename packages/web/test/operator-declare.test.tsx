@@ -11,7 +11,7 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { statementFor } from '@projectx-social/sdk';
-import { OperatorDeclare, minutesLeft, type PendingRequest } from '../components/OperatorDeclare';
+import { OperatorDeclare, minutesLeft, windowLabel, type PendingRequest } from '../components/OperatorDeclare';
 
 const OPERATOR = `0x${'9'.repeat(64)}`;
 const AGENT = `0x${'1'.repeat(64)}`;
@@ -66,6 +66,16 @@ describe('minutesLeft', () => {
     expect(minutesLeft(100_000, 0)).toBe(2);
     expect(minutesLeft(60_000, 0)).toBe(1);
     expect(minutesLeft(0, 1)).toBe(0);
+  });
+});
+
+describe('windowLabel', () => {
+  it('says hours while there are two or more, minutes below that, and expired at zero', () => {
+    expect(windowLabel(24 * 3_600_000, 0)).toBe('24 hours left to sign');
+    expect(windowLabel(2 * 3_600_000, 0)).toBe('2 hours left to sign');
+    expect(windowLabel(2 * 3_600_000 - 1, 0)).toBe('120 minutes left to sign');
+    expect(windowLabel(60_000, 0)).toBe('1 minute left to sign');
+    expect(windowLabel(0, 1)).toBe('expired — ask the agent to post its half again');
   });
 });
 

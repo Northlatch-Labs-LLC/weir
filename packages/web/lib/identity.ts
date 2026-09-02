@@ -52,6 +52,8 @@ import {
   ok,
   statementFor,
   SIGNATURE_WINDOW_MS,
+  DECLARATION_WINDOW_MS,
+  windowFor,
   type Action,
   type Reading,
 } from '@projectx-social/sdk';
@@ -69,7 +71,7 @@ import { db } from './db';
   These are the SDK's symbols, not copies of them. There is exactly one `statementFor` in this
   repository and this line is a pointer to it.
 */
-export { isSingleUse, statementFor, SIGNATURE_WINDOW_MS, type Action };
+export { isSingleUse, statementFor, SIGNATURE_WINDOW_MS, DECLARATION_WINDOW_MS, windowFor, type Action };
 
 /**
  * Verify that `address` signed this exact action, recently.
@@ -156,6 +158,9 @@ export async function verifyActionDeferringSpend(
 async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promise<Reading<PendingSpend | null>> {
   const source = 'signature';
   const age = Date.now() - input.timestampMs;
+  // Ten minutes for everything an agent signs and sends at once; one day for the two halves of a
+  // declaration, which are signed by two parties who are not in the same room. The SDK decides.
+  const window = windowFor(input.action);
 
   if (!Number.isFinite(input.timestampMs)) {
     return fail('malformed', source, 'the timestamp is not a number');
@@ -163,7 +168,7 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
   // Future-dated statements are refused too. Allowing them would let a signature be minted now and
   // held indefinitely, which defeats the window entirely.
   if (age < -60_000) return fail('malformed', source, 'the statement is dated in the future');
-  if (age > SIGNATURE_WINDOW_MS) {
+  if (age > window) {
     return fail('malformed', source, 'this signature has expired — sign again');
   }
 
@@ -202,7 +207,8 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
   */
   return ok({
     digest: createHash('sha256').update(input.signature).digest(),
-    expiresAtMs: input.timestampMs + SIGNATURE_WINDOW_MS,
+    // The replay ledger keeps the digest for the whole window it could still verify in.
+    expiresAtMs: input.timestampMs + window,
   });
 }
 

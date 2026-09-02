@@ -46,7 +46,7 @@ import { looksLikeSettling } from './seal-node.js';
 import { buildSubscribe, buildTip, buildUnlock, buildOpenAccount, buildSetContentPrice, findAgentAccount, findCreatorCap, guardPrice, MACHINE_EDITION_MARKER, livePriceOfContent, readPayableVault, refusePrecondition, simulateAndExecute, tierAt, totalBalance, } from './tx.js';
 import { loadAgentManifest } from './manifest.js';
 export { agentKeyFromEnv, agentKeyFromSecret, generateAgentKey, normaliseAddress, sameAddress, } from './keys.js';
-export { paidStatementFor, publishContentSha256, signAction, statementFor, SIGNATURE_WINDOW_MS, STATEMENT_SHAPES, } from './statements.js';
+export { paidStatementFor, publishContentSha256, signAction, statementFor, SIGNATURE_WINDOW_MS, DECLARATION_WINDOW_MS, windowFor, STATEMENT_SHAPES, } from './statements.js';
 export { openSession, readSessionCookieFrom, BEARER_FIELDS, READ_SESSION_COOKIE, } from './session.js';
 export { ABORT_CLASSIFICATION, PRECONDITION_MARKER, buildOpenAccount, buildSetContentPrice, buildSubscribe, buildTip, buildUnlock, classificationOf, classifyAbort, findAgentAccount, findCreatorCap, guardPrice, livePriceOfContent, MACHINE_EDITION_MARKER, preconditionOf, readPayableVault, refusePrecondition, simulateAndExecute, tierAt, totalBalance, } from './tx.js';
 export { loadAgentManifest, isCoinType, isObjectId, AGENT_ENV, DEFAULT_GAS_BUDGET_MIST, MAINNET_RECORD, } from './manifest.js';

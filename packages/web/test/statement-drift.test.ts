@@ -266,6 +266,8 @@ describe('the duplication stays removed', () => {
     expect(identity.statementFor).toBe(sdk.statementFor);
     expect(identity.isSingleUse).toBe(sdk.isSingleUse);
     expect(identity.SIGNATURE_WINDOW_MS).toBe(sdk.SIGNATURE_WINDOW_MS);
+    expect(identity.DECLARATION_WINDOW_MS).toBe(sdk.DECLARATION_WINDOW_MS);
+    expect(identity.windowFor).toBe(sdk.windowFor);
   });
 
   it('lib/identity.ts builds no statement of its own', () => {

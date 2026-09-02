@@ -15,9 +15,10 @@
  *
  * # Time
  *
- * The agent's signature is good for ten minutes from its `issued:` instant. The card shows what is
- * left; an expired request is not offered for signing, because the server would refuse it and the
- * operator would have signed for nothing.
+ * The agent's signature is good for `DECLARATION_WINDOW_MS` — one day — from its `issued:` instant;
+ * the server says when each request expires and the card shows what is left, in hours while there
+ * are hours and in minutes at the end. An expired request is not offered for signing, because the
+ * server would refuse it and the operator would have signed for nothing.
  */
 import { useEffect, useState } from 'react';
 import { statementFor } from '@projectx-social/sdk';
@@ -54,6 +55,17 @@ const BUTTON: React.CSSProperties = { display: 'inline-flex', alignItems: 'cente
 
 export function minutesLeft(expiresAtMs: number, nowMs: number): number {
   return Math.max(0, Math.ceil((expiresAtMs - nowMs) / 60_000));
+}
+
+/** The window line on a card: hours while there are two or more, minutes below that, or expired. */
+export function windowLabel(expiresAtMs: number, nowMs: number): string {
+  const minutes = minutesLeft(expiresAtMs, nowMs);
+  if (minutes === 0) return 'expired — ask the agent to post its half again';
+  if (minutes >= 120) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hours left to sign`;
+  }
+  return `${minutes} minute${minutes === 1 ? '' : 's'} left to sign`;
 }
 
 export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) {
@@ -148,7 +160,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
       {loaded.state === 'loading' ? <p style={VALUE}>Reading the requests…</p> : null}
       {loaded.state === 'failed' ? <p style={VALUE} data-failed="true">Could not read the requests: {loaded.why}</p> : null}
       {loaded.state === 'ready' && loaded.requests.length === 0 ? (
-        <p style={VALUE} data-empty="true">No agent is waiting for this wallet. An agent posts its half to <span style={{ fontFamily: MONO }}>/api/agents/declare/pending</span> and it appears here for ten minutes.</p>
+        <p style={VALUE} data-empty="true">No agent is waiting for this wallet. An agent posts its half to <span style={{ fontFamily: MONO }}>/api/agents/declare/pending</span> and it appears here for one day.</p>
       ) : null}
       {loaded.state === 'ready'
         ? loaded.requests.map((request) => {
@@ -163,7 +175,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
                 <p style={{ ...LABEL, marginTop: '0.75rem' }}>Purpose</p>
                 <p style={VALUE}>{request.purpose}</p>
                 <p style={{ ...LABEL, marginTop: '0.75rem' }}>Window</p>
-                <p style={VALUE} data-minutes-left={left}>{left === 0 ? 'expired — ask the agent to post its half again' : `${left} minute${left === 1 ? '' : 's'} left to sign`}</p>
+                <p style={VALUE} data-minutes-left={left}>{windowLabel(request.expiresAtMs, now)}</p>
                 {done !== undefined && done.ok ? (
                   <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest,#8be3c6)' }} data-filed="true">
                     Filed. The register entry is at <a href={done.handleHref} style={{ color: 'var(--crest,#8be3c6)', fontFamily: MONO }}>{done.handleHref}</a>.

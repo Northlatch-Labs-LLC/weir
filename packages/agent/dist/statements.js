@@ -45,7 +45,7 @@ import { statementFor } from '@projectx-social/sdk';
   read it. It is no longer a hand-written table checked against the code — it is derived from
   `statementFor`, since with one implementation there is no longer a second opinion for it to be.
 */
-export { statementFor, isSingleUse, SIGNATURE_WINDOW_MS, STATEMENT_SHAPES, } from '@projectx-social/sdk';
+export { statementFor, isSingleUse, SIGNATURE_WINDOW_MS, DECLARATION_WINDOW_MS, windowFor, STATEMENT_SHAPES, } from '@projectx-social/sdk';
 /**
  * Sign one action.
  *

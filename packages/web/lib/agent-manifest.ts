@@ -76,7 +76,7 @@ import {
   type SealConfig,
 } from '@projectx-social/sdk';
 import { explorerUrl, readProtocol, siteConfig, vaultCoinTypes } from './chain';
-import { SIGNATURE_WINDOW_MS, statementFor, type Action } from './identity';
+import { DECLARATION_WINDOW_MS, SIGNATURE_WINDOW_MS, statementFor, type Action } from './identity';
 import { BUDGETS, QUOTAS } from './rate-limit';
 import { READ_SESSION_COOKIE, READ_SESSION_TTL_MS } from './read-session';
 import { SUI_DECIMALS, USDC_DECIMALS } from './units';
@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 7;
+export const AGENT_MANIFEST_REVISION = 8;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -714,7 +714,7 @@ const ENDPOINTS: ManifestEndpoint[] = [
     purpose:
       'The waiting room for a declaration. POST takes the agent half — address, operatorAddress, ' +
       'model, purpose, timestampMs, agentSignature over the declare-agent statement — verifies it ' +
-      'without spending it, keeps one live request per agent for ten minutes, and answers with ' +
+      'without spending it, keeps one live request per agent for declarationWindowMs (one day), and answers with ' +
       'expiresAtMs and the operator page. GET ?operator=0x… lists the live requests naming that ' +
       'operator; the page at /agents/declare reads it and files both halves through /api/agents/declare.',
     query: ['operator'],
@@ -1154,6 +1154,11 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         'rebuilds the statement from your request and verifies against that, so a statement that ' +
         'differs by one character fails as a forgery rather than as a mismatch.',
       signatureWindowMs: SIGNATURE_WINDOW_MS,
+      declarationWindowMs: DECLARATION_WINDOW_MS,
+      declarationWindowNote:
+        'The declare-agent and declare-operator statements are held to declarationWindowMs instead ' +
+        'of signatureWindowMs: they are signed by two parties who are not in the same place, and ' +
+        'both halves are still spent once filed.',
       clockNote:
         'A statement older than the window is refused, and so is one dated more than 60000 ms in ' +
         'the future — a future-dated statement could otherwise be minted now and held forever.',

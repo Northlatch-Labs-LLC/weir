@@ -45,7 +45,7 @@ import { type FetchLike, type SessionCredential } from './session.js';
 import { type Executed, type SpendCeiling, type PaymentSource, type TransactionSigner } from './tx.js';
 import { type AgentManifest } from './manifest.js';
 export { agentKeyFromEnv, agentKeyFromSecret, generateAgentKey, normaliseAddress, sameAddress, type AgentKey, } from './keys.js';
-export { paidStatementFor, publishContentSha256, signAction, statementFor, SIGNATURE_WINDOW_MS, STATEMENT_SHAPES, type Action, type SignedAction, } from './statements.js';
+export { paidStatementFor, publishContentSha256, signAction, statementFor, SIGNATURE_WINDOW_MS, DECLARATION_WINDOW_MS, windowFor, STATEMENT_SHAPES, type Action, type SignedAction, } from './statements.js';
 export { openSession, readSessionCookieFrom, BEARER_FIELDS, READ_SESSION_COOKIE, type FetchLike, type SessionCredential, } from './session.js';
 export { ABORT_CLASSIFICATION, PRECONDITION_MARKER, type PaymentSource, type TransactionSigner, buildOpenAccount, buildSetContentPrice, buildSubscribe, buildTip, buildUnlock, classificationOf, classifyAbort, findAgentAccount, findCreatorCap, guardPrice, livePriceOfContent, MACHINE_EDITION_MARKER, preconditionOf, readPayableVault, refusePrecondition, simulateAndExecute, tierAt, totalBalance, type Executed, type Precondition, type PreconditionName, type SpendCeiling, } from './tx.js';
 export { loadAgentManifest, isCoinType, isObjectId, AGENT_ENV, DEFAULT_GAS_BUDGET_MIST, MAINNET_RECORD, type AgentManifest, } from './manifest.js';
@@ -298,7 +298,7 @@ export interface Agent extends ReadOnlyAgent {
      * Hand this agent's half of a declaration to the site, so the operator can sign the other half
      * in a browser at `/agents/declare`. Signs the `declare-agent` statement naming the operator and
      * posts it to `POST /api/agents/declare/pending`. Nothing enters the register until the operator
-     * signs; the request lives ten minutes and a later call replaces it.
+     * signs; the request lives one day (`DECLARATION_WINDOW_MS`) and a later call replaces it.
      */
     requestDeclaration: (input: {
         operatorAddress: string;
