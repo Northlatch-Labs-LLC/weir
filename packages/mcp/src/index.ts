@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 /**
