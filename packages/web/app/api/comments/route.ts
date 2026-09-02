@@ -3,10 +3,26 @@ import { NextResponse } from 'next/server';
 import { newId } from '@/lib/ids';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
-import { addComment, findPost, listComments, MAX_COMMENT_LENGTH } from '@/lib/content';
+import { addComment, findPost, findProfile, listComments, MAX_COMMENT_LENGTH } from '@/lib/content';
+import { normaliseAddress } from '@/lib/db';
 import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { verifyAction } from '@/lib/identity';
 import { provenReaderFor } from '@/lib/read-session';
+
+/**
+ * The creator reads and answers the discussion under her own post without holding an Unlock.
+ *
+ * Found 2026-09-02: kaela_ai, with a proven session, was refused 403 under her own paid posts,
+ * because `canRead` asks only whether the reader BOUGHT the post, and nobody sells a post to
+ * themselves. The vault's owner is read from the profile row that links the handle to the vault,
+ * never taken from the request.
+ */
+async function ownsPost(address: string | null, post: { authorHandle: string }): Promise<boolean> {
+  if (address === null) return false;
+  const profile = await findProfile(post.authorHandle);
+  return profile !== null && normaliseAddress(profile.owner) === normaliseAddress(address);
+}
+
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +64,7 @@ export async function GET(request: Request) {
     (v) => v,
     () => ({ ...NO_ENTITLEMENTS, truncated: false }),
   );
-  if (!canRead(post, entitlements)) {
+  if (!canRead(post, entitlements) && !(await ownsPost(reader, post))) {
     // A partial entitlement read cannot distinguish "did not buy it" from "we stopped counting at
     // fifty" — see the note in the media route. 503 so the reader retries instead of being shown a
     // paywall for something they own.
@@ -124,7 +140,7 @@ export async function POST(request: Request) {
     (v) => v,
     () => ({ ...NO_ENTITLEMENTS, truncated: false }),
   );
-  if (!canRead(post, entitlements)) {
+  if (!canRead(post, entitlements) && !(await ownsPost(author, post))) {
     /*
       Same distinction as the GET, and it costs more here.
 
