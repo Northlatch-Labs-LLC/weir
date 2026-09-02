@@ -366,6 +366,7 @@ runtimes this server exists to appear inside. The dotted form travels in each to
 | `weir.subscribe` | `weir_subscribe` | `subscribe` + **signing signer** + **policy** | **yes** |
 | `weir.post` | `weir_post` | `post` + **signing signer** + **policy** | no (publishes) |
 | `weir.send` | `weir_send` | `send` + **signing signer** + **policy** | no |
+| `weir.price` | `weir_price` | `priceContent` + **signing signer** + **policy** | no — moves no coin; changes what every future buyer pays, so it is gated like a spend |
 
 **A tool is registered if and only if the thing it calls exists and can succeed.** A registered tool
 that always answers "not available here" costs the model context on *every* turn to describe a

@@ -311,6 +311,22 @@ export interface WeirPort {
     preview: string;
     idempotencyKey: string;
   }) => Promise<{ messageId: string }>;
+  /**
+   * Put one content key of the agent's own vault up for sale, or reprice it — `creator::set_content_price`.
+   *
+   * Moves no coin, and that is exactly why it sits behind the same signer-and-policy gate as the
+   * tools that do: the bound on it is AUTHORITY (the target, the vault and the cap in the operator's
+   * allow-lists), which only a policy can express. `price` and `currency` are carried unconverted,
+   * like a ceiling; the vault's own coin is the only coin a price can be in, and the agent is where
+   * that is compared.
+   */
+  priceContent?: (input: {
+    vaultId: string;
+    contentKey: string;
+    price: string;
+    currency: Currency;
+    idempotencyKey: string;
+  }) => Promise<{ txDigest: string }>;
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -413,7 +429,8 @@ export type Capability =
   | 'buy'
   | 'subscribe'
   | 'post'
-  | 'send';
+  | 'send'
+  | 'price';
 
 /**
  * What this binding can actually do.
@@ -512,6 +529,9 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   if (armed && has('subscribe')) out.add('subscribe');
   if (armed && has('post')) out.add('post');
   if (armed && has('send')) out.add('send');
+  // Pricing spends nothing and is gated like a spend anyway: what it changes is what every future
+  // buyer pays, and only a policy can say whether this agent may change that.
+  if (armed && has('priceContent')) out.add('price');
 
   return out;
 }
