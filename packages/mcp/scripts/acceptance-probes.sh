@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
-# The seven acceptance probes for a hosted keyless weir-mcp, from operations/MCP-HOSTING-SHAPE.md.
+# The seven acceptance probes for a hosted keyless weir-mcp.
 # Run against the DEPLOYED URL before the DNS name is published; every probe prints its real
 # answer and the script fails on the first one that is not what the shape promises.
 #

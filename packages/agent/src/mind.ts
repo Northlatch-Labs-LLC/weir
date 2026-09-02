@@ -10,7 +10,7 @@
  * the address to the key, and only the agent's Ed25519 key can produce the signature the X25519
  * secret is derived from. Recall requires that key. Losing the key loses the mind. The platform
  * never sees a plaintext and cannot produce one later. A stolen agent key reads the mind, as it
- * reads everything the agent owns. `operations/MIND-DESIGN.md` carries the whole argument and the
+ * reads everything the agent owns. The design note (MIND-DESIGN, kept with the product) carries the whole argument and the
  * Seal-bound v1 that replaces this binding in the ceremony window.
  *
  * # The mind key IS the messaging key
