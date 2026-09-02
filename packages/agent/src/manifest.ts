@@ -38,7 +38,10 @@
  * decision it would otherwise have to remember.
  */
 
-import { fail, ok, loadConfig, type ProjectXSocialConfig, type Reading } from '@projectx-social/sdk';
+import { fail, ok, loadConfig, type ProjectXSocialConfig, type Reading,
+  loadKeyRegistryId,
+  KEY_REGISTRY_ENV,
+} from '@projectx-social/sdk';
 
 /**
  * A 32-byte hex object id, and a coin type's package half.
@@ -121,6 +124,12 @@ export interface AgentManifest {
    * or null. Required only under a policy signer for a non-SUI coin; see `PaymentSource`.
    */
   paymentCoin: string | null;
+  /**
+   * `PROJECTX_SOCIAL_KEY_REGISTRY_ID`: the on-chain `key_registry` object, or null when unset.
+   * Needed only by the mind (`publishMindKey`, `remember`); every other call ignores it. Loaded
+   * through the SDK's `loadKeyRegistryId`, so it is validated as the browser validates it.
+   */
+  keyRegistryId: string | null;
 }
 
 /**
@@ -193,7 +202,13 @@ export function loadAgentManifest(
     paymentCoin = rawPaymentCoin.toLowerCase();
   }
 
-  return ok({ config: config.value, coinType, baseUrl, gasBudgetMist, paymentCoin });
+  // Absent is a calm state (an agent with no mind); present-but-malformed is not, and the SDK says why.
+  const registry = loadKeyRegistryId(env);
+  const rawRegistry = env[KEY_REGISTRY_ENV]?.trim();
+  if (!registry.ok && rawRegistry !== undefined && rawRegistry !== '') return registry;
+  const keyRegistryId = registry.ok ? registry.value : null;
+
+  return ok({ config: config.value, coinType, baseUrl, gasBudgetMist, paymentCoin, keyRegistryId });
 }
 
 /**

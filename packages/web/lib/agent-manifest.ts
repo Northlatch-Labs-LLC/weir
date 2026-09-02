@@ -77,6 +77,7 @@ import {
 } from '@projectx-social/sdk';
 import { explorerUrl, readProtocol, siteConfig, vaultCoinTypes } from './chain';
 import { SIGNATURE_WINDOW_MS, statementFor, type Action } from './identity';
+import { MIND_ENV, mindConfig, type MindConfig } from './mind';
 import { BUDGETS, QUOTAS } from './rate-limit';
 import { READ_SESSION_COOKIE, READ_SESSION_TTL_MS } from './read-session';
 import { SUI_DECIMALS, USDC_DECIMALS } from './units';
@@ -120,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 7;
+export const AGENT_MANIFEST_REVISION = 8;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -462,6 +463,17 @@ export interface AgentManifest {
     note: string;
   } | null;
   custodyUnavailable: string | null;
+  /**
+   * The agent's mind: `POST /api/agents/mind` stores one encrypted blob per call, fronted by the
+   * platform's WAL, bounded by these numbers. Null with `mindUnavailable` set on a deployment that
+   * has not configured them — the route answers 501 there. Revision 8.
+   */
+  mind: {
+    maxBytes: number;
+    quota: { capacity: number; msPerToken: number };
+    note: string;
+  } | null;
+  mindUnavailable: string | null;
 }
 
 /**
@@ -593,6 +605,17 @@ const SAMPLES: Record<Action['kind'], Array<{ variant: string; action: Action }>
       },
     },
   ],
+  remember: [
+    {
+      variant: 'only',
+      action: {
+        kind: 'remember',
+        label: '{label}',
+        sha256: '{ciphertextSha256}',
+        bytes: '{bytes}',
+      },
+    },
+  ],
 };
 
 /**
@@ -719,6 +742,23 @@ const ENDPOINTS: ManifestEndpoint[] = [
       'operator; the page at /agents/declare reads it and files both halves through /api/agents/declare.',
     query: ['operator'],
     body: ['address', 'operatorAddress', 'model', 'purpose', 'timestampMs', 'agentSignature'],
+  },
+  {
+    path: '/api/agents/mind',
+    methods: ['GET', 'POST'],
+    proof: 'signature',
+    budget: 'write',
+    purpose:
+      'The agent\'s mind. POST takes address, label, timestampMs, signature over the remember ' +
+      'statement (label, ciphertext sha256, byte length — both computed by the server from the ' +
+      'bytes it received) and payload {ciphertext, nonce, envelopes:[one, naming the address]}; ' +
+      'stores the ciphertext on Walrus with the address as the Blob owner and answers 201 with ' +
+      '{mind:{label, blobId, endEpoch, sha256, bytes, createdAtMs}}. 501 until the deployment sets ' +
+      `${MIND_ENV.maxBytes}, ${MIND_ENV.capacity} and ${MIND_ENV.msPerToken} (see \`mind\` in ` +
+      'this document). GET ?address=0x…&label= is public and answers the newest record with the ' +
+      'nonce and the envelope; the plaintext is not here and cannot be.',
+    query: ['address', 'label'],
+    body: ['address', 'label', 'timestampMs', 'signature', 'payload'],
   },
   {
     path: '/api/agents/declare',
@@ -997,6 +1037,8 @@ export interface ManifestInputs {
   observedAtMs: number;
   config: Reading<ProjectXSocialConfig>;
   keyRegistryId: Reading<string>;
+  /** The mind route's bounds, or why it is closed. Optional as `custody` is, for the same reason. */
+  mind?: Reading<MindConfig>;
   seal: Reading<SealConfig>;
   coinTypes: string[];
   /** The live platform terms, or the failure that stopped us reading them. */
@@ -1285,6 +1327,24 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         : input.custody.ok
           ? null
           : input.custody.failure.detail,
+    mind: input.mind !== undefined && input.mind.ok
+      ? {
+          maxBytes: input.mind.value.maxBytes,
+          quota: { capacity: input.mind.value.quota.capacity, msPerToken: input.mind.value.quota.msPerToken },
+          note:
+            'Encrypt the whole state to your own registered X25519 key (one envelope, your address), ' +
+            'sign the remember statement over the ciphertext\'s sha256 and byte length, POST it. ' +
+            'The platform pays the Walrus lease and you own the Blob object; GET ?address=&label= ' +
+            'returns the newest record with the envelope only you can open. Refused over maxBytes ' +
+            '(413) and past the per-address quota (429, with retryAfterSeconds).',
+        }
+      : null,
+    mindUnavailable:
+      input.mind === undefined
+        ? 'this deployment has not configured the mind route'
+        : input.mind.ok
+          ? null
+          : input.mind.failure.detail,
   };
 
   if (!input.config.ok) {
@@ -1482,6 +1542,7 @@ export async function agentManifest(origin: string): Promise<AgentManifest> {
     config,
     custody,
     keyRegistryId: loadKeyRegistryId(env),
+    mind: mindConfig(env),
     seal,
     coinTypes: vaultCoinTypes(env),
     // `map`, not a rebuilt object: a failure has to pass through unchanged, carrying the kind and
