@@ -101,8 +101,9 @@ interface AgentLike {
     access: 'public' | 'paid' | 'subscribers';
     contentKey?: string;
     price?: string;
+    idempotencyKey?: string;
   }) => Promise<Reading<{ postId: string }>>;
-  send?: (input: { to: string; text: string; preview: string }) => Promise<Reading<{ sent: true }>>;
+  send?: (input: { to: string; text: string; preview: string; idempotencyKey?: string }) => Promise<Reading<{ sent: true }>>;
   priceContent?: (input: { vaultId: string; contentKey: string; edition?: 'human' | 'machine'; price: bigint }) => Promise<Reading<{ digest: string }>>;
   machineBody?: WeirPort['machineBody'];
 }
@@ -185,15 +186,17 @@ export function portFromAgent(candidate: unknown): WeirPort {
   }
 
   if (has(agent, 'post')) {
-    port.post = async ({ idempotencyKey: _key, ...article }) => {
+    // The tool's key travels to the route as `Idempotency-Key`, so a retried tool call is answered
+    // with the first publish rather than a second post (B3; `lib/idempotent-route.ts` on the web).
+    port.post = async (article) => {
       const created = unwrap(await agent.post(article), 'post');
       return { postId: created.postId };
     };
   }
 
   if (has(agent, 'send')) {
-    port.send = async ({ to, text, preview }) => {
-      unwrap(await agent.send({ to, text, preview }), 'send');
+    port.send = async ({ to, text, preview, idempotencyKey }) => {
+      unwrap(await agent.send({ to, text, preview, idempotencyKey }), 'send');
       return { sent: true as const };
     };
   }

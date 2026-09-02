@@ -10,6 +10,7 @@ import {
   type MessageEncryption,
 } from '@/lib/content';
 import { verifyAction } from '@/lib/identity';
+import { idempotently } from '@/lib/idempotent-route';
 import { ciphertextDigest } from '@/lib/e2e';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
@@ -41,7 +42,17 @@ const MAX_CIPHERTEXT_CHARS = 16_384;
  * key, which is exactly the property end-to-end encryption exists to remove. So this combination
  * is refused rather than approximated, and the sender is told which one they are choosing.
  */
-export async function POST(request: Request) {
+/** Idempotent on `(from, Idempotency-Key)` when the header is sent; see `lib/idempotent-route.ts`. */
+export async function POST(request: Request): Promise<Response> {
+  return idempotently(
+    request,
+    '/api/messages',
+    (body) => (typeof (body as { from?: unknown })?.from === 'string' ? (body as { from: string }).from : null),
+    sendOnce,
+  );
+}
+
+async function sendOnce(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 

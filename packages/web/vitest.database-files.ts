@@ -13,6 +13,7 @@
  * fails if a file calls `useTestDatabase()` and is not named here, or is named here and does not.
  */
 export const DATABASE_TEST_FILES: readonly string[] = [
+  'test/idempotency-routes.test.ts',
   'test/machine-edition.test.ts',
   'test/prices-are-whole-numbers.test.ts',
   'test/relay.test.ts',

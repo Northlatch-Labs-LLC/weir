@@ -183,6 +183,12 @@ async function main(): Promise<void> {
     assert.equal(posted.isError, undefined, textOf(posted));
     assert.equal(parsed(posted)['postId'], 'p-1');
   });
+  check('the tool\'s idempotency key reaches the agent, which sends it as the header', () => {
+    const call = agent.calls.find((c) => c.method === 'post')?.input as { idempotencyKey?: string };
+    assert.equal(typeof call.idempotencyKey, 'string');
+    assert.ok(call.idempotencyKey!.length > 0);
+    assert.equal(call.idempotencyKey, parsed(posted)['idempotencyKey']);
+  });
   agent.refusePost = refused('permanent', 'publish', 'the vault refuses this handle');
   const notPosted = await client.callTool({ name: 'weir_post', arguments: article });
   check('a refused publish is a refusal — the false success is dead', () => {
