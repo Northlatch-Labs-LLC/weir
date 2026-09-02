@@ -17,21 +17,18 @@ name: Deploy to Vercel
 # reaching main in the first place, and is not available on this plan — so this stops the deploy
 # rather than the merge. That is the weaker of the two and it is the one available.
 #
-# WHAT THIS GATE IS WORTH NOW, 2026-09-02. Read this before trusting it.
+# 2026-09-02: CI no longer runs the application and Move suites on every commit — they run on
+# request and weekly, and the tests are run on the developer's own machine before anything is
+# pushed. A green CI therefore means the secret scan and the digest guard passed, and nothing more.
 #
-# CI no longer runs the application and Move suites on every commit; they run on request and
-# weekly, and the tests are run on the developer's own machine before anything is pushed. So a
-# green CI here means the secret scan and the digest guard passed, and nothing more. It does NOT
-# mean the suite is green.
+# So the automatic path is REMOVED rather than left pointing at a thinner gate. Production is not
+# deployed by a signal that no longer proves what it used to prove. A deployment is now a
+# deliberate act by somebody who has run the suite and can say so — which is a stronger gate than
+# the automatic one ever was, not a weaker one.
 #
-# That is deliberate and it is a real reduction in what this gate proves. It is written down rather
-# than left to be discovered, because a comment above claiming the suite gates the deploy would now
-# be false, and a gate people believe in that does not hold is worse than one they know is thin.
+# Restoring the automatic path means restoring what it waits for: gate it on a CI run that actually
+# includes the suites, not on the trimmed one.
 on:
-  workflow_run:
-    workflows: ['CI']
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -40,12 +37,8 @@ concurrency:
 
 jobs:
   deploy:
-    # A manual dispatch is a deliberate act by someone who can read the tree; an automatic run is
-    # not, so only the automatic path is gated. `conclusion` is checked rather than `status`:
-    # a cancelled or failed CI run is also "completed".
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    # Every run is now a deliberate dispatch by someone who can read the tree and has run the
+    # suite. There is no automatic path to gate.
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
