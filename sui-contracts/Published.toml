@@ -4,9 +4,9 @@
 
 [published.mainnet]
 chain-id = "35834a8a"
-published-at = "0xfa7eb18bbb29b047ec86434e8a8f4cfba35615bde9680eebd781a187ca3a3694"
+published-at = "0x3d9f167f5ac3e1fb5aca2305807fb75273543d83ca127e5b08e8f9faa3078391"
 original-id = "0xc5c833991ed1123d70b1001c0bcdb01ec5728b09f25dfc42a0edaf16005d404d"
-version = 3
+version = 4
 # Moved 1.77.2 -> 1.78.1 on 2026-09-01, and the move was MEASURED before it was made: this package
 # builds to the byte-identical digest 12536777af66da8eb607a97e470390fec265aa197a85abf1dd02588d08af841f
 # under 1.77.2, 1.78.0 and 1.78.1. So the pin moved at no cost and `ci-expected-digest` is unchanged.
