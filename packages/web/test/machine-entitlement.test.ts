@@ -98,7 +98,9 @@ describe('sealApprover for a paid post', () => {
   });
 
   it('prefers the human Unlock when a reader somehow holds both', () => {
-    expect(sealApprover(paidPost(true), holding([MACHINE, '0xm'], [HUMAN, '0xh']))?.contentKey).toBe(HUMAN);
+    const both = sealApprover(paidPost(true), holding([MACHINE, '0xm'], [HUMAN, '0xh']));
+    expect(both?.kind).toBe('unlock');
+    expect(both?.kind === 'unlock' ? both.contentKey : null).toBe(HUMAN);
   });
 
   it('names nothing for a reader holding neither', () => {
