@@ -584,6 +584,13 @@ export interface ServerOptions {
    * the names in {@link AGENT_ENVIRONMENT}, never the whole process environment.
    */
   agentEnvironment: Record<string, string>;
+  /**
+   * The tools this process actually registered, for {@link DISCOVERY_PATH}. Set by the entry point
+   * after `registerTools` has run, so the document can never advertise a tool that was not built.
+   * Empty until then, which reads as "this process registered nothing" — the true answer at that
+   * moment, and the safe one.
+   */
+  discoveryTools: readonly string[];
 }
 
 /** The default the operator gets if they name nothing. Production, because that is where posts are. */
@@ -750,6 +757,12 @@ export function resolveOptions(argv: readonly string[], env: NodeJS.ProcessEnv):
     allowedOrigins,
     allowedHosts: configuredHosts.length > 0 ? configuredHosts : defaultAllowedHosts(httpHost, httpPort),
     agentEnvironment: agentEnvironment(env),
+    /*
+      Nothing is registered at the moment options are resolved; the entry point replaces this once
+      `registerTools` has told it the truth. Defaulting to empty rather than to the expected list
+      means a wiring mistake advertises no tools instead of advertising four that are not there.
+    */
+    discoveryTools: [],
   };
 }
 
@@ -1160,6 +1173,68 @@ export async function serveStdio(server: McpServer): Promise<void> {
 export const MCP_PATH = '/mcp';
 
 /**
+ * Where a client looks to find out what this endpoint is, before it speaks the protocol to it.
+ *
+ * Added 2026-09-02, because the Cloud Run log showed a client asking for exactly this path and
+ * getting a 404 with nothing in it. There is no ratified standard behind the filename; it is the
+ * one clients are already trying, which is the only argument that matters for a discovery path.
+ * The document says so about itself rather than implying an authority it does not have.
+ */
+export const DISCOVERY_PATH = '/.well-known/mcp.json';
+
+export interface Discovery {
+  name: string;
+  description: string;
+  endpoint: string;
+  transport: 'streamable-http';
+  /** Exactly the tools registered on this process. Computed, never a list written by hand. */
+  tools: string[];
+  /** True when no tool on this process can move value. Derived from the tools, not asserted. */
+  readOnly: boolean;
+  authentication: 'none';
+  documentation: string;
+  manifest: string;
+  note: string;
+}
+
+/**
+ * What this endpoint says about itself.
+ *
+ * Everything here is derived from what the process actually built. `tools` is the list
+ * `registerTools` returned, so a deployment that failed to bind a capability advertises fewer
+ * tools rather than advertising a tool that would refuse every call — which is the whole failure
+ * this document could otherwise introduce.
+ *
+ * `readOnly` is computed from the tool names rather than from the mode, because mode is a
+ * statement of intent and the tool list is a fact about what was registered.
+ */
+export function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery {
+  const spending = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'];
+  const readOnly = !tools.some((t) => spending.includes(t));
+  return {
+    name: 'weir',
+    description:
+      'weir.social as a tool: read what a creator published, price it from the chain, and check a ' +
+      'balance. An agent holds the same account a person holds.',
+    endpoint: `${origin}${MCP_PATH}`,
+    transport: 'streamable-http',
+    tools: [...tools],
+    readOnly,
+    authentication: 'none',
+    documentation: `${options.baseUrl}/llms.txt`,
+    manifest: `${options.baseUrl}/.well-known/weir-agent.json`,
+    note:
+      readOnly
+        ? 'This endpoint holds no key and registers no tool that spends or writes. It exits before ' +
+          'listening if a key is placed in its environment. To buy, subscribe, price or publish, run ' +
+          '@projectx-social/mcp yourself with your own key. Nothing hosted here will ever hold yours. ' +
+          'There is no ratified standard for this file; it is served because clients ask for it.'
+        : 'This process has spending tools registered, so it is bound to a key. It is not the hosted ' +
+          'endpoint. There is no ratified standard for this file; it is served because clients ask for it.',
+  };
+}
+
+/**
  * Whether a request's `Origin` may drive this endpoint.
  *
  * The default — an empty allowlist — refuses **every** request that carries an `Origin` header at
@@ -1262,7 +1337,7 @@ async function handleHttpRequest(
 ): Promise<void> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
-  if (url.pathname !== MCP_PATH) {
+  if (url.pathname !== MCP_PATH && url.pathname !== DISCOVERY_PATH) {
     respondJson(res, 404, { error: 'not_found', detail: `MCP is served at ${MCP_PATH}` });
     return;
   }
@@ -1278,6 +1353,32 @@ async function handleHttpRequest(
       detail:
         `Host ${String(req.headers.host)} is not one this endpoint answers to. Set ` +
         `${ENV.allowedHosts} if this deployment is reached under another name.`,
+    });
+    return;
+  }
+
+  /*
+    Discovery is answered after the Host check and BEFORE the Origin check, and that ordering is
+    deliberate rather than convenient.
+
+    Host stays in front because it is the rebinding control and it must run on every request. The
+    Origin check is skipped here alone because it exists to stop a web page DRIVING this endpoint,
+    and this response drives nothing: it is a constant, identical for every caller, containing only
+    what the process already prints to its own log at startup. Refusing it to browsers would hide a
+    public document from the one client that renders it, and protect nothing.
+
+    Anything but a read is refused rather than ignored, so a client that tries to POST here learns
+    it is at the wrong path instead of receiving a document it did not ask for.
+  */
+  if (url.pathname === DISCOVERY_PATH) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      respondJson(res, 405, { error: 'method_not_allowed', detail: `${DISCOVERY_PATH} answers GET. MCP is served at ${MCP_PATH}.` });
+      return;
+    }
+    const origin = `${req.headers['x-forwarded-proto'] === 'http' ? 'http' : 'https'}://${String(req.headers.host)}`;
+    respondJson(res, 200, discoveryDocument(options, options.discoveryTools, origin), {
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300',
     });
     return;
   }
@@ -1380,8 +1481,8 @@ function asTransport(transport: StreamableHTTPServerTransport): Transport {
  * anything. A refusal that helpfully told a page it was allowed to read the refusal would be a
  * strange way to end a function whose whole job is keeping pages out.
  */
-function respondJson(res: ServerResponse, status: number, body: unknown): void {
+function respondJson(res: ServerResponse, status: number, body: unknown, extra: Record<string, string> = {}): void {
   const text = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(text) });
+  res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(text), ...extra });
   res.end(text);
 }
