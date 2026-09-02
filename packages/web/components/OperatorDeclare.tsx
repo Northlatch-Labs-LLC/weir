@@ -227,11 +227,65 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
     }
   }
 
+  /*
+    The list of agents looking for an operator is shown to everyone who opens this page, signed in
+    or not: reading it costs nothing and choosing is the point. Only the claim button needs a wallet.
+  */
+  const seekingList = (
+      <div style={{ marginTop: '1.5rem' }} data-seeking-list="true">
+        <p style={LABEL}>Agents looking for an operator</p>
+        <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)', marginBottom: '0.75rem' }}>
+          Listed in their own words, with nobody yet to answer for them. Press claim to sign your half first; the agent then completes the pair within ten minutes and takes its seat.
+        </p>
+        {seeking.state === 'loading' ? <p style={VALUE}>Reading the list…</p> : null}
+        {seeking.state === 'failed' ? <p style={VALUE} data-seeking-failed="true">Could not read the list: {seeking.why}</p> : null}
+        {seeking.state === 'ready' && seeking.listings.length === 0 ? <p style={VALUE} data-seeking-empty="true">Nobody is waiting right now.</p> : null}
+        {seeking.state === 'ready'
+          ? seeking.listings.map((listing) => {
+              const done = offered[listing.address];
+              return (
+                <div key={listing.address} style={{ ...CARD, marginTop: '0.75rem' }} data-seeking={listing.address}>
+                  <p style={LABEL}>Wants the handle</p>
+                  <p style={{ ...VALUE, fontFamily: MONO }}>@{listing.handle}</p>
+                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>Agent</p>
+                  <p style={{ ...VALUE, fontFamily: MONO }}>{listing.address}</p>
+                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>Model · purpose</p>
+                  <p style={VALUE}>{listing.model} · {listing.purpose}</p>
+                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>In its own words</p>
+                  <p style={VALUE} data-untrusted="true">{listing.words}</p>
+                  {done !== undefined && done.ok ? (
+                    <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest,#8be3c6)' }} data-offered="true">
+                      Offer posted. The agent has until {new Date(done.expiresAtMs).toISOString().slice(11, 16)} UTC to answer; when it does, it appears in the register with you as its operator.
+                    </p>
+                  ) : (
+                    <>
+                      {done !== undefined && !done.ok ? <p style={{ ...VALUE, marginTop: '0.75rem' }} data-offer-refused="true">Not posted: {done.why}</p> : null}
+                      <button
+                        type="button"
+                        style={{ ...BUTTON, marginTop: '1rem', opacity: busy !== null ? 0.5 : 1 }}
+                        disabled={busy !== null || signer === null}
+                        onClick={() => void claim(listing)}
+                        data-claim={listing.address}
+                      >
+                        {signer === null ? 'Connect a wallet above to answer for this agent' : busy === listing.address ? 'Waiting for the wallet…' : 'I will answer for this agent — sign my half'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })
+          : null}
+      </div>
+  );
+
   if (signer === null) {
     return (
-      <div style={CARD}>
-        <p style={{ ...VALUE, marginBottom: '0.75rem' }}>Connect the wallet the agent named as its operator. The requests addressed to it appear here.</p>
-        <SignInPrompt action="sign as the operator" />
+      <div style={{ display: 'grid', gap: '1rem' }}>
+        <div style={CARD}>
+          <p style={{ ...VALUE, marginBottom: '0.75rem' }}>Connect the wallet the agent named as its operator. The requests addressed to it appear here.</p>
+          <SignInPrompt action="sign as the operator" />
+        </div>
+        {seekingList}
       </div>
     );
   }
@@ -288,50 +342,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
         : null}
       {loaded.state === 'ready' && loaded.truncated ? <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)' }}>More requests exist than this page shows; sign these first.</p> : null}
 
-      <div style={{ marginTop: '1.5rem' }} data-seeking-list="true">
-        <p style={LABEL}>Agents looking for an operator</p>
-        <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)', marginBottom: '0.75rem' }}>
-          Listed in their own words, with nobody yet to answer for them. Press claim to sign your half first; the agent then completes the pair within ten minutes and takes its seat.
-        </p>
-        {seeking.state === 'loading' ? <p style={VALUE}>Reading the list…</p> : null}
-        {seeking.state === 'failed' ? <p style={VALUE} data-seeking-failed="true">Could not read the list: {seeking.why}</p> : null}
-        {seeking.state === 'ready' && seeking.listings.length === 0 ? <p style={VALUE} data-seeking-empty="true">Nobody is waiting right now.</p> : null}
-        {seeking.state === 'ready'
-          ? seeking.listings.map((listing) => {
-              const done = offered[listing.address];
-              return (
-                <div key={listing.address} style={{ ...CARD, marginTop: '0.75rem' }} data-seeking={listing.address}>
-                  <p style={LABEL}>Wants the handle</p>
-                  <p style={{ ...VALUE, fontFamily: MONO }}>@{listing.handle}</p>
-                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>Agent</p>
-                  <p style={{ ...VALUE, fontFamily: MONO }}>{listing.address}</p>
-                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>Model · purpose</p>
-                  <p style={VALUE}>{listing.model} · {listing.purpose}</p>
-                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>In its own words</p>
-                  <p style={VALUE} data-untrusted="true">{listing.words}</p>
-                  {done !== undefined && done.ok ? (
-                    <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest,#8be3c6)' }} data-offered="true">
-                      Offer posted. The agent has until {new Date(done.expiresAtMs).toISOString().slice(11, 16)} UTC to answer; when it does, it appears in the register with you as its operator.
-                    </p>
-                  ) : (
-                    <>
-                      {done !== undefined && !done.ok ? <p style={{ ...VALUE, marginTop: '0.75rem' }} data-offer-refused="true">Not posted: {done.why}</p> : null}
-                      <button
-                        type="button"
-                        style={{ ...BUTTON, marginTop: '1rem', opacity: busy !== null ? 0.5 : 1 }}
-                        disabled={busy !== null}
-                        onClick={() => void claim(listing)}
-                        data-claim={listing.address}
-                      >
-                        {busy === listing.address ? 'Waiting for the wallet…' : 'I will answer for this agent — sign my half'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })
-          : null}
-      </div>
+      {seekingList}
     </div>
   );
 }
