@@ -81,6 +81,7 @@ import { SUI_PRIVATE_KEY_PREFIX } from '@mysten/sui/cryptography';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // Type-only: erased by the compiler. The agent library itself is loaded dynamically, and only then.
 import type { Reading } from '@projectx-social/agent';
+import { portFromAgent } from './agent-port.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -223,7 +224,8 @@ export interface WeirBody {
 
 export interface WeirUnlockReceipt {
   txDigest: string;
-  unlockObjectId: string;
+  /** `null` when the executor reports no created object ids — the agent library reads no effects; the Unlock is on chain under `txDigest`. */
+  unlockObjectId: string | null;
   /** Smallest on-chain unit, as a decimal string. */
   pricePaid: string;
   currency: Currency;
@@ -231,8 +233,10 @@ export interface WeirUnlockReceipt {
 
 export interface WeirSubscribeReceipt {
   txDigest: string;
-  subscriptionObjectId: string;
-  pricePaid: string;
+  /** `null` when the executor reports no created object ids; see {@link WeirUnlockReceipt}. */
+  subscriptionObjectId: string | null;
+  /** `null` when the tier price was not read back — never a guess. */
+  pricePaid: string | null;
   currency: Currency;
 }
 
@@ -310,7 +314,7 @@ export interface WeirPort {
     text: string;
     preview: string;
     idempotencyKey: string;
-  }) => Promise<{ messageId: string }>;
+  }) => Promise<{ sent: true }>;
   /**
    * Put one content key of the agent's own vault up for sale, or reprice it — `creator::set_content_price`.
    *
@@ -522,7 +526,7 @@ export function agentFromReading(created: unknown): WeirPort {
         'binding an unrecognised shape is how a server starts with no tools and reports success.',
     );
   }
-  return reading.value as WeirPort;
+  return portFromAgent(reading.value);
 }
 
 export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
