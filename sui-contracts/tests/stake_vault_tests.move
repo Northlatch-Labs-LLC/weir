@@ -1104,8 +1104,10 @@ fun a_harvest_that_realises_nothing_matures_nothing() {
 /// So every switch in the package is thrown at once and every stake-side money path out is
 /// exercised against them.
 ///
-/// Withdrawals and claims must all succeed. Deposits must NOT — that is the pause working, and
-/// asserting it here is what stops this test from passing because the switches do nothing.
+/// Withdrawals and claims must all succeed. The other half — that the switches DO stop a deposit —
+/// is pinned by `a_deposit_is_refused_while_payments_are_paused` and
+/// `a_deposit_is_refused_once_the_vault_stops_accepting`; here the switches are read back at the
+/// end so a test that paused nothing could not pass.
 fun no_pause_can_block_a_withdrawal_or_a_claim() {
     let mut sc = setup();
     set_full_rebate(&mut sc);
@@ -1185,5 +1187,620 @@ fun no_pause_can_block_a_withdrawal_or_a_claim() {
         ts::return_shared(p);
     };
 
+    sc.end();
+}
+
+// === Doors that must refuse ===
+//
+// The 2026-09-01 mutation pass ran 164 mutations over this package and the survivors were almost
+// all one shape: an authorization or ownership check that exists, runs on every call, and whose
+// removal left the whole suite green because no test had ever presented the wrong object to it.
+// Every test in this section names the line it exists for, and each was checked against that line
+// blanked — it fails, for the right reason, when the guard is gone. A test that passes with its
+// guard removed is not a test of the guard.
+
+/// The platform `setup` opened the vault on. Read before a second deployment exists: the vault
+/// does not expose its platform, and once two are shared they can only be told apart by exclusion.
+fun home_platform_id(sc: &mut Scenario): ID {
+    sc.next_tx(ADMIN);
+    let p = sc.take_shared<Platform>();
+    let id = object::id(&p);
+    ts::return_shared(p);
+    id
+}
+
+/// A second deployment beside the one `setup` built — mainnet and staging is the real case, and
+/// its objects are indistinguishable from the first's in a wallet. Returns the new platform's ID.
+fun open_another_deployment(sc: &mut Scenario): ID {
+    sc.next_tx(ADMIN);
+    { platform::init_for_testing(sc.ctx()); };
+    sc.next_tx(ADMIN);
+    ts::most_recent_id_shared<Platform>().destroy_some()
+}
+
+/// The `PlatformCap` governing `platform_id`, from ADMIN's wallet, whichever order it arrived in.
+/// Call from an ADMIN transaction.
+fun cap_for(sc: &mut Scenario, platform_id: ID): PlatformCap {
+    let mut ids = ts::ids_for_sender<PlatformCap>(sc);
+    let mut found = option::none<PlatformCap>();
+    while (!ids.is_empty()) {
+        let cap = sc.take_from_sender_by_id<PlatformCap>(ids.pop_back());
+        if (platform::cap_platform_id(&cap) == platform_id) {
+            found.fill(cap);
+        } else {
+            sc.return_to_sender(cap);
+        };
+    };
+    ids.destroy_empty();
+    found.destroy_some()
+}
+
+/// The vault `setup` opened. Read before a second vault exists, for the same reason as
+/// `home_platform_id`.
+fun home_vault_id(sc: &mut Scenario): ID {
+    sc.next_tx(ADMIN);
+    let v = sc.take_shared<StakeVault>();
+    let id = object::id(&v);
+    ts::return_shared(v);
+    id
+}
+
+/// A second stake vault on the same platform, opened by FAN2, who then holds its `StakeCap`.
+fun open_another_vault(sc: &mut Scenario) {
+    sc.next_tx(FAN2);
+    let mut p = sc.take_shared<Platform>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let cap = sv::open(&mut p, &acct, VALIDATOR, sc.ctx());
+    transfer::public_transfer(cap, FAN2);
+    sc.return_to_sender(acct);
+    ts::return_shared(p);
+}
+
+/// One deposit, staked and matured once, so every yield balance is non-zero.
+fun earn_one_harvest(sc: &mut Scenario) {
+    deposit(sc, FAN, 100 * SUI_1);
+    harvest(sc);
+    advance_to_maturity(sc);
+    harvest(sc);
+}
+
+// --- Somebody else's account ---
+//
+// A `SocialAccount` has no `store`, so no on-chain path hands one to a stranger today. The scenario
+// constructs that holder deliberately, exactly as `account_tests` does for `close`: this call is
+// the only thing standing between a named account and the vault if any such path ever appears,
+// and an untested last line is the one that rots.
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+/// Kills stake_vault.move:619 — `withdraw` must authenticate the account against the sender.
+///
+/// The first finding of the 2026-09-01 mutation report. With the line blanked the stranger is
+/// still refused, but for the wrong reason — `ENoPosition`, because `who` is the sender rather
+/// than the account's owner — which is precisely the kind of green a suite cannot see through.
+fun a_stranger_cannot_withdraw_with_somebody_elses_account() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 10 * SUI_1);
+
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_address<SocialAccount>(FAN);
+        let out = sv::withdraw(&mut v, &acct, 10 * SUI_1, &mut state, sc.ctx());
+        coin::burn_for_testing(out);
+        ts::return_to_address(FAN, acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+/// Kills stake_vault.move:562 — `deposit` must authenticate the account against the sender.
+fun a_stranger_cannot_deposit_with_somebody_elses_account() {
+    let mut sc = setup();
+
+    sc.next_tx(FAN2);
+    {
+        let p = sc.take_shared<Platform>();
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_address<SocialAccount>(FAN);
+        let funds = coin::mint_for_testing<SUI>(10 * SUI_1, sc.ctx());
+        sv::deposit(&p, &mut v, &acct, funds, sc.ctx());
+        ts::return_to_address(FAN, acct);
+        ts::return_shared(v);
+        ts::return_shared(p);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+/// Kills stake_vault.move:252 — `open` must authenticate the creator's account against the sender.
+fun a_stranger_cannot_open_a_vault_with_somebody_elses_account() {
+    let mut sc = setup();
+
+    sc.next_tx(FAN);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let acct = sc.take_from_address<SocialAccount>(CREATOR);
+        let cap = sv::open(&mut p, &acct, VALIDATOR, sc.ctx());
+        transfer::public_transfer(cap, FAN);
+        ts::return_to_address(CREATOR, acct);
+        ts::return_shared(p);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+/// The fourth door of the same shape, stake_vault.move:713 in `claim_rebate`. Not a row in the
+/// mutation table — that line was never mutated — but it is the same call on the same kind of
+/// path, and proven the same way.
+fun a_stranger_cannot_claim_a_rebate_with_somebody_elses_account() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 10 * SUI_1);
+
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_address<SocialAccount>(FAN);
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        coin::burn_for_testing(out);
+        ts::return_to_address(FAN, acct);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+// --- The wrong capability ---
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EWrongVault)]
+/// Kills stake_vault.move:964 — `assert_cap`, the one line that is the whole stake cap model.
+///
+/// Two vaults on one platform; the second vault's cap is presented to the first. Every `set_*`
+/// door and `claim_creator_yield` run through this line, so with it blanked any `StakeCap` holder
+/// governs every stake vault in the package.
+fun a_cap_from_another_vault_cannot_set_its_rebate() {
+    let mut sc = setup();
+    let home = home_vault_id(&mut sc);
+    open_another_vault(&mut sc);
+
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared_by_id<StakeVault>(home);
+        let cap = sc.take_from_sender<StakeCap>();
+        assert!(sv::cap_vault_id(&cap) != home, 0); // the precondition: this cap is not the vault's
+        sv::set_rebate_bps(&mut v, &cap, 10_000);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EWrongVault)]
+/// Kills stake_vault.move:896 — the `assert_cap` call in `claim_creator_yield`, the door that
+/// moves the creator's money. The vault has real yield and the claim asks for all of it, so with
+/// the call removed the whole balance leaves to the holder of the wrong cap.
+fun a_cap_from_another_vault_cannot_claim_its_creator_yield() {
+    let mut sc = setup();
+    earn_one_harvest(&mut sc);
+    let home = home_vault_id(&mut sc);
+    open_another_vault(&mut sc);
+
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared_by_id<StakeVault>(home);
+        let cap = sc.take_from_sender<StakeCap>();
+        let due = sv::creator_yield_value(&v);
+        assert!(due > 0, 0);
+        let out = sv::claim_creator_yield(&mut v, &cap, due, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EWrongPlatform)]
+/// Kills stake_vault.move:916 — `claim_platform_yield` binds the `PlatformCap` to the vault's
+/// platform. A staging deployment's cap must not drain a mainnet vault's platform yield.
+fun a_cap_from_another_deployment_cannot_claim_platform_yield() {
+    let mut sc = setup();
+    earn_one_harvest(&mut sc);
+    let other = open_another_deployment(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = cap_for(&mut sc, other);
+        let due = sv::platform_yield_value(&v);
+        assert!(due > 0, 0);
+        let out = sv::claim_platform_yield(&mut v, &cap, due, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EWrongPlatform)]
+/// Kills stake_vault.move:951 — `migrate_as_platform` refuses a platform that is not the vault's.
+///
+/// The cap is the right one; only the platform object is foreign. With the line blanked the cap
+/// check still passes and the call falls through to `ENotUpgraded`, a different refusal.
+fun the_platform_door_refuses_another_deployments_platform() {
+    let mut sc = setup();
+    let home = home_platform_id(&mut sc);
+    let other = open_another_deployment(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let foreign = sc.take_shared_by_id<Platform>(other);
+        let cap = cap_for(&mut sc, home);
+        sv::migrate_as_platform(&mut v, &foreign, &cap);
+        sc.return_to_sender(cap);
+        ts::return_shared(foreign);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EWrongPlatform)]
+/// Kills stake_vault.move:952 — `migrate_as_platform` refuses a cap that does not govern the
+/// vault's platform. The mirror of the test above: the platform is right, the cap is foreign.
+fun the_platform_door_refuses_another_deployments_cap() {
+    let mut sc = setup();
+    let home = home_platform_id(&mut sc);
+    let other = open_another_deployment(&mut sc);
+
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let p = sc.take_shared_by_id<Platform>(home);
+        let cap = cap_for(&mut sc, other);
+        sv::migrate_as_platform(&mut v, &p, &cap);
+        sc.return_to_sender(cap);
+        ts::return_shared(p);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::ENotUpgraded)]
+/// Kills stake_vault.move:931 — the creator's own `migrate` at the current version is a named
+/// refusal, not a silent no-op. The twin of `the_platform_door_refuses_a_vault_already_at_version`;
+/// `migrate` itself had no test.
+fun migrating_a_current_vault_is_refused() {
+    let mut sc = setup();
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::migrate(&mut v, &cap);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+// --- The deposit door ---
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::platform::EPaymentsPaused)]
+/// Kills stake_vault.move:557 — `deposit` consults the platform's payments pause.
+///
+/// The creator side has `a_payments_pause_does_block_a_new_payment`; the stake side had only the
+/// promise that the pause does NOT block withdrawals, which is the other half.
+fun a_deposit_is_refused_while_payments_are_paused() {
+    let mut sc = setup();
+    sc.next_tx(ADMIN);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        platform::set_payments_paused(&mut p, &cap, true);
+        sc.return_to_sender(cap);
+        ts::return_shared(p);
+    };
+    deposit(&mut sc, FAN, 10 * SUI_1);
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EWrongPlatform)]
+/// Kills stake_vault.move:558 — `deposit` refuses a platform that is not the vault's.
+///
+/// The account is the depositor's own and is bound to the vault's platform, so the account check
+/// downstream passes; only this line stands between a deposit and a foreign platform's pause and
+/// fee state.
+fun a_deposit_is_refused_through_another_deployment() {
+    let mut sc = setup();
+    let other = open_another_deployment(&mut sc);
+
+    sc.next_tx(FAN);
+    {
+        let foreign = sc.take_shared_by_id<Platform>(other);
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let funds = coin::mint_for_testing<SUI>(10 * SUI_1, sc.ctx());
+        sv::deposit(&foreign, &mut v, &acct, funds, sc.ctx());
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+        ts::return_shared(foreign);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::ENotAccepting)]
+/// Kills stake_vault.move:559 — a vault that has stopped accepting refuses the deposit.
+/// `closing_deposits_does_not_close_withdrawals` proves the switch spares withdrawals; nothing
+/// proved it stops deposits.
+fun a_deposit_is_refused_once_the_vault_stops_accepting() {
+    let mut sc = setup();
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        sv::set_accepting(&mut v, &cap, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    deposit(&mut sc, FAN, 10 * SUI_1);
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::platform::ECreationPaused)]
+/// Kills stake_vault.move:248 — `open` consults the platform's creation pause. The account and
+/// creator sides each test this on their own `open`; the stake vault's was untested.
+fun a_vault_cannot_be_opened_while_creation_is_paused() {
+    let mut sc = setup();
+    sc.next_tx(ADMIN);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        platform::set_creation_paused(&mut p, &cap, true);
+        sc.return_to_sender(cap);
+        ts::return_shared(p);
+    };
+    sc.next_tx(FAN);
+    {
+        let mut p = sc.take_shared<Platform>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let cap = sv::open(&mut p, &acct, VALIDATOR, sc.ctx());
+        transfer::public_transfer(cap, FAN);
+        sc.return_to_sender(acct);
+        ts::return_shared(p);
+    };
+    sc.end();
+}
+
+#[test]
+/// Kills the boundary at stake_vault.move:565 and at stake_ladder.move:211 together.
+///
+/// `a_dust_deposit_is_refused` pins one MIST below the minimum; nothing pinned the minimum itself,
+/// so `>=` could become `>` and the suite stayed green. The two floors are the same number by
+/// design — the module says so — and this proves they agree: exactly one SUI opens a position AND
+/// is large enough for the ladder to stake, so `available < MIN_STAKE_MIST` becoming `<=` fails
+/// here too, on the tranche count.
+fun a_deposit_of_exactly_the_minimum_is_accepted_and_staked() {
+    let mut sc = setup();
+    let min = sv::min_deposit_mist();
+    assert!(min == ladder::min_stake_mist(), 0);
+    deposit(&mut sc, FAN, min);
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::principal_of(&v, FAN) == min, 1);
+        ts::return_shared(v);
+    };
+
+    harvest(&mut sc);
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::tranche_count(&v) == 1, 2);
+        assert!(sv::staked_principal(&v) == min, 3);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+// --- No position, and more than the balance ---
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::ENoPosition)]
+/// Kills stake_vault.move:620 — `withdraw` names the refusal. Without the line the table borrow
+/// aborts inside `sui::dynamic_field`, which a caller cannot tell from any other missing field.
+fun withdrawing_without_a_position_is_refused() {
+    let mut sc = setup();
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let mut state = sc.take_shared<SuiSystemState>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::withdraw(&mut v, &acct, 1, &mut state, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(state);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::ENoPosition)]
+/// Kills stake_vault.move:714 — the same refusal on `claim_rebate`.
+fun claiming_a_rebate_without_a_position_is_refused() {
+    let mut sc = setup();
+    sc.next_tx(FAN2);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let out = sv::claim_rebate(&mut v, &acct, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(acct);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::ENoPosition)]
+/// Kills stake_vault.move:1013 — `principal_of` on an address with no position. `has_position`
+/// is the read to prefer; this one is the abort a client must be able to name.
+fun reading_the_principal_of_a_stranger_is_refused() {
+    let mut sc = setup();
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        sv::principal_of(&v, FAN2);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EInsufficientBalance)]
+/// Kills stake_vault.move:897 — one MIST more than the creator's yield. Without the line
+/// `Balance::split` aborts in `sui::balance` instead, anonymously.
+fun the_creator_cannot_claim_more_yield_than_accrued() {
+    let mut sc = setup();
+    earn_one_harvest(&mut sc);
+    sc.next_tx(CREATOR);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<StakeCap>();
+        let due = sv::creator_yield_value(&v);
+        assert!(due > 0, 0);
+        let out = sv::claim_creator_yield(&mut v, &cap, due + 1, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::stake_vault::EInsufficientBalance)]
+/// Kills stake_vault.move:917 — the same boundary on the platform's yield.
+fun the_platform_cannot_claim_more_yield_than_accrued() {
+    let mut sc = setup();
+    earn_one_harvest(&mut sc);
+    sc.next_tx(ADMIN);
+    {
+        let mut v = sc.take_shared<StakeVault>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        let due = sv::platform_yield_value(&v);
+        assert!(due > 0, 0);
+        let out = sv::claim_platform_yield(&mut v, &cap, due + 1, sc.ctx());
+        coin::burn_for_testing(out);
+        sc.return_to_sender(cap);
+        ts::return_shared(v);
+    };
+    sc.end();
+}
+
+// === Guards no honest caller can reach ===
+//
+// Seven mutations in the 2026-09-01 pass survived in these two modules because the guard cannot
+// fire through the public surface with an honest `sui_system` harness — not because nothing
+// checks the property. They are recorded here rather than given a test that would pass with the
+// line blanked; a test like that is green because it proves nothing, which is the most expensive
+// kind of wrong. Each names the invariant that makes it unreachable and the test that pins that
+// invariant from the other side, so a change that makes one reachable has a written claim to
+// contradict. (The eighth, `creator.move:682`, is documented in `creator_tests.move`.)
+//
+// stake_ladder.move:171 and :252 — `withdrawn.value() >= principal`, on the harvest and unwind
+//   paths. `request_withdraw_stake_non_entry` returns principal plus rewards for an activated
+//   stake and exactly principal for one that never activated; Sui does not slash, and
+//   `governance_test_utils` cannot produce a loss. Pinned from the other side by
+//   `a_matured_tranche_actually_yields` (strictly more than principal came back) and
+//   `principal_is_returned_in_full_even_when_fully_staked` (an unwind returned exactly it). The
+//   guard is there because the alternative to aborting, should the staking system ever return
+//   less than it was given, is a `u64` wrap crediting a phantom yield of ~1.8e19 MIST.
+//
+// stake_ladder.move:209 — `available <= liquid.value()`. `stake_one_rung` has one caller,
+//   `harvest`, and it passes `vault.liquid.value()` as `available`. Pinned by every harvest in
+//   this file; `the_ladder_stakes_at_most_one_rung_per_epoch` is the one that counts rungs.
+//
+// stake_ladder.move:212 — `tranches.length() >= MAX_TRANCHES` (16). One rung per epoch, and a
+//   matured rung is withdrawn before the next is staked, so the ladder holds at most `RUNGS` (7)
+//   at once and `harvest` never approaches the cap; the unwind in `withdraw` only removes.
+//   Pinned by `the_ladder_never_holds_more_than_its_rungs`, below, on every epoch of a run
+//   four ladders long with a deposit landing mid-way.
+//
+// stake_vault.move:543 — `backing >= total_principal` (`EInsolvent`). Every path moves
+//   principal and backing by the same amount: `deposit` joins the payment to `liquid` and adds
+//   it to `total_principal`; `withdraw` splits and subtracts the same `amount`; `harvest` moves
+//   principal between `liquid` and a tranche whose `staked_sui_amount` is that principal, and
+//   `credit_proceeds` returns exactly `principal` to `liquid` before it touches yield. Backing
+//   equals principal at every point, so `<` needs a loss on staked SUI — which is :171 above.
+//   Pinned by `the_vault_stays_solvent_through_churn` and every `is_solvent` assertion here.
+//
+// stake_vault.move:637 — `!tranches.is_empty()` (`ECannotRaiseLiquidity`). The loop runs while
+//   `liquid < amount`, and `amount <= position.principal <= total_principal <= liquid + staked`
+//   by :628 and :543. With no tranches `staked == 0`, so `liquid >= amount` and the loop is
+//   never entered. Pinned by `principal_is_returned_in_full_even_when_fully_staked`, which
+//   drains a ladder to pay a withdrawal and is made whole.
+//
+// stake_vault.move:728 — `rebate_pool.value() >= amount` (`EInsufficientBalance` in
+//   `claim_rebate`). `amount` is the position's `pending`, credited as
+//   `eligible_i * acc / ACC_SCALE` floored, and `acc` advances by `rebate_cut * ACC_SCALE /
+//   eligible` floored each time `rebate_cut` is joined to the pool. Summed over depositors the
+//   credits never exceed `rebate_cut`, so the pool always covers every claim; the one way past
+//   was a stale `FreshTotal` inflating `acc`, closed on 2026-09-01. Pinned by
+//   `a_round_trip_cannot_inflate_the_accumulator` (`due <= rebate_pool_value`) and
+//   `an_unwinding_withdrawal_is_paid_the_rebate_it_funded` (the pool empties to dust).
+//
+// The seven version gates — `assert_version` and its callers in all three modules, including
+// stake_vault.move:556 and :960 — are unreachable at `VERSION = 1` by construction and are
+// documented once, in `platform_tests.move`.
+
+#[test]
+/// The ladder never holds more than `RUNGS` tranches at once, whatever the deposit flow.
+///
+/// Pins the invariant that keeps `stake_ladder.move:212` — the `MAX_TRANCHES` cap of 16 — out of
+/// reach through `harvest`: one rung per epoch, and a matured rung is withdrawn before the next is
+/// staked, so the count climbs to `rungs()` and stays there. A seven-fold deposit lands after the
+/// ladder has converged to show that size changes rung size, not rung count. Asserted on every
+/// epoch, not just at the end.
+fun the_ladder_never_holds_more_than_its_rungs() {
+    let mut sc = setup();
+    deposit(&mut sc, FAN, 100 * SUI_1);
+
+    let mut i = 0;
+    while (i < 4 * ladder::rungs()) {
+        harvest(&mut sc);
+        sc.next_tx(ADMIN);
+        {
+            let v = sc.take_shared<StakeVault>();
+            assert!(sv::tranche_count(&v) <= ladder::rungs(), 0);
+            ts::return_shared(v);
+        };
+        if (i == ladder::rungs()) { deposit(&mut sc, FAN2, 700 * SUI_1); };
+        gtu::advance_epoch_with_reward_amounts(0, 400, &mut sc);
+        i = i + 1;
+    };
+
+    sc.next_tx(ADMIN);
+    {
+        let v = sc.take_shared<StakeVault>();
+        assert!(sv::tranche_count(&v) == ladder::rungs(), 1);
+        assert!(sv::total_principal(&v) == 800 * SUI_1, 2);
+        assert!(sv::is_solvent(&v), 3);
+        ts::return_shared(v);
+    };
     sc.end();
 }

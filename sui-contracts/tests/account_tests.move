@@ -306,3 +306,34 @@ fun a_registry_that_never_saw_the_handle_refuses_the_close() {
     };
     sc.end();
 }
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::EHandleMismatch)]
+/// Kills account.move:219 — the registry knows the handle and records a different owner.
+fun a_registry_that_gave_the_handle_to_someone_else_refuses_the_close() {
+    // Third line of the same drift guard. `a_registry_that_never_saw_the_handle_refuses_the_close`
+    // covers the absent row; this is the present-but-wrong row, and it is the more dangerous of the
+    // two: deleting it would free BOB's handle on ALICE's say-so. The 2026-09-01 mutation sweep
+    // deleted it and the suite stayed green.
+    let mut sc = setup();
+    open_as(&mut sc, ALICE, b"shared", option::none());
+
+    sc.next_tx(ADMIN);
+    {
+        account::init_for_testing(sc.ctx());
+    };
+    // BOB takes the same handle in the drifted registry — the newest, which is the one `open_as`
+    // resolves to now that two exist.
+    open_as(&mut sc, BOB, b"shared", option::none());
+
+    sc.next_tx(ALICE);
+    {
+        let drifted_id = ts::most_recent_id_shared<Registry>().destroy_some();
+        let mut drifted = sc.take_shared_by_id<Registry>(drifted_id);
+        assert!(account::resolve(&drifted, b"shared".to_string()) == BOB, 0);
+        let acct = sc.take_from_sender<SocialAccount>();
+        account::close(&mut drifted, acct, sc.ctx());
+        ts::return_shared(drifted);
+    };
+    sc.end();
+}

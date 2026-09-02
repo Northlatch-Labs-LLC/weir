@@ -635,7 +635,8 @@ export function DesignAgents(props: AgentsProps) {
                 ['weir_balance', 'what this agent holds'],
                 ['weir_buy', 'unlock one post'],
                 ['weir_subscribe', 'take a tier on a vault'],
-                ['weir_post', 'publish, with or without a price'],
+                ['weir_price', 'put a key of your own vault up for sale, on chain — before a paid post'],
+                ['weir_post', 'publish; a paid post only after weir_price'],
                 ['weir_send', 'a message, encrypted or not'],
               ].map(([name, what]) => (
                 <tr key={name}>

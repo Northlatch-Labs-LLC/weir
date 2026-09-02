@@ -27,6 +27,13 @@ const ADMIN: address = @0xAD;
 const CREATOR: address = @0xC1;
 const FAN: address = @0xFA;
 const REFERRER: address = @0xEF;
+/// A second creator, with a vault and a cap of their own. Exists to present them to CREATOR's vault.
+const RIVAL: address = @0xC2;
+/// A second fan. Exists to present FAN's account and FAN's subscription as their own.
+const OTHER_FAN: address = @0xFB;
+/// Publishes the second deployment. Mainnet beside staging is the real case: two `Platform`s, two
+/// `PlatformCap`s, indistinguishable in a wallet.
+const OTHER_ADMIN: address = @0xAE;
 
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 const MONTH_MS: u64 = 30 * 24 * 60 * 60 * 1000;
@@ -105,6 +112,66 @@ fun open_vault_with_tier(sc: &mut Scenario, price: u64) {
         sc.return_to_sender(cap);
         ts::return_shared(vault);
     };
+}
+
+/// Open a bare USD vault — no tiers — for `who`, who must already hold an account, and return its
+/// id. Every test about a capability or an entitlement presented to the WRONG vault needs a second
+/// vault beside the one `open_vault_with_tier` opens for CREATOR; this is that vault.
+fun open_vault_for(sc: &mut Scenario, who: address): ID {
+    sc.next_tx(who);
+    let mut platform = sc.take_shared<Platform>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+    let (cap, change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+    let vault_id = creator::cap_vault_id(&cap);
+    transfer::public_transfer(cap, who);
+    coin::burn_for_testing(change);
+    sc.return_to_sender(acct);
+    ts::return_shared(platform);
+    vault_id
+}
+
+/// A second deployment, published by OTHER_ADMIN and opened for creation the way `setup` opens the
+/// first. Returns its id.
+///
+/// Call it AFTER every fixture that resolves `take_shared<Platform>()`: that helper takes the most
+/// recently created platform, so once this exists the other fixtures would land on it. Tests that
+/// deploy a second platform address both by id from then on.
+fun deploy_second_platform(sc: &mut Scenario): ID {
+    sc.next_tx(OTHER_ADMIN);
+    platform::init_for_testing(sc.ctx());
+    sc.next_tx(OTHER_ADMIN);
+    let mut p = sc.take_shared<Platform>();
+    let cap = sc.take_from_sender<PlatformCap>();
+    platform::set_creation_paused(&mut p, &cap, false);
+    let id = object::id(&p);
+    sc.return_to_sender(cap);
+    ts::return_shared(p);
+    id
+}
+
+/// The id of the vault `open_vault_with_tier` just opened. Advances a transaction first: the
+/// inventory `most_recent_id_shared` reads is rebuilt at each `next_tx`, and that fixture returns
+/// the vault inside the transaction that added its tier, where it is not yet visible again.
+fun the_vault(sc: &mut Scenario): ID {
+    sc.next_tx(CREATOR);
+    ts::most_recent_id_shared<CreatorVault<USD>>().destroy_some()
+}
+
+/// `who` subscribes to tier 0 of `vault_id`, paying its price exactly. The `Subscription` lands in
+/// `who`'s inventory.
+fun subscribe_to(sc: &mut Scenario, who: address, vault_id: ID, clock: &Clock) {
+    sc.next_tx(who);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let payment = coin::mint_for_testing<USD>(creator::tier_price(&vault, 0), sc.ctx());
+    let change = creator::subscribe(&platform, &mut vault, &acct, 0, payment, clock, sc.ctx());
+    assert!(change.value() == 0, 0);
+    coin::burn_for_testing(change);
+    sc.return_to_sender(acct);
+    ts::return_shared(vault);
+    ts::return_shared(platform);
 }
 
 // === Conservation of value ===
@@ -990,5 +1057,779 @@ fun the_platform_door_refuses_a_creator_vault_already_at_version() {
     let platform = sc.take_shared<Platform>();
     let cap = sc.take_from_sender<PlatformCap>();
     creator::migrate_as_platform(&mut vault, &platform, &cap);
+    abort 0
+}
+
+// === The capability model ===
+//
+// `assert_cap` is one line — `cap.vault == object::id(vault)` — and it is the whole of a creator's
+// authority: every `set_*` door, `add_tier`, `update_tier` and `claim_earnings` run through it. The
+// 2026-09-01 mutation sweep deleted that line and the suite stayed green, because no test had ever
+// presented one vault's cap to another vault. A `CreatorCap` has `store`; a rival holding a real one
+// is the ordinary case, not a contrived one.
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongVault)]
+/// Kills creator.move:831 — `assert!(cap.vault == object::id(vault), EWrongVault)`.
+fun a_cap_for_another_vault_cannot_configure_this_one() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, RIVAL, b"rival", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let mine = the_vault(&mut sc);
+    open_vault_for(&mut sc, RIVAL);
+
+    // RIVAL's cap is genuine. It governs RIVAL's vault and must open nothing else.
+    sc.next_tx(RIVAL);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(mine);
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::add_tier(&mut vault, &cap, b"Hijacked".to_string(), 20_000_000, MONTH_MS);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongVault)]
+/// Kills creator.move:758 — the `assert_cap` call in `claim_earnings`. The money door, pinned
+/// separately from the configuration doors: a rival with a cap of their own must not withdraw one
+/// unit of somebody else's earnings.
+fun a_cap_for_another_vault_cannot_claim_its_earnings() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, RIVAL, b"rival", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let mine = the_vault(&mut sc);
+    open_vault_for(&mut sc, RIVAL);
+    subscribe_to(&mut sc, FAN, mine, &clock);
+
+    sc.next_tx(RIVAL);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(mine);
+    let cap = sc.take_from_sender<CreatorCap>();
+    assert!(creator::earnings_value(&vault) == 10_000_000, 0);
+    coin::burn_for_testing(creator::claim_earnings(&mut vault, &cap, 1, sc.ctx()));
+    abort 0
+}
+
+// === Two deployments ===
+//
+// Mainnet beside staging. A `Platform`, a `PlatformCap` and a `SocialAccount` from one must be
+// refused by the other at every door, or a staging cap sweeps mainnet commission and a staging
+// account pays into mainnet vaults. Every one of these checks was deleted in the 2026-09-01 sweep
+// with the suite green.
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongPlatform)]
+/// Kills creator.move:778 — `claim_platform_fees` with the other deployment's cap.
+fun a_cap_from_another_platform_cannot_claim_the_fees() {
+    let (mut sc, clock) = setup();
+    set_fees(&mut sc, 1_000, 0, 0);
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+    deploy_second_platform(&mut sc);
+
+    sc.next_tx(OTHER_ADMIN);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    // OTHER_ADMIN holds exactly one cap, and it is the second deployment's.
+    let cap = sc.take_from_sender<PlatformCap>();
+    assert!(creator::platform_fees_value(&vault) == 1_000_000, 0);
+    coin::burn_for_testing(creator::claim_platform_fees(&mut vault, &cap, 1_000_000, sc.ctx()));
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongPlatform)]
+/// Kills creator.move:819 — `migrate_as_platform` with the right platform and the wrong cap.
+fun the_platform_door_refuses_a_cap_from_another_platform() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    let platform_a = ts::most_recent_id_shared<Platform>().destroy_some();
+    deploy_second_platform(&mut sc);
+
+    sc.next_tx(OTHER_ADMIN);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let platform = sc.take_shared_by_id<Platform>(platform_a);
+    let cap = sc.take_from_sender<PlatformCap>();
+    creator::migrate_as_platform(&mut vault, &platform, &cap);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongPlatform)]
+/// Kills creator.move:818 — `migrate_as_platform` with the right cap and the wrong platform object.
+fun the_platform_door_refuses_another_platform_object() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    let platform_b = deploy_second_platform(&mut sc);
+
+    sc.next_tx(ADMIN);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let platform = sc.take_shared_by_id<Platform>(platform_b);
+    let cap = sc.take_from_sender<PlatformCap>();
+    creator::migrate_as_platform(&mut vault, &platform, &cap);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongPlatform)]
+/// Kills creator.move:522 — `accept_current_terms` against a platform that did not issue the vault.
+/// The second deployment publishes at a zero fee; without this line a creator could snapshot it.
+fun terms_cannot_be_adopted_from_another_platform() {
+    let (mut sc, _clock) = setup();
+    set_fees(&mut sc, 3_000, 0, 0);
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    let platform_b = deploy_second_platform(&mut sc);
+
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let platform = sc.take_shared_by_id<Platform>(platform_b);
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::accept_current_terms(&mut vault, &cap, &platform);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongPlatform)]
+/// Kills creator.move:609 — the platform check in `assert_payable`, reached through `subscribe`.
+/// The other deployment's pause switches would otherwise govern this vault's payments.
+fun a_payment_cannot_be_routed_through_another_platform() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    let platform_b = deploy_second_platform(&mut sc);
+
+    sc.next_tx(FAN);
+    let platform = sc.take_shared_by_id<Platform>(platform_b);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+    coin::burn_for_testing(
+        creator::subscribe(&platform, &mut vault, &acct, 0, payment, &clock, sc.ctx()),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::EWrongPlatform)]
+/// Kills account.move:271 — the platform half of `assert_authenticates`, reached through
+/// `open_vault`. `assert_authenticates` is `public(package)`, so it can only be tested through the
+/// `creator` doors that call it; that is why this lives here and not in `account_tests`.
+fun an_account_from_another_platform_cannot_open_a_vault() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    let platform_b = deploy_second_platform(&mut sc);
+
+    sc.next_tx(CREATOR);
+    let mut platform = sc.take_shared_by_id<Platform>(platform_b);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+    let (_cap, _change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+    abort 0
+}
+
+// === Authentication at the creator's doors ===
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+/// Kills account.move:270 and creator.move:613 — the owner half of `assert_authenticates`, reached
+/// through `subscribe`. A `SocialAccount` has no `store`, so no on-chain path hands one to OTHER_FAN
+/// today; the scenario constructs the impossible holder deliberately, because this line is the
+/// last one between a borrowed reference and somebody else's referrer being paid on your money.
+fun a_fan_cannot_pay_with_somebody_elses_account() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+
+    sc.next_tx(OTHER_FAN);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let acct = sc.take_from_address<SocialAccount>(FAN);
+    let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+    coin::burn_for_testing(
+        creator::subscribe(&platform, &mut vault, &acct, 0, payment, &clock, sc.ctx()),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::account::ENotOwner)]
+/// Kills creator.move:332 — the `assert_authenticates` call in `open_vault`. RIVAL has no account
+/// and presents CREATOR's; the vault that would open would carry CREATOR's identity and RIVAL's cap.
+fun a_vault_cannot_be_opened_on_somebody_elses_account() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+
+    sc.next_tx(RIVAL);
+    let mut platform = sc.take_shared<Platform>();
+    let acct = sc.take_from_address<SocialAccount>(CREATOR);
+    let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+    let (_cap, _change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::platform::ECreationPaused)]
+/// Kills creator.move:328 — the creation pause, reached through `open_vault` rather than by calling
+/// `assert_can_create` directly, which is what the existing platform test does.
+fun no_vault_can_be_opened_while_creation_is_paused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+
+    sc.next_tx(ADMIN);
+    {
+        let mut platform = sc.take_shared<Platform>();
+        let cap = sc.take_from_sender<PlatformCap>();
+        platform::set_creation_paused(&mut platform, &cap, true);
+        sc.return_to_sender(cap);
+        ts::return_shared(platform);
+    };
+
+    sc.next_tx(CREATOR);
+    let mut platform = sc.take_shared<Platform>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+    let (_cap, _change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+    abort 0
+}
+
+// === Renewal presents the right subscription ===
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ESubscriptionVaultMismatch)]
+/// Kills creator.move:678 — a subscription minted by one vault presented to another for renewal.
+/// RIVAL's vault has a tier at the same price, so nothing but this line stands in the way.
+fun a_subscription_cannot_be_renewed_at_another_vault() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, RIVAL, b"rival", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let mine = the_vault(&mut sc);
+    let theirs = open_vault_for(&mut sc, RIVAL);
+    sc.next_tx(RIVAL);
+    {
+        let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(theirs);
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::add_tier(&mut vault, &cap, b"Monthly".to_string(), 10_000_000, MONTH_MS);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    subscribe_to(&mut sc, FAN, mine, &clock);
+
+    sc.next_tx(FAN);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(theirs);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let mut sub = sc.take_from_sender<Subscription>();
+    let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+    coin::burn_for_testing(
+        creator::renew(&platform, &mut vault, &acct, &mut sub, payment, &clock, sc.ctx()),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ESubscriptionVaultMismatch)]
+/// Kills creator.move:679 — somebody else's subscription renewed from the renewer's own account.
+/// `Subscription` is soulbound, so the scenario constructs the impossible holder deliberately, as
+/// `a_fan_cannot_pay_with_somebody_elses_account` does with the account.
+fun a_subscription_cannot_be_renewed_by_somebody_else() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+
+    sc.next_tx(OTHER_FAN);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let mut sub = sc.take_from_address<Subscription>(FAN);
+    let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+    coin::burn_for_testing(
+        creator::renew(&platform, &mut vault, &acct, &mut sub, payment, &clock, sc.ctx()),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ETierInactive)]
+/// Kills creator.move:684 — renewing onto a tier the creator has since retired. The `subscribe`
+/// side is `a_retired_tier_cannot_be_subscribed_to`; this is the other door onto the same tier.
+fun a_retired_tier_cannot_be_renewed() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::update_tier(&mut vault, &cap, 0, 10_000_000, MONTH_MS, false);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+
+    sc.next_tx(FAN);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let mut sub = sc.take_from_sender<Subscription>();
+    let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+    coin::burn_for_testing(
+        creator::renew(&platform, &mut vault, &acct, &mut sub, payment, &clock, sc.ctx()),
+    );
+    abort 0
+}
+
+/*
+  creator.move:682 — `assert!(tier_index < vault.tiers.length(), ENoSuchTier)` in `renew` — is
+  DEFENSIVE and deliberately has no test.
+
+  `Subscription.tier` is written once, in `subscribe`, from a `tier_index` that creator.move:644 has
+  already bounded, and tiers are append-only: `update_tier` retires a tier in place precisely so
+  that no subscriber's index is ever renumbered (see `Tier.active`). A subscription's index can
+  therefore never exceed its own vault's tier count, and creator.move:678 refuses a subscription
+  from any other vault before line 682 is reached. The invariant is pinned from the other side by
+  `subscribing_to_a_tier_that_does_not_exist_is_refused` (bounded at birth) and
+  `ordinary_pricing_still_works_under_the_ordering_rule` (retiring keeps the index). Tripping the
+  line would need a seam that forges a `Subscription` with an out-of-range tier, and a guard only a
+  forged object can reach is not one a test should claim to cover.
+*/
+
+// === Balances ===
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EInsufficientBalance)]
+/// Kills creator.move:779 — the platform cannot claim one unit more than the vault holds for it.
+/// The creator's twin is `a_creator_cannot_claim_more_than_they_earned`.
+fun the_platform_cannot_claim_more_than_its_fees() {
+    let (mut sc, clock) = setup();
+    set_fees(&mut sc, 1_000, 0, 0);
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+
+    sc.next_tx(ADMIN);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let cap = sc.take_from_sender<PlatformCap>();
+    assert!(creator::platform_fees_value(&vault) == 1_000_000, 0);
+    coin::burn_for_testing(creator::claim_platform_fees(&mut vault, &cap, 1_000_001, sc.ctx()));
+    abort 0
+}
+
+// === Tier and content validation ===
+//
+// One refusal per guard, and every exact boundary from both sides. Each of these lines was deleted
+// in the 2026-09-01 mutation sweep and the suite stayed green: the happy path had been tested and
+// not one of the refusals.
+
+#[test]
+/// The accepted side of creator.move:401 — exactly `MAX_TIERS` tiers are legal.
+fun sixteen_tiers_are_accepted() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    let vault_id = open_vault_for(&mut sc, CREATOR);
+
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+        let cap = sc.take_from_sender<CreatorCap>();
+        let mut i = 0;
+        while (i < creator::max_tiers()) {
+            creator::add_tier(&mut vault, &cap, b"Tier".to_string(), (i + 1) * 1_000_000, MONTH_MS);
+            i = i + 1;
+        };
+        assert!(creator::max_tiers() == 16, 0);
+        assert!(creator::tier_count(&vault) == 16, 1);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ETooManyTiers)]
+/// Kills creator.move:401 — the seventeenth tier, from both the deletion and the `<=` boundary.
+fun a_seventeenth_tier_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    let vault_id = open_vault_for(&mut sc, CREATOR);
+
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let cap = sc.take_from_sender<CreatorCap>();
+    let mut i = 0;
+    while (i < creator::max_tiers()) {
+        creator::add_tier(&mut vault, &cap, b"Tier".to_string(), (i + 1) * 1_000_000, MONTH_MS);
+        i = i + 1;
+    };
+    creator::add_tier(&mut vault, &cap, b"One too many".to_string(), 17_000_000, MONTH_MS);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EEmptyName)]
+/// Kills creator.move:402 — a tier with no name cannot be audited.
+fun a_tier_with_an_empty_name_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::add_tier(&mut vault, &cap, b"".to_string(), 20_000_000, MONTH_MS);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EBadPeriod)]
+/// Kills creator.move:404, the floor. Zero is a whole number of Seal periods, so only this guard
+/// can refuse it — a term of one day would be caught by `EPeriodNotWholeSealPeriods` first.
+fun a_tier_term_of_zero_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::add_tier(&mut vault, &cap, b"Instant".to_string(), 20_000_000, 0);
+    abort 0
+}
+
+#[test]
+/// The accepted side of the ceiling in creator.move:404. `MAX_PERIOD_MS` is 3,650 days, which is
+/// not itself a whole number of 30-day periods, so the real boundary the two rules compose to is
+/// 121 periods (3,630 days) accepted, 122 (3,660 days) refused.
+fun the_longest_whole_period_term_under_the_ceiling_is_accepted() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        assert!(121 * MONTH_MS <= creator::max_period_ms(), 0);
+        creator::add_tier(&mut vault, &cap, b"Decade".to_string(), 20_000_000, 121 * MONTH_MS);
+        assert!(creator::tier_period_ms(&vault, 1) == 121 * MONTH_MS, 1);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EBadPeriod)]
+/// Kills creator.move:404, the ceiling — the first whole-period term over `MAX_PERIOD_MS`.
+fun the_first_whole_period_term_over_the_ceiling_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    assert!(122 * MONTH_MS > creator::max_period_ms(), 0);
+    creator::add_tier(&mut vault, &cap, b"Too long".to_string(), 20_000_000, 122 * MONTH_MS);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENoSuchTier)]
+/// Kills creator.move:432 — `update_tier` at `tier_count`, the first index that does not exist.
+fun updating_a_tier_that_does_not_exist_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    let missing = creator::tier_count(&vault);
+    creator::update_tier(&mut vault, &cap, missing, 20_000_000, MONTH_MS, true);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EZeroPrice)]
+/// Kills creator.move:433 — the `update_tier` twin of `a_tier_with_a_zero_price_is_refused`.
+fun a_tier_cannot_be_repriced_to_zero() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::update_tier(&mut vault, &cap, 0, 0, MONTH_MS, true);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EBadPeriod)]
+/// Kills creator.move:434 — the `update_tier` twin of `a_tier_term_of_zero_is_refused`.
+fun a_tier_term_cannot_be_updated_to_zero() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::update_tier(&mut vault, &cap, 0, 10_000_000, 0, true);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EPeriodNotWholeSealPeriods)]
+/// Kills creator.move:435 — the `update_tier` twin of `a_tier_term_that_is_not_whole_periods_is_refused`.
+/// A reprice that could slip a six-week term past the rule would reopen the defect from the side
+/// `add_tier` had closed.
+fun a_tier_term_cannot_be_updated_to_a_fraction_of_a_period() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::update_tier(&mut vault, &cap, 0, 10_000_000, MONTH_MS + 12 * DAY_MS, true);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ETierPriceNotAscending)]
+/// Kills creator.move:441 — the predecessor comparison. `a_reprice_cannot_invert_two_tiers` lifts
+/// a tier ABOVE its successor and only reaches line 444; this drops one BELOW its predecessor.
+fun a_reprice_cannot_drop_a_tier_below_its_predecessor() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::add_tier(&mut vault, &cap, b"Plus".to_string(), 50_000_000, MONTH_MS);
+    creator::add_tier(&mut vault, &cap, b"VIP".to_string(), 100_000_000, MONTH_MS);
+    // Still below VIP, so the successor check passes; only the predecessor check can refuse it.
+    creator::update_tier(&mut vault, &cap, 1, 5_000_000, MONTH_MS, true);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EEmptyName)]
+/// Kills creator.move:464 — content with an empty key cannot be priced.
+fun content_with_an_empty_key_cannot_be_priced() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::set_content_price(&mut vault, &cap, b"", 1_000_000);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EZeroPrice)]
+/// Kills creator.move:465 — a zero price is not "free", it is a paid unlock for nothing.
+fun content_cannot_be_priced_at_zero() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::set_content_price(&mut vault, &cap, b"post:1", 0);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EContentNotForSale)]
+/// Kills creator.move:485 — `unprice_content` on a key that was never priced. Without the guard the
+/// table removal aborts anyway, but with a `sui::table` code and no name a client can act on.
+fun content_that_was_never_priced_cannot_be_unpriced() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::unprice_content(&mut vault, &cap, b"never:priced");
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EZeroPrice)]
+/// Kills creator.move:494 — a zero minimum would let `tip` settle an empty coin.
+fun the_minimum_tip_cannot_be_zero() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::set_min_tip(&mut vault, &cap, 0);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENoSuchTier)]
+/// Kills creator.move:644 — `subscribe` at `tier_count`, the first index that does not exist.
+fun subscribing_to_a_tier_that_does_not_exist_is_refused() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(FAN);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let acct = sc.take_from_sender<SocialAccount>();
+    let missing = creator::tier_count(&vault);
+    let payment = coin::mint_for_testing<USD>(10_000_000, sc.ctx());
+    coin::burn_for_testing(
+        creator::subscribe(&platform, &mut vault, &acct, missing, payment, &clock, sc.ctx()),
+    );
+    abort 0
+}
+
+#[test]
+/// The accepted side of creator.move:703 — a tip of exactly the minimum settles.
+/// `a_tip_below_the_minimum_is_refused` is one unit under; between them a `>=` cannot become `>`.
+fun a_tip_of_exactly_the_minimum_is_accepted() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::set_min_tip(&mut vault, &cap, 1_000_000);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+
+    sc.next_tx(FAN);
+    {
+        let platform = sc.take_shared<Platform>();
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let payment = coin::mint_for_testing<USD>(1_000_000, sc.ctx());
+        creator::tip(&platform, &mut vault, &acct, payment, sc.ctx());
+        assert!(creator::tips_received(&vault) == 1, 0);
+        // No fee was set, so the whole coin is the creator's.
+        assert!(creator::earnings_value(&vault) == 1_000_000, 1);
+        sc.return_to_sender(acct);
+        ts::return_shared(vault);
+        ts::return_shared(platform);
+    };
+    clock::destroy_for_testing(clock);
+    sc.end();
+}
+
+// === Reads that must refuse ===
+//
+// A getter that reads past the end of `tiers` aborts on the vector index either way; these pin the
+// NAMED refusal, so a storefront asking about a tier that does not exist gets `ENoSuchTier` and not
+// a bare VM error it cannot show a user.
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENoSuchTier)]
+/// Kills creator.move:859.
+fun reading_the_price_of_a_tier_that_does_not_exist_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let vault = sc.take_shared<CreatorVault<USD>>();
+    let _ = creator::tier_price(&vault, creator::tier_count(&vault));
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENoSuchTier)]
+/// Kills creator.move:864.
+fun reading_the_period_of_a_tier_that_does_not_exist_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let vault = sc.take_shared<CreatorVault<USD>>();
+    let _ = creator::tier_period_ms(&vault, creator::tier_count(&vault));
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENoSuchTier)]
+/// Kills creator.move:869.
+fun reading_whether_a_tier_that_does_not_exist_is_active_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let vault = sc.take_shared<CreatorVault<USD>>();
+    let _ = creator::tier_active(&vault, creator::tier_count(&vault));
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENoSuchTier)]
+/// Kills creator.move:874.
+fun reading_the_name_of_a_tier_that_does_not_exist_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let vault = sc.take_shared<CreatorVault<USD>>();
+    let _ = creator::tier_name(&vault, creator::tier_count(&vault));
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EContentNotForSale)]
+/// Kills creator.move:885 — `content_price` on a key that is not for sale. `is_for_sale` is the
+/// read that does not abort, and the existing unlock test already asks it first.
+fun reading_the_price_of_unpriced_content_is_refused() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let vault = sc.take_shared<CreatorVault<USD>>();
+    let _ = creator::content_price(&vault, b"never:priced");
+    abort 0
+}
+
+// === The creator's own migrate door ===
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENotUpgraded)]
+/// Kills creator.move:789 — `migrate` with the creator's own cap on a vault already at `VERSION`.
+/// The platform door has `the_platform_door_refuses_a_creator_vault_already_at_version`; this is
+/// the creator's, pinned the same way: a named refusal, not a silent no-op.
+fun the_creator_door_refuses_a_vault_already_at_version() {
+    let (mut sc, _clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    sc.next_tx(CREATOR);
+    let mut vault = sc.take_shared<CreatorVault<USD>>();
+    let cap = sc.take_from_sender<CreatorCap>();
+    creator::migrate(&mut vault, &cap);
     abort 0
 }
