@@ -27,7 +27,7 @@
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { DISCOVERY_PATH, discoveryDocument, resolveOptions, serveHttp } from '../src/transport.js';
+import { DISCOVERY_PATH, canonicalOrigin, discoveryDocument, resolveOptions, serveHttp } from '../src/transport.js';
 
 const PORT = 8497;
 const HOST = '127.0.0.1';
@@ -98,6 +98,22 @@ check('it never claims a standard it does not have', () => {
 const http = await serveHttp(async () => new McpServer({ name: 'harness', version: '0.0.0' }, {}), {
   ...options,
   discoveryTools: ['weir_search', 'weir_quote', 'weir_read'],
+});
+
+check('the advertised address comes from the allowlist, never from the request Host', () => {
+  /*
+    The defect this pins, found in production on 2026-09-02 minutes after the first deploy: behind
+    Cloud Run the container sees the platform hostname, so a document built from req.headers.host
+    published the raw run.app address — which this endpoint's own Host allowlist refuses with 403.
+  */
+  const hosted = { ...options, allowedHosts: ['mcp.weir.social'] };
+  assert.equal(canonicalOrigin(hosted, 'weir-mcp-k5aija3d6q-ew.a.run.app'), 'https://mcp.weir.social');
+  assert.equal(discoveryDocument(hosted, [], canonicalOrigin(hosted, 'weir-mcp-k5aija3d6q-ew.a.run.app')).endpoint,
+    'https://mcp.weir.social/mcp');
+});
+
+check('a loopback allowlist is plain HTTP, so a developer gets a URL that works', () => {
+  assert.equal(canonicalOrigin({ ...options, allowedHosts: ['127.0.0.1:8497'] }, undefined), 'http://127.0.0.1:8497');
 });
 
 const served = await fetch(`http://${HOST}:${PORT}${DISCOVERY_PATH}`);

@@ -1208,6 +1208,25 @@ export interface Discovery {
  * `readOnly` is computed from the tool names rather than from the mode, because mode is a
  * statement of intent and the tool list is a fact about what was registered.
  */
+/**
+ * The address this endpoint tells clients to use.
+ *
+ * NOT the request's `Host`. Behind Cloud Run and Cloudflare the container sees the platform's own
+ * hostname, and the first deployment of this document (2026-09-02) duly published
+ * `https://weir-mcp-….run.app/mcp` — an address the Host allowlist in this very file refuses with
+ * 403. It advertised a door it was built to keep shut.
+ *
+ * The allowlist is the deployment's own statement of the names it answers to, so its first entry is
+ * the canonical one. Scheme follows the host rather than the request: a loopback allowlist is a
+ * developer's machine and is plain HTTP; anything else reached from outside is not.
+ */
+export function canonicalOrigin(options: ServerOptions, requestHost: string | undefined): string {
+  const host = options.allowedHosts[0] ?? requestHost;
+  if (host === undefined || host.trim() === '') return '';
+  const loopback = /^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(host);
+  return `${loopback ? 'http' : 'https'}://${host}`;
+}
+
 export function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery {
   const spending = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'];
   const readOnly = !tools.some((t) => spending.includes(t));
@@ -1375,8 +1394,7 @@ async function handleHttpRequest(
       respondJson(res, 405, { error: 'method_not_allowed', detail: `${DISCOVERY_PATH} answers GET. MCP is served at ${MCP_PATH}.` });
       return;
     }
-    const origin = `${req.headers['x-forwarded-proto'] === 'http' ? 'http' : 'https'}://${String(req.headers.host)}`;
-    respondJson(res, 200, discoveryDocument(options, options.discoveryTools, origin), {
+    respondJson(res, 200, discoveryDocument(options, options.discoveryTools, canonicalOrigin(options, req.headers.host)), {
       'access-control-allow-origin': '*',
       'cache-control': 'public, max-age=300',
     });
