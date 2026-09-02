@@ -696,9 +696,18 @@ export async function titlesForContentKeys(
     A's `intro` was titled with B's. `unlockKey` in entitlement.ts is `${vault}:${key}` for the same
     reason — the pair is the identity — and this map is keyed the same way.
   */
-  const pairs = wanted.filter((w) => w.contentKey !== '' && w.vaultId !== '');
+  const seen = new Set<string>();
+  const pairs = wanted
+    .filter((w) => w.contentKey !== '' && w.vaultId !== '')
+    .map((w) => ({ vaultId: normaliseAddress(w.vaultId), contentKey: w.contentKey }))
+    .filter((w) => {
+      const id = `${w.vaultId}:${w.contentKey}`;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
   if (pairs.length === 0) return new Map();
-  const vaults = pairs.map((w) => normaliseAddress(w.vaultId));
+  const vaults = pairs.map((w) => w.vaultId);
   const keys = pairs.map((w) => w.contentKey);
 
   const { rows } = await db().query<{ vault_id: string; content_key: string; title: string }>(

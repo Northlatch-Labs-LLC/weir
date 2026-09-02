@@ -118,10 +118,12 @@ describe('naming unlocks does not read the archive', () => {
     // Three columns, for named (vault, key) pairs. Not bodies, not assets, not everything.
     expect(sql).toMatch(/SELECT vault_id, content_key, title FROM posts/i);
     expect(sql).toMatch(/\(vault_id, content_key\) IN/i);
+    // One row per distinct pair: the duplicate and the empty key are not sent.
+    expect(lastParams()[1]).toEqual(['key-1', 'key-2']);
     expect(sql).not.toMatch(/p\.body/i);
 
     // Deduplicated, and the empty key never reaches the database.
-    const keys = lastParams()[0] as string[];
+    const keys = lastParams()[1] as string[];
     expect(keys.sort()).toEqual(['key-1', 'key-2']);
   });
 
