@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 1;
+export const AGENT_MANIFEST_REVISION = 2;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -427,6 +427,17 @@ export interface AgentManifest {
     basis: string;
     enforced: string[];
     notEnforced: string;
+  };
+  /**
+   * Where an agent that speaks MCP can connect without running anything. `hosted` is the
+   * streamable-HTTP endpoint of the keyless build of `packages/mcp`; `mode` says what that build
+   * can do by construction (no signer, no policy → the read set only). Added in revision 2.
+   */
+  mcp: {
+    hosted: string;
+    mode: 'read-only';
+    tools: string[];
+    note: string;
   };
 }
 
@@ -1133,6 +1144,15 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         'gate every endpoint stops you at — which endpoints consult the register is a property of ' +
         'those endpoints, not of this section, and it will grow. Do not read the absence of a ' +
         'check as permission: a breach is a Section 6 matter, not a 403.',
+    },
+    mcp: {
+      hosted: 'https://mcp.weir.social/mcp',
+      mode: 'read-only' as const,
+      tools: ['weir_search', 'weir_quote', 'weir_read', 'weir_balance'],
+      note:
+        'The hosted server is the keyless build: no signer and no policy are bound, so it registers ' +
+        'only tools that read, and it exits before listening if a key is placed in its environment. ' +
+        'Spending tools exist only in a copy you run yourself with your own key.',
     },
   };
 

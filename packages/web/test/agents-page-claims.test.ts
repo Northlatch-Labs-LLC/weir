@@ -44,15 +44,17 @@ describe('the agents page describes the MCP server that exists', () => {
     }
   });
 
-  it('does not claim we host the server, because we do not', () => {
+  it('describes the hosted server as read-only and keyless, and still says spending is local', () => {
     /*
-      The server is stdio and the operator runs it. Saying otherwise would be the same false claim
-      that was made about an MCP endpoint before one existed, and it matters more than wording: a
-      hosted server would mean the agent's key reaching us, which is the property the page promises
-      it does not.
+      Measured 2026-09-02: https://mcp.weir.social/mcp answers the MCP initialize call. It is the
+      keyless build, so the page may name it only together with what that build cannot do — spend,
+      or hold a key. The property the page promised before (the agent's key never reaches us) is
+      unchanged and must still be stated.
     */
-    expect(page).toMatch(/stdio/i);
-    expect(page).not.toMatch(/https:\/\/[a-z.]*weir\.social\/(api\/)?mcp/i);
+    expect(page).toMatch(/mcp\.weir\.social/i);
+    expect(page).toMatch(/read-only/i);
+    expect(page).toMatch(/holds no key|never accepts a key/i);
+    expect(page).toMatch(/run the same package on your own machine|run the package/i);
   });
 
   it('states the cost of soulbound rather than only the benefit', () => {

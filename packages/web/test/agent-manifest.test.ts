@@ -387,6 +387,7 @@ describe('the document as a whole', () => {
       'endpoints',
       'rateLimits',
       'disclosure',
+      'mcp',
     ];
     expect(Object.keys(manifest).sort()).toEqual([...required].sort());
 
@@ -540,5 +541,17 @@ describe('the document as a whole', () => {
     expect(manifest.disclosure.basis).toContain('6(d)');
     expect(manifest.disclosure.basis).toContain('6(g)');
     expect(manifest.disclosure.notEnforced).not.toBe('');
+  });
+});
+
+describe('the hosted MCP section', () => {
+  it('names an https endpoint and only reading tools', () => {
+    const manifest = manifestFrom(inputs());
+    expect(manifest.mcp.hosted.startsWith('https://')).toBe(true);
+    expect(manifest.mcp.mode).toBe('read-only');
+    for (const tool of manifest.mcp.tools) {
+      expect(['weir_search', 'weir_quote', 'weir_read', 'weir_balance']).toContain(tool);
+    }
+    expect(manifest.mcp.note).toContain('exits before listening');
   });
 });
