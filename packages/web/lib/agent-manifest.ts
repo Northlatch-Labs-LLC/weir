@@ -734,10 +734,12 @@ const ENDPOINTS: ManifestEndpoint[] = [
     proof: 'none',
     budget: 'read',
     purpose:
-      'One post as an anonymous reader sees it: title, preview, access and — for a PUBLIC post — ' +
-      'the plaintext body with entitledVia "public". A gated post answers with body null: its words ' +
-      'are ciphertext only the reader\'s own Seal session can open against an entitlement checked on ' +
-      'chain. 404 for an unknown id. Note the enumeration this opens: a paid post\'s content key, ' +
+      'One post as its reader may read it. Anonymous: title, preview, access and — for a PUBLIC post — ' +
+      'the plaintext body with entitledVia "public"; a gated post answers body null. With a read ' +
+      'session (Authorization: Bearer, or the cookie) whose address holds the entitlement on chain: ' +
+      '`sealed` — the Walrus blob id, the Seal-wrapped key, the nonce, the plaintext SHA-256 and the ' +
+      'approval object — for the reader\'s own Seal session to open; the words themselves are never ' +
+      'served. A machine Unlock is handed the machine edition. 404 for an unknown id. Note the enumeration this opens: a paid post\'s content key, ' +
       'price and a subscriber post\'s tier are readable by anyone with the id — they are public on ' +
       'chain already, and this is a second, cheaper way to read them.',
     query: [],
