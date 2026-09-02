@@ -559,6 +559,58 @@ export async function findAgentAccount(
   }
 }
 
+/**
+ * The reserved marker inside a content key. A machine edition of a key is named by appending it
+ * (`packages/web/lib/machine-pricing.ts`), so a human key that contains it could collide with
+ * another post's machine edition — and an Unlock cannot be withdrawn once someone holds it. The
+ * studio refuses such a key before pricing; so does `priceContent`. `test/price-content.test.ts`
+ * reads the web's constant from source, so the two cannot drift.
+ */
+export const MACHINE_EDITION_MARKER = '#machine';
+
+/**
+ * The `CreatorCap` this address holds FOR THIS VAULT, or `not-found`.
+ *
+ * A cap is bound to one vault (`creator.move` `assert_cap`, `EWrongVault`); a creator with two
+ * vaults holds two caps, and the first one returned is right only by luck. Every cap is decoded —
+ * 32 bytes of its own id, 32 bytes of the vault it governs — and only the one naming `vaultId` is
+ * returned. Choosing any other would build a transaction the chain aborts after gas is spent, with
+ * a failure that names neither the cap nor the vault. A shorter object that matched the type filter
+ * is a different struct and is refused rather than decoded into a plausible-looking vault id.
+ */
+export async function findCreatorCap(
+  client: SuiGrpcClient,
+  config: ProjectXSocialConfig,
+  owner: string,
+  vaultId: string,
+): Promise<Reading<string>> {
+  const source = `CreatorCap for vault ${vaultId} owned by ${owner}`;
+  try {
+    const response = await client.listOwnedObjects({
+      owner,
+      type: `${config.packageId}::creator::CreatorCap`,
+      limit: 50,
+      include: { content: true },
+    });
+    const objects = (response as { objects?: Array<{ objectId?: unknown; content?: unknown }> }).objects ?? [];
+    for (const object of objects) {
+      if (typeof object.objectId !== 'string') continue;
+      const raw = (object.content as { value?: unknown } | undefined)?.value ?? object.content;
+      const bytes =
+        raw instanceof Uint8Array ? raw : typeof raw === 'string' ? Uint8Array.from(Buffer.from(raw, 'base64')) : null;
+      if (bytes === null || bytes.length < 64) {
+        return fail('malformed', source, `object ${object.objectId} matched the CreatorCap type filter but is not a CreatorCap.`);
+      }
+      const governs = `0x${Buffer.from(bytes.subarray(32, 64)).toString('hex')}`;
+      if (sameAddress(governs, vaultId)) return ok(object.objectId);
+    }
+    return fail('not-found', source, `${owner} holds no CreatorCap for vault ${vaultId}. Only the vault's creator can price its content.`);
+  } catch (error) {
+    const failure = classify(error, source);
+    return fail(failure.kind, source, failure.detail);
+  }
+}
+
 /** Total spendable balance of one coin type. */
 export async function totalBalance(
   client: SuiGrpcClient,
@@ -918,6 +970,42 @@ export function buildUnlock(
       contentKey: new TextEncoder().encode(args.contentKey),
       paymentCoin: coin!,
       sender: args.sender,
+    },
+  );
+}
+
+/**
+ * `creator::set_content_price<T>` — put one key up for sale at `price`, or reprice it.
+ *
+ * # What the operator's policy must and must not treat this as
+ *
+ * No coin leaves in this transaction; only gas does. When a `PolicySigner` is in front of the key,
+ * `outflow-ceiling` therefore passes trivially and MUST NOT be what authorises the call. The bound
+ * is AUTHORITY, never spend: `move-call-target` must list `…::creator::set_content_price`,
+ * `object-input` must list BOTH the vault and this cap (an owned object with a stable id),
+ * `type-argument` the vault's coin, and `gas-budget` applies as it does to every call. A policy that
+ * only sets ceilings never authorises pricing — the safe default — and an operator who wants a
+ * buying agent that cannot reprice its own catalogue leaves the target out, exactly as
+ * `claim_earnings` is left out of the buyer fixture.
+ */
+export function buildSetContentPrice(
+  config: ProjectXSocialConfig,
+  args: {
+    coinType: string;
+    vaultId: string;
+    capId: string;
+    contentKey: string;
+    price: bigint;
+  },
+): Transaction {
+  return build.setContentPrice(
+    { config },
+    {
+      coinType: args.coinType,
+      vaultId: args.vaultId,
+      capId: args.capId,
+      contentKey: new TextEncoder().encode(args.contentKey),
+      price: args.price,
     },
   );
 }

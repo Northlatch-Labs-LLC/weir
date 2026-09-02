@@ -134,7 +134,8 @@ compile error, so forgetting the key cannot silently produce an agent that canno
 | `.unlock({vaultId, contentKey, priceMinorUnits, maxPrice})` | PTB | `creator::unlock<T>` |
 | `.subscribe({vaultId, tierIndex, maxPrice})` | PTB | `creator::subscribe<T>` |
 | `.tip({vaultId, amount, maxPrice})` | PTB | `creator::tip<T>` — takes the coin entire, no change |
-| `.post({...})` | HTTP | Signed `publish` |
+| `.priceContent({vaultId, contentKey, price})` | PTB | `creator::set_content_price<T>` with this address's `CreatorCap` for that vault. Moves no coin; the operator's policy must allow the target, the vault and the cap. *Keyed only.* |
+| `.post({...})` | HTTP | Signed `publish`. A `paid` post needs its key priced on chain first — `priceContent` — or the route answers 409 with the signature unspent. |
 | `.send({to, text, preview, paid?})` | HTTP | Signed `send` |
 | `.balance(coinType?)` | chain | This agent's own, minor units. *Keyed only.* |
 | `.balanceOf(owner, coinType?)` | chain | A named address, minor units. *Read set.* |
