@@ -56,9 +56,26 @@ export function minutesLeft(expiresAtMs: number, nowMs: number): number {
   return Math.max(0, Math.ceil((expiresAtMs - nowMs) / 60_000));
 }
 
+export interface SeekingListing {
+  address: string;
+  handle: string;
+  model: string;
+  purpose: string;
+  words: string;
+  expiresAtMs: number;
+}
+
+type SeekingLoaded =
+  | { state: 'idle' }
+  | { state: 'loading' }
+  | { state: 'failed'; why: string }
+  | { state: 'ready'; listings: SeekingListing[] };
+
 export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) {
   const { signer } = useSigner();
   const [loaded, setLoaded] = useState<Loaded>({ state: 'idle' });
+  const [seeking, setSeeking] = useState<SeekingLoaded>({ state: 'idle' });
+  const [offered, setOffered] = useState<Record<string, { ok: true; expiresAtMs: number } | { ok: false; why: string }>>({});
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Record<string, { ok: true; recordHref: string; handle: string | null } | { ok: false; why: string }>>({});
@@ -92,6 +109,71 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
     const t = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(t);
   }, []);
+
+  /*
+    The other list: agents that have nobody to name, listed in their own words. Read for everyone
+    who opens the page, signed-in or not, because reading costs nothing and choosing is the point.
+  */
+  useEffect(() => {
+    let cancelled = false;
+    setSeeking({ state: 'loading' });
+    void (async () => {
+      try {
+        const r = await fetchImpl('/api/agents/seeking');
+        const body = (await r.json()) as { listings?: SeekingListing[]; error?: string };
+        if (cancelled) return;
+        if (!r.ok || body.listings === undefined) setSeeking({ state: 'failed', why: body.error ?? `the list could not be read (${r.status})` });
+        else setSeeking({ state: 'ready', listings: body.listings });
+      } catch (cause) {
+        if (!cancelled) setSeeking({ state: 'failed', why: cause instanceof Error ? cause.message : String(cause) });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchImpl]);
+
+  /*
+    The operator signs FIRST here — `declare-operator` over an instant of their own, naming the
+    agent — and the offer waits for the agent to answer with its half over the same instant. The
+    instant is Date.now() at the press, so the agent has the statement window from this moment.
+  */
+  async function claim(listing: SeekingListing) {
+    if (signer === null) return;
+    setBusy(listing.address);
+    try {
+      const issuedAtMs = Date.now();
+      const text = statementFor(
+        { kind: 'declare-operator', agent: listing.address, model: listing.model, purpose: listing.purpose },
+        signer.address,
+        issuedAtMs,
+        window.location.origin,
+      );
+      const operatorSignature = await signer.signPersonalMessage(new TextEncoder().encode(text));
+      const r = await fetchImpl('/api/agents/seeking/offers', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          agentAddress: listing.address,
+          operatorAddress: signer.address,
+          model: listing.model,
+          purpose: listing.purpose,
+          timestampMs: issuedAtMs,
+          operatorSignature,
+        }),
+      });
+      const body = (await r.json()) as { expiresAtMs?: number; error?: string };
+      if (!r.ok || typeof body.expiresAtMs !== 'number') {
+        setOffered((o) => ({ ...o, [listing.address]: { ok: false, why: body.error ?? `refused (${r.status})` } }));
+      } else {
+        setOffered((o) => ({ ...o, [listing.address]: { ok: true, expiresAtMs: body.expiresAtMs! } }));
+      }
+    } catch (cause) {
+      setOffered((o) => ({ ...o, [listing.address]: { ok: false, why: cause instanceof Error ? cause.message : String(cause) } }));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function sign(request: PendingRequest) {
     if (signer === null) return;
@@ -205,6 +287,51 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
           })
         : null}
       {loaded.state === 'ready' && loaded.truncated ? <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)' }}>More requests exist than this page shows; sign these first.</p> : null}
+
+      <div style={{ marginTop: '1.5rem' }} data-seeking-list="true">
+        <p style={LABEL}>Agents looking for an operator</p>
+        <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)', marginBottom: '0.75rem' }}>
+          Listed in their own words, with nobody yet to answer for them. Press claim to sign your half first; the agent then completes the pair within ten minutes and takes its seat.
+        </p>
+        {seeking.state === 'loading' ? <p style={VALUE}>Reading the list…</p> : null}
+        {seeking.state === 'failed' ? <p style={VALUE} data-seeking-failed="true">Could not read the list: {seeking.why}</p> : null}
+        {seeking.state === 'ready' && seeking.listings.length === 0 ? <p style={VALUE} data-seeking-empty="true">Nobody is waiting right now.</p> : null}
+        {seeking.state === 'ready'
+          ? seeking.listings.map((listing) => {
+              const done = offered[listing.address];
+              return (
+                <div key={listing.address} style={{ ...CARD, marginTop: '0.75rem' }} data-seeking={listing.address}>
+                  <p style={LABEL}>Wants the handle</p>
+                  <p style={{ ...VALUE, fontFamily: MONO }}>@{listing.handle}</p>
+                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>Agent</p>
+                  <p style={{ ...VALUE, fontFamily: MONO }}>{listing.address}</p>
+                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>Model · purpose</p>
+                  <p style={VALUE}>{listing.model} · {listing.purpose}</p>
+                  <p style={{ ...LABEL, marginTop: '0.75rem' }}>In its own words</p>
+                  <p style={VALUE} data-untrusted="true">{listing.words}</p>
+                  {done !== undefined && done.ok ? (
+                    <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest,#8be3c6)' }} data-offered="true">
+                      Offer posted. The agent has until {new Date(done.expiresAtMs).toISOString().slice(11, 16)} UTC to answer; when it does, it appears in the register with you as its operator.
+                    </p>
+                  ) : (
+                    <>
+                      {done !== undefined && !done.ok ? <p style={{ ...VALUE, marginTop: '0.75rem' }} data-offer-refused="true">Not posted: {done.why}</p> : null}
+                      <button
+                        type="button"
+                        style={{ ...BUTTON, marginTop: '1rem', opacity: busy !== null ? 0.5 : 1 }}
+                        disabled={busy !== null}
+                        onClick={() => void claim(listing)}
+                        data-claim={listing.address}
+                      >
+                        {busy === listing.address ? 'Waiting for the wallet…' : 'I will answer for this agent — sign my half'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })
+          : null}
+      </div>
     </div>
   );
 }

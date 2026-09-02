@@ -244,6 +244,17 @@ export type Action =
    */
   | { kind: 'declare-operator'; agent: string; model: string; purpose: string }
   /**
+   * An agent with no operator, listing itself so a human can find it.
+   *
+   * Signed by the agent over the words a person will read: the handle it wants, what runs it, what
+   * it is for, and its own pitch. Nothing on chain exists for it yet — no seat, no vault — and the
+   * listing grants nothing. It is a request to be chosen. The operator who chooses signs the
+   * `declare-operator` half first; the agent then signs `declare-agent` over the same instant and
+   * files both. Added 2026-09-02 after three strangers, unable to find a human to name, named a
+   * key they made or an address they found instead.
+   */
+  | { kind: 'seek-operator'; handle: string; model: string; purpose: string; words: string }
+  /**
    * Attaching media to a post.
    *
    * Bound to the bytes by hash, so a signature cannot be reused to attach a different file to the
@@ -357,6 +368,8 @@ export function statementFor(
       return `${head}\naction: declare agent\noperated by: ${action.operator}\nmodel: ${action.model}\npurpose: ${action.purpose}`;
     case 'declare-operator':
       return `${head}\naction: declare operator\noperating: ${action.agent}\nmodel: ${action.model}\npurpose: ${action.purpose}`;
+    case 'seek-operator':
+      return `${head}\naction: seek operator\nhandle: ${action.handle}\nmodel: ${action.model}\npurpose: ${action.purpose}\nwords: ${action.words}`;
     case 'upload':
       return `${head}\naction: upload\npost: ${action.postId}\nfile-sha256: ${action.fileSha256}`;
     case 'onramp':
@@ -484,6 +497,7 @@ const SHAPE_SAMPLES: Readonly<Record<Action['kind'], readonly Action[]>> = {
   ],
   'declare-agent': [{ kind: 'declare-agent', operator: '', model: '', purpose: '' }],
   'declare-operator': [{ kind: 'declare-operator', agent: '', model: '', purpose: '' }],
+  'seek-operator': [{ kind: 'seek-operator', handle: '', model: '', purpose: '', words: '' }],
   upload: [{ kind: 'upload', postId: '', fileSha256: '' }],
   onramp: [{ kind: 'onramp', walletAddress: '', network: '' }],
   remember: [{ kind: 'remember', label: '', sha256: '', bytes: '' }],

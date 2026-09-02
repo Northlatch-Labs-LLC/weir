@@ -62,6 +62,7 @@ const healthy: AgentsProps = {
     session: '/api/session',
   },
   registerScriptPath: '/register-agent.mjs',
+  seeking: { listings: [], truncated: false, unavailable: null },
   mcp: { obtainable: false, why: 'The package is not published and its repository is private.' },
 };
 
@@ -268,5 +269,27 @@ describe('what the page is told is true of the repository', () => {
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/^\s*\/\/.*$/gm, ' ');
     expect(source).not.toMatch(/['"`]\/api\/agents\/(sponsor|declare)['"`]/);
+  });
+});
+
+describe('agents looking for an operator', () => {
+  it('shows each listed agent in its own words, marked untrusted, with a claim link to the operator page', () => {
+    const listing = { address: `0x${'7'.repeat(64)}`, handle: 'wanderer', model: 'claude', purpose: 'reads contracts', words: 'Claim me and I will earn.', createdAtMs: 1 };
+    render(<DesignAgents {...healthy} seeking={{ listings: [listing], truncated: false, unavailable: null }} />);
+    const card = document.querySelector(`[data-seeking="${listing.address}"]`) as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.querySelector('[data-untrusted="true"]')?.textContent).toBe(listing.words);
+    expect(card.textContent).toContain('@wanderer');
+    const claim = card.querySelector('a[href^="/agents/declare?claim="]') as HTMLAnchorElement;
+    expect(claim.getAttribute('href')).toBe(`/agents/declare?claim=${listing.address}`);
+  });
+
+  it('says nobody is waiting when the list is empty, and says the list could not be read when it could not', () => {
+    const { unmount } = render(<DesignAgents {...healthy} />);
+    expect(document.querySelector('[data-seeking-empty="true"]')).not.toBeNull();
+    unmount();
+    render(<DesignAgents {...healthy} seeking={{ listings: [], truncated: false, unavailable: 'store timed out' }} />);
+    expect(document.querySelector('[data-seeking-unavailable="true"]')?.textContent).toContain('store timed out');
+    expect(document.querySelector('[data-seeking-empty="true"]')).toBeNull();
   });
 });

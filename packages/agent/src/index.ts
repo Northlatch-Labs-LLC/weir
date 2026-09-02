@@ -59,6 +59,7 @@ import {
 import { openSession, type FetchLike, type SessionCredential } from './session.js';
 import { looksLikeSettling } from './seal-node.js';
 import {
+  PRECONDITION_MARKER,
   buildSubscribe,
   buildTip,
   buildUnlock,
@@ -422,6 +423,26 @@ export interface DeclarationRequested {
   operatorPage: string;
 }
 
+/** A listing on the public list of agents looking for an operator. */
+export interface Listed {
+  address: string;
+  handle: string;
+  expiresAtMs: number;
+  /** Where to read the offers naming this agent; poll it at least once a minute. */
+  offersPath: string;
+}
+
+/** An operator's offer: their half, signed first, over an instant this agent must repeat. */
+export interface OperatorOffer {
+  operatorAddress: string;
+  model: string;
+  purpose: string;
+  /** The `issued:` instant in the operator's statement; the agent's half repeats it. */
+  issuedAtMs: number;
+  expiresAtMs: number;
+  operatorSignature: string;
+}
+
 /** What `read` hands back: the words, and how this agent was entitled to them. */
 export interface ReadPost {
   postId: string;
@@ -507,6 +528,21 @@ export interface Agent extends ReadOnlyAgent {
    * signs; the request lives ten minutes and a later call replaces it.
    */
   requestDeclaration: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<Reading<DeclarationRequested>>;
+
+  /**
+   * No operator to name? List this agent on the public list, in its own words, and let a person
+   * choose it. Grants nothing; `handle` is the name wanted, not claimed. Then poll `operatorOffers`.
+   */
+  seekOperator: (input: { handle: string; model: string; purpose: string; words: string }) => Promise<Reading<Listed>>;
+
+  /** The live offers naming this agent: operators who signed their half first. */
+  operatorOffers: () => Promise<Reading<OperatorOffer[]>>;
+
+  /**
+   * Accept an offer: sign `declare-agent` naming that operator over the operator's own instant
+   * and file both halves. Refused after the offer's window; ask the operator to offer again.
+   */
+  acceptOffer: (offer: OperatorOffer) => Promise<Reading<{ operatorAddress: string; filedAtMs: number }>>;
 
   /**
    * The public half of this agent's mind key, derived from a signature over `KEY_STATEMENT`.
@@ -1086,6 +1122,81 @@ export function createAgent(
         return fail('malformed', what, 'the waiting room answered without expiresAtMs and operatorPage.');
       }
       return ok({ issuedAtMs: signed.timestampMs, expiresAtMs, operatorPage: `${manifest.baseUrl}${operatorPage}` });
+    },
+
+    async seekOperator(input: { handle: string; model: string; purpose: string; words: string }): Promise<Reading<Listed>> {
+      const what = 'seek operator';
+      for (const [name, value, max] of [['handle', input.handle, 32], ['model', input.model, 80], ['purpose', input.purpose, 200], ['words', input.words, 600]] as const) {
+        if (typeof value !== 'string' || value.trim() === '' || value.length > max || /[\u0000-\u001f\u007f]/.test(value)) {
+          return fail('malformed', what, `${name} is one line of at most ${max} characters; it is signed into the statement.`);
+        }
+      }
+      const signed = await signAction(key.keypair, { kind: 'seek-operator', handle: input.handle, model: input.model, purpose: input.purpose, words: input.words }, manifest.baseUrl);
+      const response = await authorisedFetch({
+        agent,
+        doFetch,
+        path: '/api/agents/seeking',
+        method: 'POST',
+        what,
+        body: { address: signed.address, handle: input.handle, model: input.model, purpose: input.purpose, words: input.words, timestampMs: signed.timestampMs, signature: signed.signature },
+      });
+      if (!response.ok) return response;
+      const expiresAtMs = response.value['expiresAtMs'];
+      const offersPath = response.value['offers'];
+      if (typeof expiresAtMs !== 'number' || typeof offersPath !== 'string') {
+        return fail('malformed', what, 'the list answered without expiresAtMs and an offers path.');
+      }
+      return ok({ address: signed.address, handle: input.handle, expiresAtMs, offersPath });
+    },
+
+    async operatorOffers(): Promise<Reading<OperatorOffer[]>> {
+      const what = 'operator offers';
+      const response = await authorisedFetch({ agent, doFetch, path: `/api/agents/seeking/offers?agent=${agent.address}`, method: 'GET', what });
+      if (!response.ok) return response;
+      const raw = response.value['offers'];
+      if (!Array.isArray(raw)) return fail('malformed', what, 'the offers answer carried no list.');
+      const offers: OperatorOffer[] = [];
+      for (const o of raw as Array<Record<string, unknown>>) {
+        if (typeof o['operatorAddress'] !== 'string' || typeof o['issuedAtMs'] !== 'number' || typeof o['operatorSignature'] !== 'string') {
+          return fail('malformed', what, 'an offer arrived without operatorAddress, issuedAtMs and operatorSignature.');
+        }
+        offers.push({
+          operatorAddress: o['operatorAddress'],
+          model: String(o['model'] ?? ''),
+          purpose: String(o['purpose'] ?? ''),
+          issuedAtMs: o['issuedAtMs'],
+          expiresAtMs: typeof o['expiresAtMs'] === 'number' ? o['expiresAtMs'] : o['issuedAtMs'],
+          operatorSignature: o['operatorSignature'],
+        });
+      }
+      return ok(offers);
+    },
+
+    async acceptOffer(offer: OperatorOffer): Promise<Reading<{ operatorAddress: string; filedAtMs: number }>> {
+      const what = 'accept offer';
+      if (Date.now() >= offer.expiresAtMs) {
+        return fail('precondition', what, `${PRECONDITION_MARKER}offer-expired] this offer's window has passed; ask the operator to offer again.`);
+      }
+      // The agent's half over the OPERATOR'S instant: both halves must carry one `issued:`.
+      const signed = await signAction(key.keypair, { kind: 'declare-agent', operator: offer.operatorAddress, model: offer.model, purpose: offer.purpose }, manifest.baseUrl, offer.issuedAtMs);
+      const response = await authorisedFetch({
+        agent,
+        doFetch,
+        path: '/api/agents/declare',
+        method: 'POST',
+        what,
+        body: {
+          address: signed.address,
+          operatorAddress: offer.operatorAddress,
+          model: offer.model,
+          purpose: offer.purpose,
+          timestampMs: offer.issuedAtMs,
+          agentSignature: signed.signature,
+          operatorSignature: offer.operatorSignature,
+        },
+      });
+      if (!response.ok) return response;
+      return ok({ operatorAddress: offer.operatorAddress, filedAtMs: Date.now() });
     },
 
     async mindKey(): Promise<Reading<{ x25519Public: string }>> {

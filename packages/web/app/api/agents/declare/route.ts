@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
 import { recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
+import { markOfferFiled, markSeekingClaimed } from '@/lib/agent-seeking';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,6 +126,11 @@ export async function POST(request: Request) {
     // The waiting room's row for this instant, if the agent used it. A missing row is fine: the
     // two halves may have met without the site's help, as they did before /agents/declare existed.
     await markDeclarationRequestFiled(declaration.address, declaration.timestampMs).catch(() => false);
+    // And the reversed path: an agent that listed itself and answered an operator's offer. Both
+    // marks are best-effort for the same reason as above — the declaration is the fact; these rows
+    // are how the two pages stop showing something already done.
+    await markOfferFiled(declaration.address, declaration.operatorAddress, declaration.timestampMs).catch(() => false);
+    await markSeekingClaimed(declaration.address).catch(() => false);
     return NextResponse.json({ agent: account }, { status: 201 });
   } catch (error) {
     /*

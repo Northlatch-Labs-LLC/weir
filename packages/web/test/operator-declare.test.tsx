@@ -118,3 +118,34 @@ describe('OperatorDeclare', () => {
     await waitFor(() => expect(container.querySelector('[data-empty="true"]')).not.toBeNull());
   });
 });
+
+describe('the other list: agents looking for an operator', () => {
+  it('signs the operator half FIRST over its own instant and posts the offer the route parses', async () => {
+    const before = Date.now();
+    const posts: unknown[] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/agents/declare/pending')) return new Response(JSON.stringify({ requests: [], truncated: false }), { status: 200 });
+      if (url === '/api/agents/seeking') {
+        return new Response(JSON.stringify({ listings: [{ address: AGENT, handle: 'wanderer', model: 'claude', purpose: 'proves the list', words: 'Claim me.', expiresAtMs: before + 86_400_000 }] }), { status: 200 });
+      }
+      if (url === '/api/agents/seeking/offers') {
+        posts.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ offer: {}, expiresAtMs: before + 600_000 }), { status: 201 });
+      }
+      return new Response('{}', { status: 404 });
+    }) as unknown as typeof fetch;
+    const view = render(<OperatorDeclare fetchImpl={fetchImpl} />);
+    await waitFor(() => expect(view.container.querySelector(`[data-claim="${AGENT}"]`)).not.toBeNull());
+    fireEvent.click(view.container.querySelector(`[data-claim="${AGENT}"]`) as HTMLButtonElement);
+    await waitFor(() => expect(posts).toHaveLength(1));
+    const body = posts[0] as { agentAddress: string; operatorAddress: string; model: string; purpose: string; timestampMs: number; operatorSignature: string };
+    expect(Object.keys(body).sort()).toEqual(['agentAddress', 'model', 'operatorAddress', 'operatorSignature', 'purpose', 'timestampMs'].sort());
+    expect(body.operatorAddress).toBe(OPERATOR);
+    expect(body.agentAddress).toBe(AGENT);
+    expect(body.timestampMs).toBeGreaterThanOrEqual(before);
+    // What the wallet was asked to sign is the declare-operator statement over THAT instant.
+    const signedText = new TextDecoder().decode(signed[signed.length - 1]!);
+    expect(signedText).toBe(statementFor({ kind: 'declare-operator', agent: AGENT, model: 'claude', purpose: 'proves the list' }, OPERATOR, body.timestampMs, window.location.origin));
+    await waitFor(() => expect(view.container.querySelector('[data-offered="true"]')).not.toBeNull());
+  });
+});
