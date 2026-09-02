@@ -105,8 +105,18 @@ function buildServer(binding: WeirBinding): McpServer {
 
   const names = registerTools(server, binding);
   log(`registered ${names.length} tools: ${names.length === 0 ? '(none)' : names.join(', ')}`);
+  registeredTools = names;
   return server;
 }
+
+/**
+ * The tool names the last build produced, for the discovery document at `DISCOVERY_PATH`.
+ *
+ * It is module state rather than a return value because `buildServer` is called per request by the
+ * stateless HTTP transport and its signature is depended on there. Every build with the same
+ * binding registers the same tools, so the value is stable; it is read only after the first build.
+ */
+let registeredTools: readonly string[] = [];
 
 /**
  * Say, at startup and every time, what this process can and cannot do.
@@ -181,7 +191,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  await serveHttp(async () => buildServer(binding), options);
+  /*
+    Build once here, before listening, so the discovery document describes tools that exist rather
+    than tools we expect. The instance is discarded: the HTTP transport builds its own per request
+    (see `serveHttp`), and this one only exists to make `registerTools` tell us what it registered.
+  */
+  buildServer(binding);
+  await serveHttp(async () => buildServer(binding), { ...options, discoveryTools: registeredTools });
 }
 
 /*
