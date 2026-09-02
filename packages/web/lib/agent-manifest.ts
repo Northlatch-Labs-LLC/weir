@@ -404,6 +404,8 @@ export interface AgentManifest {
     session: {
       mint: { method: string; path: string; body: string[]; action: string };
       returns: string[];
+      /** The request header that adds `token` to the body; without it a program gets the cookie only. */
+      bearerHeader: { name: string; value: string; adds: string };
       cookie: string;
       bearer: string;
       ttlMs: number;
