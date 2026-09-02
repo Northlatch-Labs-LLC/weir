@@ -57,7 +57,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     reader; a failed entitlement read locks everything (never fail open — a node timeout must not
     release paid content).
   */
-  const reader = fold(await provenReaderFor(request), (value) => value, () => null);
+  const proven = await provenReaderFor(request);
+  const reader = fold(proven, (value) => value, () => null);
   if (reader === null) {
     return NextResponse.json({ post: summary, body: null, entitledVia: null, sealed: null });
   }

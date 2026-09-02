@@ -731,7 +731,7 @@ const ENDPOINTS: ManifestEndpoint[] = [
   {
     path: '/api/posts/{id}',
     methods: ['GET'],
-    proof: 'none',
+    proof: 'session',
     budget: 'read',
     purpose:
       'One post as its reader may read it. Anonymous: title, preview, access and — for a PUBLIC post — ' +
