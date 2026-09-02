@@ -23,6 +23,7 @@
  * different key types (`String` one way, `address` the other) and therefore different derivations.
  */
 
+import { decodeObjectBytes } from './objectbytes.js';
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { deriveDynamicFieldID } from '@mysten/sui/utils';
@@ -89,11 +90,18 @@ export function handleProblem(handle: string): HandleProblem | null {
   return null;
 }
 
+/**
+ * One decoder for every object read in this package — `decodeObjectBytes` in objectbytes.ts —
+ * so a transport that answers base64, a byte array or an array-like object is read the same way
+ * here as everywhere else. Until 2026-09-02 this file carried its own reader that accepted a
+ * subset of those shapes, and a registry answered as the other shape was reported "malformed:
+ * no decodable content" (the read fails CLOSED, never wrong, but a page said "not measured" for a
+ * value the node had sent). A decode failure is `null` here, which every caller below already
+ * reports as malformed with the source named.
+ */
 function toBytes(content: unknown): Uint8Array | null {
-  const value = (content as { value?: unknown } | undefined)?.value ?? content;
-  if (value instanceof Uint8Array) return value;
-  if (typeof value === 'string') return Uint8Array.from(Buffer.from(value, 'base64'));
-  return null;
+  const decoded = decodeObjectBytes(content, 'registry');
+  return decoded.ok ? decoded.value : null;
 }
 
 export interface RegistryTables {

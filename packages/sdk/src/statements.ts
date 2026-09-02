@@ -356,17 +356,12 @@ export function statementFor(
  * Everything that changes state does. A signature authorises one post, one message, one follow —
  * not an unlimited number of them for the next ten minutes, which is what freshness alone allowed.
  *
- * `read` does not, and that is a decision rather than an omission. It proves identity for fetching
- * a thread or a notification list, which the client does on a timer; spending it would mean a
- * wallet prompt per refresh. That trains people to approve prompts without reading them, which is
- * strictly worse than the replay it prevents — replaying a read grants exactly the access the
- * signer already had, to the signer.
- *
- * `read-content` **is** spent, and the contrast with `read` is the point. It performs no read; it
- * mints a session cookie that stands in for the signer for a day. Replaying it therefore does not
- * grant the signer what they already had — it hands a *second* session to whoever captured the
- * statement, for an address they do not control. It is signed once a day rather than once a
- * refresh, so spending it costs nobody a prompt they would have noticed.
+ * `read` is spent too, since the reversal recorded inside the function below — the manifest
+ * points agents at this doc, and until 2026-09-02 it still described the older rule, under which
+ * a read could be replayed within its window while the server refused the replay. Every kind is
+ * single-use; a client that wants to read on a timer takes a `read-content` session once a day
+ * rather than re-signing. (`read-content` mints that session cookie: replaying it would hand a
+ * second session to whoever captured the statement, which is why it was always spent.)
  *
  * # Exported, but the decision is still not yours
  *

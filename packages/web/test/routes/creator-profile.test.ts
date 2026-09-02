@@ -41,6 +41,13 @@ let chainHandle: string | null = 'newname';
   exercised on its own at the end of this file — a mock that always passes would otherwise remove
   the gate from every test here without anybody noticing.
 */
+/** What the vault's type parameter says its coin is. Reassigned by the mismatch test. */
+let vaultCoin: string | null = '0xdba34672::usdc::USDC';
+vi.mock('@/lib/creator-setup', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  coinTypeOf: async () => vaultCoin,
+}));
+
 let proofOk = true;
 vi.mock('@/lib/identity', () => ({
   verifyAction: async () =>
@@ -268,5 +275,40 @@ describe('what the signature covers is what gets stored', () => {
 
     // 400 for the length, not 401 for the signature — so the length was decided first.
     expect(response.status).toBe(400);
+  });
+});
+
+describe('the coin type is the vault\'s, not the body\'s', () => {
+  it('refuses a coinType that is not the vault\'s type parameter', async () => {
+    vaultCoin = '0x2::sui::SUI';
+    try {
+      const r = await save({
+      owner: OWNER,
+      vaultId: VAULT,
+      coinType: COIN,
+      displayName: 'Blitz vault',
+      bio: 'a new description',
+    });
+      expect(r.status).toBe(400);
+      expect(((await r.json()) as { error: string }).error).toMatch(/does not match the vault/);
+    } finally {
+      vaultCoin = '0xdba34672::usdc::USDC';
+    }
+  });
+
+  it('refuses to write when the vault\'s coin cannot be read, rather than trusting the body', async () => {
+    vaultCoin = null;
+    try {
+      const r = await save({
+      owner: OWNER,
+      vaultId: VAULT,
+      coinType: COIN,
+      displayName: 'Blitz vault',
+      bio: 'a new description',
+    });
+      expect(r.status).toBe(424);
+    } finally {
+      vaultCoin = '0xdba34672::usdc::USDC';
+    }
   });
 });

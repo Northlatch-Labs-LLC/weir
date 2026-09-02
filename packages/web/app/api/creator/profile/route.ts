@@ -6,6 +6,7 @@ import { siteConfig } from '@/lib/chain';
 import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
 import { verifyAction } from '@/lib/identity';
+import { coinTypeOf } from '@/lib/creator-setup';
 
 /**
  * What a creator may write about themselves.
@@ -50,37 +51,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: config.failure.detail }, { status: 503 });
   }
 
-  const vault = await readCreatorVault(createClient(config.value), b.vaultId);
+  const client = createClient(config.value);
+  const vault = await readCreatorVault(client, b.vaultId);
   if (!vault.ok) {
     return NextResponse.json(
       { error: `the vault could not be read: ${vault.failure.detail}` },
       { status: 424 },
     );
   }
-  /*
-    Prove the caller controls `owner`, rather than taking the body's word for it.
-
-    The check below compares the request's `owner` against the vault's owner read from chain, and
-    on its own it authorises nothing: a vault's owner is public, so anybody could read it, send it
-    and rename somebody else's vault. The name and description are bound into the statement because
-    they are the entire payload — a signature authorising "some change to this vault" would
-    authorise every later one too.
-  */
-  /*
-    Bounded before the signature is checked, and refused rather than trimmed.
-
-    These two fields used to be sliced to 60 and 280 AFTER `verifyAction` returned, so what was
-    stored was not what the signature covered. A creator who signed a 300-character bio had 280 of
-    it stored under a signature attesting to the other shape — and the whole reason the name and bio
-    are bound into the statement is that they ARE the payload. A signature covering bytes that were
-    never stored authorises a thing that never happened.
-
-    Refused rather than silently shortened, and refused BEFORE verification, for the reason
-    `POST /api/posts` gives for its own length checks: rejecting afterwards would spend a
-    single-use signature on a request that was never going to be stored, so the creator would have
-    to sign again to find out. The length reported is the one they actually sent, not one this
-    route trimmed to.
-  */
   const tooLong =
     (b.displayName ?? '').length > MAX_DISPLAY_NAME_LENGTH
       ? `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`
@@ -114,6 +92,49 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+
+  /*
+    The coin type is the vault's type parameter, read from chain, and the body must agree with it.
+    This route's own rule is "ownership is read from chain, never taken from the request", and the
+    coin was the one field it took from the request: a creator who signed the wrong coin type
+    stored a denomination every buyer's subscribe/tip/unlock was then built with, and every one
+    of those simulations failed with a type mismatch until somebody read the row.
+  */
+  const onChainCoin = await coinTypeOf(client, b.vaultId);
+  if (onChainCoin === null) {
+    return NextResponse.json({ error: 'the vault\'s coin type could not be read from chain' }, { status: 424 });
+  }
+  if (normaliseCoinType(onChainCoin) !== normaliseCoinType(b.coinType)) {
+    return NextResponse.json(
+      { error: `coinType does not match the vault: the vault is denominated in ${onChainCoin}` },
+      { status: 400 },
+    );
+  }
+  /*
+    Prove the caller controls `owner`, rather than taking the body's word for it.
+
+    The check below compares the request's `owner` against the vault's owner read from chain, and
+    on its own it authorises nothing: a vault's owner is public, so anybody could read it, send it
+    and rename somebody else's vault. The name and description are bound into the statement because
+    they are the entire payload — a signature authorising "some change to this vault" would
+    authorise every later one too.
+  */
+  /*
+    Bounded before the signature is checked, and refused rather than trimmed.
+
+    These two fields used to be sliced to 60 and 280 AFTER `verifyAction` returned, so what was
+    stored was not what the signature covered. A creator who signed a 300-character bio had 280 of
+    it stored under a signature attesting to the other shape — and the whole reason the name and bio
+    are bound into the statement is that they ARE the payload. A signature covering bytes that were
+    never stored authorises a thing that never happened.
+
+    Refused rather than silently shortened, and refused BEFORE verification, for the reason
+    `POST /api/posts` gives for its own length checks: rejecting afterwards would spend a
+    single-use signature on a request that was never going to be stored, so the creator would have
+    to sign again to find out. The length reported is the one they actually sent, not one this
+    route trimmed to.
+  */
+
 
   const handle = await accountHandle(b.owner);
   if (!handle.ok) {
@@ -188,4 +209,11 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ handle: slug });
+}
+
+/** `0x2::sui::SUI` and its 64-hex spelling are one coin; compare with the address padded. */
+function normaliseCoinType(coinType: string): string {
+  const [pkg, ...rest] = coinType.trim().split('::');
+  const hex = (pkg ?? '').replace(/^0x/i, '').padStart(64, '0').toLowerCase();
+  return `0x${hex}::${rest.join('::')}`;
 }

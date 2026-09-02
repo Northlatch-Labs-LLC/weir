@@ -38,7 +38,7 @@ import { retentionDays } from '@/lib/storage-retention';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
 
-interface Target { vaultId: string; coinType: string; handle: string; tiers: { index: number; name: string; active: boolean }[] }
+interface Target { vaultId: string; coinType: string; handle: string; tiers: { index: number; name: string; active: boolean }[]; decimals: number; symbol: string }
 
 type Access = 'public' | 'subscribers' | 'paid';
 
@@ -93,18 +93,22 @@ async function sha256HexBytes(bytes: Uint8Array): Promise<string> {
 /** Filters the picker only. The real check is a magic-number sniff of the bytes, server-side. */
 const ACCEPTED_IMAGES = 'image/png,image/jpeg,image/gif,image/webp';
 
-/** USDC decimal string → smallest units, by string manipulation. No float touches a price. */
-function toMinor(input: string): bigint | null {
+/**
+ * Decimal string → smallest units, by string manipulation, at the VAULT's decimals. No float
+ * touches a price, and no constant decides the scale: a SUI vault has nine, USDC six, and the
+ * tier form was fixed for exactly this while this file kept assuming six.
+ */
+function toMinor(input: string, decimals: number): bigint | null {
   const t = input.trim();
-  if (!/^\d+(\.\d{1,6})?$/.test(t)) return null;
+  if (!new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`).test(t)) return null;
   const [whole, frac = ''] = t.split('.');
-  return BigInt(whole + frac.padEnd(6, '0'));
+  return BigInt(whole + frac.padEnd(decimals, '0'));
 }
 
 /** The shape `/api/creator` answers with, narrowed to what publishing needs. */
 interface CreatorBody {
   stage?: 'no-account' | 'no-vault' | 'ready';
-  vaults?: { vaultId: string; coinType: string; handle: string | null; tiers?: { index: number; name: string; active: boolean }[] }[];
+  vaults?: { vaultId: string; coinType: string; handle: string | null; tiers?: { index: number; name: string; active: boolean }[]; decimals?: number; symbol?: string }[];
 }
 
 export function StudioComposer() {
@@ -195,7 +199,7 @@ export function StudioComposer() {
         const publishable = (body.vaults ?? []).flatMap((vault) =>
           vault.handle === null
             ? []
-            : [{ vaultId: vault.vaultId, coinType: vault.coinType, handle: vault.handle, tiers: vault.tiers ?? [] }],
+            : [{ vaultId: vault.vaultId, coinType: vault.coinType, handle: vault.handle, tiers: vault.tiers ?? [], decimals: vault.decimals ?? 6, symbol: vault.symbol ?? vault.coinType.split('::').pop() ?? '' }],
         );
         setTargets(publishable);
         setSelected(publishable[0]?.vaultId ?? null);
@@ -320,9 +324,9 @@ export function StudioComposer() {
   }) {
     const { key, amount, report } = input;
     if (signer === null || target === null) return;
-    const minor = toMinor(amount);
+    const minor = toMinor(amount, target.decimals);
     if (minor === null) {
-      report({ name: 'failed', message: 'Price must be a decimal with up to 6 places.' });
+      report({ name: 'failed', message: `Price must be a decimal with up to ${target.decimals} places.` });
       return;
     }
     if (key === '') {
@@ -519,7 +523,7 @@ export function StudioComposer() {
   */
   const onChainPrice = keyPrice.name === 'known' ? keyPrice.price : null;
   const effectivePrice =
-    stage.name === 'priced' ? toMinor(price) : (onChainPrice ?? toMinor(price));
+    stage.name === 'priced' ? toMinor(price, target?.decimals ?? 6) : (onChainPrice ?? toMinor(price, target?.decimals ?? 6));
 
   /*
     A paid post is publishable only once its price is on chain. Anything else would ship a buy
@@ -773,7 +777,7 @@ export function StudioComposer() {
               {keyPrice.name === 'known' && keyPrice.price !== null && (
                 <p className="enc-status" style={{ marginTop: 6 }}>
                   <span className="enc-tag">in use</span> already sells at{' '}
-                  {formatUnits(keyPrice.price, 6)} USDC — everyone who has bought it receives this
+                  {formatUnits(keyPrice.price, target?.decimals ?? 6)} {target?.symbol ?? ''} — everyone who has bought it receives this
                   post too, at no extra charge
                 </p>
               )}
@@ -785,7 +789,7 @@ export function StudioComposer() {
               )}
             </div>
             <div>
-              <label className="k" htmlFor="pr">PRICE · USDC</label>
+              <label className="k" htmlFor="pr">PRICE · {target?.symbol ?? ''}</label>
               <input id="pr" className="field" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
           </div>
@@ -829,7 +833,7 @@ export function StudioComposer() {
             {machineKeyPrice.name === 'known' && machineOnChainPrice !== null && (
               <p className="enc-status">
                 <span className="enc-tag">on sale</span> machines already pay{' '}
-                {formatUnits(machineOnChainPrice, 6)} USDC for this key — pricing it again replaces
+                {formatUnits(machineOnChainPrice, target?.decimals ?? 6)} {target?.symbol ?? ''} for this key — pricing it again replaces
                 that, and every Unlock already sold stays valid
               </p>
             )}
@@ -847,7 +851,7 @@ export function StudioComposer() {
             {machineBody !== 'absent' && (
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
               <div>
-                <label className="k" htmlFor="mpr">MACHINE PRICE · USDC</label>
+                <label className="k" htmlFor="mpr">MACHINE PRICE · {target?.symbol ?? ''}</label>
                 <input
                   id="mpr"
                   className="field"

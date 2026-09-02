@@ -21,13 +21,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
-import { formatUnits, USDC_DECIMALS } from '@/lib/units';
+import { formatUnits } from '@/lib/units';
 
-interface Sub {
+interface Coin {
+  /** From the coin's metadata on chain; null when unread, in which case the amount is not formatted. */
+  decimals: number | null;
+  symbol: string | null;
+}
+interface Sub extends Coin {
   objectId: string; vaultId: string; handle: string | null; tier: number;
   pricePaid: string; startedAtMs: number; expiresAtMs: number; renewals: number; active: boolean;
 }
-interface Unlock {
+interface Unlock extends Coin {
   objectId: string; vaultId: string; handle: string | null; contentKey: string;
   title: string | null; edition?: 'human' | 'machine'; pricePaid: string; purchasedAtMs: number;
 }
@@ -37,8 +42,9 @@ type Load =
   | { state: 'ready'; subscriptions: Sub[]; unlocks: Unlock[]; truncated: boolean }
   | { state: 'unmeasured'; detail: string };
 
-const DECIMALS = USDC_DECIMALS;
-const units = (raw: string) => formatUnits(BigInt(raw), USDC_DECIMALS);
+/** Formatted at the ROW's decimals — a SUI vault has nine, USDC six — or said to be unmeasured. */
+const units = (raw: string, coin: Coin) =>
+  coin.decimals === null ? `${raw} units (decimals not measured)` : `${formatUnits(BigInt(raw), coin.decimals)} ${coin.symbol ?? ''}`.trim();
 
 const day = (ms: number) =>
   new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -144,7 +150,7 @@ export function Purchases() {
               <div style={{ display: 'grid', gap: 'var(--space-20)', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
                 <div className="stat">
                   <span className="k">Paid per period</span>
-                  <span className="v">{units(s.pricePaid)}</span>
+                  <span className="v">{units(s.pricePaid, s)}</span>
                 </div>
                 <div className="stat">
                   <span className="k">Started</span>
@@ -185,7 +191,7 @@ export function Purchases() {
                     {u.handle === null ? 'unknown creator' : `@${u.handle}`} · {day(u.purchasedAtMs)}
                   </div>
                 </div>
-                <span className="pill paid">{units(u.pricePaid)}</span>
+                <span className="pill paid">{units(u.pricePaid, u)}</span>
               </div>
               <p className="section-note" style={{ margin: 0 }}>
                 Yours permanently.{' '}

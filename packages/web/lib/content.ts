@@ -688,17 +688,40 @@ export async function listPosts(options?: {
  * store keeps its raw key rather than borrowing somebody else's title.
  */
 export async function titlesForContentKeys(
-  keys: readonly string[],
+  wanted: readonly { vaultId: string; contentKey: string }[],
 ): Promise<Map<string, string>> {
-  const wanted = [...new Set(keys.filter((key) => key !== ''))];
-  if (wanted.length === 0) return new Map();
+  /*
+    Keyed by the PAIR. A content key is a creator-chosen string and `/api/posts` does not uniquify
+    it across vaults, so two creators can both price `intro`; matched on the key alone, a buyer of
+    A's `intro` was titled with B's. `unlockKey` in entitlement.ts is `${vault}:${key}` for the same
+    reason — the pair is the identity — and this map is keyed the same way.
+  */
+  const seen = new Set<string>();
+  const pairs = wanted
+    .filter((w) => w.contentKey !== '' && w.vaultId !== '')
+    .map((w) => ({ vaultId: normaliseAddress(w.vaultId), contentKey: w.contentKey }))
+    .filter((w) => {
+      const id = `${w.vaultId}:${w.contentKey}`;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  if (pairs.length === 0) return new Map();
+  const vaults = pairs.map((w) => w.vaultId);
+  const keys = pairs.map((w) => w.contentKey);
 
-  const { rows } = await db().query<{ content_key: string; title: string }>(
-    `SELECT content_key, title FROM posts
-      WHERE access_kind = 'paid' AND content_key = ANY($1::text[])`,
-    [wanted],
+  const { rows } = await db().query<{ vault_id: string; content_key: string; title: string }>(
+    `SELECT vault_id, content_key, title FROM posts
+      WHERE access_kind = 'paid'
+        AND (vault_id, content_key) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
+    [vaults, keys],
   );
-  return new Map(rows.map((row) => [row.content_key, row.title]));
+  return new Map(rows.map((row) => [titleKey(row.vault_id, row.content_key), row.title]));
+}
+
+/** The lookup key {@link titlesForContentKeys} answers under. */
+export function titleKey(vaultId: string, contentKey: string): string {
+  return `${normaliseAddress(vaultId)}:${contentKey}`;
 }
 
 /**

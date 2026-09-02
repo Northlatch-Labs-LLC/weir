@@ -66,6 +66,8 @@ export const UNLOCK_BCS_FIELDS = [
 ] as const;
 
 export interface SubscriptionRecord {
+  /** The vault's coin type from its profile row, or null when this deployment does not know the vault. */
+  coinType: string | null;
   objectId: string;
   vaultId: string;
   /** The creator's handle, when this deployment's store knows the vault. `null` otherwise. */
@@ -80,6 +82,8 @@ export interface SubscriptionRecord {
 }
 
 export interface UnlockRecord {
+  /** The vault's coin type from its profile row, or null when this deployment does not know the vault. */
+  coinType: string | null;
   objectId: string;
   vaultId: string;
   handle: string | null;
@@ -128,11 +132,15 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
     const profiles = await listProfiles();
     // Pages without a vault cannot appear on a receipt, so they are not in this lookup. Keying one
     // by a normalised null would map every unknown vault onto whichever page came first.
-    const handleOf = new Map(
+    const profileOf = new Map(
       profiles
         .filter((p): p is typeof p & { vaultId: string } => p.vaultId !== null)
-        .map((p) => [normalise(p.vaultId), p.handle]),
+        .map((p) => [normalise(p.vaultId), { handle: p.handle, coinType: p.coinType ?? null }]),
     );
+    const handleOf = new Map([...profileOf].map(([k, v]) => [k, v.handle]));
+    // The vault's coin, from its profile row, so a receipt is formatted at the right decimals —
+    // a SUI vault's purchase read 1000× too large when everything was scaled as USDC.
+    const coinOf = (vaultId: string): string | null => profileOf.get(vaultId)?.coinType ?? null;
 
     const subs = await client.listOwnedObjects({
       owner: buyer,
@@ -162,6 +170,7 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
         objectId: normalise(s.id),
         vaultId,
         handle: handleOf.get(vaultId) ?? null,
+        coinType: coinOf(vaultId),
         tier: Number(s.tier),
         pricePaid: BigInt(s.pricePaid),
         startedAtMs: Number(s.startedAtMs),
@@ -185,6 +194,7 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
         objectId: normalise(u.id),
         vaultId,
         handle: handleOf.get(vaultId) ?? null,
+        coinType: coinOf(vaultId),
         contentKey,
         title: null,
         edition: isMachineContentKey(contentKey) ? 'machine' : 'human',
@@ -202,16 +212,18 @@ export async function readPurchases(buyer: string): Promise<Reading<Purchases>> 
       raw key rather than borrowing a title.
     */
     if (unlockRecords.length > 0) {
-      const { titlesForContentKeys } = await import('./content');
+      const { titlesForContentKeys, titleKey } = await import('./content');
       // A machine `Unlock` is titled by the post it opens: the row is stored under the HUMAN key,
       // and `<key>#machine` names no row of its own.
       const humanKeyOf = (key: string): string => {
         const human = humanContentKey(key);
         return human.ok ? human.value : key;
       };
-      const titleOf = await titlesForContentKeys(unlockRecords.map((u) => humanKeyOf(u.contentKey)));
+      const titleOf = await titlesForContentKeys(
+        unlockRecords.map((u) => ({ vaultId: u.vaultId, contentKey: humanKeyOf(u.contentKey) })),
+      );
       for (const record of unlockRecords) {
-        record.title = titleOf.get(humanKeyOf(record.contentKey)) ?? null;
+        record.title = titleOf.get(titleKey(record.vaultId, humanKeyOf(record.contentKey))) ?? null;
       }
     }
 

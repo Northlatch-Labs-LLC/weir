@@ -17,6 +17,7 @@
  * the **table's** id, not the registry's. That is why a lookup reads the registry first.
  */
 
+import { decodeObjectBytes } from './objectbytes.js';
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { deriveDynamicFieldID } from '@mysten/sui/utils';
@@ -61,11 +62,18 @@ export interface PublishedKey {
 /** An X25519 public key is exactly this long. Mirrored from `key_registry::KEY_BYTES`. */
 export const KEY_BYTES = 32;
 
+/**
+ * One decoder for every object read in this package — `decodeObjectBytes` in objectbytes.ts —
+ * so a transport that answers base64, a byte array or an array-like object is read the same way
+ * here as everywhere else. Until 2026-09-02 this file carried its own reader that accepted a
+ * subset of those shapes, and a key registry answered as the other shape was reported "malformed:
+ * no decodable content" (the read fails CLOSED, never wrong, but a page said "not measured" for a
+ * value the node had sent). A decode failure is `null` here, which every caller below already
+ * reports as malformed with the source named.
+ */
 function toBytes(content: unknown): Uint8Array | null {
-  const value = (content as { value?: unknown } | undefined)?.value ?? content;
-  if (value instanceof Uint8Array) return value;
-  if (typeof value === 'string') return Uint8Array.from(Buffer.from(value, 'base64'));
-  return null;
+  const decoded = decodeObjectBytes(content, 'key registry');
+  return decoded.ok ? decoded.value : null;
 }
 
 /**
