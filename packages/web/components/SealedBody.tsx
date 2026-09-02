@@ -28,6 +28,7 @@ import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
 import { PostBody } from '@/components/PostBody';
+import { readVaultCoinType } from '@projectx-social/sdk';
 import { approvalFor, isSettling, openBlob, sha256Hex } from '@/lib/seal-open';
 import { sessionKeyFor } from '@/lib/seal-session';
 
@@ -98,12 +99,14 @@ type State =
   | { phase: 'failed'; reason: string };
 
 export function SealedBody({
-  sealed, preview, vaultId, contentKey, approver,
+  sealed, preview, vaultId, coinType, contentKey, approver,
 }: {
   sealed: SealedBodyRef;
   preview: string;
   /** Every Seal identity in this system begins with the vault's bytes. */
   vaultId: string;
+  /** The vault's coin type, when the caller knows it; otherwise it is read from the vault on chain. */
+  coinType?: string | null;
   /** The post's content key. Present on a paid post; a subscriber post has none and needs none. */
   contentKey?: string;
   /**
@@ -157,6 +160,14 @@ export function SealedBody({
           bytes, and the key server refuses it in a way that reads exactly like having no
           entitlement. That mistake has already cost this desk an afternoon once.
         */
+        const resolvedCoinType =
+          approver.kind === 'subscription'
+            ? (coinType ?? (await (async () => {
+                const read = await readVaultCoinType(suiClient, vaultId);
+                if (!read.ok) throw new Error(`could not read the vault's coin type: ${read.failure.detail}`);
+                return read.value;
+              })()))
+            : null;
         const tx = approvalFor(
           config,
           approver.kind === 'unlock'
@@ -177,6 +188,8 @@ export function SealedBody({
             : {
                 kind: 'subscription' as const,
                 vaultId,
+                // `creator::seal_approve_subscription<T>` names the vault's coin (v5).
+                coinType: resolvedCoinType!,
                 // `bigint`, never `number`: both are `u64`, and a rounded period builds a valid
                 // approval for the wrong month.
                 tier: BigInt(approver.tier),

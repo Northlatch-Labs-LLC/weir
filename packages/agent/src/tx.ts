@@ -366,6 +366,9 @@ export const ABORT_CLASSIFICATION: Record<string, Record<number, PreconditionNam
       code existed the same refusal came back as 15, indistinguishable from the wrong vault.
     */
     20: 'permanent',
+    21: 'permanent', // EWrongIdentity — the identity bytes do not match the vault, tier and period named.
+    22: 'permanent', // ETierNotPaidFor — the tier costs more than the subscription pays; no retry changes the price paid.
+    23: 'permanent', // EPeriodNotPaid — the period is outside the paid window; renewing is a different action.
   },
 };
 

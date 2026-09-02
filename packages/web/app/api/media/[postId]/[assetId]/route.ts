@@ -9,8 +9,9 @@ import {
   unlockKey,
 } from '@/lib/entitlement';
 import { provenReaderFor } from '@/lib/read-session';
-import { findAsset, findPost } from '@/lib/content';
-import { fold } from '@projectx-social/sdk';
+import { findAsset, findPost, findProfile } from '@/lib/content';
+import { createClient, fold, readVaultCoinType } from '@projectx-social/sdk';
+import { siteConfig } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,17 @@ export async function GET(
   }
 
   const post = await findPost(postId);
+  // v5: the subscription approval names CreatorVault<T>; the profile records the vault's coin.
+  const vaultCoinType = await (async () => {
+    if (post === null) return null;
+    const recorded = (await findProfile(post.authorHandle))?.coinType ?? null;
+    if (recorded !== null) return recorded;
+    // A profile without a recorded coin: the vault's own type on chain is the authority.
+    const config = siteConfig();
+    if (!config.ok) return null;
+    const read = await readVaultCoinType(createClient(config.value), post.vaultId);
+    return read.ok ? read.value : null;
+  })();
   if (post === null) return new Response('not found', { status: 404 });
 
   // The asset must belong to this post. Without this, a reader entitled to any one post could
@@ -209,6 +221,8 @@ export async function GET(
               'x-seal-object': held.objectId,
               'x-seal-tier': sealed.tier,
               'x-seal-period': sealed.period,
+              // v5: the approval names `CreatorVault<T>`, so the browser needs the coin type.
+              ...(vaultCoinType === null ? {} : { 'x-seal-coin-type': vaultCoinType }),
             };
       }
 

@@ -332,6 +332,9 @@ const EWrongIdentity: u64 = 5;
 const EPeriodNotPaid: u64 = 6;
 /// The subscription is of a lower tier than the content requested.
 const ETierTooLow: u64 = 7;
+/// `seal_approve_subscription` in this module is retired: subscription keys are released by
+/// `creator::seal_approve_subscription`, which ranks by the price paid rather than the tier index.
+const EDeprecatedApproval: u64 = 8;
 
 /// The identity a single piece of priced content is encrypted to.
 ///
@@ -395,25 +398,49 @@ entry fun seal_approve_subscription(
     subscription: &Subscription,
     ctx: &TxContext,
 ) {
-    assert!(subscription.subscriber == ctx.sender(), ENotHolder);
+    /*
+      RETIRED in v5 (2026-09-02), and it aborts unconditionally.
+
+      This ranked access by `subscription.tier >= tier`, an INDEX comparison. The ordering that made
+      an index comparison mean "at least as expensive" was only enforced from 2026-09-01
+      (`creator::ETierPriceNotAscending`), and vaults opened before that exist on mainnet with a
+      cheap tier at a higher index than an expensive one. Under this function a 0.50 USDC
+      subscriber derived keys for 10 USDC content, and a derived Seal key is permanent.
+
+      The replacement is `creator::seal_approve_subscription<T>`, which takes the vault and ranks
+      by the PRICE the subscriber paid against the price of the tier being asked for. The body here
+      cannot be removed — an upgrade may not delete an entry function — so it is closed: any call
+      aborts before reading anything, and the key servers release nothing through it.
+    */
+    let _ = id;
+    let _ = tier;
+    let _ = period;
+    let _ = subscription;
+    let _ = ctx;
+    abort EDeprecatedApproval
     // Binds `tier` and `period` to the identity: they cannot name one period and be checked
     // against another, because the bytes would not match.
-    assert!(id == period_identity(subscription.vault, tier, period), EWrongIdentity);
-    assert!(subscription.tier >= tier, ETierTooLow);
-
-    /*
-      Judged at the period's start rather than by overlap.
-
-      Overlap would grant a whole period to somebody subscribed for one day of it — a day's payment
-      buying two periods of content at the boundaries. Judging by the start under-grants instead: a
-      subscriber who joins mid-period gets the next one, not the one already running. That is the
-      safe direction, because a key once derived cannot be taken back, and the creator can always
-      sell the missing period as an `Unlock`.
-    */
-    let period_start = period * PERIOD_MS;
-    assert!(subscription.started_at_ms <= period_start, EPeriodNotPaid);
-    assert!(period_start < subscription.expires_at_ms, EPeriodNotPaid);
 }
+
+/// Is `period` one this subscription paid for? The rule the retired approval used, kept here as
+/// the one place it is written so `creator::seal_approve_subscription` cannot drift from it.
+///
+/// Judged at the period's start rather than by overlap. Overlap would grant a whole period to
+/// somebody subscribed for one day of it — a day's payment buying two periods of content at the
+/// boundaries. Judging by the start under-grants instead: a subscriber who joins mid-period gets
+/// the next one, not the one already running. That is the safe direction, because a key once
+/// derived cannot be taken back, and the creator can always sell the missing period as an `Unlock`.
+public fun covers_period(subscription: &Subscription, period: u64): bool {
+    let period_start = period * PERIOD_MS;
+    subscription.started_at_ms <= period_start && period_start < subscription.expires_at_ms
+}
+
+/// Whether `ETierTooLow` can still be raised: it cannot, and it is kept only so its number is
+/// never reused by a different meaning. `ETierTooLow` and `EPeriodNotPaid` remain named for the
+/// mirrors that decode historic aborts.
+public fun tier_too_low_code(): u64 { ETierTooLow }
+public fun period_not_paid_code(): u64 { EPeriodNotPaid }
+public fun deprecated_approval_code(): u64 { EDeprecatedApproval }
 
 /*
   Test seams.

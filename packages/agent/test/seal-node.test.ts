@@ -132,6 +132,7 @@ const SUBSCRIPTION: SealApproval = {
   tier: 0n,
   period: 689n,
   subscriptionId: SUBSCRIPTION_OBJECT,
+  coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
 };
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -171,6 +172,7 @@ const browserOpener = (await import(
           tier: bigint;
           period: bigint;
           subscriptionId: string;
+          coinType: string;
         },
   ) => Parameters<typeof approvalBytes>[0];
 };
@@ -480,6 +482,7 @@ describe('the approval transaction handed to the key servers', () => {
       tier: 0n,
       period: 689n,
       subscriptionId: SUBSCRIPTION_OBJECT,
+      coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     });
 
     expect(mine.getData()).toEqual(browser.getData());
@@ -496,10 +499,12 @@ describe('the approval transaction handed to the key servers', () => {
       test can actually tell them apart.
     */
     expect(LATEST).not.toBe(PACKAGE);
-    for (const approval of [UNLOCK, SUBSCRIPTION]) {
+    // Since v5 the two approvals live in different modules: unlocks in `entitlement`, subscriptions
+    // in `creator`, where the tier prices are. Both still target the LATEST package.
+    for (const [approval, module] of [[UNLOCK, 'entitlement'], [SUBSCRIPTION, 'creator']] as const) {
       const command = approvalTransactionFor(CONFIG, approval).getData().commands[0];
       expect(command?.MoveCall?.package).toBe(LATEST);
-      expect(command?.MoveCall?.module).toBe('entitlement');
+      expect(command?.MoveCall?.module).toBe(module);
     }
   });
 
@@ -536,7 +541,10 @@ describe('the approval transaction handed to the key servers', () => {
     expect([...fromBase64(data.inputs[2]?.Pure?.bytes ?? '')]).toEqual([
       0xb1, 0x02, 0, 0, 0, 0, 0, 0,
     ]);
-    expect(data.inputs[3]?.UnresolvedObject).toEqual({ objectId: SUBSCRIPTION_OBJECT });
+    // v5: the vault comes before the subscription, because the policy reads the tier's price from it.
+    expect(data.inputs[3]?.UnresolvedObject).toEqual({ objectId: VAULT });
+    expect(data.inputs[4]?.UnresolvedObject).toEqual({ objectId: SUBSCRIPTION_OBJECT });
+    expect(data.commands[0]?.MoveCall?.typeArguments).toEqual([SUBSCRIPTION.coinType]);
     expect(data.inputs[3]?.UnresolvedObject).not.toHaveProperty('mutable');
   });
 

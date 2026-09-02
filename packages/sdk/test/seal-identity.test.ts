@@ -230,24 +230,27 @@ describe('the approval transactions', () => {
     expect(call.arguments).toHaveLength(2);
   });
 
-  it('calls seal_approve_subscription with identity, tier, period and the subscription, in order', () => {
+  it('calls creator::seal_approve_subscription<T> with identity, tier, period, the vault and the subscription, in order', () => {
     const tx = approveSubscription(CONFIG, {
       identity: periodIdentity(VAULT, 3n, 5n),
       tier: 3n,
       period: 5n,
       subscriptionId: `0x${'bb'.repeat(32)}`,
+      vaultId: VAULT,
+      coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     });
     const data = tx.getData();
     const call = data.commands[0]!.MoveCall!;
     expect(call.package).toBe(CONFIG.latestPackageId);
-    expect(call.module).toBe('entitlement');
+    expect(call.module).toBe('creator');
+    expect(call.typeArguments).toEqual(['0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC']);
     expect(call.function).toBe('seal_approve_subscription');
     /*
-      Four arguments, and the count is the point. `tier` and `period` are both u64 and adjacent, so
+      Five arguments since v5 (the vault carries the tier prices), and the count is the point. `tier` and `period` are both u64 and adjacent, so
       swapping them builds, signs and asks for a key to a different period — which the contract
       then refuses with an identity mismatch, at the key server, a long way from the mistake.
     */
-    expect(call.arguments).toHaveLength(4);
+    expect(call.arguments).toHaveLength(5);
   });
 
   it('calls seal_approve_mind on the mind package with the identity, then the account object', () => {

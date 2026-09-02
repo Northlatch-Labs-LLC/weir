@@ -406,6 +406,7 @@ describe('the identity a reader asks for is the one the contract will check', ()
       tier: 2n,
       period: 7n,
       subscriptionId: `0x${'ef'.repeat(32)}`,
+      coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     };
     expect([...identityFor(subscription)]).toEqual([...periodIdentity(VAULT, 2n, 7n)]);
   });
@@ -424,11 +425,13 @@ describe('the identity a reader asks for is the one the contract will check', ()
       tier: 2n,
       period: 7n,
       subscriptionId: `0x${'ef'.repeat(32)}`,
+      coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     })
       .getData()
       .commands[0]!.MoveCall!;
+    expect(call.module).toBe('creator');
     expect(call.function).toBe('seal_approve_subscription');
-    expect(call.arguments).toHaveLength(4);
+    expect(call.arguments).toHaveLength(5);
   });
 });
 
@@ -510,6 +513,7 @@ describe('the entitlement descriptor a sealed response carries', () => {
         [SEAL_HEADERS.entitlementObject]: `0x${'ab'.repeat(32)}`,
         [SEAL_HEADERS.tier]: '0',
         [SEAL_HEADERS.period]: '640',
+        [SEAL_HEADERS.coinType]: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
       }),
     );
 
@@ -524,7 +528,24 @@ describe('the entitlement descriptor a sealed response carries', () => {
       subscriptionId: `0x${'ab'.repeat(32)}`,
       tier: 0n,
       period: 640n,
+      coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     });
+  });
+
+  it('refuses a subscription descriptor without the vault coin type the approval must name', async () => {
+    // v5: `creator::seal_approve_subscription<T>` names the vault's coin. A descriptor without it
+    // would build nothing, so it is refused here rather than at the key servers.
+    await expect(
+      readMediaResponse(
+        await withHeaders({
+          [SEAL_HEADERS.entitlement]: 'subscription',
+          [SEAL_HEADERS.vault]: VAULT,
+          [SEAL_HEADERS.entitlementObject]: `0x${'ab'.repeat(32)}`,
+          [SEAL_HEADERS.tier]: '0',
+          [SEAL_HEADERS.period]: '640',
+        }),
+      ),
+    ).rejects.toThrow(/coin type/);
   });
 
   it('refuses a subscription that does not say which period it covers', async () => {

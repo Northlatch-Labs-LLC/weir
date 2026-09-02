@@ -169,12 +169,19 @@ fun a_crafted_content_key_cannot_forge_a_subscription_identity() {
 }
 
 // === Subscriptions ===
+//
+// The policy for subscription keys moved to `creator::seal_approve_subscription` in v5 (2026-09-02)
+// and is tested in `creator_tests.move` with real vaults: it ranks by the price paid, and the price
+// lives in the vault. What stays here is the one property of the retired entry that matters.
 
 #[test]
-fun subscription_approves_a_period_it_paid_for() {
+#[expected_failure(abort_code = ::projectx_social::entitlement::EDeprecatedApproval)]
+fun the_retired_subscription_approval_releases_nothing() {
+    // A valid subscription, a valid identity, the right sender — and still refused. An upgrade
+    // cannot delete an entry function, so the retired one is closed rather than removed: a key
+    // server that still called it would release nothing, which is the safe failure.
     let mut scenario = ts::begin(CREATOR);
     let vault = vault_id(&mut scenario);
-    // Starts exactly on a period boundary, so period 10 is covered from its first millisecond.
     let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
 
     entitlement::mint_subscription_for_testing(
@@ -190,219 +197,35 @@ fun subscription_approves_a_period_it_paid_for() {
         &subscription,
         ts::ctx(&mut scenario),
     );
+
+    abort 0
+}
+
+#[test]
+fun covers_period_is_judged_at_the_period_start() {
+    let mut scenario = ts::begin(CREATOR);
+    let vault = vault_id(&mut scenario);
+    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
+
+    entitlement::mint_subscription_for_testing(
+        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
+    );
+
+    ts::next_tx(&mut scenario, FAN);
+    let subscription = ts::take_from_sender<Subscription>(&scenario);
+    // Period 10 is paid for from its first millisecond; 9 is the back catalogue; 11 is after expiry.
+    assert!(entitlement::covers_period(&subscription, 10));
+    assert!(!entitlement::covers_period(&subscription, 9));
+    assert!(!entitlement::covers_period(&subscription, 11));
 
     ts::return_to_sender(&scenario, subscription);
     clock.destroy_for_testing();
     ts::end(scenario);
 }
 
-#[test]
-#[expected_failure(abort_code = ::projectx_social::entitlement::EPeriodNotPaid)]
-fun subscription_refuses_a_period_before_it_started() {
-    // The back catalogue is not included. A new subscriber who could derive earlier periods would
-    // be buying the archive for one period's price, permanently.
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 9),
-        1,
-        9,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    abort 0
-}
-
-#[test]
-#[expected_failure(abort_code = ::projectx_social::entitlement::EPeriodNotPaid)]
-fun subscription_refuses_a_period_after_it_expires() {
-    /*
-      The property that makes recurring revenue possible at all.
-
-      Encrypt every subscriber post to one identity per tier and a single period's payment buys the
-      archive forever, including everything published after the subscriber stops paying — and
-      nothing about it would look wrong, because the check passes once and a Seal key is permanent.
-      The period in the identity is what makes "paid until" mean something.
-    */
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 11),
-        1,
-        11,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    abort 0
-}
-
-#[test]
-fun a_lapsed_subscriber_keeps_the_periods_they_paid_for() {
-    /*
-      Deliberate, and the reason no `Clock` is read by the policy.
-
-      A key is permanent once derived, so requiring the subscription to be *currently* active would
-      control nothing — anybody could fetch every key the day before lapsing — while punishing the
-      subscriber who simply did not open the app in time. What they bought, they keep; what they did
-      not buy stays shut, which the previous test asserts.
-    */
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-
-    // Nothing here advances the clock, and nothing needs to: the policy never asks what time it is,
-    // so this call is identical to one made years after the subscription lapsed.
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 10),
-        1,
-        10,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    ts::return_to_sender(&scenario, subscription);
-    clock.destroy_for_testing();
-    ts::end(scenario);
-}
-
-#[test]
-#[expected_failure(abort_code = ::projectx_social::entitlement::ETierTooLow)]
-fun subscription_refuses_content_above_its_tier() {
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 2, 10),
-        2,
-        10,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    abort 0
-}
-
-#[test]
-/// `>=` on the tier index is only safe because a higher index is a MORE EXPENSIVE tier. This test
-/// asserted the comparison for a year without saying so, and the comparison was never the defect:
-/// the ordering it relies on was not enforced anywhere until 2026-09-01, so a cheap tier added or
-/// repriced above the expensive ones passed this exact check for content it had not bought.
-/// `creator::add_tier` and `update_tier` now refuse any price that is not strictly ascending by
-/// index — see `ETierPriceNotAscending` and its tests — and that is the precondition this test
-/// stands on.
-fun a_higher_tier_reads_everything_below_it() {
-    // Equality on the tier would mean upgrading silently revoked access to the content the lower
-    // tier had been buying — an upgrade that takes something away.
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 3, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 10),
-        1,
-        10,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    ts::return_to_sender(&scenario, subscription);
-    clock.destroy_for_testing();
-    ts::end(scenario);
-}
-
-#[test]
-#[expected_failure(abort_code = ::projectx_social::entitlement::EWrongIdentity)]
-fun subscription_refuses_a_period_that_is_not_the_one_in_the_identity() {
-    /*
-      `tier` and `period` arrive as arguments, so on their own they could name a window the
-      subscription paid for while the *identity* names another. The equality against
-      `period_identity` is what binds them: mismatched arguments cannot produce matching bytes.
-    */
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-    entitlement::approve_subscription_for_testing(
-        // The identity says period 99; the arguments claim the paid one.
-        entitlement::period_identity(vault, 1, 99),
-        1,
-        10,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    abort 0
-}
-
-#[test]
-#[expected_failure(abort_code = ::projectx_social::entitlement::ENotHolder)]
-fun subscription_refuses_somebody_else_holding_it() {
-    let mut scenario = ts::begin(CREATOR);
-    let vault = vault_id(&mut scenario);
-    let clock = clock_at(&mut scenario, 10 * PERIOD_MS);
-
-    entitlement::mint_subscription_for_testing(
-        vault, FAN, 1, PERIOD_MS, &clock, ts::ctx(&mut scenario),
-    );
-
-    ts::next_tx(&mut scenario, FAN);
-    let subscription = ts::take_from_sender<Subscription>(&scenario);
-
-    ts::next_tx(&mut scenario, STRANGER);
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 10),
-        1,
-        10,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
-
-    abort 0
-}
+// `subscription_refuses_a_period_that_is_not_the_one_in_the_identity` and
+// `subscription_refuses_somebody_else_holding_it` moved to `creator_tests.move` with the policy
+// (EWrongIdentity / ENotSubscriber there), 2026-09-02.
 
 #[test]
 fun periods_partition_time_at_a_fixed_width() {
@@ -507,10 +330,9 @@ fun the_period_arithmetic_is_exactly_this() {
 }
 
 #[test]
-#[expected_failure(abort_code = ::projectx_social::entitlement::EPeriodNotPaid)]
 /// A renewal after a lapse must not hand over the months nobody paid for.
 ///
-/// `seal_approve_subscription` grants a period inside `[started_at_ms, expires_at_ms)`, and until
+/// `covers_period` grants a period inside `[started_at_ms, expires_at_ms)`, and until
 /// 2026-09-01 `extend` moved only the far end of that pair. Subscribe at period 10, stop, come
 /// back at period 30 and pay for one period, and the window became periods 10 to 31 — twenty
 /// unpaid periods, derivable permanently, for one period's price. Here period 20 sits squarely in
@@ -531,15 +353,12 @@ fun a_renewal_after_a_lapse_does_not_open_the_gap() {
     clock.set_for_testing(30 * PERIOD_MS);
     entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
 
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 20),
-        1,
-        20,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
+    assert!(!entitlement::covers_period(&subscription, 20));
+    assert!(entitlement::covers_period(&subscription, 30));
 
-    abort 0
+    ts::return_to_sender(&scenario, subscription);
+    clock.destroy_for_testing();
+    ts::end(scenario);
 }
 
 #[test]
@@ -561,13 +380,7 @@ fun a_renewal_after_a_lapse_still_buys_the_period_it_paid_for() {
     clock.set_for_testing(30 * PERIOD_MS);
     entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
 
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 30),
-        1,
-        30,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
+    assert!(entitlement::covers_period(&subscription, 30));
 
     ts::return_to_sender(&scenario, subscription);
     clock.destroy_for_testing();
@@ -597,13 +410,9 @@ fun an_unbroken_renewal_keeps_every_period_it_paid_for() {
     entitlement::extend_for_testing(&mut subscription, 1, PERIOD_MS, &clock);
 
     // Period 10 is the first one, bought before either renewal, and it must still be derivable.
-    entitlement::approve_subscription_for_testing(
-        entitlement::period_identity(vault, 1, 10),
-        1,
-        10,
-        &subscription,
-        ts::ctx(&mut scenario),
-    );
+    assert!(entitlement::covers_period(&subscription, 10));
+    assert!(entitlement::covers_period(&subscription, 12));
+    assert!(!entitlement::covers_period(&subscription, 13));
 
     ts::return_to_sender(&scenario, subscription);
     clock.destroy_for_testing();

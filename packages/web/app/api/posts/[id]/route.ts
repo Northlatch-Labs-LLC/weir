@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { fold } from '@projectx-social/sdk';
 import { rateLimit } from '@/lib/rate-limit';
-import { findPost, visiblePost } from '@/lib/content';
+import { findPost, findProfile, visiblePost } from '@/lib/content';
 import { canRead, readEntitlements, sealApprover } from '@/lib/entitlement';
 import { provenReaderFor } from '@/lib/read-session';
 
@@ -88,10 +88,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ...(shown.edition === undefined ? {} : { edition: shown.edition }),
     });
   }
+  const authorProfile = await findProfile(post.authorHandle);
   const approval =
     approver.kind === 'unlock'
       ? { kind: 'unlock' as const, vaultId: post.vaultId, contentKey: approver.contentKey, unlockId: approver.objectId }
-      : { kind: 'subscription' as const, vaultId: post.vaultId, tier: approver.tier, period: approver.period, subscriptionId: approver.objectId };
+      : {
+          kind: 'subscription' as const,
+          vaultId: post.vaultId,
+          tier: approver.tier,
+          period: approver.period,
+          subscriptionId: approver.objectId,
+          // v5: the approval names CreatorVault<T>. Sent when the profile records the coin; a reader
+          // without it reads the vault's type on chain.
+          ...(authorProfile?.coinType ? { coinType: authorProfile.coinType } : {}),
+        };
   return NextResponse.json({
     post: summary,
     body: null,

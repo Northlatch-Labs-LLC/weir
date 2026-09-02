@@ -67,9 +67,13 @@ describe('an entitlement is named as an owned object', () => {
       tier: 0n,
       period: 690n,
       subscriptionId: SUBSCRIPTION,
+      vaultId: VAULT,
+      coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     });
     const refs = unresolvedInputs(tx);
-    expect(refs).toHaveLength(1);
+    // Two unresolved objects since v5: the vault (shared) and the subscription (owned).
+    expect(refs).toHaveLength(2);
+    expect(refs[1]).not.toHaveProperty('mutable');
     expect(refs[0]).not.toHaveProperty('mutable');
   });
 

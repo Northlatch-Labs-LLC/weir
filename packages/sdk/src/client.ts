@@ -483,6 +483,9 @@ export const ABORT_EXPLANATIONS: Record<string, Record<number, string>> = {
     17: 'Nothing to migrate: this vault already matches the package version.',
     18: 'A tier period must be a whole number of 30-day Seal periods.',
     19: 'Tier prices must ascend with the tier index: a higher tier cannot cost less than a lower one.',
+    21: 'That Seal identity is not the one this vault, tier and period produce.',
+    22: 'That tier costs more than this subscription pays per period, so its key is not released.',
+    23: 'That period is outside what this subscription paid for.',
     20: 'That subscription is not yours to renew.',
   },
   stake_vault: {

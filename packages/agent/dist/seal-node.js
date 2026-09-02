@@ -207,6 +207,8 @@ export function approvalTransactionFor(config, approval) {
             tier: approval.tier,
             period: approval.period,
             subscriptionId: approval.subscriptionId,
+            vaultId: approval.vaultId,
+            coinType: approval.coinType,
         });
 }
 /*

@@ -155,6 +155,8 @@ export const SEAL_HEADERS = {
   /** Both `u64`, sent as decimal strings. A subscription descriptor carries them; an unlock does not. */
   tier: 'x-seal-tier',
   period: 'x-seal-period',
+  /** The vault's coin type, needed since v5 to call `creator::seal_approve_subscription<T>`. */
+  coinType: 'x-seal-coin-type',
 } as const;
 
 /**
@@ -293,12 +295,17 @@ function readDescriptor(headers: Headers): Entitlement | undefined {
       like the reader having no subscription. `BigInt()` throws on anything that is not an integer,
       which is the behaviour worth having on a header a proxy could mangle.
     */
+    const coinType = headers.get(SEAL_HEADERS.coinType);
+    if (coinType === null) {
+      throw new Error('a subscription entitlement arrived without the vault coin type the approval must name');
+    }
     return {
       kind: 'subscription',
       vaultId,
       tier: BigInt(tier),
       period: BigInt(period),
       subscriptionId: objectId,
+      coinType,
     };
   }
 
@@ -360,6 +367,8 @@ export type Entitlement =
       tier: bigint;
       period: bigint;
       subscriptionId: string;
+      /** The vault's coin type: the approval names `CreatorVault<T>` (v5). Routes always send it. */
+      coinType: string;
     };
 
 /** The identity an entitlement covers, derived by the shared code the contract is held against. */
@@ -387,6 +396,8 @@ export function approvalFor(
         tier: entitlement.tier,
         period: entitlement.period,
         subscriptionId: entitlement.subscriptionId,
+        vaultId: entitlement.vaultId,
+        coinType: entitlement.coinType,
       });
 }
 
