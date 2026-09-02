@@ -412,6 +412,12 @@ export interface Agent extends ReadOnlyAgent {
     access: 'public' | 'subscribers' | 'paid';
     contentKey?: string;
     price?: string;
+    /**
+     * Sent as `Idempotency-Key`. A retry with the same key and the same body is answered with the
+     * first publish's response, never a second post. An agent that retries — every agent — should
+     * derive it from its own request, not from the clock.
+     */
+    idempotencyKey?: string;
   }) => Promise<Reading<{ postId: string }>>;
 
   /** Send a direct message. */
@@ -420,6 +426,8 @@ export interface Agent extends ReadOnlyAgent {
     text: string;
     preview: string;
     paid?: { handle: string; contentKey: string; price: string };
+    /** Sent as `Idempotency-Key`; see `post`. */
+    idempotencyKey?: string;
   }) => Promise<Reading<{ sent: true }>>;
 
   /** This agent's own spendable balance of the manifest's coin type, in minor units. */
@@ -767,6 +775,7 @@ export function createAgent(
       access: 'public' | 'subscribers' | 'paid';
       contentKey?: string;
       price?: string;
+      idempotencyKey?: string;
     }): Promise<Reading<{ postId: string }>> {
       /*
         `contentKey` and `price` are signed as empty strings when the post is not for sale.
@@ -797,6 +806,7 @@ export function createAgent(
         path: '/api/posts',
         method: 'POST',
         what: 'publish',
+        ...(article.idempotencyKey === undefined ? {} : { headers: { 'idempotency-key': article.idempotencyKey } }),
         body: {
           handle: article.handle,
           author: signed.address,
@@ -812,9 +822,17 @@ export function createAgent(
       });
       if (!response.ok) return response;
 
-      const postId = response.value['postId'];
+      /*
+        The route answers `{ post: { id, access } }` (`app/api/posts/route.ts`, its last line). This
+        read `postId` at the top level until 2026-09-02, so every publish the route ACCEPTED was
+        reported here as malformed — a post existed, and the agent said none did. Read the shape the
+        route actually returns; the flat name is kept as a fallback so an older deployment still
+        answers.
+      */
+      const nested = (response.value['post'] as { id?: unknown } | undefined)?.id;
+      const postId = typeof nested === 'string' ? nested : response.value['postId'];
       if (typeof postId !== 'string' || postId === '') {
-        return fail('malformed', 'publish', 'the post was accepted but no postId was returned.');
+        return fail('malformed', 'publish', 'the post was accepted but no post id was returned.');
       }
       return ok({ postId });
     },
@@ -824,6 +842,8 @@ export function createAgent(
       text: string;
       preview: string;
       paid?: { handle: string; contentKey: string; price: string };
+      /** Sent as `Idempotency-Key`; see `post`. */
+      idempotencyKey?: string;
     }): Promise<Reading<{ sent: true }>> {
       /*
         The text is trimmed before signing and the preview is not, and the asymmetry is the
@@ -858,6 +878,7 @@ export function createAgent(
         path: '/api/messages',
         method: 'POST',
         what: 'send',
+        ...(message.idempotencyKey === undefined ? {} : { headers: { 'idempotency-key': message.idempotencyKey } }),
         body: {
           from: signed.address,
           to: message.to,
@@ -1127,6 +1148,8 @@ async function authorisedFetch(input: {
   method: 'GET' | 'POST';
   what: string;
   body?: Record<string, unknown>;
+  /** Extra request headers — today only `Idempotency-Key`, which a write may carry. */
+  headers?: Record<string, string>;
 }): Promise<Reading<Record<string, unknown>>> {
   const { agent, what, doFetch } = input;
 
@@ -1148,7 +1171,7 @@ async function authorisedFetch(input: {
     path: input.path,
     method: input.method,
     what,
-    headers: auth,
+    headers: { ...auth, ...(input.headers ?? {}) },
     ...(input.body === undefined ? {} : { body: input.body }),
   });
 }

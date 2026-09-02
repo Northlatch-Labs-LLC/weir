@@ -16,6 +16,7 @@ import { siteConfig } from '@/lib/chain';
 import { storeBody, type SealedBody } from '@/lib/body-storage';
 import { sealBothEditions } from '@/lib/machine-pricing';
 import { spendSignature, sweepUsedSignatures, verifyActionDeferringSpend } from '@/lib/identity';
+import { idempotently } from '@/lib/idempotent-route';
 import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,22 @@ function contentDigest(preview: string, text: string): string {
  * Authorship is checked the same way: the caller must be the vault's owner, read from chain. There
  * is no account table here to consult, and no session to forge.
  */
-export async function POST(request: Request) {
+/**
+ * Idempotent when the caller asks for it. `Idempotency-Key` present → the request is claimed on
+ * `(author, key)` before any side effect and its answer is replayed on a retry; absent → the route
+ * runs as it always has. `lib/idempotent-route.ts` says why the header is optional and why the
+ * claim precedes the signature check.
+ */
+export async function POST(request: Request): Promise<Response> {
+  return idempotently(
+    request,
+    '/api/posts',
+    (body) => (typeof (body as { author?: unknown })?.author === 'string' ? (body as { author: string }).author : null),
+    publishOnce,
+  );
+}
+
+async function publishOnce(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
