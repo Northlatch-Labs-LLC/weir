@@ -79,6 +79,8 @@ import { createServer, type IncomingMessage, type Server as HttpServer, type Ser
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SUI_PRIVATE_KEY_PREFIX } from '@mysten/sui/cryptography';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+// Type-only: erased by the compiler. The agent library itself is loaded dynamically, and only then.
+import type { Reading } from '@projectx-social/agent';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -163,6 +165,20 @@ export function parseAmount(text: string): bigint | null {
 }
 
 /** A post as it appears in a search result: enough to decide whether to pay, never the paid body. */
+/**
+ * One page of the shop window, as `GET /api/browse` answers it.
+ *
+ * `truncated` is the server's word, measured by fetching one row past the page, and it is carried
+ * to the caller untouched: a page that came back full is not evidence of a next one, and a tool
+ * that dropped the flag would leave an agent unable to tell "that is all" from "there is more".
+ * `nextCursor` is opaque; it goes back to the server as it came.
+ */
+export interface WeirFeed {
+  posts: WeirPost[];
+  truncated: boolean;
+  nextCursor: string | null;
+}
+
 export interface WeirPost {
   postId: string;
   handle: string;
@@ -247,7 +263,15 @@ export interface WeirBalance {
  */
 export interface WeirPort {
   /** Browse or search. Absent today — see {@link capabilitiesOf}. */
-  feed?: (input: { query?: string; handle?: string; limit: number }) => Promise<WeirPost[]>;
+  /**
+   * Browse the shop window: one page, optionally one creator's, optionally continuing from a cursor.
+   *
+   * No `limit` and no `query`. The page size is the server's (`BROWSE_PAGE`, not a caller
+   * parameter — a ceiling a caller can raise is not a ceiling), and `/api/browse` has no free-text
+   * search, so a `query` here would be a promise the endpoint cannot keep. A `Reading`, not a bare
+   * array: a failed read is a failure kind the caller can act on, never an empty page.
+   */
+  feed?: (input: { handle?: string; cursor?: string }) => Promise<Reading<WeirFeed>>;
   /** Price one content key from the chain. */
   quote?: (input: { vaultId: string; contentKey: string }) => Promise<WeirQuote>;
   /** Fetch a body the caller is already entitled to. `null` means "exists, not entitled". */
@@ -509,6 +533,11 @@ export interface ServerOptions {
   allowedOrigins: string[];
   /** `Host` header values this endpoint answers to. See {@link hostAllowed}. */
   allowedHosts: string[];
+  /**
+   * The environment the agent library is handed — {@link agentEnvironment}, a projection of exactly
+   * the names in {@link AGENT_ENVIRONMENT}, never the whole process environment.
+   */
+  agentEnvironment: Record<string, string>;
 }
 
 /** The default the operator gets if they name nothing. Production, because that is where posts are. */
@@ -523,6 +552,46 @@ export const ENV = {
   allowedOrigins: 'WEIR_MCP_ALLOWED_ORIGINS',
   allowedHosts: 'WEIR_MCP_ALLOWED_HOSTS',
 } as const;
+
+/**
+ * The variables the agent library reads, and the only ones it is handed.
+ *
+ * `createAgent` loads its manifest from the record it is given — `loadAgentManifest(config)` reads
+ * the six chain ids, the coin type and the base URL from THAT object, not from `process.env`. This
+ * package used to pass `{ source: 'weir-mcp' }`, so the agent saw none of them and refused with
+ * "missing required environment variables" whatever the operator had exported; hosted mode had never
+ * started on any machine. It is handed a projection now, and a projection rather than `process.env`
+ * itself so that the one secret the agent's own manifest names (`PROJECTX_SOCIAL_AGENT_SECRET`) can
+ * never travel to it by accident from this side — keys reach `createAgent` through `keypair`, and in
+ * HTTP mode that is `null` by construction.
+ *
+ * The list is checked, not trusted: `test/env-handoff.ts` compares it to the agent's and the SDK's
+ * own exported names, so a variable added over there fails a test here.
+ */
+export const AGENT_ENVIRONMENT = [
+  // The six the SDK requires (`REQUIRED_ENV` in `@projectx-social/sdk`).
+  'PROJECTX_SOCIAL_NETWORK',
+  'PROJECTX_SOCIAL_GRPC_URL',
+  'PROJECTX_SOCIAL_PACKAGE_ID',
+  'PROJECTX_SOCIAL_LATEST_PACKAGE_ID',
+  'PROJECTX_SOCIAL_PLATFORM_ID',
+  'PROJECTX_SOCIAL_REGISTRY_ID',
+  // The two the agent's manifest requires (`AGENT_ENV` in `@projectx-social/agent`).
+  'PROJECTX_SOCIAL_AGENT_COIN_TYPE',
+  'PROJECTX_SOCIAL_AGENT_BASE_URL',
+  // The one optional seam the SDK reads when present; absent is a supported state.
+  'PROJECTX_SOCIAL_KEY_REGISTRY_ID',
+] as const;
+
+/** Exactly the {@link AGENT_ENVIRONMENT} names that are set and non-empty, trimmed. */
+export function agentEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of AGENT_ENVIRONMENT) {
+    const value = env[name]?.trim();
+    if (value !== undefined && value !== '') out[name] = value;
+  }
+  return out;
+}
 
 /** Raised for every condition that must stop the process before it can do harm. */
 export class StartupRefusal extends Error {
@@ -627,6 +696,7 @@ export function resolveOptions(argv: readonly string[], env: NodeJS.ProcessEnv):
     httpPort,
     allowedOrigins,
     allowedHosts: configuredHosts.length > 0 ? configuredHosts : defaultAllowedHosts(httpHost, httpPort),
+    agentEnvironment: agentEnvironment(env),
   };
 }
 
@@ -849,7 +919,8 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
   const created: unknown = await (createAgent as (input: unknown) => unknown)({
     keypair,
     baseUrl: options.baseUrl,
-    config: { source: 'weir-mcp' },
+    // The projection, never `process.env`. See `AGENT_ENVIRONMENT`.
+    config: options.agentEnvironment,
   });
 
   if (created === null || typeof created !== 'object') {

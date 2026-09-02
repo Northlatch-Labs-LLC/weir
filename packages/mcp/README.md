@@ -260,6 +260,28 @@ Streamable HTTP, stateless, JSON responses.
 | `WEIR_MCP_ALLOWED_ORIGINS` | *(empty)* | Comma-separated browser origins. Empty means **every request carrying an `Origin` header is refused** and every request without one is served — browsers send `Origin`, MCP clients do not. |
 | `WEIR_MCP_ALLOWED_HOSTS` | bound address + loopback spellings, at the bound port | Comma-separated `Host` values this endpoint answers to. **This is the DNS-rebinding control.** |
 
+The agent library this server binds reads **eight more**, and this server hands it exactly these
+(`AGENT_ENVIRONMENT` in `transport.ts` — a projection, never the whole process environment). Every
+value is public; none is a secret. Each refusal below is the library's own message, verbatim, so an
+operator can match a log line to a row.
+
+| Variable | Required | Refusal when absent |
+|---|---|---|
+| `PROJECTX_SOCIAL_NETWORK` | yes | `missing required environment variable: PROJECTX_SOCIAL_NETWORK. There is no default — set them explicitly. Mainnet ids are recorded in sui-contracts/deploy/mainnet.json.` (several absent: `variables:` and the list) |
+| `PROJECTX_SOCIAL_GRPC_URL` | yes | as above |
+| `PROJECTX_SOCIAL_PACKAGE_ID` | yes | as above |
+| `PROJECTX_SOCIAL_LATEST_PACKAGE_ID` | yes | as above |
+| `PROJECTX_SOCIAL_PLATFORM_ID` | yes | as above |
+| `PROJECTX_SOCIAL_REGISTRY_ID` | yes | as above |
+| `PROJECTX_SOCIAL_AGENT_COIN_TYPE` | yes | `PROJECTX_SOCIAL_AGENT_COIN_TYPE is not set. Every spending call this agent makes is generic over a coin type and there is no safe default: a vault takes payment in the coin it was opened in and aborts on any other. The mainnet USDC type is recorded in MAINNET_RECORD.` |
+| `PROJECTX_SOCIAL_AGENT_BASE_URL` | yes | `PROJECTX_SOCIAL_AGENT_BASE_URL is not set. Feeds, publishing and messaging are HTTP calls against a weir deployment; the chain does not hold them.` |
+| `PROJECTX_SOCIAL_KEY_REGISTRY_ID` | no | none — encrypted messaging is unavailable without it, nothing else is |
+
+`WEIR_BASE_URL` overrides the manifest's `baseUrl` after loading; it does **not** satisfy the
+`PROJECTX_SOCIAL_AGENT_BASE_URL` check, so both are set. `PROJECTX_SOCIAL_AGENT_SECRET` is **not** in
+the projection: keys reach the agent through `keypair`, and in HTTP mode that is `null` by
+construction.
+
 Everything this process says, it says on **stderr**. Nothing in this package writes to stdout in
 either transport, ever — in stdio mode stdout *is* the JSON-RPC frame stream, and one stray
 `console.log` kills the session with a decoding error that names neither the line nor the module
@@ -364,6 +386,11 @@ Configuration says what an operator intended; this says what will succeed.
   chain events — `creator.move` emits ten event types and the only one touching content is
   `ContentPriced { vault, content_key, price }`, with no title, no preview, no body, no handle and no
   publication time. A post lives in Postgres.
+  The shape it will take is settled and is in this package now: the port's `feed` takes
+  `{ handle?, cursor? }` and answers a `Reading` of `{ posts, truncated, nextCursor }` — the shop
+  window, `GET /api/browse` — with no `limit` (the page is the server's) and no `query` (the
+  endpoint has none). `test/search-shape.ts` pins the tool's side against a stub port; the agent's
+  `feed()` over the endpoint is the next change, in `packages/agent`.
 - **`weir.quote` takes a vault id and a content key, not a post id.** The post-id form needed the
   same missing `GET` to resolve the id. The vault-and-key form reads the price straight off the chain
   and has always worked; it is the honest half, and it is the number a spending decision depends on.
@@ -470,13 +497,19 @@ $ pnpm --filter @projectx-social/mcp transport
 
 ## Not done, and honest about it
 
-- 🔴 **`pnpm install` has not been run since `@projectx-social/policy` and `@projectx-social/signer`
-  were added to `dependencies`.** Both packages landed in the workspace while this rework was in
-  progress and the dependency lines are correct, but `packages/mcp/node_modules` does not yet link
-  them, so the dynamic import reports them absent and **no spending or publishing tool is registered
-  today.** That is a safe state rather than a broken one — absence produces a smaller tool list, by
-  design — but it is not the intended one. Run an install. The install was deliberately not run from
-  here because other agents are working in this tree concurrently.
+- ✅ **Resolved 2026-09-01 — the install has been run.** This note previously said `pnpm install` had
+  not been run since `@projectx-social/policy` and `@projectx-social/signer` were added to
+  `dependencies`, so the dynamic imports reported them absent. `packages/mcp/node_modules/@projectx-social/`
+  now links `agent`, `policy` and `signer` (symlinks dated 2026-08-31); the spending tools register
+  whenever a signing signer is bound. Kept rather than deleted so a reader of an older checkout can
+  place it.
+- 🟠 **Hosted keyless mode could not start on any machine until 2026-09-01.** `openWeir` handed
+  `createAgent` a placeholder (`{ source: 'weir-mcp' }`) where the agent expected the environment, so
+  the six chain variables were never seen and the server refused with "missing required environment
+  variables" whatever the operator exported — and two further variables the read path needs
+  (`PROJECTX_SOCIAL_AGENT_COIN_TYPE`, `PROJECTX_SOCIAL_AGENT_BASE_URL`) were undocumented. Fixed: the
+  agent is handed `AGENT_ENVIRONMENT`, the table above lists all eight, and `test/env-handoff.ts`
+  starts `--http` with them and asserts the refusals are gone. What remains is the next item.
 - 🔴 **The ceiling path has never been exercised against the real enforcement layer.** The canary
   harness proves the shape against a stub signer that applies a standing ceiling; it has not been run
   against `policySigner`, which additionally simulates the transaction and evaluates its *effects*

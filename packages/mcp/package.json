@@ -19,8 +19,8 @@
     "canary": "tsx test/injection-canary.ts",
     "transport": "tsx test/transport-http.ts",
     "keys": "tsx test/key-refusal.ts",
-    "check": "tsc --noEmit && tsx test/injection-canary.ts && tsx test/transport-http.ts && tsx test/key-refusal.ts",
-    "test": "tsx test/injection-canary.ts && tsx test/transport-http.ts && tsx test/key-refusal.ts && tsx test/agent-binding.ts && tsx test/ledger-never-evicts-in-flight.ts"
+    "check": "tsc --noEmit && tsx test/injection-canary.ts && tsx test/transport-http.ts && tsx test/key-refusal.ts && tsx test/env-handoff.ts && tsx test/search-shape.ts",
+    "test": "tsx test/injection-canary.ts && tsx test/transport-http.ts && tsx test/key-refusal.ts && tsx test/env-handoff.ts && tsx test/search-shape.ts && tsx test/agent-binding.ts && tsx test/ledger-never-evicts-in-flight.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
