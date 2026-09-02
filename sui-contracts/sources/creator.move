@@ -142,6 +142,14 @@ const ETierPriceNotAscending: u64 = 19;
 /// The two refusals now carry different codes, so a client can tell "wrong vault" from
 /// "not yours" without re-deriving the check.
 const ENotSubscriber: u64 = 20;
+/// A Seal identity that is not the one this vault, tier and period produce.
+const EWrongIdentity: u64 = 21;
+/// The tier asked for costs more than this subscription pays. C3 (2026-09-01): access is ranked
+/// by the PRICE PAID, never by the tier index, so a cheap tier at a high index reads nothing above
+/// its price — including on vaults whose tiers were ordered before `ETierPriceNotAscending`.
+const ETierNotPaidFor: u64 = 22;
+/// The period asked for is outside what this subscription paid for (see `entitlement::covers_period`).
+const EPeriodNotPaid: u64 = 23;
 
 // === Types ===
 
@@ -860,6 +868,73 @@ public fun referral_share_bps_snapshot<T>(vault: &CreatorVault<T>): u64 {
 public fun accepting<T>(vault: &CreatorVault<T>): bool { vault.accepting }
 
 public fun min_tip<T>(vault: &CreatorVault<T>): u64 { vault.min_tip }
+
+/// Release the key for one creator-period to a subscriber who paid at least that tier's price.
+///
+/// # Ranked by price, not by index — C3
+///
+/// `entitlement::seal_approve_subscription` (retired) compared tier INDICES. The index only means
+/// "more expensive" when the vault's prices ascend with it, which `add_tier` and `update_tier`
+/// enforce since 2026-09-01 — but vaults opened before that carry a cheap tier above an expensive
+/// one, and a 0.50 USDC subscriber was deriving 10 USDC keys. Seal keys are permanent, so the only
+/// fix is a policy that is right for every vault regardless of order: the subscriber may read a
+/// tier priced at or below what they paid per period, `Subscription.price_paid`, which
+/// `subscribe` and `renew` write from the vault's own price.
+///
+/// # Why the vault is an argument
+///
+/// The tier's price lives in the vault, so the approval takes `&CreatorVault<T>` beside the
+/// subscription. The key servers execute this with the reader as sender; the vault is shared and
+/// read-only here. The subscription must belong to this vault, or a subscriber to a cheap vault
+/// would present their subscription against an expensive one's prices.
+///
+/// # What did not change
+///
+/// The identity (`entitlement::period_identity(vault, tier, period)`), the period rule
+/// (`entitlement::covers_period`) and the holder rule. Content sealed before this upgrade stays
+/// readable by exactly the subscribers who paid for it; what closes is the cross-tier reach.
+entry fun seal_approve_subscription<T>(
+    id: vector<u8>,
+    tier: u64,
+    period: u64,
+    vault: &CreatorVault<T>,
+    subscription: &Subscription,
+    ctx: &TxContext,
+) {
+    assert!(entitlement::subscriber(subscription) == ctx.sender(), ENotSubscriber);
+    assert!(entitlement::subscription_vault(subscription) == object::id(vault), ESubscriptionVaultMismatch);
+    assert!(id == entitlement::period_identity(object::id(vault), tier, period), EWrongIdentity);
+    assert!(tier < vault.tiers.length(), ENoSuchTier);
+    assert!(vault.tiers[tier].price <= entitlement::subscription_price_paid(subscription), ETierNotPaidFor);
+    assert!(entitlement::covers_period(subscription, period), EPeriodNotPaid);
+}
+
+#[test_only]
+/// Append a tier WITHOUT the ascending-price guard, to build the shape mainnet vaults opened before
+/// `ETierPriceNotAscending` still have. Exists only so the price-ranked approval is tested against
+/// the case it was written for; no production path can create this shape any more.
+public fun add_tier_unordered_for_testing<T>(
+    vault: &mut CreatorVault<T>,
+    cap: &CreatorCap,
+    name: String,
+    price: u64,
+    period_ms: u64,
+) {
+    assert_cap(vault, cap);
+    vault.tiers.push_back(Tier { name, price, period_ms, active: true });
+}
+
+#[test_only]
+public fun approve_subscription_for_testing<T>(
+    id: vector<u8>,
+    tier: u64,
+    period: u64,
+    vault: &CreatorVault<T>,
+    subscription: &Subscription,
+    ctx: &TxContext,
+) {
+    seal_approve_subscription(id, tier, period, vault, subscription, ctx)
+}
 
 public fun tier_count<T>(vault: &CreatorVault<T>): u64 { vault.tiers.length() }
 

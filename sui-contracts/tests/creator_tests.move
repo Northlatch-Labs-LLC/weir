@@ -1833,3 +1833,181 @@ fun the_creator_door_refuses_a_vault_already_at_version() {
     creator::migrate(&mut vault, &cap);
     abort 0
 }
+
+// === Subscription keys are ranked by the price paid (C3) ===
+
+/// A vault with the C3 shape: an expensive tier at index 0 and a cheap one at index 1. Legal on
+/// mainnet for vaults opened before `ETierPriceNotAscending`; here it is built through the
+/// test-only door so the policy is exercised against exactly that shape.
+fun open_vault_expensive_then_cheap(sc: &mut Scenario) {
+    sc.next_tx(CREATOR);
+    {
+        let mut platform = sc.take_shared<Platform>();
+        let acct = sc.take_from_sender<SocialAccount>();
+        let fee = coin::mint_for_testing<SUI>(1_000_000_000, sc.ctx());
+        let (cap, change) = creator::open_vault<USD>(&mut platform, &acct, fee, sc.ctx());
+        transfer::public_transfer(cap, CREATOR);
+        coin::burn_for_testing(change);
+        sc.return_to_sender(acct);
+        ts::return_shared(platform);
+    };
+    sc.next_tx(CREATOR);
+    {
+        let mut vault = sc.take_shared<CreatorVault<USD>>();
+        let cap = sc.take_from_sender<CreatorCap>();
+        creator::add_tier(&mut vault, &cap, b"Monthly".to_string(), 10_000_000, MONTH_MS);
+        creator::add_tier_unordered_for_testing(&mut vault, &cap, b"Supporter".to_string(), 500_000, MONTH_MS);
+        sc.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+}
+
+/// `who` subscribes to `tier` of `vault_id`, paying that tier's price exactly.
+fun subscribe_to_tier(sc: &mut Scenario, who: address, vault_id: ID, tier: u64, clock: &Clock) {
+    sc.next_tx(who);
+    let platform = sc.take_shared<Platform>();
+    let mut vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let acct = sc.take_from_sender<SocialAccount>();
+    let payment = coin::mint_for_testing<USD>(creator::tier_price(&vault, tier), sc.ctx());
+    let change = creator::subscribe(&platform, &mut vault, &acct, tier, payment, clock, sc.ctx());
+    coin::burn_for_testing(change);
+    sc.return_to_sender(acct);
+    ts::return_shared(vault);
+    ts::return_shared(platform);
+}
+
+fun approve_as(sc: &mut Scenario, who: address, vault_id: ID, tier: u64, period: u64) {
+    sc.next_tx(who);
+    let vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let sub = sc.take_from_sender<Subscription>();
+    creator::approve_subscription_for_testing(
+        entitlement::period_identity(vault_id, tier, period), tier, period, &vault, &sub, sc.ctx(),
+    );
+    sc.return_to_sender(sub);
+    ts::return_shared(vault);
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ETierNotPaidFor)]
+/// C3 itself: the 0.50 tier sits at index 1, above the 10.00 tier at index 0. Under the retired
+/// index comparison this subscriber read Monthly content; under the price rule they do not.
+fun a_cheap_tier_at_a_higher_index_cannot_read_the_expensive_tier() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_expensive_then_cheap(&mut sc);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to_tier(&mut sc, FAN, vault_id, 1, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    approve_as(&mut sc, FAN, vault_id, 0, period);
+    abort 0
+}
+
+#[test]
+/// The same subscriber reads their own tier, and an expensive subscriber reads the cheap one.
+fun a_subscriber_reads_every_tier_priced_at_or_below_what_they_paid() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
+    open_vault_expensive_then_cheap(&mut sc);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to_tier(&mut sc, FAN, vault_id, 1, &clock);
+    subscribe_to_tier(&mut sc, OTHER_FAN, vault_id, 0, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    approve_as(&mut sc, FAN, vault_id, 1, period);
+    approve_as(&mut sc, OTHER_FAN, vault_id, 0, period);
+    approve_as(&mut sc, OTHER_FAN, vault_id, 1, period);
+    clock.destroy_for_testing();
+    sc.end();
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EPeriodNotPaid)]
+fun a_subscription_key_is_refused_for_a_period_before_it_started() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms());
+    // The running period started before the subscription: back catalogue, not included.
+    approve_as(&mut sc, FAN, vault_id, 0, period);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EPeriodNotPaid)]
+fun a_subscription_key_is_refused_for_a_period_after_it_expires() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms()) + 2;
+    approve_as(&mut sc, FAN, vault_id, 0, period);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ESubscriptionVaultMismatch)]
+fun a_subscription_to_one_vault_cannot_present_against_another() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    let other_vault = open_vault_for(&mut sc, OTHER_FAN);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    sc.next_tx(FAN);
+    let vault = sc.take_shared_by_id<CreatorVault<USD>>(other_vault);
+    let sub = sc.take_from_sender<Subscription>();
+    creator::approve_subscription_for_testing(
+        entitlement::period_identity(other_vault, 0, period), 0, period, &vault, &sub, sc.ctx(),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::ENotSubscriber)]
+fun somebody_else_cannot_present_a_subscription_they_do_not_hold() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_account(&mut sc, OTHER_FAN, b"other_fan", option::none());
+    open_vault_with_tier(&mut sc, 10_000_000);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to(&mut sc, FAN, vault_id, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    sc.next_tx(OTHER_FAN);
+    let vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let sub = sc.take_from_address<Subscription>(FAN);
+    creator::approve_subscription_for_testing(
+        entitlement::period_identity(vault_id, 0, period), 0, period, &vault, &sub, sc.ctx(),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = ::projectx_social::creator::EWrongIdentity)]
+fun a_subscription_key_is_refused_for_an_identity_naming_another_tier() {
+    let (mut sc, clock) = setup();
+    open_account(&mut sc, CREATOR, b"creator", option::none());
+    open_account(&mut sc, FAN, b"fan", option::none());
+    open_vault_expensive_then_cheap(&mut sc);
+    let vault_id = the_vault(&mut sc);
+    subscribe_to_tier(&mut sc, FAN, vault_id, 1, &clock);
+    let period = entitlement::period_of(clock.timestamp_ms()) + 1;
+    sc.next_tx(FAN);
+    let vault = sc.take_shared_by_id<CreatorVault<USD>>(vault_id);
+    let sub = sc.take_from_sender<Subscription>();
+    // Asks for tier 1 in the arguments and tier 0 in the identity: the bytes must match.
+    creator::approve_subscription_for_testing(
+        entitlement::period_identity(vault_id, 0, period), 1, period, &vault, &sub, sc.ctx(),
+    );
+    abort 0
+}
