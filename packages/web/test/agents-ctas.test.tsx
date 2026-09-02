@@ -175,7 +175,7 @@ describe('the MCP server, which a stranger cannot obtain today', () => {
 
   it('prints the command only when told it is obtainable', () => {
     const { container } = render(
-      <DesignAgents {...healthy} mcp={{ obtainable: true, command: '{"mcpServers":{"weir":{}}}' }} />,
+      <DesignAgents {...healthy} mcp={{ obtainable: true, hosted: 'https://mcp.weir.social/mcp', command: '{"mcpServers":{"weir":{}}}' }} />,
     );
     expect(pasted(container)).toContain('"mcpServers"');
     expect(screen.queryByText(/not yet obtainable/i)).toBeNull();

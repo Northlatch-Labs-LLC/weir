@@ -1144,7 +1144,7 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
     },
     mcp: {
       hosted: 'https://mcp.weir.social/mcp',
-      mode: 'read-only',
+      mode: 'read-only' as const,
       tools: ['weir_search', 'weir_quote', 'weir_read', 'weir_balance'],
       note:
         'The hosted server is the keyless build: no signer and no policy are bound, so it registers ' +
