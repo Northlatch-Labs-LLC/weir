@@ -57,6 +57,7 @@ import {
   type SignedAction,
 } from './statements.js';
 import { openSession, type FetchLike, type SessionCredential } from './session.js';
+import { looksLikeSettling } from './seal-node.js';
 import {
   buildSubscribe,
   buildTip,
@@ -382,6 +383,16 @@ export interface ReadOnlyAgent {
   readPreview: (input: { postId: string }) => Promise<Reading<PublicPost | null>>;
 }
 
+/** What `read` hands back: the words, and how this agent was entitled to them. */
+export interface ReadPost {
+  postId: string;
+  handle: string;
+  title: string;
+  body: string;
+  entitledVia: 'public' | 'unlock' | 'subscription';
+  edition?: 'human' | 'machine';
+}
+
 /** What `readPreview` hands back for a public post. */
 export interface PublicPost {
   postId: string;
@@ -422,6 +433,18 @@ export interface Agent extends ReadOnlyAgent {
 
   /** Pay a creator with nothing in return. Refuses over `maxPrice`. */
   tip: (input: { vaultId: string; amount: bigint } & SpendCeiling) => Promise<Reading<Executed>>;
+
+  /**
+   * Read a post this agent is entitled to, by software.
+   *
+   * `GET /api/posts/{id}` with the read session. A public post's words come back as they are. A
+   * gated post the agent holds the entitlement for comes back as a sealed reference, which the
+   * bound {@link SealDecryptor} opens: the key servers re-run the on-chain approval with THIS
+   * agent as sender and release the key to it — never to the platform. The plaintext's SHA-256 is
+   * verified before the words are returned. Without a decryptor a gated post is `unconfigured`;
+   * without the entitlement it is `not-found` (exists, not yours), which the tools report as such.
+   */
+  read: (input: { postId: string }) => Promise<Reading<ReadPost>>;
 
   /** Publish a post under a handle this agent's address owns the vault for. */
   post: (input: {
@@ -816,6 +839,52 @@ export function createAgent(
         gasBudgetMist: manifest.gasBudgetMist,
         what: `creator::tip ${guarded.value}`,
       });
+    },
+
+    async read(input: { postId: string }): Promise<Reading<ReadPost>> {
+      const id = input.postId.trim();
+      if (id === '' || /[^A-Za-z0-9_-]/.test(id)) {
+        return fail('malformed', 'read', `a post id is a short token; received ${JSON.stringify(input.postId)}`);
+      }
+      const response = await authorisedFetch({ agent, doFetch, path: `/api/posts/${encodeURIComponent(id)}`, method: 'GET', what: 'read' });
+      if (!response.ok) return response;
+      const post = response.value['post'] as { id?: unknown; handle?: unknown; title?: unknown } | undefined;
+      if (post === undefined || typeof post.id !== 'string' || typeof post.handle !== 'string' || typeof post.title !== 'string') {
+        return fail('malformed', 'read', 'the post answer carried no id, handle and title.');
+      }
+      const edition = response.value['edition'];
+      const editionField: { edition?: 'human' | 'machine' } = edition === 'human' || edition === 'machine' ? { edition } : {};
+      const body = response.value['body'];
+      if (typeof body === 'string' && response.value['entitledVia'] === 'public') {
+        return ok({ postId: post.id, handle: post.handle, title: post.title, body, entitledVia: 'public', ...editionField });
+      }
+      const sealed = response.value['sealed'] as
+        | { blobId?: unknown; sealWrappedKey?: unknown; nonce?: unknown; sha256?: unknown; approval?: Record<string, unknown> }
+        | null
+        | undefined;
+      if (sealed === null || sealed === undefined) {
+        return fail('not-found', 'read', `${id} exists and this agent holds no entitlement to it (or the words were never sealed under the key it holds).`);
+      }
+      if (agent.seal === null) {
+        return fail('unconfigured', 'read', 'this post is sealed and no SealDecryptor is bound; pass `seal` to createAgent with loadSealConfig().');
+      }
+      const a = sealed.approval ?? {};
+      const approval =
+        a['kind'] === 'unlock' && typeof a['vaultId'] === 'string' && typeof a['contentKey'] === 'string' && typeof a['unlockId'] === 'string'
+          ? { kind: 'unlock' as const, vaultId: a['vaultId'], contentKey: a['contentKey'], unlockId: a['unlockId'] }
+          : a['kind'] === 'subscription' && typeof a['vaultId'] === 'string' && typeof a['subscriptionId'] === 'string'
+            ? { kind: 'subscription' as const, vaultId: a['vaultId'], tier: BigInt(String(a['tier'])), period: BigInt(String(a['period'])), subscriptionId: a['subscriptionId'] }
+            : null;
+      if (approval === null || typeof sealed.blobId !== 'string' || typeof sealed.sealWrappedKey !== 'string' || typeof sealed.nonce !== 'string' || typeof sealed.sha256 !== 'string') {
+        return fail('malformed', 'read', 'the sealed reference is missing a field.');
+      }
+      const via = response.value['entitledVia'] === 'subscription' ? 'subscription' : 'unlock';
+      try {
+        const bytes = await agent.seal.decrypt({ blobId: sealed.blobId, sealWrappedKey: sealed.sealWrappedKey, nonce: sealed.nonce, sha256: sealed.sha256, approval });
+        return ok({ postId: post.id, handle: post.handle, title: post.title, body: new TextDecoder().decode(bytes), entitledVia: via, ...editionField });
+      } catch (error) {
+        return fail(looksLikeSettling(error) ? 'timeout' : 'malformed', 'read', `the sealed body could not be opened: ${error instanceof Error ? error.message : String(error)}`);
+      }
     },
 
     async post(article: {
