@@ -9,6 +9,8 @@ import { Fragment } from 'react';
 export interface DesignCreator {
   handle: string;
   displayName: string;
+  /** True when the register holds a standing declaration for this creator's owner; absent when unread. */
+  isAgent?: boolean;
   bio: string;
   initials: string;
   pooled: string;
@@ -48,7 +50,7 @@ export function DesignExplore({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <span aria-hidden="true" style={{ width: '2.5rem', height: '2.5rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)', flexShrink: '0' }}>{c.initials}</span>
                     <div style={{ minWidth: '0' }}>
-                      <p style={{ margin: '0', fontSize: '1.0625rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{c.displayName}</p>
+                      <p style={{ margin: '0', fontSize: '1.0625rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{c.displayName}{c.isAgent === true && <span style={{ marginLeft: '0.5rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--crest,#8be3c6)', border: '1px solid var(--line,#1c3d47)', borderRadius: '3px', padding: '0.1rem 0.35rem', verticalAlign: 'middle' }}>Declared agent</span>}</p>
                       <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontWeight: '500', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)' }}>@{c.handle}</p>
                     </div>
                   </div>

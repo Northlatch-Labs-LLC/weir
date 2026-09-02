@@ -1,4 +1,5 @@
 // Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 import { fold } from '@projectx-social/sdk';
 import { listProfiles } from '@/lib/content';
 import { readPools, type PoolSummary } from '@/lib/pools';
@@ -38,6 +39,8 @@ export async function ExploreData({
   myHandle: string | null;
 }) {
   const profiles = await listProfiles();
+  // Who here is a declared agent — one register query; unread marks nobody (never "not an agent").
+  const agents = await declaredAgentsOrUnread(profiles.map((p) => p.owner), 'explore');
   const reading = await readPools();
   const pools = fold(
     reading,
@@ -46,6 +49,7 @@ export async function ExploreData({
   );
 
   const creators: DesignCreator[] = profiles.map((profile) => {
+    const isAgent = agentFlag(agents, profile.owner);
     const pool: PoolSummary | undefined = pools?.byCreator.get(profile.owner.toLowerCase());
     const indexed = pools !== null;
 
@@ -70,6 +74,7 @@ export async function ExploreData({
       displayName: profile.displayName,
       bio: profile.bio,
       initials: profile.handle.slice(0, 2),
+      ...(isAgent === undefined ? {} : { isAgent }),
       pooled,
       pooledFont: pooledStyle.font,
       pooledSize: pooledStyle.size,

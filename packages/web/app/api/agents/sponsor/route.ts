@@ -4,6 +4,7 @@ import { rateLimit, simulateLimit } from '@/lib/rate-limit';
 import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
+import { verifyAction } from '@/lib/identity';
 import {
   SPONSORED_VAULT_GAS_BUDGET_MIST,
   SPONSORSHIP_SEATS,
@@ -54,6 +55,28 @@ export const dynamic = 'force-dynamic';
  * register; it just costs them the gas. Both say which, in the body, because "we do not do this
  * here" and "you were too late" call for different next actions.
  */
+interface AgentHalf {
+  operatorAddress: string;
+  model: string;
+  purpose: string;
+  timestampMs: number;
+  agentSignature: string;
+}
+
+/** The shape of the agent half, checked before any signature work; a sentence names what is missing. */
+function agentHalfProblem(value: unknown): string | null {
+  if (value === null || typeof value !== 'object') {
+    return 'declaration is required: the agent half — { operatorAddress, model, purpose, timestampMs, agentSignature } — signed by the address asking for the seat';
+  }
+  const d = value as Record<string, unknown>;
+  if (typeof d['operatorAddress'] !== 'string' || !/^0x[0-9a-fA-F]{1,64}$/.test(d['operatorAddress'].trim())) return 'declaration.operatorAddress must be a Sui address';
+  if (typeof d['model'] !== 'string' || d['model'].trim() === '' || /[\r\n]/.test(d['model'])) return 'declaration.model is required, one line';
+  if (typeof d['purpose'] !== 'string' || d['purpose'].trim() === '' || /[\r\n]/.test(d['purpose'])) return 'declaration.purpose is required, one line';
+  if (typeof d['timestampMs'] !== 'number' || !Number.isFinite(d['timestampMs'])) return 'declaration.timestampMs must be a number';
+  if (typeof d['agentSignature'] !== 'string' || d['agentSignature'] === '') return 'declaration.agentSignature is required';
+  return null;
+}
+
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
@@ -224,6 +247,42 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  /*
+    A seat is offered only to a machine that has signed the agent half of its declaration.
+
+    Verified after the cheap refusals (shape, handle) and before anything that costs: verifying
+    spends the single-use signature, and a bad handle must not cost the agent a signed statement.
+    An unconfigured sponsor (501) still comes after it — that is a deployment-wide state, not a
+    per-request mistake, and an agent re-signs in one call.
+
+    Until 2026-09-02 a seat went to any address that asked, and seats were burned by design. Now the
+    address must sign "I am operated by X" over the same statement the register verifies later
+    (`declare-agent`), so every seat names an operator we can read before we pay its gas, and a
+    griefer spends a keypair AND names an operator per seat. The operator's half is not asked for
+    here — the operator signs when the pair is recorded at /api/agents/declare — and nothing is
+    written to the register by this route: a signature over a statement is proof of intent, not the
+    declaration itself.
+  */
+  const declaration = body['declaration'];
+  const halfProblem = agentHalfProblem(declaration);
+  if (halfProblem !== null) {
+    return NextResponse.json({ error: halfProblem }, { status: 400 });
+  }
+  const half = declaration as AgentHalf;
+  if (normaliseAddress(half.operatorAddress) === address) {
+    return NextResponse.json({ error: 'an agent may not name itself as its operator' }, { status: 400 });
+  }
+  const signedHalf = await verifyAction({
+    origin: new URL(request.url).origin,
+    address,
+    signature: half.agentSignature,
+    timestampMs: half.timestampMs,
+    action: { kind: 'declare-agent', operator: normaliseAddress(half.operatorAddress), model: half.model.trim(), purpose: half.purpose.trim() },
+  });
+  if (!signedHalf.ok) {
+    return NextResponse.json({ error: `the agent's declaration does not stand: ${signedHalf.failure.detail}` }, { status: 401 });
   }
 
   const sponsor = loadSponsor();

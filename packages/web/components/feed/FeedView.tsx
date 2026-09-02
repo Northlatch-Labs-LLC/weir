@@ -28,9 +28,15 @@ import { readEntityTypes } from '@/components/EntityType';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
+import { filterByRegister } from '@/lib/feed-filter';
 
 
-type View = 'following' | 'all';
+/**
+ * `people` hides declared agents and counts them on the tab; `agents` shows only declared agents.
+ * Default stays `all` with the mark — the register proves a declaration was made, never that one
+ * was not, so hiding is a reader's choice and never the default (spec D-3, the desk's reading).
+ */
+type View = 'following' | 'all' | 'people' | 'agents';
 
 function withParams(reader: string | undefined, view: View): string {
   const params = new URLSearchParams();
@@ -96,7 +102,7 @@ export async function FeedView({
     falling back to everything is how a following feed stops filtering and nobody notices.
   */
   const view: View =
-    requested === 'all' || requested === 'following'
+    requested === 'all' || requested === 'following' || requested === 'people' || requested === 'agents'
       ? requested
       : following.length > 0
         ? 'following'
@@ -113,11 +119,19 @@ export async function FeedView({
   const isGuest = reader === undefined;
   const GUEST_POSTS = 10;
   const wanted = isGuest ? GUEST_POSTS : POSTS_PAGE;
+  /*
+    A filtered view reads a bounded multiple of the page rather than the whole table: the register
+    is consulted after the read, so rows that will be hidden cannot be excluded in SQL without
+    joining the register into every feed query. Four pages is the ceiling; a view that would need
+    more says "more" rather than reading on.
+  */
+  const filtered = view === 'people' || view === 'agents';
+  const fetchLimit = filtered ? wanted * 4 : wanted;
 
   const all =
     view === 'following'
-      ? await listPosts({ handles: following, limit: wanted + 1 })
-      : await listPosts({ limit: wanted + 1 });
+      ? await listPosts({ handles: following, limit: fetchLimit + 1 })
+      : await listPosts({ limit: fetchLimit + 1 });
 
   /*
     What a visitor sees before signing in.
@@ -131,13 +145,13 @@ export async function FeedView({
     Locked bodies stay locked either way. This caps how much of the *public* feed is shown, nothing
     more.
   */
-  const posts = all.slice(0, wanted);
+  const loaded = all.slice(0, fetchLimit);
   /*
     Whether more exists, not how much. The extra row asked for above answers that exactly; an exact
     total would need a second query counting rows nobody is going to read, which is the cost this
     change exists to remove.
   */
-  const hasMore = all.length > posts.length;
+  let hasMore = all.length > loaded.length;
 
 
   /*
@@ -147,7 +161,7 @@ export async function FeedView({
    * tiers" rather than as a membership — a marker inviting a reader to buy from a vault nobody
    * could read is worse than no marker.
    */
-  const authors = [...new Set(posts.map((p) => p.authorHandle))];
+  const authors = [...new Set(loaded.map((p) => p.authorHandle))];
   const config = siteConfig();
   const client = config.ok ? createClient(config.value) : null;
   const entities = await readEntityTypes(authors, {
@@ -171,6 +185,15 @@ export async function FeedView({
     authors.map((h) => ownerOf.get(h)).filter((o): o is string => o !== undefined),
     'feed',
   );
+
+  /*
+    The filter, applied only once the register has answered. When it could not be read, nothing is
+    hidden and the tab says so: "we could not look" must never render as "there are no agents".
+  */
+  const filteredView = filterByRegister(loaded, view, (p) => agentFlag(agents, ownerOf.get(p.authorHandle)));
+  const { kept, hidden: hiddenCount, registerUnread } = filteredView;
+  const posts = kept.slice(0, wanted);
+  hasMore = hasMore || kept.length > posts.length;
 
   /*
     Decimals once per distinct coin, not once per post. Creators on a deployment usually share a
@@ -249,6 +272,13 @@ export async function FeedView({
       icon: 'users' as const,
     },
     { label: 'Everything', view: 'all' as const, icon: 'waves' as const },
+    {
+      label: 'People',
+      note: view === 'people' ? (registerUnread ? 'register unread' : hiddenCount > 0 ? `${hiddenCount} agent post${hiddenCount === 1 ? '' : 's'} hidden on this page` : undefined) : undefined,
+      view: 'people' as const,
+      icon: 'users' as const,
+    },
+    { label: 'Agents', view: 'agents' as const, icon: 'waves' as const },
   ].map((tab) => ({
     label: tab.label,
     note: tab.note,
@@ -265,7 +295,11 @@ export async function FeedView({
       ? 'You follow nobody yet. Browse everything and follow someone.'
       : view === 'following'
         ? 'The creators you follow have not posted yet.'
-        : 'No posts yet. When a creator publishes, it appears here.';
+        : view === 'agents'
+          ? (registerUnread ? 'The agent register could not be read just now, so nothing can be filtered.' : 'No declared agent has posted yet.')
+          : view === 'people' && registerUnread
+            ? 'The agent register could not be read just now; everything is shown, nothing hidden.'
+            : 'No posts yet. When a creator publishes, it appears here.';
 
   const designCreators = profiles.map((profile, index) => ({
     displayName: profile.displayName,

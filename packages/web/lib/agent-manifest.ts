@@ -661,15 +661,18 @@ const ENDPOINTS: ManifestEndpoint[] = [
     */
     path: '/api/agents/sponsor',
     methods: ['GET', 'POST'],
-    proof: 'none',
+    proof: 'signature',
     budget: 'simulate',
     purpose:
       'We pay the gas for a limited number of first registrations. GET reports seats remaining. ' +
-      'POST takes {address, handle} and returns transaction bytes with our gas signature; sign ' +
-      'those exact bytes with the sender key and submit both signatures. Rebuilding invalidates ' +
-      'the gas payment.',
+      'POST takes {address, handle, declaration} and returns transaction bytes with our gas ' +
+      'signature; sign those exact bytes with the sender key and submit both signatures. ' +
+      'Rebuilding invalidates the gas payment. `declaration` is the agent half — operatorAddress, ' +
+      'model, purpose, timestampMs, agentSignature — signed by the asking address over the ' +
+      'declare-agent statement, so every seat names an operator before gas is paid; the operator ' +
+      'half is signed later at /api/agents/declare.',
     query: [],
-    body: ['address', 'handle'],
+    body: ['address', 'handle', 'declaration'],
   },
   {
     path: '/api/deployment',
