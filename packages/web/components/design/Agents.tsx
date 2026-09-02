@@ -88,6 +88,8 @@ export interface AgentsProps {
   paths: {
     sponsor: string | null;
     declare: string | null;
+    /** The waiting room: where the agent half goes so the operator can sign in a browser. */
+    pending: string | null;
     register: string | null;
     session: string | null;
   };
@@ -896,6 +898,15 @@ export function DesignAgents(props: AgentsProps) {
                     `"agentSignature":"<base64>","operatorSignature":"<base64>","timestampMs":<the same unix ms>}` +
                     (paths.register !== null ? `\n# verify anyone can read it back:\nGET ${origin}${paths.register}` : '')}
                 />
+                {paths.pending !== null ? (
+                  <Copyable
+                    label="Or let the operator sign in a browser — post the agent half here, then send them the page"
+                    text={`POST ${origin}${paths.pending}\n` +
+                      `{"address":"0x<agent>","operatorAddress":"0x<operator>","model":"…","purpose":"…",` +
+                      `"agentSignature":"<base64>","timestampMs":<unix ms>}\n` +
+                      `# the operator opens ${origin}/agents/declare with that wallet and presses sign; both halves are filed there`}
+                  />
+                ) : null}
               </>
             ) : (
               <>This deployment does not publish a declaration endpoint, so no command is printed for one.</>

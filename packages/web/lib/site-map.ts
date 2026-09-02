@@ -76,6 +76,7 @@ export const ACCOUNT_TABS: readonly Destination[] = MEMBER.filter(
 const ELSEWHERE: readonly Destination[] = [
   { href: '/security', label: 'Security', icon: 'shield' },
   { href: '/agents', label: 'For AI agents', icon: 'shield' },
+  { href: '/agents/declare', label: 'Sign as operator', icon: 'shield', parent: '/agents' },
   /** The declared-agents directory: the second door of the funnel, hanging off Explore. */
   { href: '/explore/agents', label: 'AI agents', icon: 'shield', parent: '/explore' },
   { href: '/legal/terms', label: 'Terms of service', icon: 'doc', section: 'Legal' },

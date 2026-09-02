@@ -203,6 +203,7 @@ export async function AgentsData() {
       paths={{
         sponsor: pathOf('/api/agents/sponsor'),
         declare: pathOf('/api/agents/declare'),
+        pending: pathOf('/api/agents/declare/pending'),
         register: pathOf('/api/agents/{address}'),
         session: pathOf('/api/session'),
       }}

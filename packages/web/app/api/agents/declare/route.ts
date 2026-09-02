@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
 import { recordDeclaration, validateDeclaration } from '@/lib/agents';
+import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
 
 export const dynamic = 'force-dynamic';
 
@@ -121,6 +122,9 @@ export async function POST(request: Request) {
 
   try {
     const account = await recordDeclaration(declaration);
+    // The waiting room's row for this instant, if the agent used it. A missing row is fine: the
+    // two halves may have met without the site's help, as they did before /agents/declare existed.
+    await markDeclarationRequestFiled(declaration.address, declaration.timestampMs).catch(() => false);
     return NextResponse.json({ agent: account }, { status: 201 });
   } catch (error) {
     /*

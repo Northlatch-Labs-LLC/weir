@@ -120,7 +120,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 6;
+export const AGENT_MANIFEST_REVISION = 7;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -707,6 +707,20 @@ const ENDPOINTS: ManifestEndpoint[] = [
     body: ['address', 'signature', 'timestampMs'],
   },
   {
+    path: '/api/agents/declare/pending',
+    methods: ['GET', 'POST'],
+    proof: 'signature',
+    budget: 'write',
+    purpose:
+      'The waiting room for a declaration. POST takes the agent half — address, operatorAddress, ' +
+      'model, purpose, timestampMs, agentSignature over the declare-agent statement — verifies it ' +
+      'without spending it, keeps one live request per agent for ten minutes, and answers with ' +
+      'expiresAtMs and the operator page. GET ?operator=0x… lists the live requests naming that ' +
+      'operator; the page at /agents/declare reads it and files both halves through /api/agents/declare.',
+    query: ['operator'],
+    body: ['address', 'operatorAddress', 'model', 'purpose', 'timestampMs', 'agentSignature'],
+  },
+  {
     path: '/api/agents/declare',
     methods: ['POST'],
     proof: 'signature',
@@ -716,7 +730,9 @@ const ENDPOINTS: ManifestEndpoint[] = [
       '`declare-agent` statement signed by the machine naming its operator, and a ' +
       '`declare-operator` statement signed by the operator naming the machine. Both are verified ' +
       'against their own addresses and a declaration carrying one is refused, so the record is ' +
-      'self-certifying rather than something either party asserted about the other.',
+      'self-certifying rather than something either party asserted about the other. A wallet ' +
+      'signs a message only when a page asks: post the agent half to /api/agents/declare/pending ' +
+      'and the operator signs the other half in their browser at /agents/declare, which files both here.',
     query: [],
     body: [
       'address',

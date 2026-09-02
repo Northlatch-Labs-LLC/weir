@@ -216,6 +216,37 @@ export function validateDeclaration(
   };
 }
 
+/** The agent's half alone: everything a declaration carries except the operator's signature. */
+export interface AgentHalf {
+  address: string;
+  operatorAddress: string;
+  agentSignature: string;
+  model: string;
+  purpose: string;
+  timestampMs: number;
+}
+
+/**
+ * The same rules as `validateDeclaration`, applied to the agent's half on its own.
+ *
+ * Implemented by running the full validator with the operator's slot filled by a value no wallet
+ * can produce, then dropping it: one set of rules, one place they live, and a half that passes here
+ * will pass the full check the moment a real operator signature joins it. The sentinel is a
+ * single control character, which is not base64 and cannot collide with the agent's signature.
+ */
+export function validateAgentHalf(
+  input: Record<string, unknown>,
+): { ok: true; half: AgentHalf } | { ok: false; why: string } {
+  if (typeof input['operatorSignature'] === 'string' && input['operatorSignature'] !== '') {
+    return { ok: false, why: 'this is the agent half only — the operator signs on /agents/declare' };
+  }
+  const checked = validateDeclaration({ ...input, operatorSignature: '\u0001' });
+  if (!checked.ok) return checked;
+  const { operatorSignature: _dropped, ...half } = checked.declaration;
+  void _dropped;
+  return { ok: true, half };
+}
+
 /**
  * File a declaration whose two signatures have already been verified.
  *
