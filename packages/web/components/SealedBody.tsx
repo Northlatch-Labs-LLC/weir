@@ -45,7 +45,8 @@ export interface SealedBodyRef {
  * `SealApprover` straight into this prop — so they cannot drift silently.
  */
 export type Approver =
-  | { kind: 'unlock'; objectId: string }
+  /** `contentKey` is the key the `Unlock` carries — the human key or `<key>#machine`. */
+  | { kind: 'unlock'; objectId: string; contentKey: string }
   | { kind: 'subscription'; objectId: string; tier: string; period: string };
 
 interface PublicKeyServer {
@@ -167,10 +168,18 @@ export function SealedBody({
           config,
           approver.kind === 'unlock'
             ? (() => {
-                if (contentKey === undefined) {
+                /*
+                  The approver's key, not the post's. `seal_approve_unlock` asserts the identity
+                  equals `unlock_identity(unlock.vault, unlock.content_key)` for the object named,
+                  so a machine buyer's `Unlock` (key `<key>#machine`) must be asked for the machine
+                  identity — the post's own key would be a MoveAbort that reads as "no access" on
+                  a post they paid for. `sealed` is already the matching edition (`visiblePost`).
+                */
+                const key = approver.contentKey ?? contentKey;
+                if (key === undefined) {
                   throw new Error('this post is unlock-gated but carries no content key');
                 }
-                return { kind: 'unlock' as const, vaultId, contentKey, unlockId: approver.objectId };
+                return { kind: 'unlock' as const, vaultId, contentKey: key, unlockId: approver.objectId };
               })()
             : {
                 kind: 'subscription' as const,

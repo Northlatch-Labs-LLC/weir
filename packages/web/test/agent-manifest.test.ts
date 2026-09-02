@@ -242,6 +242,20 @@ describe('the endpoints it publishes', () => {
     }
   });
 
+  it('says content-price answers for the machine edition too, and the route does', () => {
+    /*
+      The claim an agent builds `weir_price` on: `machineBody` tells it whether a machine edition
+      can be delivered before it prices one. A manifest that promised the field while the route
+      did not compute it — or the reverse — would send an agent to price what cannot be sold.
+    */
+    const entry = endpoints.find((e) => e.path === '/api/studio/content-price');
+    expect(entry?.purpose).toContain('machineBody');
+    for (const state of ['sealed', 'no-post', 'absent']) expect(entry?.purpose).toContain(state);
+    const source = read(fileFor('/api/studio/content-price'));
+    expect(source).toContain('machineBodyState(');
+    expect(source).toContain('machineBody,');
+  });
+
   it('puts this document at the path the manifest says it lives at', () => {
     // The constant and the directory are two halves of one claim, and nothing else checks them.
     expect(() => read(`app${AGENT_MANIFEST_PATH}/route.ts`)).not.toThrow();

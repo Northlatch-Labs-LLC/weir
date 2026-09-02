@@ -29,7 +29,7 @@ interface Sub {
 }
 interface Unlock {
   objectId: string; vaultId: string; handle: string | null; contentKey: string;
-  title: string | null; pricePaid: string; purchasedAtMs: number;
+  title: string | null; edition?: 'human' | 'machine'; pricePaid: string; purchasedAtMs: number;
 }
 
 type Load =
@@ -177,6 +177,9 @@ export function Purchases() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span className="byline-name">
                     {u.title ?? <span className="mono">{u.contentKey}</span>}
+                    {u.edition === 'machine' && (
+                      <span className="pill" style={{ marginLeft: 8 }}>machine edition</span>
+                    )}
                   </span>
                   <div className="byline-meta">
                     {u.handle === null ? 'unknown creator' : `@${u.handle}`} · {day(u.purchasedAtMs)}

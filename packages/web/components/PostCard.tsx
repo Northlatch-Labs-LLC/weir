@@ -207,6 +207,18 @@ export function PostCard({
         gated posts published before sealing — whose words really are still in `body` — keep taking
         the direct path instead of rendering a spinner over a blob that does not exist.
       */}
+      {/*
+        A machine `Unlock` on a post published before machine editions were sealed (migration 034).
+        There is no blob to open and never will be — the plaintext was not kept — so the reader is
+        told, rather than shown a spinner that reads as their own fault.
+      */}
+      {post.edition === 'machine-absent' && (
+        <p className="unmeasured">
+          Your Unlock is for the machine edition of this post, and this post was published before
+          machine editions were sealed. Its words were never sealed to that key; only the creator
+          can republish it.
+        </p>
+      )}
       {post.sealedBody !== undefined && post.access.kind !== 'public' ? (
         <SealedBody
           sealed={post.sealedBody}

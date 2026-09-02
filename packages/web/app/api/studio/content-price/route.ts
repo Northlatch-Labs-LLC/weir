@@ -5,6 +5,7 @@ import { isSuiId } from '@/lib/db';
 import { createClient, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { machineContentKey } from '@/lib/machine-pricing';
+import { machineBodyState } from '@/lib/content';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,10 +145,23 @@ export async function GET(request: Request) {
       }
     : { contentKey: machineKey.value, state: 'unreadable' as const, price: null };
 
+  /*
+    Whether the machine edition can be DELIVERED, beside whether it is priced.
+
+    A price is a promise the seal has to keep. Every paid post published since migration 034 is
+    sealed to both keys at publish; a paid post from before it was sealed to the human key only,
+    and its plaintext is gone, so the machine edition of that key can never exist. `absent` is
+    that state — permanent until the creator republishes — and the composer, `studio/price` and
+    `weir_price` all refuse to price it. `no-post` means nothing is published under the key yet,
+    which is the composer's ordinary case: it prices first and publishes second.
+  */
+  const machineBody = await machineBodyState(vaultId, contentKey.trim());
+
   // `null` is a measured absence: this key has never been priced on this vault.
   return NextResponse.json({
     priced: price.value !== null,
     price: price.value?.toString() ?? null,
     machine,
+    machineBody,
   });
 }

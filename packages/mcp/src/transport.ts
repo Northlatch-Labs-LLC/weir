@@ -322,12 +322,29 @@ export interface WeirPort {
    */
   priceContent?: (input: {
     vaultId: string;
+    /** The HUMAN key, always. `edition: 'machine'` prices `<contentKey>#machine`; the port derives it. */
     contentKey: string;
+    edition?: 'human' | 'machine';
     price: string;
     currency: Currency;
     idempotencyKey: string;
   }) => Promise<{ txDigest: string }>;
+  /**
+   * Whether the machine edition of a human key can be delivered on a vault — `GET
+   * /api/studio/content-price`'s `machineBody`. Asked by `weir_price` before it prices a machine
+   * edition: `absent` is a post sealed before machine editions were, whose plaintext is gone, and
+   * pricing it would sell an `Unlock` that opens nothing.
+   *
+   * Answered either as the bare state or as the agent package's `Reading` of it; the tool reads
+   * both, and a failed `Reading` or a throw concludes nothing (`unreadable`).
+   */
+  machineBody?: (input: {
+    vaultId: string;
+    contentKey: string;
+  }) => Promise<MachineBodyState | { ok: true; value: MachineBodyState } | { ok: false; failure: unknown }>;
 }
+
+export type MachineBodyState = 'no-post' | 'sealed' | 'absent';
 
 /* ------------------------------------------------------------------------------------------------
  * The signer, and the policy that bounds it

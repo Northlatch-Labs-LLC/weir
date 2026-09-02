@@ -23,6 +23,7 @@ import {
 import { bcs } from '@mysten/sui/bcs';
 import { siteConfig } from './chain';
 import type { Post } from './content';
+import { machineContentKey } from './machine-pricing';
 
 /**
  * `entitlement::Subscription`.
@@ -261,8 +262,25 @@ export function canRead(post: Post, entitlements: Entitlements): boolean {
       return true;
     case 'subscribers':
       return entitlements.subscribedVaults.has(normalise(post.vaultId));
-    case 'paid':
-      return entitlements.unlocked.has(unlockKey(post.vaultId, post.access.contentKey));
+    case 'paid': {
+      /*
+        Either edition entitles.
+
+        A paid post is sold under two keys on one vault — the creator's, and `<key>#machine` for
+        machine buyers (`lib/machine-pricing.ts`). Both are real `Unlock` objects minted by the same
+        `creator::unlock`, and both were paid for. Checking only the human key was the visible half
+        of the defect this widening closes: a machine buyer held a valid `Unlock`, and this predicate
+        called them a stranger.
+
+        Widened HERE and nowhere else, which is the reason there is one predicate. Every call site
+        — the comments route, the media route, the creator page, the feed — reads the wider answer
+        without changing.
+      */
+      const human = unlockKey(post.vaultId, post.access.contentKey);
+      if (entitlements.unlocked.has(human)) return true;
+      const machine = machineContentKey(post.access.contentKey);
+      return machine.ok && entitlements.unlocked.has(unlockKey(post.vaultId, machine.value));
+    }
   }
 }
 
@@ -282,8 +300,27 @@ export function canRead(post: Post, entitlements: Entitlements): boolean {
  */
 export function sealApprover(post: Post, entitlements: Entitlements): SealApprover | undefined {
   if (post.access.kind === 'paid') {
-    const objectId = entitlements.unlockIds?.get(unlockKey(post.vaultId, post.access.contentKey));
-    return objectId === undefined ? undefined : { kind: 'unlock', objectId };
+    /*
+      Names WHICH key the object was bought under, because the key server will be asked for that
+      identity and no other: `seal_approve_unlock` asserts
+      `id == unlock_identity(unlock.vault, unlock.content_key)`, so handing a machine buyer's
+      `Unlock` the human identity is a `MoveAbort` that reads as "you do not have access" on a post
+      they paid for. The card opens the edition the approver names.
+
+      Human preferred when a reader somehow holds both: it is the edition the post's own
+      `contentKey` names, and the two bodies are the same words.
+    */
+    const ids = entitlements.unlockIds;
+    const humanKey = post.access.contentKey;
+    const humanId = ids?.get(unlockKey(post.vaultId, humanKey));
+    if (humanId !== undefined) return { kind: 'unlock', objectId: humanId, contentKey: humanKey };
+
+    const machine = machineContentKey(humanKey);
+    if (!machine.ok) return undefined;
+    const machineId = ids?.get(unlockKey(post.vaultId, machine.value));
+    return machineId === undefined
+      ? undefined
+      : { kind: 'unlock', objectId: machineId, contentKey: machine.value };
   }
 
   if (post.access.kind === 'subscribers') {
@@ -312,7 +349,8 @@ export function sealApprover(post: Post, entitlements: Entitlements): SealApprov
  * `u64` silently into an identity that is the right length and the wrong bytes.
  */
 export type SealApprover =
-  | { kind: 'unlock'; objectId: string }
+  /** `contentKey` is the key the `Unlock` carries — the human key, or `<key>#machine`. */
+  | { kind: 'unlock'; objectId: string; contentKey: string }
   | { kind: 'subscription'; objectId: string; tier: string; period: string };
 
 /**

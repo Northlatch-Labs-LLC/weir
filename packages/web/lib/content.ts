@@ -72,6 +72,24 @@ export interface Post {
     tier?: string;
     period?: string;
   };
+  /**
+   * The machine edition: the same words, sealed a second time to
+   * `unlock_identity(vault, contentKey)` where `contentKey` is `<key>#machine`.
+   *
+   * Present only on a paid post published after machine editions were sealed at publish
+   * (migration 034). Its absence on an older paid post is permanent — the platform holds no
+   * plaintext to seal — and `machineBodyState` reports exactly that so nobody prices what cannot
+   * be delivered. `contentKey` is stored rather than re-derived: the reader names it to the key
+   * server, and the rule that derives it must not be able to drift under a row already written.
+   */
+  machineBody?: {
+    blobId: string;
+    endEpoch: number;
+    nonce: string;
+    sealWrappedKey: string;
+    sha256: string;
+    contentKey: string;
+  };
   access: PostAccess;
   /** Attached media, by asset id. Ids only — never paths and never URLs. */
   assetIds?: string[];
@@ -204,6 +222,12 @@ export interface PostRow {
   body_sha256: string | null;
   body_tier: string | number | null;
   body_period: string | number | null;
+  machine_blob_id: string | null;
+  machine_end_epoch: string | number | null;
+  machine_nonce: string | null;
+  machine_seal_wrapped_key: string | null;
+  machine_sha256: string | null;
+  machine_content_key: string | null;
   price: string | null;
   content_key: string | null;
   asset_ids: string[] | null;
@@ -280,6 +304,22 @@ function toPost(row: PostRow): Post {
           },
         }
       : {}),
+    // The same rule as the human edition: all of it or none of it. `posts_machine_body_complete`
+    // already refuses a partial row; this is the read side of the same promise.
+    ...(row.machine_blob_id !== null && row.machine_nonce !== null
+        && row.machine_seal_wrapped_key !== null && row.machine_sha256 !== null
+        && row.machine_content_key !== null
+      ? {
+          machineBody: {
+            blobId: row.machine_blob_id,
+            endEpoch: Number(row.machine_end_epoch ?? 0),
+            nonce: row.machine_nonce,
+            sealWrappedKey: row.machine_seal_wrapped_key,
+            sha256: row.machine_sha256,
+            contentKey: row.machine_content_key,
+          },
+        }
+      : {}),
     access,
     ...(assetIds.length > 0 ? { assetIds } : {}),
   };
@@ -308,6 +348,8 @@ const POST_SELECT = `
          p.access_kind, p.price, p.content_key,
          p.body_blob_id, p.body_end_epoch, p.body_nonce, p.body_seal_wrapped_key, p.body_sha256,
          p.body_tier, p.body_period,
+         p.machine_blob_id, p.machine_end_epoch, p.machine_nonce, p.machine_seal_wrapped_key,
+         p.machine_sha256, p.machine_content_key,
          COALESCE(
            (SELECT array_agg(a.id ORDER BY a.id) FROM assets a WHERE a.post_id = p.id),
            '{}'
@@ -658,6 +700,37 @@ export async function titlesForContentKeys(
   return new Map(rows.map((row) => [row.content_key, row.title]));
 }
 
+/**
+ * Whether the machine edition of a content key can be delivered on this vault.
+ *
+ * Asked before a machine edition is priced — by `studio/price`, by the composer and by `weir_price`
+ * — because pricing is a promise the seal has to keep. An `Unlock` stamps a KEY, not a post, so a
+ * creator who reuses one key across a season sells every post under it with one purchase; the
+ * answer is therefore about every paid post under the key, and one post that cannot deliver makes
+ * the whole key `absent`.
+ *
+ *  - `no-post`: nothing is published under this key yet. Pricing is allowed — the composer prices
+ *    before it publishes, and publish seals both editions.
+ *  - `sealed`: every paid post under the key that has a sealed body has a machine body too.
+ *  - `absent`: at least one paid post under the key was sealed for humans and never for machines —
+ *    published before migration 034. Its plaintext is gone, so this is permanent until the creator
+ *    republishes. A paid post whose words are still in the `body` column (published before 020)
+ *    is not counted: a machine buyer's `Unlock` reads that column through `canRead` like any other.
+ */
+export async function machineBodyState(
+  vaultId: string,
+  humanKey: string,
+): Promise<'no-post' | 'sealed' | 'absent'> {
+  const { rows } = await db().query<{ sealed_without_machine: boolean }>(
+    `SELECT (body_blob_id IS NOT NULL AND machine_blob_id IS NULL) AS sealed_without_machine
+       FROM posts
+      WHERE vault_id = $1 AND access_kind = 'paid' AND content_key = $2`,
+    [normaliseAddress(vaultId), humanKey],
+  );
+  if (rows.length === 0) return 'no-post';
+  return rows.some((row) => row.sealed_without_machine) ? 'absent' : 'sealed';
+}
+
 /** The cursor that continues after `posts`, or `null` when there is nothing more to ask for. */
 export function cursorAfter(posts: readonly Post[]): PostCursor | null {
   const last = posts.at(-1);
@@ -683,8 +756,11 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
     `INSERT INTO posts (id, vault_id, author_handle, created_at_ms, title, preview, body,
                         access_kind, price, content_key,
                         body_blob_id, body_end_epoch, body_nonce, body_seal_wrapped_key, body_sha256,
-                        body_tier, body_period)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+                        body_tier, body_period,
+                        machine_blob_id, machine_end_epoch, machine_nonce, machine_seal_wrapped_key,
+                        machine_sha256, machine_content_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+             $18, $19, $20, $21, $22, $23)`,
     [
       post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
       /*
@@ -700,6 +776,9 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
       post.sealedBody?.nonce ?? null, post.sealedBody?.sealWrappedKey ?? null,
       post.sealedBody?.sha256 ?? null,
       post.sealedBody?.tier ?? null, post.sealedBody?.period ?? null,
+      post.machineBody?.blobId ?? null, post.machineBody?.endEpoch ?? null,
+      post.machineBody?.nonce ?? null, post.machineBody?.sealWrappedKey ?? null,
+      post.machineBody?.sha256 ?? null, post.machineBody?.contentKey ?? null,
     ],
   );
 }
@@ -1108,11 +1187,26 @@ export async function messagesTo(address: string): Promise<Message[]> {
   return rows.map(toMessage);
 }
 
-export interface VisiblePost extends Omit<Post, 'body' | 'assetIds' | 'sealedBody'> {
+export interface VisiblePost extends Omit<Post, 'body' | 'assetIds' | 'sealedBody' | 'machineBody'> {
   body?: string;
   assetIds?: string[];
-  /** Present only for an entitled reader of a post whose body was sealed at publish. */
+  /**
+   * Present only for an entitled reader of a post whose body was sealed at publish.
+   *
+   * THE EDITION THIS READER CAN OPEN, not always the human one: a reader whose `Unlock` carries
+   * `<key>#machine` is handed the machine body here, under the same field, so the card has one
+   * thing to open. `edition` says which.
+   */
   sealedBody?: Post['sealedBody'];
+  /**
+   * Which body `sealedBody` is, or why there is none to hand over.
+   *
+   * `machine-absent` is the one state that is a defect and not a choice: the reader holds a machine
+   * `Unlock` for a post published before machine editions were sealed (migration 034). Its words
+   * were never sealed to that key and cannot be now — the platform kept no plaintext — so the card
+   * says so rather than spinning over a blob that will never open.
+   */
+  edition?: 'human' | 'machine' | 'machine-absent';
   /**
    * The entitlement object the browser names to the key server, with its arguments.
    *
@@ -1152,6 +1246,36 @@ export function visiblePost(
   };
 
   if (post.access.kind === 'public' || entitled) {
+    /*
+      Which sealed body this reader gets.
+
+      The approver names the key the reader's `Unlock` carries. When that is the machine key, the
+      machine body is the one their object can open — `seal_approve_unlock` asserts the identity
+      matches the `Unlock`'s own key — so it travels under `sealedBody` and the human one stays
+      behind. A machine `Unlock` on a post with no machine body is reported, not papered over.
+    */
+    const machineApprover =
+      approver?.kind === 'unlock'
+      && post.access.kind === 'paid'
+      && approver.contentKey !== post.access.contentKey;
+    const handed: { sealedBody?: Post['sealedBody']; edition?: VisiblePost['edition'] } =
+      machineApprover
+        ? post.machineBody === undefined
+          ? { edition: 'machine-absent' }
+          : {
+              sealedBody: {
+                blobId: post.machineBody.blobId,
+                endEpoch: post.machineBody.endEpoch,
+                nonce: post.machineBody.nonce,
+                sealWrappedKey: post.machineBody.sealWrappedKey,
+                sha256: post.machineBody.sha256,
+              },
+              edition: 'machine',
+            }
+        : post.sealedBody === undefined
+          ? {}
+          : { sealedBody: post.sealedBody, edition: 'human' };
+
     return {
       ...base,
       body: post.body,
@@ -1164,7 +1288,7 @@ export function visiblePost(
         creator's catalogue on the open internet in an enumerable form, and defence in depth costs
         nothing here.
       */
-      ...(post.sealedBody === undefined ? {} : { sealedBody: post.sealedBody }),
+      ...handed,
       ...(approver === undefined ? {} : { approver }),
       ...(post.assetIds === undefined ? {} : { assetIds: post.assetIds }),
       locked: false,

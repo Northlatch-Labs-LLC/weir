@@ -32,7 +32,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatUnits } from '@/lib/units';
-import { machineContentKey, machineKeyProblem } from '@/lib/machine-pricing';
+import { NO_MACHINE_BODY, machineContentKey, machineKeyProblem } from '@/lib/machine-pricing';
 import { retentionDays } from '@/lib/storage-retention';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -145,6 +145,15 @@ export function StudioComposer() {
   /** What a machine buyer pays. Empty means the creator has not offered a machine edition. */
   const [machinePrice, setMachinePrice] = useState('');
   /**
+   * Whether the machine edition of the key being typed can be DELIVERED, from `content-price`.
+   *
+   * `absent` is a post under this key that was sealed before machine editions were (migration 034):
+   * its plaintext is gone, so no machine body can ever exist for it and pricing it would sell an
+   * `Unlock` for nothing. The price field is withheld and the reason shown. `unknown` covers a read
+   * that has not happened or failed — never rendered as "can be sold".
+   */
+  const [machineBody, setMachineBody] = useState<'unknown' | 'no-post' | 'sealed' | 'absent'>('unknown');
+  /**
    * The machine edition's pricing transaction, kept out of `stage` deliberately.
    *
    * `needsPricing` below reads `stage.name !== 'priced'` to decide whether a paid post may be
@@ -229,6 +238,7 @@ export function StudioComposer() {
       */
       setKeyPrice({ name: 'unknown' });
       setMachineKeyPrice({ name: 'unknown' });
+      setMachineBody('unknown');
       return;
     }
 
@@ -251,7 +261,13 @@ export function StudioComposer() {
           const body = (await response.json()) as {
             price?: string | null;
             machine?: { state?: string; price?: string | null };
+            machineBody?: string;
           };
+          setMachineBody(
+            body.machineBody === 'sealed' || body.machineBody === 'no-post' || body.machineBody === 'absent'
+              ? body.machineBody
+              : 'unknown',
+          );
           setKeyPrice({
             name: 'known',
             price: body.price == null ? null : BigInt(body.price),
@@ -796,6 +812,12 @@ export function StudioComposer() {
                 this key yet
               </p>
             )}
+            {machineBody === 'absent' && (
+              <p className="unmeasured">
+                &ldquo;{contentKey.trim()}&rdquo; {NO_MACHINE_BODY}
+              </p>
+            )}
+            {machineBody !== 'absent' && (
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
               <div>
                 <label className="k" htmlFor="mpr">MACHINE PRICE · USDC</label>
@@ -823,6 +845,7 @@ export function StudioComposer() {
                 </button>
               </div>
             </div>
+            )}
             {machineStage.name === 'priced' && (
               <p className="mono" style={{ fontSize: 13 }}>{machineStage.digest}</p>
             )}
