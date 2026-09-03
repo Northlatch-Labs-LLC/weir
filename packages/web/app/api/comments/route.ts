@@ -124,8 +124,14 @@ export async function POST(request: Request) {
 
   // The statement is rebuilt here from the trimmed text that will actually be stored, so a
   // signature cannot authorise one comment while a different one is written.
+  /*
+    Held rather than inlined: the same origin goes into the verification AND into the retained
+    proof below. Deriving it twice is how a stored record drifts from the bytes that were verified.
+  */
+  const origin = new URL(request.url).origin;
+
   const proven = await verifyAction({
-    origin: new URL(request.url).origin,
+    origin,
     address: author,
     signature,
     timestampMs,
@@ -168,6 +174,12 @@ export async function POST(request: Request) {
     author,
     text: trimmed,
     createdAtMs: Date.now(),
+    /*
+      The proof, kept — see `db/040_comment_authorship.sql`. These are the exact values
+      `verifyAction` accepted, not a re-derivation: a proof that differs from what was checked is
+      not a proof. `trimmed` is what was signed and what is stored, so the bytes rebuild exactly.
+    */
+    authorship: { issuedAtMs: timestampMs, origin, signature },
   };
   await addComment(comment);
   return NextResponse.json({ comment });

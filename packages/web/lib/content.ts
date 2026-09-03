@@ -150,9 +150,16 @@ export interface AssetRecord {
 export interface Comment {
   id: string;
   postId: string;
+  /** The address that signed. Already the proved signer, unlike a post's handle. */
   author: string;
   text: string;
   createdAtMs: number;
+  /**
+   * What lets somebody who is not us check who wrote this — see `db/040_comment_authorship.sql`.
+   * Absent on comments written before the proof was kept. Never defaulted: those were signed, and
+   * "we did not keep it" must stay distinguishable from "this was not signed".
+   */
+  authorship?: { issuedAtMs: number; origin: string; signature: string };
 }
 
 export interface Follow {
@@ -970,8 +977,18 @@ function readEncryption(row: {
 
 export async function addComment(comment: Comment): Promise<void> {
   await db().query(
-    'INSERT INTO comments (id, post_id, author, body, created_at_ms) VALUES ($1, $2, $3, $4, $5)',
-    [comment.id, comment.postId, normaliseAddress(comment.author), comment.text, comment.createdAtMs],
+    `INSERT INTO comments (id, post_id, author, body, created_at_ms, issued_at_ms, origin, signature)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      comment.id, comment.postId, normaliseAddress(comment.author), comment.text, comment.createdAtMs,
+      /*
+        All three or none. A row with an instant and no signature would read as a proof and verify
+        as nothing, which is worse than the honest absence these columns exist for.
+      */
+      comment.authorship?.issuedAtMs ?? null,
+      comment.authorship?.origin ?? null,
+      comment.authorship?.signature ?? null,
+    ],
   );
 }
 
@@ -981,13 +998,32 @@ interface CommentRow {
   author: string;
   body: string;
   created_at_ms: string;
+  issued_at_ms: string | number | null;
+  origin: string | null;
+  signature: string | null;
 }
 
 function toComment(r: CommentRow): Comment {
+  /*
+    All three or none. A partial row cannot be verified and must not be handed on as though it
+    could: the route that serves this says "no proof was kept", and that sentence has to be true of
+    every comment it is said about.
+  */
+  const authorship =
+    r.issued_at_ms !== null && r.origin !== null && r.signature !== null
+      ? { issuedAtMs: Number(r.issued_at_ms), origin: r.origin, signature: r.signature }
+      : undefined;
   return {
     id: r.id, postId: r.post_id, author: r.author,
     text: r.body, createdAtMs: Number(r.created_at_ms),
+    ...(authorship === undefined ? {} : { authorship }),
   };
+}
+
+/** One comment, by id. Added for the authorship route: the list is by post, not by comment. */
+export async function findComment(id: string): Promise<Comment | null> {
+  const { rows } = await db().query<CommentRow>('SELECT * FROM comments WHERE id = $1', [id]);
+  return rows[0] === undefined ? null : toComment(rows[0]);
 }
 
 /** Oldest first — a conversation reads forwards. */

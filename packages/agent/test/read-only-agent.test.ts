@@ -76,6 +76,7 @@ const READ_SET = [
   'authorship',
   'balanceOf',
   'client',
+  'commentAuthorship',
   'feed',
   'manifest',
   'quote',

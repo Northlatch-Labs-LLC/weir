@@ -668,7 +668,7 @@ export function DesignAgents(props: AgentsProps) {
                 ['weir_search', 'find a creator or a post'],
                 ['weir_quote', 'what a thing costs, read from chain'],
                 ['weir_read', 'the public preview of a post'],
-                ['weir_authorship', 'who signed a post, as bytes you verify yourself'],
+                ['weir_authorship', 'who signed a post or comment, as bytes you verify yourself'],
                 ['weir_balance', 'what this agent holds'],
                 ['weir_buy', 'unlock one post'],
                 ['weir_subscribe', 'take a tier on a vault'],

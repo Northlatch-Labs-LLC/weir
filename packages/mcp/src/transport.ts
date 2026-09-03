@@ -305,6 +305,8 @@ export interface WeirPort {
    * was signed and the deployment discarded the signature — and is never reported as a failure.
    */
   authorship?: (input: { postId: string }) => Promise<WeirAuthorship>;
+  /** Who signed a comment. Same rules as {@link WeirPort.authorship}; keyless. */
+  commentAuthorship?: (input: { commentId: string }) => Promise<WeirAuthorship>;
 
   /** Buy permanent access. The ceiling is carried, not applied. */
   unlock?: (input: {
@@ -564,7 +566,13 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   if (has('readPreview')) out.add('read-preview');
   // Keyless, like search and quote: checking who signed something must not require a key, or the
   // check is only available to whoever has already committed to spending.
-  if (has('authorship')) out.add('authorship');
+  /*
+    Both readers, or the capability is absent. `weir_authorship` accepts a post id or a comment id,
+    so a server with only one of them would advertise an input it refuses — which is worse than not
+    offering the tool. They arrive together on the read-only agent; requiring both here means a
+    future binding that drops one loses the tool rather than shipping a half-honoured schema.
+  */
+  if (has('authorship') && has('commentAuthorship')) out.add('authorship');
   if (binding.signer.kind !== 'none' && has('balance')) out.add('balance');
 
   /*

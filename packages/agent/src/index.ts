@@ -439,6 +439,11 @@ export interface ReadOnlyAgent {
    * failure.
    */
   authorship: (input: { postId: string }) => Promise<Reading<Authorship>>;
+  /**
+   * Who signed a comment. The same shape and the same rules as {@link ReadOnlyAgent.authorship};
+   * a comment carries no handle, so `handleStillResolvesToSigner` is always null here.
+   */
+  commentAuthorship: (input: { commentId: string }) => Promise<Reading<Authorship>>;
 
   /**
    * One post as an anonymous reader sees it: the plaintext of a PUBLIC post, or `null` for a post
@@ -1704,6 +1709,19 @@ function readSurface(input: {
      * deployment retained signatures have none, and they were signed. Unproven is not forged, and
      * collapsing the two would make every older post look fraudulent.
      */
+    async commentAuthorship(input: { commentId: string }): Promise<Reading<Authorship>> {
+      const what = 'commentAuthorship';
+      const read = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: `/api/comments/${encodeURIComponent(input.commentId)}/authorship`,
+        method: 'GET',
+        what,
+      });
+      if (!read.ok) return read;
+      return authorshipFrom(read.value, what);
+    },
+
     async authorship(input: { postId: string }): Promise<Reading<Authorship>> {
       const what = 'authorship';
       const read = await httpRead({
