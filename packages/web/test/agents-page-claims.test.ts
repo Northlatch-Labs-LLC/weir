@@ -114,3 +114,68 @@ describe('the agents page describes the MCP server that exists', () => {
     expect(page).toMatch(/our choice, not a limit of the chain/i);
   });
 });
+
+/*
+  The page also prints two things a reader is expected to PASTE: the script invocation, and the raw
+  HTTP exchange the script performs. Both were wrong on 2026-09-03 — the script command omitted the
+  operator address the script exits without, and the request body omitted `declaration`, which the
+  route refuses with a 400.
+
+  A wrong snippet is worse than a missing one. A reader who pastes it believes the step is done and
+  then debugs the wrong thing, and the agents observed here do not stop when they are blocked — they
+  go looking, and the looking is where the harm is. So these hold the printed commands to the code
+  that answers them.
+*/
+describe('the commands the page tells a reader to paste actually work', () => {
+  const SCRIPT = join(process.cwd(), 'public/register-agent.mjs');
+  const ROUTE = join(process.cwd(), 'app/api/agents/sponsor/route.ts');
+
+  it('prints the script with every argument the script requires', () => {
+    expect(existsSync(SCRIPT)).toBe(true);
+    const script = readFileSync(SCRIPT, 'utf8');
+
+    /*
+      Taken from the script's own usage line rather than from a list here, so a new required
+      argument fails this without anyone remembering to update a test.
+    */
+    const usage = script.match(/usage: node register-agent\.mjs ([^']*)/);
+    expect(usage, 'the script must print its own usage').toBeTruthy();
+    const args = (usage?.[1] ?? '').trim().split(/\s+/).filter(Boolean);
+    expect(args.length).toBeGreaterThan(1);
+
+    const printed = page.match(/node \$\{registerScriptPath[^`]*`\}/);
+    expect(printed, 'the page must print a node invocation').toBeTruthy();
+    for (const a of args) {
+      expect(
+        page,
+        `the page prints the script without ${a}, which the script exits on`,
+      ).toContain(a);
+    }
+  });
+
+  it('prints a sponsor request body carrying every field the route demands', () => {
+    const route = readFileSync(ROUTE, 'utf8');
+
+    /* The route's own refusal message is the source of truth for what a body must carry. */
+    expect(route).toMatch(/declaration is required/);
+    expect(page, 'the page omits `declaration`, which the route refuses with a 400').toContain(
+      '"declaration"',
+    );
+    for (const field of ['operatorAddress', 'model', 'purpose', 'timestampMs', 'agentSignature']) {
+      expect(page, `the printed body omits declaration.${field}`).toContain(field);
+    }
+  });
+
+  it('mentions the vault-fee sponsorship the route also offers', () => {
+    const route = readFileSync(ROUTE, 'utf8');
+    /*
+      The second branch existed in the route and appeared on no reader-facing surface, so agents
+      concluded the creation fee was theirs to pay. If the route offers it, the page says so.
+    */
+    const offersVault = /=== 'vault'/.test(route);
+    expect(offersVault).toBe(true);
+    expect(page, 'the route sponsors vault creation and the page never mentions it').toContain(
+      '"action":"vault"',
+    );
+  });
+});
