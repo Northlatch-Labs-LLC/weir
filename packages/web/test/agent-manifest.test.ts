@@ -424,6 +424,7 @@ describe('the document as a whole', () => {
         'keyRegistryId',
         'keyRegistryUnavailable',
         'explorer',
+        'source',
       ].sort(),
     );
 
@@ -798,5 +799,66 @@ describe('the first thing an agent is told', () => {
 
   it('warns that the key cannot be replaced, beside the instruction to make it', () => {
     expect(manifestFrom(inputs()).startHere.soulbound).toMatch(/no rotation and no recovery|no rotation/);
+  });
+});
+
+/*
+  Both of these were added on 2026-09-03 for the same reason, and the reason is behavioural rather
+  than editorial: watching four agents across three models, the failure was never that a document
+  said something wrong. It was that the document named a thing and never said where it was, and the
+  agent went looking. One crawled the organisation's private repositories for contracts it had been
+  told to verify us against; another concluded it had to pay a fee we were in fact paying for it.
+
+  So these tests do not check that a field exists. They check that the two questions an agent would
+  otherwise go searching for are answered IN the document.
+*/
+describe('the manifest answers what an agent would otherwise go looking for', () => {
+  it('says where the contracts it asks you to verify us against actually are', () => {
+    const manifest = manifestFrom(inputs());
+    const source = manifest.chain?.source;
+
+    expect(source, 'chain.source must exist or verifyNote sends the reader on a search').toBeTruthy();
+    expect(source?.repository).toBe('https://github.com/Northlatch-Labs-LLC/weir-protocol');
+    /*
+      The contracts path is asserted separately from the repository. Pointing at the organisation
+      and leaving the reader to find the right repository among the private ones is the exact
+      behaviour this field exists to prevent.
+    */
+    expect(source?.contracts).toContain('/weir-protocol/');
+    expect(source?.contracts).toContain('sui-contracts');
+    /*
+      Reachable is not licensed. An agent that can clone a repository will, so the licence has to
+      travel with the address rather than being left in a file it may not open.
+    */
+    expect(source?.licenceNote).toMatch(/BUSL/);
+    expect(source?.licenceNote).toMatch(/Apache/);
+    /*
+      Disagreement between source and chain must be reported, not silently resolved by the reader
+      picking whichever looks more official.
+    */
+    expect(source?.note).toMatch(/disagree|refuse/i);
+  });
+
+  it('says the vault creation fee is covered, not only the registration gas', () => {
+    const manifest = manifestFrom(inputs());
+    const sponsor = manifest.endpoints.find((e) => e.path === '/api/agents/sponsor');
+
+    expect(sponsor, 'the sponsorship endpoint must be listed at all').toBeTruthy();
+    const purpose = sponsor?.purpose ?? '';
+
+    /* The branch exists in the route; before this it existed nowhere in the document. */
+    expect(purpose).toMatch(/vault/i);
+    expect(purpose).toMatch(/creation fee/i);
+    expect(purpose).toMatch(/action.{0,4}vault/i);
+    /*
+      The two allowances are separate and an agent that believes opening a vault costs it a
+      registration seat will ration itself for no reason.
+    */
+    expect(purpose).toMatch(/does NOT spend one of the registration seats/);
+    /*
+      And the boundary of the offer, because the opposite error is just as expensive: an agent that
+      assumes everything is free reads a priced call as a fault and reports us broken.
+    */
+    expect(purpose).toMatch(/fund yourself|design rather than an obstacle/i);
   });
 });

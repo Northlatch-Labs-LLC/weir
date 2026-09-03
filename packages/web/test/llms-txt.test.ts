@@ -28,6 +28,61 @@ describe('llms.txt tells an agent the truth', () => {
     const line = src.findIndex((l) => l.includes('fee_bps_snapshot: platform.fee_bps()')) + 1;
     expect(line).toBeGreaterThan(0);
     expect(llms).toContain(`creator.move:${line}`);
+
+    /*
+      The SECOND line, which this test was named for and did not check until 2026-09-03.
+
+      Its absence is why `llms.txt` shipped reading "creator.move:358 and creator.move:358" — the
+      same line printed twice, in a sentence promising two references. The test passed the whole
+      time because one correct citation satisfied it. A test that checks half of what its own name
+      claims is worse than no test: it is a green light over an unchecked thing.
+
+      Found by content, not by counting: `settle` is the only place a stored snapshot is read back
+      out for the split, and if that ever stops being true the promise itself has changed.
+    */
+    const settleAt = src.findIndex((l) => /^fun settle</.test(l.trim()));
+    expect(settleAt, 'settle() must exist for the fee promise to mean anything').toBeGreaterThan(-1);
+    const readsSnapshot = src.findIndex(
+      (l, i) => i > settleAt && l.includes('vault.fee_bps_snapshot'),
+    ) + 1;
+    expect(readsSnapshot).toBeGreaterThan(settleAt);
+    expect(llms).toContain(`creator.move:${readsSnapshot}`);
+    expect(
+      line === readsSnapshot,
+      'the two citations must be two different lines, not one line printed twice',
+    ).toBe(false);
+  });
+
+  it('pre-empts the line an auditor will read as a contradiction', () => {
+    /*
+      `accept_current_terms` assigns `vault.fee_bps_snapshot = platform.fee_bps()`, which reads
+      exactly like the platform reaching into a vault it promised not to touch. It is gated on a
+      CreatorCap, so only the vault's owner can call it — but an agent auditing the contract finds
+      the assignment before it finds the guard, and an unexplained contradiction is a reason to
+      distrust everything else we said. So the document has to reach that line first.
+    */
+    const creator = join(process.cwd(), '../../sui-contracts/sources/creator.move');
+    const src = readFileSync(creator, 'utf8').split('\n');
+    const at = src.findIndex((l) => l.includes('public fun accept_current_terms<T>(')) + 1;
+    expect(at, 'accept_current_terms must exist to be explained').toBeGreaterThan(0);
+    expect(llms).toContain(`creator.move:${at}`);
+    expect(llms).toContain('accept_current_terms');
+    expect(llms).toMatch(/CreatorCap/);
+
+    // And the guard must genuinely be there, or the paragraph is a comfortable lie.
+    const body = src.slice(at, at + 14).join('\n');
+    expect(body).toMatch(/assert_cap\(vault, cap\)/);
+  });
+
+  it('says where the contracts it cites actually are', () => {
+    /*
+      Every citation above is a file and a line number in a repository the reader was never given.
+      Four agents were watched going looking for exactly this kind of unaddressed reference; one
+      crawled the organisation's private repositories to find it.
+    */
+    expect(llms).toContain('github.com/Northlatch-Labs-LLC/weir-protocol');
+    expect(llms).toContain('sui-contracts');
+    expect(llms).toMatch(/BUSL/);
   });
 
   it('states the gaps rather than only the guarantees', () => {

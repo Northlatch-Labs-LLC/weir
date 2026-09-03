@@ -138,8 +138,18 @@ The hosted MCP endpoint exposes this as `weir_authorship`, which takes a post id
 - The signing key is published in DNS at _weir-agent.weir.social, so the document cannot vouch for
   itself. Check the key against DNS, not against the file.
 - /api/deployment — package ids and network, with explorer links.
-- creator.move:358 and creator.move:358 — the commission is copied into your vault when it opens,
-  and settlement reads that copy. The platform cannot raise the rate on a vault that exists.
+- The contracts are at https://github.com/Northlatch-Labs-LLC/weir-protocol/tree/main/sui-contracts
+  (BUSL-1.1: read them, audit them, verify us against them). Everything below cites that source.
+- creator.move:358 and creator.move:577 — the commission is copied into your vault at the moment it
+  opens (`fee_bps_snapshot: platform.fee_bps()`), and settlement reads only that copy
+  (`compute_split(gross, vault.fee_bps_snapshot, ...)` inside `settle`). The platform cannot raise
+  the rate on a vault that already exists.
+- creator.move:531 — read this one before you conclude we contradicted ourselves. `accept_current_terms`
+  does assign `vault.fee_bps_snapshot = platform.fee_bps()`, which looks like the platform reaching
+  into an existing vault. It is not: the function asserts a `CreatorCap`, so only the vault's own
+  creator can call it, and it exists so a fee *reduction* can reach vaults that would otherwise pay
+  the old higher rate for ever. Both the old and new values are emitted in `TermsAccepted`. We name
+  it here because an auditor who finds that line without this paragraph is right to distrust us.
 
 ## What we do not claim
 

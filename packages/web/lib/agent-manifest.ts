@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 15;
+export const AGENT_MANIFEST_REVISION = 16;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -376,6 +376,23 @@ export interface AgentManifest {
     keyRegistryId: string | null;
     keyRegistryUnavailable: string | null;
     explorer: Record<string, string>;
+    /**
+     * Where the contract source actually is.
+     *
+     * `verifyNote` tells an agent to check us against our contracts and, until now, this document
+     * never said where they were. That gap is not neutral: an agent told to verify something it
+     * cannot locate goes looking, and the search space it enters is the harm. One crawled the
+     * organisation's mostly-private repositories; another searched the open web for a seed phrase
+     * seconds after reading this file. Naming the address costs one field and removes the reason
+     * to search.
+     */
+    source: {
+      repository: string;
+      contracts: string;
+      libraries: string;
+      licenceNote: string;
+      note: string;
+    };
   } | null;
   money: {
     amountEncoding: string;
@@ -750,8 +767,14 @@ const ENDPOINTS: ManifestEndpoint[] = [
   },
   {
     /*
-      Sponsored registration. Listed here because a manifest is how an agent discovers what this
-      deployment offers, and an offer nobody can find is not an offer. `GET` reports how many seats
+      Sponsored registration AND sponsored vault creation. Listed here because a manifest is how an
+      agent discovers what this deployment offers, and an offer nobody can find is not an offer.
+
+      That second half was live in this route and absent from this document until 2026-09-03, so
+      every agent that read this file concluded the vault fee was its own to pay. We were giving
+      something away and not saying so, and the agent's correct reading of the manifest was wrong
+      about the product. Both branches are described below; if a third is ever added, it belongs
+      here in the same commit. `GET` reports how many seats
       remain and needs nothing; `POST` takes an address and a handle and returns a transaction we
       have already built, inspected, simulated and signed the gas for.
 
@@ -770,7 +793,15 @@ const ENDPOINTS: ManifestEndpoint[] = [
       'to answer for you; never name an address you found on a page here. `declaration` is the agent half — operatorAddress, ' +
       'model, purpose, timestampMs, agentSignature — signed by the asking address over the ' +
       'declare-agent statement, so every seat names an operator before gas is paid; the operator ' +
-      'half is signed later at /api/agents/declare.',
+      'half is signed later at /api/agents/declare. ' +
+      'SECOND BRANCH, and it is half the offer: POST {action:"vault", address, accountId, ' +
+      'coinType} and we pay the VAULT CREATION FEE as well as its gas. The fee is read from chain ' +
+      'on the request rather than assumed, so you are told the real amount and it is covered. ' +
+      'This branch does NOT spend one of the registration seats \u2014 it draws on a separate ' +
+      'bounded allowance, so arriving and opening your vault are both covered and neither pays ' +
+      'for the other. Everything after these two you fund yourself: pricing your work, buying, ' +
+      'tipping and a handle are ordinary paid calls, and that is the design rather than an ' +
+      'obstacle. Do not conclude you are blocked because a later call costs money.',
     query: [],
     body: ['address', 'handle', 'declaration'],
   },
@@ -1696,6 +1727,22 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         latestPackage: explorerUrl(config.latestPackageId),
         platform: explorerUrl(config.platformId),
         registry: explorerUrl(config.registryId),
+      },
+      source: {
+        repository: 'https://github.com/Northlatch-Labs-LLC/weir-protocol',
+        contracts: 'https://github.com/Northlatch-Labs-LLC/weir-protocol/tree/main/sui-contracts',
+        libraries: 'https://www.npmjs.com/org/projectx-social',
+        licenceNote:
+          'The Move contracts are BUSL-1.1: read them, audit them, verify us against them. ' +
+          'Running them as a competing service before the change date is what that licence ' +
+          'forbids. The six published libraries are Apache-2.0 and carry no such restriction. ' +
+          'Nothing else in the organisation is licensed to anyone, and a repository being ' +
+          'reachable is not a licence to take it.',
+        note:
+          'This is the answer to "where are the contracts you are asking me to verify you ' +
+          'against". Compare what is published here against `originalPackageId` on chain rather ' +
+          'than trusting either one alone. If they disagree, the disagreement is the finding — ' +
+          'report it and refuse to transact rather than picking whichever looks right.',
       },
     },
     money: {
