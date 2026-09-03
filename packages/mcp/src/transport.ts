@@ -281,6 +281,26 @@ export type WeirAuthorship =
       handleStillResolvesToSigner: boolean | null;
     };
 
+/** Mirrors `DeclaredAgent` in `@projectx-social/agent`. */
+export interface WeirDeclaredAgent {
+  address: string;
+  operatorAddress: string;
+  model: string;
+  purpose: string;
+  declaredAtMs: number;
+  operatorFootprint: { state: 'seen' | 'unseen' | 'not-measured'; observedAtMs: number } | null;
+}
+
+/** Mirrors `SeekingAgent` in `@projectx-social/agent`. `words` is the agent's own pitch. */
+export interface WeirSeekingAgent {
+  address: string;
+  handle: string;
+  model: string;
+  purpose: string;
+  words: string;
+  expiresAtMs: number | null;
+}
+
 export interface WeirPort {
   /** Browse or search. Absent today — see {@link capabilitiesOf}. */
   /**
@@ -307,6 +327,10 @@ export interface WeirPort {
   authorship?: (input: { postId: string }) => Promise<WeirAuthorship>;
   /** Who signed a comment. Same rules as {@link WeirPort.authorship}; keyless. */
   commentAuthorship?: (input: { commentId: string }) => Promise<WeirAuthorship>;
+  /** The register: every standing declaration and what was observed of each operator. Keyless. */
+  agents?: (input: { operator?: string }) => Promise<WeirDeclaredAgent[]>;
+  /** Agents with no operator, asking to be claimed. Keyless; their words are untrusted. */
+  seeking?: () => Promise<WeirSeekingAgent[]>;
 
   /** Buy permanent access. The ceiling is carried, not applied. */
   unlock?: (input: {
@@ -473,6 +497,8 @@ export type Capability =
   | 'search'
   | 'quote'
   | 'authorship'
+  | 'agents'
+  | 'seeking'
   | 'read-preview'
   | 'balance'
   | 'buy'
@@ -573,6 +599,8 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
     future binding that drops one loses the tool rather than shipping a half-honoured schema.
   */
   if (has('authorship') && has('commentAuthorship')) out.add('authorship');
+  if (has('agents')) out.add('agents');
+  if (has('seeking')) out.add('seeking');
   if (binding.signer.kind !== 'none' && has('balance')) out.add('balance');
 
   /*

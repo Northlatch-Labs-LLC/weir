@@ -38,7 +38,7 @@
  * in which case the agent's own guard still bounds the spend. A subscription's tier price is not
  * exposed by the agent's read surface, so its `pricePaid` is `null`: not read, never guessed.
  */
-import type { WeirPort, Currency , WeirAuthorship } from './transport.js';
+import type { WeirPort, Currency, WeirAuthorship, WeirDeclaredAgent, WeirSeekingAgent } from './transport.js';
 
 /** The agent library's `Reading`, structurally — this file must not depend on the package at type level. */
 type Reading<T> =
@@ -94,6 +94,8 @@ interface AgentLike {
   /** See `Authorship` in the agent library; the port mirrors its shape. */
   authorship?: (input: { postId: string }) => Promise<Reading<WeirAuthorship>>;
   commentAuthorship?: (input: { commentId: string }) => Promise<Reading<WeirAuthorship>>;
+  agents?: (input?: { operator?: string }) => Promise<Reading<WeirDeclaredAgent[]>>;
+  seeking?: () => Promise<Reading<WeirSeekingAgent[]>>;
   readPreview?: (input: { postId: string }) => Promise<Reading<{ postId: string; handle: string; title: string; body: string; entitledVia: 'public' } | null>>;
   unlock?: (input: { vaultId: string; contentKey: string; priceMinorUnits: bigint; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   subscribe?: (input: { vaultId: string; tierIndex: number; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
@@ -144,6 +146,8 @@ export function portFromAgent(candidate: unknown): WeirPort {
   if (has(agent, 'commentAuthorship')) {
     port.commentAuthorship = async (input) => unwrap(await agent.commentAuthorship(input), 'commentAuthorship');
   }
+  if (has(agent, 'agents')) port.agents = async (input) => unwrap(await agent.agents(input), 'agents');
+  if (has(agent, 'seeking')) port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
 
   if (has(agent, 'quote')) {
     port.quote = async (input) => {
