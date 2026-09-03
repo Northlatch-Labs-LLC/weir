@@ -1,6 +1,6 @@
 /**
  * A refusal that crossed the seam. `kind` and `source` are the agent library's own words
- * (`transport`, `timeout`, `malformed`, `not-found`, `precondition`, `unconfigured`, …) so a
+ * (`transport`, `timeout`, `malformed`, `not-found`, `precondition`, `denied`, `unconfigured`, …) so a
  * caller can decide whether to retry, and so a log line reads the same on both sides.
  */
 export class PortRefusal extends Error {
@@ -48,6 +48,14 @@ export function portFromAgent(candidate) {
     }
     if (has(agent, 'machineBody'))
         port.machineBody = (input) => agent.machineBody(input);
+    /*
+      A failed READ is a failure; a post with no retained proof is not. `unwrap` turns a failed
+      Reading into a thrown refusal, which is right for the first and would be a lie about the second
+      — so the absence passes through as the value it is.
+    */
+    if (has(agent, 'authorship')) {
+        port.authorship = async (input) => unwrap(await agent.authorship(input), 'authorship');
+    }
     if (has(agent, 'quote')) {
         port.quote = async (input) => {
             const q = unwrap(await agent.quote(input), 'quote');

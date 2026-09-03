@@ -82,10 +82,11 @@ import { Transaction } from '@mysten/sui/transactions';
 import { classify, decodeAbort, fail, ok, readContentPrice, readCreatorVault, simulate, tx as build, } from '@projectx-social/sdk';
 import { sameAddress } from './keys.js';
 /**
- * The prefix a precondition refusal carries in `Failure.detail`.
+ * The prefix under which a `precondition` refusal names its condition in `Failure.detail`.
  *
  * A marker in the text rather than a field, because `Failure` is the SDK's shape and this package
- * does not get to add fields to it. The marker is machine-readable, it is the first thing in the
+ * does not get to add fields to it. It carries the NAME only; the fact that the refusal is a
+ * precondition is the kind itself. The marker is machine-readable, it is the first thing in the
  * string so a truncating log still shows it, and {@link preconditionOf} is the only thing that
  * parses it — no caller should be matching on prose.
  *
@@ -110,16 +111,20 @@ const CLEARS_WHEN = {
 /**
  * Refuse, naming a precondition.
  *
- * The SDK `kind` is `malformed` and that is the closed union's fault rather than a claim: a
- * precondition is not `transport` (retrying blindly is exactly wrong), not `not-found` (the thing
- * exists), not `unconfigured` (nothing here is missing from an env file) and not `timeout`. The
- * marker carries the truth; {@link classificationOf} is how a caller reads it.
+ * The SDK kind is `precondition`: not `transport` (retrying blindly is exactly wrong), not
+ * `not-found` (the thing exists), not `unconfigured` (nothing here is missing from an env file),
+ * not `malformed` (the request was fine). The marker at the head of `detail` names WHICH
+ * condition; {@link preconditionOf} reads the name and {@link classificationOf} reads the kind.
  */
 export function refusePrecondition(name, source, detail) {
-    return fail('malformed', source, `${PRECONDITION_MARKER}${name}] ${detail} This clears when ${CLEARS_WHEN[name]}`);
+    return fail('precondition', source, `${PRECONDITION_MARKER}${name}] ${detail} This clears when ${CLEARS_WHEN[name]}`);
 }
 /** The precondition a failure names, or `null` when it names none. */
 export function preconditionOf(failure) {
+    // The kind is authoritative. A `malformed` failure whose text happens to start with the marker
+    // — a message quoting one, say — is not a precondition, and must not hand a caller `mayClear`.
+    if (failure.kind !== 'precondition')
+        return null;
     if (!failure.detail.startsWith(PRECONDITION_MARKER))
         return null;
     const end = failure.detail.indexOf(']');
@@ -144,9 +149,27 @@ export function preconditionOf(failure) {
  * is a loop that never reports the real problem.
  */
 export function classificationOf(failure) {
-    if (failure.kind === 'transport' || failure.kind === 'timeout')
-        return 'transport';
-    return preconditionOf(failure) === null ? 'permanent' : 'precondition';
+    // Exhaustive on purpose: a kind added to the SDK union without a line here turns `_exhaustive`
+    // into a non-`never` and the build goes red. A loop must never meet a kind it cannot classify.
+    switch (failure.kind) {
+        case 'transport':
+        case 'timeout':
+            return 'transport';
+        case 'precondition':
+            // A `precondition` whose name this package does not recognise is still one the loop may
+            // wait on — it is not permanent — but `preconditionOf` will not invent a `clearsWhen` for it.
+            return 'precondition';
+        case 'malformed':
+        case 'unconfigured':
+        case 'not-found':
+        case 'budget-exhausted':
+        case 'denied':
+            return 'permanent';
+        default: {
+            const _exhaustive = failure.kind;
+            return _exhaustive;
+        }
+    }
 }
 /**
  * Move abort codes, classified. Read from the Move sources on 2026-08-31, not from memory.

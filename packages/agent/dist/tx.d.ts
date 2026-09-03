@@ -84,25 +84,22 @@ import type { AgentKey } from './keys.js';
 /**
  * A refusal that is neither "retry me" nor "never retry": a **precondition**.
  *
- * # Why this exists here and not in `packages/sdk/src/reading.ts`
+ * # Where the kind lives, and where the name lives
  *
- * `FailureKind` in `reading.ts:22-35` is a closed string-literal union — `transport`, `timeout`,
- * `malformed`, `unconfigured`, `not-found`, `budget-exhausted` — and it is switched on
- * exhaustively across `sdk`, `web` and `daemon`. **It was not extended.** Three reasons, in order
- * of weight:
+ * `FailureKind` in `packages/sdk/src/reading.ts` carries `precondition` as a member since B17
+ * (2026-09-02). Before that the union was closed at six members and this package smuggled the
+ * classification through a text marker in `detail` while the SDK kind said `malformed` — the
+ * roadmap's own words for that were "the text marker is a stand-in". It is not any more: the
+ * **kind** says a refusal is a precondition, and every reader that switches on the kind is
+ * exhaustive, so a new kind cannot arrive anywhere unclassified.
  *
- *   1. Widening a union that other packages switch on exhaustively is a breaking change to every
- *      one of them, and this change has no mandate to touch `web` or `daemon`.
- *   2. `reading.ts` is outside this task's assigned files, and `packages/sdk/src/index.ts` — which
- *      would have to re-export the new member — is being edited by another author in this same
- *      session. Two authors editing one export list is how a merge quietly drops a case.
- *   3. The distinction is genuinely an **agent** concern. A browser shows a person a message and
- *      they decide; an unattended loop has to decide for itself whether to come back later. That
- *      asymmetry is what makes the third classification worth having at all, and it belongs where
- *      the loop lives.
- *
- * So the classification is additive and package-local. It does not weaken or contradict the SDK's
- * kind, which is still set as truthfully as the closed union allows; it travels **alongside** it.
+ * What stays here is the **name** of the condition — which precondition, and what clears it. That
+ * is genuinely an agent concern: a browser shows a person a message and they decide; an unattended
+ * loop has to decide for itself whether to come back later, and for that it needs a stable
+ * machine-readable name, not a sentence. `Failure` has no field for it, so the name still travels
+ * at the head of `detail` behind {@link PRECONDITION_MARKER}, and {@link preconditionOf} is the only
+ * thing that parses it. The marker without the kind is not a precondition (see the tests): the kind
+ * is authoritative, the marker is the name.
  *
  * # What was wrong with the two we had
  *
@@ -161,10 +158,11 @@ export interface Precondition {
     readonly mayClear: true;
 }
 /**
- * The prefix a precondition refusal carries in `Failure.detail`.
+ * The prefix under which a `precondition` refusal names its condition in `Failure.detail`.
  *
  * A marker in the text rather than a field, because `Failure` is the SDK's shape and this package
- * does not get to add fields to it. The marker is machine-readable, it is the first thing in the
+ * does not get to add fields to it. It carries the NAME only; the fact that the refusal is a
+ * precondition is the kind itself. The marker is machine-readable, it is the first thing in the
  * string so a truncating log still shows it, and {@link preconditionOf} is the only thing that
  * parses it — no caller should be matching on prose.
  *
@@ -175,10 +173,10 @@ export declare const PRECONDITION_MARKER = "[precondition:";
 /**
  * Refuse, naming a precondition.
  *
- * The SDK `kind` is `malformed` and that is the closed union's fault rather than a claim: a
- * precondition is not `transport` (retrying blindly is exactly wrong), not `not-found` (the thing
- * exists), not `unconfigured` (nothing here is missing from an env file) and not `timeout`. The
- * marker carries the truth; {@link classificationOf} is how a caller reads it.
+ * The SDK kind is `precondition`: not `transport` (retrying blindly is exactly wrong), not
+ * `not-found` (the thing exists), not `unconfigured` (nothing here is missing from an env file),
+ * not `malformed` (the request was fine). The marker at the head of `detail` names WHICH
+ * condition; {@link preconditionOf} reads the name and {@link classificationOf} reads the kind.
  */
 export declare function refusePrecondition<T>(name: PreconditionName, source: string, detail: string): Reading<T>;
 /** The precondition a failure names, or `null` when it names none. */
