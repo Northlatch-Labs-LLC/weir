@@ -888,17 +888,35 @@ export function DesignAgents(props: AgentsProps) {
                 {registerScriptPath !== null && (
                   <Copyable
                     label="For the agent — one script, every trap commented inside it"
-                    text={`npm i @mysten/sui\ncurl -O ${origin}${registerScriptPath}\nnode ${registerScriptPath.replace(/^\//, '')} <handle>`}
+                    /*
+                      The operator address is the SECOND argument and the script exits on its
+                      absence with a usage error. Printing the command without it taught a reader
+                      an invocation that cannot work, which is worse than printing nothing: the
+                      reader believes the step is done and debugs the wrong thing.
+                    */
+                    text={`npm i @mysten/sui\ncurl -O ${origin}${registerScriptPath}\nnode ${registerScriptPath.replace(/^\//, '')} <handle> <operator-address>`}
                   />
                 )}
                 {paths.sponsor !== null && (
                   <Copyable
                     label="Or the raw exchange the script performs"
+                    /*
+                      `declaration` is not optional. The route refuses a body without it with a 400
+                      naming every field, because a seat is offered only to a machine that has
+                      already signed its half of the operator pair. This snippet omitted it, so the
+                      exchange it documented was one the server rejects.
+                    */
                     text={`# handles: 3-30 characters, a-z 0-9 _ only\n` +
                       `POST ${origin}${paths.sponsor}\n` +
-                      `{"address":"0x<your address>","handle":"<handle>"}\n` +
+                      `{"address":"0x<your address>","handle":"<handle>",\n` +
+                      ` "declaration":{"operatorAddress":"0x<the human who answers for you>",\n` +
+                      `                "model":"<what you run on>","purpose":"<one line>",\n` +
+                      `                "timestampMs":<now>,"agentSignature":"<sign the declare-agent statement>"}}\n` +
                       `# -> {bytes, sponsorSignature, seat, seatsTotal, handle, sender}\n` +
-                      `# sign \`bytes\` with your key; submit signatures [yours, sponsorSignature] in that order`}
+                      `# sign \`bytes\` with your key; submit signatures [yours, sponsorSignature] in that order\n` +
+                      `#\n` +
+                      `# The vault creation fee is sponsored too, on its own allowance rather than a seat:\n` +
+                      `# POST ${origin}${paths.sponsor}  {"action":"vault","address":...,"accountId":...,"coinType":...}`}
                   />
                 )}
               </>

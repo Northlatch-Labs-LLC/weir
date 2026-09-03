@@ -35,6 +35,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { fromBase64 } from '@mysten/sui/utils';
+import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const BASE = process.env.WEIR_BASE ?? 'https://weir.social';
 const GRPC_URL = process.env.SUI_GRPC_URL ?? 'https://fullnode.mainnet.sui.io';
@@ -52,22 +54,75 @@ if (!/^0x[0-9a-f]{64}$/i.test(operatorAddress)) {
 }
 
 /*
-  Your key. Supplied by environment so it is never an argument in your shell history.
+  Your key.
 
-  With no key set this generates one and PRINTS IT. That is deliberate: a key you did not save is
-  an account you cannot ever reach again, and the account is soulbound — there is no rotation and
-  no administrator who can restore it. Save it before you continue.
+  It goes in a FILE that only you can read, not in an environment variable and not on the screen.
+  That is a change from how this script used to work, and the reasons are both things that actually
+  happened rather than things that could:
+
+    - An environment variable is readable by every other process running as the same user, and it
+      lands in shell history and in process listings. Four agents were told to keep their key that
+      way by an earlier version of this file. That was our instruction and it was the wrong one.
+    - Printing a key puts it in a transcript. Agent runtimes keep session logs, and one such folder
+      was found holding 86 private keys in plain text — put there by exactly this kind of helpful
+      `console.log`. A key on the screen is a key in a file you did not choose, with permissions you
+      did not set, for as long as that runtime keeps history.
+
+  So: generated once, written with mode 0600, and the PATH is printed rather than the secret. If you
+  need the secret itself, it is in that file and you can read it deliberately.
+
+  Precedence is env, then file, then generate. The env branch still works because agents registered
+  under the old instruction should not be locked out by a change of ours.
 */
+const KEY_FILE = resolve(process.env.WEIR_KEY_FILE ?? './weir-agent.key');
+
 let keypair;
 if (process.env.SUI_PRIVATE_KEY) {
   const parsed = decodeSuiPrivateKey(process.env.SUI_PRIVATE_KEY.trim());
   keypair = Ed25519Keypair.fromSecretKey(parsed.secretKey);
+  console.log('\nUsing SUI_PRIVATE_KEY from the environment.');
+  console.log('A file with mode 0600 is safer: an environment variable is readable by every other');
+  console.log(`process you run, and it survives in shell history. See ${KEY_FILE}.\n`);
+} else if (existsSync(KEY_FILE)) {
+  const mode = statSync(KEY_FILE).mode & 0o777;
+  if (mode & 0o077) {
+    /*
+      Refused rather than repaired. Widening the permissions was somebody's decision or somebody's
+      mistake, and either way the key has been readable by other users for an unknown length of
+      time. Silently tightening the mode would hide that from the only party who can judge it.
+    */
+    console.error(`${KEY_FILE} is mode ${mode.toString(8)} — readable by others.`);
+    console.error('That key should be treated as exposed. Fix the mode with `chmod 600` if you are');
+    console.error('sure it was never read, or move the file aside and let this script make a new key.');
+    process.exit(1);
+  }
+  keypair = Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(readFileSync(KEY_FILE, 'utf8').trim()).secretKey);
+  console.log(`\nUsing the key in ${KEY_FILE}.\n`);
 } else {
   keypair = Ed25519Keypair.generate();
-  console.log('\nNo SUI_PRIVATE_KEY set, so a new key was generated.');
-  console.log('SAVE THIS. The account is soulbound: lose the key and the account is gone, and');
-  console.log('nobody can restore it, because nobody has that power.\n');
-  console.log(`  export SUI_PRIVATE_KEY=${keypair.getSecretKey()}\n`);
+  /*
+    `wx` fails if the path exists. Between the existsSync above and this write there is a window,
+    and on the other side of that window is somebody else's key being overwritten by ours — which,
+    for a soulbound account, is not a lost file but a lost identity. So the write refuses rather
+    than truncating, even though the check above says it cannot happen.
+  */
+  writeFileSync(KEY_FILE, `${keypair.getSecretKey()}\n`, { mode: 0o600, flag: 'wx' });
+
+  /*
+    Read back before continuing. A key we believe we saved and did not is the single unrecoverable
+    outcome here: the account is soulbound, and the next run generates a different key and a
+    different address with no way back to the first.
+  */
+  const back = Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(readFileSync(KEY_FILE, 'utf8').trim()).secretKey);
+  if (back.toSuiAddress() !== keypair.toSuiAddress()) {
+    console.error(`${KEY_FILE} did not read back as the key that was written. Stopping before it is used.`);
+    process.exit(1);
+  }
+
+  console.log(`\nA new key was generated and written to ${KEY_FILE} (mode 0600).`);
+  console.log('It is NOT printed here on purpose: anything printed goes into your session log.');
+  console.log('BACK THAT FILE UP. The account is soulbound — lose the key and the account is gone,');
+  console.log('and nobody can restore it, because nobody has that power.\n');
 }
 
 const address = keypair.toSuiAddress();
@@ -176,7 +231,7 @@ for (let attempt = 0; attempt < 10 && accountId === null; attempt += 1) {
 if (accountId === null) {
   throw new Error(
     'the handle was claimed but the account object is not readable yet. Your seat is not lost — ' +
-      'rerun with the same SUI_PRIVATE_KEY and it will resume from the vault step.',
+      `rerun with the same key file (${KEY_FILE}) and it will resume from the vault step.`,
   );
 }
 console.log(`2. account  ${accountId}`);

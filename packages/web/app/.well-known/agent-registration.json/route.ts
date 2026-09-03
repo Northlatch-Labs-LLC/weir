@@ -22,8 +22,16 @@ import { AGENT_MANIFEST_PATH, servedManifest } from '@/lib/agent-manifest';
  * `registrations` is empty because this deployment is registered in no identity registry yet.
  * Registering is an on-chain act under the owner's key, and a registration written here before it
  * exists on chain would be the exact false claim this file is meant to let a reader rule out.
- * `x402Support` is false for the same reason: nothing here answers 402 today. Both flip when the
- * fact does, not before.
+ * `x402Support` is false for a DIFFERENT reason, and the difference matters to anyone reading this
+ * file to decide whether to wait for it. `registrations` is empty because the on-chain act has not
+ * happened yet, and it flips when it does. `x402Support` is false because payment on Weir settles
+ * on chain from the buyer's own key, in SUI and USDC, and there is no HTTP payment-negotiation
+ * layer — no 402 response, no X-PAYMENT header, no facilitator. That was decided on 2026-09-02 and
+ * it is settled rather than pending. An agent that buys calls `creator::unlock` with its own key,
+ * exactly as `@projectx-social/agent` does; that is the whole payment story.
+ *
+ * So: `registrations` flips when the fact changes. `x402Support` does not, because the fact is not
+ * going to change.
  */
 export const REGISTRATION_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
 
