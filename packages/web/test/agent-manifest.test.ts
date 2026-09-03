@@ -756,7 +756,16 @@ describe('the first thing an agent is told', () => {
     expect(start.keyEnvVar).toBe('SUI_PRIVATE_KEY');
     expect(start.howTheKeyIsMade).toMatch(/Ed25519/);
     expect(start.howTheKeyIsMade).toMatch(/never leaves the process/);
-    expect(start.first).toMatch(/SUI_PRIVATE_KEY/);
+    /*
+      This asserted `first` names SUI_PRIVATE_KEY, because at the time the variable WAS the
+      mechanism and naming it was the fix. On 2026-09-03 the mechanism became a 0600 file and the
+      variable became a supported fallback, so the assertion is now on the requirement rather than
+      on the wording: `first` must say where the key ends up, whatever that place currently is. An
+      agent must never have to leave this sentence to find out how a key comes into existence —
+      that search is what sent one looking for somebody else's.
+    */
+    expect(start.first).toContain(start.keyFile);
+    expect(start.first).toMatch(/0600/);
     /*
       A runnable line, not a function name. Watched 2026-09-03: an agent that had correctly refused
       every existing wallet then reached for `sui keytool sign`, which signs transaction bytes under
@@ -860,5 +869,58 @@ describe('the manifest answers what an agent would otherwise go looking for', ()
       assumes everything is free reads a priced call as a fault and reports us broken.
     */
     expect(purpose).toMatch(/fund yourself|design rather than an obstacle/i);
+  });
+});
+
+/*
+  The manifest and the registration script give the same reader the same advice about the same key.
+  When the script changed on 2026-09-03 — key into a 0600 file, secret no longer printed — the
+  manifest still said "prints the secret ONCE" and named an environment variable as the place a key
+  lives. That contradiction was introduced by the fix itself, and it is the worse kind: the document
+  we tell everyone is the authority disagreeing with the file we tell everyone to run.
+*/
+describe('the manifest and the script agree about the key', () => {
+  const script = readFileSync(join(process.cwd(), 'public/register-agent.mjs'), 'utf8');
+  const start = () => manifestFrom(inputs()).startHere;
+
+  it('names the same key file the script writes', () => {
+    const fromScript = script.match(/WEIR_KEY_FILE \?\? '([^']+)'/)?.[1];
+    expect(fromScript, "the script must have a default key path").toBeTruthy();
+    expect(start().keyFile).toBe(fromScript);
+    expect(start().keyFileMode).toBe('0600');
+    expect(script).toMatch(/mode: 0o600/);
+  });
+
+  it('does not tell a reader the script prints the secret, because it does not', () => {
+    const text = JSON.stringify(start());
+    expect(text, 'the script stopped printing the key; the manifest must stop saying it does').not.toMatch(
+      /prints the secret/i,
+    );
+    expect(text).toMatch(/does NOT print the secret/i);
+  });
+
+  it('keeps the environment variable working but stops advising it', () => {
+    /*
+      Four agents registered under the old instruction. Removing the name would make their setup
+      look unsupported; recommending it would repeat the mistake.
+    */
+    expect(start().keyEnvVar).toBe('SUI_PRIVATE_KEY');
+    expect(script).toContain('process.env.SUI_PRIVATE_KEY');
+    expect(start().keyEnvVarNote).toMatch(/readable by every other process/i);
+  });
+
+  it('prints a signing command that reads the key from where the key now is', () => {
+    /*
+      This string is pasted and run. It previously read `process.env.SUI_PRIVATE_KEY` and nothing
+      else, so for an agent that followed the current instructions it would have signed with
+      `undefined`. Executed by hand against a throwaway key on 2026-09-03: it produced a signature
+      that verified back to the signing address.
+    */
+    const cmd = start().signWith;
+    expect(cmd).toContain('weir-agent.key');
+    expect(cmd).toContain('decodeSuiPrivateKey');
+    expect(cmd).toContain('signPersonalMessage');
+    /* The env var stays as the fallback, so an agent on the old setup is not broken by this. */
+    expect(cmd).toContain('process.env.SUI_PRIVATE_KEY');
   });
 });

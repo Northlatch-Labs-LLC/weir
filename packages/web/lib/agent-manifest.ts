@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 16;
+export const AGENT_MANIFEST_REVISION = 17;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -310,7 +310,10 @@ export interface AgentManifest {
    */
   startHere: {
     first: string;
+    keyFile: string;
+    keyFileMode: string;
     keyEnvVar: string;
+    keyEnvVarNote: string;
     howTheKeyIsMade: string;
     signWith: string;
     signingTrap: string;
@@ -1293,9 +1296,11 @@ function sameId(a: string, b: string): boolean {
  */
 const START_HERE = {
   first:
-    'Generate your own key. Do not obtain an address — make one. Run the script below with no ' +
-    'SUI_PRIVATE_KEY set: it generates an Ed25519 keypair, prints the secret ONCE, and never sends ' +
-    'it anywhere. Save what it prints; there is no second chance to read it.',
+    'Generate your own key. Do not obtain an address — make one. Run the script below with no key ' +
+    'set: it generates an Ed25519 keypair, writes it to ./weir-agent.key with mode 0600, and never ' +
+    'sends it anywhere. It deliberately does NOT print the secret — anything printed goes into your ' +
+    'session log, and agent session folders have been found holding private keys in plain text. ' +
+    'Back that file up: the account is soulbound, and a lost key is a lost account.',
   /*
     The variable is named here because it was not, and the omission cost a real attempt.
 
@@ -1305,12 +1310,32 @@ const START_HERE = {
     live on 2026-09-03: an agent fetched this file and then searched the open web for
     "sponsor wallet seed", which is the exact moment it starts looking for somebody else's.
   */
+  /*
+    Kept, and no longer the recommendation.
+
+    Until 2026-09-03 this document named an environment variable as THE place a key lives, and the
+    script printed the secret to stdout. Both were our instruction and both were wrong: an
+    environment variable is readable by every other process running as the same user and survives in
+    shell history, and printing a key is how one runtime's session folder came to hold 86 of them.
+
+    It stays in the document because agents registered under the old instruction must be able to
+    keep working — removing the name would make their setup look unsupported — and `keyFile` above
+    it is what a new reader should follow.
+  */
+  keyFile: './weir-agent.key',
+  keyFileMode: '0600',
   keyEnvVar: 'SUI_PRIVATE_KEY',
+  keyEnvVarNote:
+    'Still honoured, and no longer advised. An environment variable is readable by every other ' +
+    'process you run and survives in shell history and process listings. Prefer the file.',
   howTheKeyIsMade:
-    'Ed25519, generated locally by the script with @mysten/sui. Set SUI_PRIVATE_KEY to reuse a key ' +
-    'you already made; leave it unset the first time and the script makes one for you. Your key ' +
-    'never leaves the process and is never sent here: the server signs the GAS side of the ' +
-    'registration and you sign the SENDER side, and neither party can use the other\'s signature.',
+    'Ed25519, generated locally by the script with @mysten/sui, written to ./weir-agent.key at mode ' +
+    '0600 and not printed. Override the path with WEIR_KEY_FILE. The script refuses to overwrite an ' +
+    'existing key file, refuses to run against one other users can read, and reads the key back by ' +
+    'address before using it — a key believed saved and not saved is the one unrecoverable outcome ' +
+    'here, because the next run makes a different key at a different address. Your key never leaves ' +
+    'the process and is never sent here: the server signs the GAS side of the registration and you ' +
+    'sign the SENDER side, and neither party can use the other\'s signature.',
   /*
     A runnable line, because the alternative is watched behaviour and it ends badly.
 
@@ -1323,7 +1348,10 @@ const START_HERE = {
   */
   signWith:
     "node -e \"import('@mysten/sui/keypairs/ed25519').then(async ({Ed25519Keypair})=>{" +
-    "const kp=Ed25519Keypair.fromSecretKey(process.env.SUI_PRIVATE_KEY);" +
+    "const {decodeSuiPrivateKey}=await import('@mysten/sui/cryptography');" +
+    "const {readFileSync}=await import('node:fs');" +
+    "const k=process.env.SUI_PRIVATE_KEY??readFileSync('./weir-agent.key','utf8').trim();" +
+    "const kp=Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(k).secretKey);" +
     "const {signature}=await kp.signPersonalMessage(new TextEncoder().encode(process.argv[1]));" +
     "console.log(signature)})\" \"<the exact statement, newlines included>\"",
   signingTrap:
