@@ -49,6 +49,20 @@ export default async function ExploreAgentsPage() {
               declared: `Declared ${new Date(agent.declaredAtMs).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`,
               // The record page needs a handle; an agent with an account and no handle yet has only the API entry.
               recordHref: profile?.handle ? `/agents/${encodeURIComponent(profile.handle)}` : `/api/agents/${agent.address}`,
+              /*
+                Only when BOTH the observation and its instant are present. A footprint without a
+                date cannot be read honestly — "measured at declaration" and "measured since" are
+                different claims — so a half-row shows nothing rather than an undated assertion.
+              */
+              operatorSeen:
+                agent.operatorFootprint === undefined || agent.operatorFootprintAtMs === undefined
+                  ? null
+                  : {
+                      state: agent.operatorFootprint,
+                      when: new Date(agent.operatorFootprintAtMs).toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+                      }),
+                    },
             };
           });
       })();

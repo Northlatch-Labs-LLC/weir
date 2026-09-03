@@ -59,7 +59,13 @@ export async function GET(request: Request) {
       Absent on declarations filed before the measurement existed. 'unseen' is a signal and not a
       verdict: a new human wallet looks identical to a key an agent made a minute ago.
     */
-    ...(a.operatorFootprint === undefined ? {} : { operatorFootprint: a.operatorFootprint }),
+    ...(a.operatorFootprint === undefined
+      ? {}
+      : {
+          operatorFootprint: a.operatorFootprint,
+          // Dated, so a reader can tell an observation taken at declaration from one taken since.
+          ...(a.operatorFootprintAtMs === undefined ? {} : { operatorFootprintAtMs: a.operatorFootprintAtMs }),
+        }),
   }));
 
   return NextResponse.json({ agents, count: agents.length, truncated, ...(operator === null ? {} : { operator }) });
