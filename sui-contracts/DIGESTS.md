@@ -27,6 +27,37 @@ the chain does. Editing it on a branch would make CI report the source as deploy
 2026-09-01 the only alternative was leaving every upgrade PR red on this check for its whole life, and a
 check that is red by design is a check nobody reads.
 
+The external verifier (PVS · digest) learned the second file on 2026-09-01 (protocolx-verify #22, via
+the canonical `verification-tools/ci/digest-compare.sh`): it accepts a build matching either file and
+says which one it matched, the same rule as the workflow above.
+
+> **A correction, kept rather than erased.** On 2026-09-03 this paragraph was replaced with the
+> opposite claim — that the verifier knows only one file — on the evidence of
+> `engine/ci/digest-guard.sh` in a local checkout, where the string `ci-next-digest` genuinely does
+> not appear. That checkout was four commits behind `origin/main` and predated the merge of #22. The
+> product was correct the whole time; the reading was made against a stale working copy and not
+> checked against the remote. The original paragraph is restored above. The lesson is recorded here
+> because the same mistake produced a confident, wrong entry in a governing document, and a
+> document that quietly self-corrects teaches nobody why it was wrong.
+
+## Equal files are refused
+
+If both files exist and hold the **same** value, the guard fails and says so. That state is never
+legitimate: it means a ceremony copied next into expected and did not delete next.
+
+The cost of tolerating it is not theoretical. The v5 ceremony on 2026-09-02 promoted the digest and
+left `ci-next-digest` behind, and for the next day the guard had a second door standing open — a
+deliberately corrupted `ci-expected-digest` passed through the next branch instead of failing.
+Found on 2026-09-03 by mutation-testing the guard rather than by reading it. The guard was sound;
+the leftover file was the defect, and nothing in the check could tell anyone it was there.
+
+So the last step of a ceremony is enforced rather than remembered.
+
+Why two files rather than editing the first: the first is a fact about the chain and must not change until
+the chain does. Editing it on a branch would make CI report the source as deployed when it is not. Before
+2026-09-01 the only alternative was leaving every upgrade PR red on this check for its whole life, and a
+check that is red by design is a check nobody reads.
+
 The external verifier does NOT know about the second file, and this paragraph used to say it did.
 
 It was true when written: `verification-tools/ci/digest-compare.sh` accepted either file
