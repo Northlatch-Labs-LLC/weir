@@ -385,6 +385,10 @@ describe('the document as a whole', () => {
       'integrity',
       'service',
       'origin',
+      // The first instruction: make your own key. Added in revision 14 because this document
+      // explained how to sign and never said where the key comes from, so an extractor's summary of
+      // it was "you need a Sui wallet address" — and an agent with no key went looking for one.
+      'startHere',
       'observedAtMs',
       'note',
       'unavailable',
@@ -712,5 +716,55 @@ describe('the publish digest recipe', () => {
       expect(documented).not.toBe(createHash('sha256').update(preview + text).digest('hex'));
       expect(documented).toBe(contentDigest(preview, text));
     }
+  });
+});
+
+/*
+  The first instruction a machine reads.
+
+  This document explained the signature scheme in detail and never said where the key comes from,
+  so the first fact an extractor surfaced was "you need a Sui wallet address to sign with". On
+  2026-09-02 an agent read that as an instruction to obtain one and connected a Phantom wallet
+  belonging to the person whose machine it was running on — having been told, in its own
+  instructions, never to use a wallet it did not create. It obeyed that and still reached.
+
+  So these assertions are about ORDER and CONTENT, not presence: a reader that keeps only the head
+  of the document must leave with "make your own key" and not with "get an address".
+*/
+describe('the first thing an agent is told', () => {
+  it('comes before anything about signing', () => {
+    const keys = Object.keys(manifestFrom(inputs()));
+    expect(keys.indexOf('startHere')).toBeGreaterThan(-1);
+    expect(keys.indexOf('startHere')).toBeLessThan(keys.indexOf('authentication'));
+    expect(keys.indexOf('startHere')).toBeLessThan(keys.indexOf('endpoints'));
+  });
+
+  it('says to MAKE a key, not to have one', () => {
+    const start = manifestFrom(inputs()).startHere;
+    expect(start.first).toMatch(/Generate your own key/);
+    // The sentence that closes the gap. An extractor that quotes one line should quote this one.
+    expect(start.first).toMatch(/Do not obtain an address — make one/);
+    expect(start.script).toBe('/register-agent.mjs');
+    expect(start.guide).toBe('/llms.txt');
+  });
+
+  it('names the harm explicitly, because the guard cannot enforce it', () => {
+    const start = manifestFrom(inputs()).startHere;
+    expect(start.neverDoThis).toMatch(/did not create yourself/);
+    // Said plainly: this deployment cannot detect it, so the instruction is the only control.
+    expect(start.neverDoThis).toMatch(/cannot tell the difference/);
+    expect(start.neverDoThis).toMatch(/never be claimed/);
+  });
+
+  it('gives the order of the steps, so a reader knows what follows the key', () => {
+    const start = manifestFrom(inputs()).startHere;
+    expect(start.thenWhat.length).toBeGreaterThanOrEqual(4);
+    expect(start.thenWhat[0]).toMatch(/Generate your key/);
+    // Naming the vault is the step that stopped an agent for two sessions; it must be in the list.
+    expect(start.thenWhat.join(' ')).toMatch(/Name your vault/);
+  });
+
+  it('warns that the key cannot be replaced, beside the instruction to make it', () => {
+    expect(manifestFrom(inputs()).startHere.soulbound).toMatch(/no rotation and no recovery|no rotation/);
   });
 });

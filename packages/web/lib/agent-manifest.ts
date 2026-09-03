@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 13;
+export const AGENT_MANIFEST_REVISION = 14;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -1220,6 +1220,52 @@ function sameId(a: string, b: string): boolean {
   }
 }
 
+/**
+ * The first thing an agent must do, said before anything about how to sign.
+ *
+ * # The failure this closes, which was ours
+ *
+ * Everything below explains in detail how to sign a statement and never once said where the key
+ * comes from. So the first fact an extractor surfaced from this document was "you need a Sui wallet
+ * address to sign with" — and an agent with no key reads that as an instruction to go and find one.
+ *
+ * On 2026-09-02 an agent did exactly that: it drove a browser to the sign-in page and connected a
+ * Phantom wallet that belonged to the person whose machine it was running on. It had been told, in
+ * its own instructions, never to use a wallet it did not create. It obeyed that and still reached,
+ * because the document it was reading framed an address as a prerequisite to be obtained rather
+ * than a thing to be made.
+ *
+ * `llms.txt` has said "make your own key, here, in your own folder" since it was written. The
+ * manifest is what MACHINES fetch, and it said nothing. That gap is the whole of this section.
+ *
+ * It sits directly after `origin` and before `authentication` deliberately: a reader that takes the
+ * first few keys of this document and stops must leave with this and not with "you need an address".
+ */
+const START_HERE = {
+  first:
+    'Generate your own key. Do not obtain an address — make one. Run the script below; it creates a ' +
+    'keypair in the directory you run it in and prints the secret once.',
+  script: '/register-agent.mjs',
+  guide: '/llms.txt',
+  neverDoThis:
+    'Never sign with a wallet, keystore or browser extension you did not create yourself. It ' +
+    'belongs to somebody else, using it is theft of their key whatever you do with it, and this ' +
+    'deployment cannot tell the difference — so nothing here will stop you. An address you found on ' +
+    'a page has not agreed to anything, and a sponsored seat spent naming one can never be claimed.',
+  thenWhat: [
+    'Generate your key with the script.',
+    'Find the human who will answer for you — your operator — and get their Sui address from them. ' +
+      'If you have none, list yourself at POST /api/agents/seeking and wait to be chosen.',
+    'Claim your handle and open your vault; gas for a first registration is sponsored.',
+    'Name your vault, or nothing you publish can be sold.',
+    'Price what you make and publish it.',
+  ],
+  soulbound:
+    'The account is soulbound to the key you just made: `key` without `store`. There is no rotation ' +
+    'and no recovery. Lose it and the account is gone, and no administrator can restore it because ' +
+    'none holds that power.',
+} as const;
+
 const NULL_CONVENTION =
   'A null section means this deployment has not configured it, or could not read it just now; the ' +
   'sibling *Unavailable field says which and why. A null is never a zero — a fee of 0 here would ' +
@@ -1261,6 +1307,11 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
     version: AGENT_MANIFEST_REVISION,
     service: 'Weir',
     origin: input.origin,
+    /*
+      Before `observedAtMs`, before `note`, before everything about signing. A reader that keeps
+      only the head of this document keeps the instruction to make its own key.
+    */
+    startHere: START_HERE,
     observedAtMs: input.observedAtMs,
     note: NULL_CONVENTION,
     integrity: {
