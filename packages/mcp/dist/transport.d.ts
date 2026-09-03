@@ -161,6 +161,21 @@ export interface WeirBalance {
  * cost it one shipped-shaped defect on its Seal boundary. The arguments here are addresses, prices
  * and ceilings; the same hole would be worth more.
  */
+/** What {@link WeirPort.authorship} answers. Mirrors `Authorship` in `@projectx-social/agent`. */
+export type WeirAuthorship = {
+    proof: null;
+    reason: string;
+} | {
+    proof: {
+        address: string;
+        signature: string;
+        statement: string;
+        origin: string;
+        contentSha256: string;
+        issuedAtMs: number;
+    };
+    handleStillResolvesToSigner: boolean | null;
+};
 export interface WeirPort {
     /** Browse or search. Absent today — see {@link capabilitiesOf}. */
     /**
@@ -186,6 +201,15 @@ export interface WeirPort {
     }) => Promise<WeirBody | null>;
     /** The signer's own spendable balance. */
     balance?: () => Promise<WeirBalance>;
+    /**
+     * Who signed a post, from the deployment that holds the proof.
+     *
+     * Keyless: it is the check a buyer makes BEFORE spending. `proof: null` is an answer — the post
+     * was signed and the deployment discarded the signature — and is never reported as a failure.
+     */
+    authorship?: (input: {
+        postId: string;
+    }) => Promise<WeirAuthorship>;
     /** Buy permanent access. The ceiling is carried, not applied. */
     unlock?: (input: {
         vaultId: string;
@@ -351,7 +375,7 @@ export interface WeirBinding {
     policyAvailable: boolean;
 }
 /** The logical things this server can offer. One tool each; see `tools.ts`. */
-export type Capability = 'search' | 'quote' | 'read-preview' | 'balance' | 'buy' | 'subscribe' | 'post' | 'send' | 'price';
+export type Capability = 'search' | 'quote' | 'authorship' | 'read-preview' | 'balance' | 'buy' | 'subscribe' | 'post' | 'send' | 'price';
 /**
  * What this binding can actually do.
  *
@@ -433,6 +457,13 @@ export interface ServerOptions {
      * the names in {@link AGENT_ENVIRONMENT}, never the whole process environment.
      */
     agentEnvironment: Record<string, string>;
+    /**
+     * The tools this process actually registered, for {@link DISCOVERY_PATH}. Set by the entry point
+     * after `registerTools` has run, so the document can never advertise a tool that was not built.
+     * Empty until then, which reads as "this process registered nothing" — the true answer at that
+     * moment, and the safe one.
+     */
+    discoveryTools: readonly string[];
 }
 /** The default the operator gets if they name nothing. Production, because that is where posts are. */
 export declare const DEFAULT_BASE_URL = "https://weir.social";
@@ -575,6 +606,54 @@ export declare function loadPolicyDoc(text: string, signerAddress: string): {
  */
 export declare function serveStdio(server: McpServer): Promise<void>;
 export declare const MCP_PATH = "/mcp";
+/**
+ * Where a client looks to find out what this endpoint is, before it speaks the protocol to it.
+ *
+ * Added 2026-09-02, because the Cloud Run log showed a client asking for exactly this path and
+ * getting a 404 with nothing in it. There is no ratified standard behind the filename; it is the
+ * one clients are already trying, which is the only argument that matters for a discovery path.
+ * The document says so about itself rather than implying an authority it does not have.
+ */
+export declare const DISCOVERY_PATH = "/.well-known/mcp.json";
+export interface Discovery {
+    name: string;
+    description: string;
+    endpoint: string;
+    transport: 'streamable-http';
+    /** Exactly the tools registered on this process. Computed, never a list written by hand. */
+    tools: string[];
+    /** True when no tool on this process can move value. Derived from the tools, not asserted. */
+    readOnly: boolean;
+    authentication: 'none';
+    documentation: string;
+    manifest: string;
+    note: string;
+}
+/**
+ * What this endpoint says about itself.
+ *
+ * Everything here is derived from what the process actually built. `tools` is the list
+ * `registerTools` returned, so a deployment that failed to bind a capability advertises fewer
+ * tools rather than advertising a tool that would refuse every call — which is the whole failure
+ * this document could otherwise introduce.
+ *
+ * `readOnly` is computed from the tool names rather than from the mode, because mode is a
+ * statement of intent and the tool list is a fact about what was registered.
+ */
+/**
+ * The address this endpoint tells clients to use.
+ *
+ * NOT the request's `Host`. Behind Cloud Run and Cloudflare the container sees the platform's own
+ * hostname, and the first deployment of this document (2026-09-02) duly published
+ * `https://weir-mcp-….run.app/mcp` — an address the Host allowlist in this very file refuses with
+ * 403. It advertised a door it was built to keep shut.
+ *
+ * The allowlist is the deployment's own statement of the names it answers to, so its first entry is
+ * the canonical one. Scheme follows the host rather than the request: a loopback allowlist is a
+ * developer's machine and is plain HTTP; anything else reached from outside is not.
+ */
+export declare function canonicalOrigin(options: ServerOptions, requestHost: string | undefined): string;
+export declare function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery;
 /**
  * Whether a request's `Origin` may drive this endpoint.
  *

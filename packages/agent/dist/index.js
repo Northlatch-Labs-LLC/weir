@@ -43,7 +43,7 @@ import { agentKeyFromEnv, agentKeyFromSecret, generateAgentKey, normaliseAddress
 import { paidStatementFor, publishContentSha256, signAction, } from './statements.js';
 import { openSession } from './session.js';
 import { looksLikeSettling } from './seal-node.js';
-import { buildSubscribe, buildTip, buildUnlock, buildOpenAccount, buildSetContentPrice, findAgentAccount, findCreatorCap, guardPrice, MACHINE_EDITION_MARKER, livePriceOfContent, readPayableVault, refusePrecondition, simulateAndExecute, tierAt, totalBalance, } from './tx.js';
+import { PRECONDITION_MARKER, buildSubscribe, buildTip, buildUnlock, buildOpenAccount, buildSetContentPrice, findAgentAccount, findCreatorCap, guardPrice, MACHINE_EDITION_MARKER, livePriceOfContent, readPayableVault, refusePrecondition, simulateAndExecute, tierAt, totalBalance, } from './tx.js';
 import { loadAgentManifest } from './manifest.js';
 import { buildPublishKey, deriveMindKey, fetchBlob, LABEL, openMind, PUBLIC_WALRUS_AGGREGATORS, registryStateFor, sealMind, } from './mind.js';
 export { agentKeyFromEnv, agentKeyFromSecret, generateAgentKey, normaliseAddress, sameAddress, } from './keys.js';
@@ -156,6 +156,84 @@ export function createAgent(input) {
                 gasBudgetMist: manifest.gasBudgetMist,
                 what: `account::open "${handle}"`,
             });
+        },
+        async nameVault(input) {
+            const what = 'name vault';
+            if (!/^0x[0-9a-f]{64}$/i.test(input.vaultId)) {
+                return fail('malformed', what, `vaultId must be a Sui object id; received ${JSON.stringify(input.vaultId)}`);
+            }
+            if (typeof input.displayName !== 'string' || input.displayName.length === 0 || input.displayName.length > 60) {
+                return fail('malformed', what, 'displayName is 1–60 characters; it is signed into the statement.');
+            }
+            const bio = input.bio ?? '';
+            if (bio.length > 280)
+                return fail('malformed', what, 'bio is at most 280 characters; it is signed into the statement.');
+            /*
+              The coin type is bound into the signature and the route compares it with the vault's own
+              type parameter read from chain. Reading it here rather than guessing is the same rule the
+              route applies: a signed wrong coin would be refused, and a refused single-use signature has
+              to be signed again to find out why.
+            */
+            const coinType = input.coinType ?? (await vaultCoinTypeOf(input.vaultId));
+            if (coinType === '') {
+                return fail('transport', what, `the vault ${input.vaultId} could not be read, so its coin type is unknown; pass coinType or retry.`);
+            }
+            // `app/api/creator/profile/route.ts` rebuilds exactly this: name = displayName, bio, coinType.
+            const signed = await signAction(key.keypair, {
+                kind: 'name-vault',
+                vaultId: input.vaultId,
+                name: input.displayName,
+                bio,
+                coinType,
+            }, manifest.baseUrl);
+            const response = await authorisedFetch({
+                agent,
+                doFetch,
+                path: '/api/creator/profile',
+                method: 'POST',
+                what,
+                body: {
+                    owner: signed.address,
+                    vaultId: input.vaultId,
+                    coinType,
+                    displayName: input.displayName,
+                    bio,
+                    signature: signed.signature,
+                    timestampMs: signed.timestampMs,
+                },
+            });
+            if (!response.ok)
+                return response;
+            const handle = response.value['handle'];
+            if (typeof handle !== 'string' || handle === '') {
+                return fail('malformed', what, 'the vault was named but the route returned no handle.');
+            }
+            return ok({ handle });
+        },
+        async setProfile(input) {
+            const what = 'set profile';
+            if (typeof input.displayName !== 'string' || input.displayName.length === 0 || input.displayName.length > 60) {
+                return fail('malformed', what, 'displayName is 1–60 characters; it is signed into the statement.');
+            }
+            // `app/api/account/profile/route.ts` rebuilds `{ kind: 'set-profile', handle, name: displayName }`.
+            const signed = await signAction(key.keypair, { kind: 'set-profile', handle: input.handle, name: input.displayName }, manifest.baseUrl);
+            const response = await authorisedFetch({
+                agent,
+                doFetch,
+                path: '/api/account/profile',
+                method: 'POST',
+                what,
+                body: {
+                    address: signed.address,
+                    handle: input.handle,
+                    displayName: input.displayName,
+                    signature: signed.signature,
+                    timestampMs: signed.timestampMs,
+                },
+            });
+            if (!response.ok)
+                return response;
+            return ok({ handle: input.handle });
         },
         async unlock(spend) {
             // Before any read: a spend a policy can never approve is refused without touching the chain.
@@ -333,6 +411,82 @@ export function createAgent(input) {
                 return fail('malformed', what, 'the waiting room answered without expiresAtMs and operatorPage.');
             }
             return ok({ issuedAtMs: signed.timestampMs, expiresAtMs, operatorPage: `${manifest.baseUrl}${operatorPage}` });
+        },
+        async seekOperator(input) {
+            const what = 'seek operator';
+            for (const [name, value, max] of [['handle', input.handle, 32], ['model', input.model, 80], ['purpose', input.purpose, 200], ['words', input.words, 600]]) {
+                if (typeof value !== 'string' || value.trim() === '' || value.length > max || /[\u0000-\u001f\u007f]/.test(value)) {
+                    return fail('malformed', what, `${name} is one line of at most ${max} characters; it is signed into the statement.`);
+                }
+            }
+            const signed = await signAction(key.keypair, { kind: 'seek-operator', handle: input.handle, model: input.model, purpose: input.purpose, words: input.words }, manifest.baseUrl);
+            const response = await authorisedFetch({
+                agent,
+                doFetch,
+                path: '/api/agents/seeking',
+                method: 'POST',
+                what,
+                body: { address: signed.address, handle: input.handle, model: input.model, purpose: input.purpose, words: input.words, timestampMs: signed.timestampMs, signature: signed.signature },
+            });
+            if (!response.ok)
+                return response;
+            const expiresAtMs = response.value['expiresAtMs'];
+            const offersPath = response.value['offers'];
+            if (typeof expiresAtMs !== 'number' || typeof offersPath !== 'string') {
+                return fail('malformed', what, 'the list answered without expiresAtMs and an offers path.');
+            }
+            return ok({ address: signed.address, handle: input.handle, expiresAtMs, offersPath });
+        },
+        async operatorOffers() {
+            const what = 'operator offers';
+            const response = await authorisedFetch({ agent, doFetch, path: `/api/agents/seeking/offers?agent=${agent.address}`, method: 'GET', what });
+            if (!response.ok)
+                return response;
+            const raw = response.value['offers'];
+            if (!Array.isArray(raw))
+                return fail('malformed', what, 'the offers answer carried no list.');
+            const offers = [];
+            for (const o of raw) {
+                if (typeof o['operatorAddress'] !== 'string' || typeof o['issuedAtMs'] !== 'number' || typeof o['operatorSignature'] !== 'string') {
+                    return fail('malformed', what, 'an offer arrived without operatorAddress, issuedAtMs and operatorSignature.');
+                }
+                offers.push({
+                    operatorAddress: o['operatorAddress'],
+                    model: String(o['model'] ?? ''),
+                    purpose: String(o['purpose'] ?? ''),
+                    issuedAtMs: o['issuedAtMs'],
+                    expiresAtMs: typeof o['expiresAtMs'] === 'number' ? o['expiresAtMs'] : o['issuedAtMs'],
+                    operatorSignature: o['operatorSignature'],
+                });
+            }
+            return ok(offers);
+        },
+        async acceptOffer(offer) {
+            const what = 'accept offer';
+            if (Date.now() >= offer.expiresAtMs) {
+                return fail('precondition', what, `${PRECONDITION_MARKER}offer-expired] this offer's window has passed; ask the operator to offer again.`);
+            }
+            // The agent's half over the OPERATOR'S instant: both halves must carry one `issued:`.
+            const signed = await signAction(key.keypair, { kind: 'declare-agent', operator: offer.operatorAddress, model: offer.model, purpose: offer.purpose }, manifest.baseUrl, offer.issuedAtMs);
+            const response = await authorisedFetch({
+                agent,
+                doFetch,
+                path: '/api/agents/declare',
+                method: 'POST',
+                what,
+                body: {
+                    address: signed.address,
+                    operatorAddress: offer.operatorAddress,
+                    model: offer.model,
+                    purpose: offer.purpose,
+                    timestampMs: offer.issuedAtMs,
+                    agentSignature: signed.signature,
+                    operatorSignature: offer.operatorSignature,
+                },
+            });
+            if (!response.ok)
+                return response;
+            return ok({ operatorAddress: offer.operatorAddress, filedAtMs: Date.now() });
         },
         async mindKey() {
             const pair = await mindPair();
@@ -763,6 +917,31 @@ function readSurface(input) {
             }
             return ok({ postId: post.id, handle: post.handle, title: post.title, body, entitledVia: 'public' });
         },
+        /**
+         * Who signed a post, and what that does and does not establish.
+         *
+         * A keyless read of `GET /api/posts/{id}/authorship`. The deployment hands back the exact bytes
+         * that were signed and the signature over them, and deliberately does not verify them for you:
+         * a verification the seller performs is another thing you are taking on trust. Verify it with
+         * `verifyPersonalMessageSignature` from `@mysten/sui/verify` against `address`.
+         *
+         * `proof: null` is a real, successful answer and NOT a failure: posts published before the
+         * deployment retained signatures have none, and they were signed. Unproven is not forged, and
+         * collapsing the two would make every older post look fraudulent.
+         */
+        async authorship(input) {
+            const what = 'authorship';
+            const read = await httpRead({
+                doFetch,
+                baseUrl: manifest.baseUrl,
+                path: `/api/posts/${encodeURIComponent(input.postId)}/authorship`,
+                method: 'GET',
+                what,
+            });
+            if (!read.ok)
+                return read;
+            return authorshipFrom(read.value, what);
+        },
         async feed(input) {
             const what = 'feed';
             /*
@@ -788,6 +967,45 @@ function readSurface(input) {
             return feedPageFrom(read.value, manifest.coinType, what);
         },
     };
+}
+/**
+ * The authorship response, checked before it becomes an answer.
+ *
+ * `proof: null` with a reason is a valid answer and passes through as `{ proof: null, reason }`.
+ * A body carrying a proof that is missing any part of the signed bytes is `malformed` rather than a
+ * partial proof: a proof missing a field cannot be verified, and handing one back as if it could be
+ * would send the caller to a verification that fails for our reasons and looks like the author's.
+ */
+function authorshipFrom(body, what) {
+    const proof = body['proof'];
+    if (proof === null || proof === undefined) {
+        const reason = typeof body['reason'] === 'string' ? body['reason'] : 'No proof was kept for this post.';
+        return ok({ proof: null, reason });
+    }
+    if (typeof proof !== 'object') {
+        return fail('malformed', what, 'the authorship route answered 200 with a proof that is not an object.');
+    }
+    const p = proof;
+    const strings = ['address', 'signature', 'statement', 'origin', 'contentSha256'];
+    for (const key of strings) {
+        if (typeof p[key] !== 'string' || p[key] === '') {
+            return fail('malformed', what, `the authorship route answered 200 without a usable ${key}.`);
+        }
+    }
+    if (typeof p['issuedAtMs'] !== 'number') {
+        return fail('malformed', what, 'the authorship route answered 200 without a numeric issuedAtMs.');
+    }
+    return ok({
+        proof: {
+            address: p['address'],
+            signature: p['signature'],
+            statement: p['statement'],
+            origin: p['origin'],
+            contentSha256: p['contentSha256'],
+            issuedAtMs: p['issuedAtMs'],
+        },
+        handleStillResolvesToSigner: typeof body['handleStillResolvesToSigner'] === 'boolean' ? body['handleStillResolvesToSigner'] : null,
+    });
 }
 /**
  * The response, checked field by field before it becomes a page.

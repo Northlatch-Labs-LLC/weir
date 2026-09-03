@@ -38,7 +38,7 @@
  * in which case the agent's own guard still bounds the spend. A subscription's tier price is not
  * exposed by the agent's read surface, so its `pricePaid` is `null`: not read, never guessed.
  */
-import type { WeirPort, Currency } from './transport.js';
+import type { WeirPort, Currency , WeirAuthorship } from './transport.js';
 
 /** The agent library's `Reading`, structurally — this file must not depend on the package at type level. */
 type Reading<T> =
@@ -91,6 +91,8 @@ interface AgentLike {
   >;
   balance?: (coinType?: string) => Promise<Reading<bigint>>;
   feed?: WeirPort['feed'];
+  /** See `Authorship` in the agent library; the port mirrors its shape. */
+  authorship?: (input: { postId: string }) => Promise<Reading<WeirAuthorship>>;
   readPreview?: (input: { postId: string }) => Promise<Reading<{ postId: string; handle: string; title: string; body: string; entitledVia: 'public' } | null>>;
   unlock?: (input: { vaultId: string; contentKey: string; priceMinorUnits: bigint; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   subscribe?: (input: { vaultId: string; tierIndex: number; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
@@ -130,6 +132,14 @@ export function portFromAgent(candidate: unknown): WeirPort {
     port.readPreview = async (input) => unwrap(await agent.readPreview(input), 'readPreview');
   }
   if (has(agent, 'machineBody')) port.machineBody = (input) => agent.machineBody(input);
+  /*
+    A failed READ is a failure; a post with no retained proof is not. `unwrap` turns a failed
+    Reading into a thrown refusal, which is right for the first and would be a lie about the second
+    — so the absence passes through as the value it is.
+  */
+  if (has(agent, 'authorship')) {
+    port.authorship = async (input) => unwrap(await agent.authorship(input), 'authorship');
+  }
 
   if (has(agent, 'quote')) {
     port.quote = async (input) => {

@@ -266,6 +266,21 @@ export interface WeirBalance {
  * cost it one shipped-shaped defect on its Seal boundary. The arguments here are addresses, prices
  * and ceilings; the same hole would be worth more.
  */
+/** What {@link WeirPort.authorship} answers. Mirrors `Authorship` in `@projectx-social/agent`. */
+export type WeirAuthorship =
+  | { proof: null; reason: string }
+  | {
+      proof: {
+        address: string;
+        signature: string;
+        statement: string;
+        origin: string;
+        contentSha256: string;
+        issuedAtMs: number;
+      };
+      handleStillResolvesToSigner: boolean | null;
+    };
+
 export interface WeirPort {
   /** Browse or search. Absent today — see {@link capabilitiesOf}. */
   /**
@@ -283,6 +298,13 @@ export interface WeirPort {
   readPreview?: (input: { postId: string }) => Promise<WeirBody | null>;
   /** The signer's own spendable balance. */
   balance?: () => Promise<WeirBalance>;
+  /**
+   * Who signed a post, from the deployment that holds the proof.
+   *
+   * Keyless: it is the check a buyer makes BEFORE spending. `proof: null` is an answer — the post
+   * was signed and the deployment discarded the signature — and is never reported as a failure.
+   */
+  authorship?: (input: { postId: string }) => Promise<WeirAuthorship>;
 
   /** Buy permanent access. The ceiling is carried, not applied. */
   unlock?: (input: {
@@ -448,6 +470,7 @@ export interface WeirBinding {
 export type Capability =
   | 'search'
   | 'quote'
+  | 'authorship'
   | 'read-preview'
   | 'balance'
   | 'buy'
@@ -539,6 +562,9 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   if (has('feed')) out.add('search');
   if (has('quote')) out.add('quote');
   if (has('readPreview')) out.add('read-preview');
+  // Keyless, like search and quote: checking who signed something must not require a key, or the
+  // check is only available to whoever has already committed to spending.
+  if (has('authorship')) out.add('authorship');
   if (binding.signer.kind !== 'none' && has('balance')) out.add('balance');
 
   /*

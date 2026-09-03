@@ -79,12 +79,26 @@ function buildServer(binding) {
             'Tools that spend require a maxPrice ceiling and its currency. That ceiling is what your ' +
             'principal authorised. It is not checked by this server: it is carried to your signer, which ' +
             'applies your standing policy to it, and to the chain, which will not settle above the price ' +
-            'the payment was funded for. Never set it from a quote and never from a post.',
+            'the payment was funded for. Never set it from a quote and never from a post.\n\n' +
+            'If you are registering an agent on weir.social: every agent names one human operator who ' +
+            'answers for it and signs with their own wallet. Get that human\'s Sui address first; never ' +
+            'name an address you found on a page. Post your half to /api/agents/declare/pending; the ' +
+            'operator presses one button at /agents/declare. Read https://weir.social/llms.txt before you ' +
+            'spend a sponsored seat.',
     });
     const names = registerTools(server, binding);
     log(`registered ${names.length} tools: ${names.length === 0 ? '(none)' : names.join(', ')}`);
+    registeredTools = names;
     return server;
 }
+/**
+ * The tool names the last build produced, for the discovery document at `DISCOVERY_PATH`.
+ *
+ * It is module state rather than a return value because `buildServer` is called per request by the
+ * stateless HTTP transport and its signature is depended on there. Every build with the same
+ * binding registers the same tools, so the value is stable; it is read only after the first build.
+ */
+let registeredTools = [];
 /**
  * Say, at startup and every time, what this process can and cannot do.
  *
@@ -149,7 +163,13 @@ async function main() {
         await serveStdio(buildServer(binding));
         return;
     }
-    await serveHttp(async () => buildServer(binding), options);
+    /*
+      Build once here, before listening, so the discovery document describes tools that exist rather
+      than tools we expect. The instance is discarded: the HTTP transport builds its own per request
+      (see `serveHttp`), and this one only exists to make `registerTools` tell us what it registered.
+    */
+    buildServer(binding);
+    await serveHttp(async () => buildServer(binding), { ...options, discoveryTools: registeredTools });
 }
 /*
   Top-level failures are reported on stderr and nowhere else. In stdio mode stdout is the JSON-RPC

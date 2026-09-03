@@ -201,6 +201,10 @@ export function capabilitiesOf(binding) {
         out.add('quote');
     if (has('readPreview'))
         out.add('read-preview');
+    // Keyless, like search and quote: checking who signed something must not require a key, or the
+    // check is only available to whoever has already committed to spending.
+    if (has('authorship'))
+        out.add('authorship');
     if (binding.signer.kind !== 'none' && has('balance'))
         out.add('balance');
     /*
@@ -369,6 +373,12 @@ export function resolveOptions(argv, env) {
         allowedOrigins,
         allowedHosts: configuredHosts.length > 0 ? configuredHosts : defaultAllowedHosts(httpHost, httpPort),
         agentEnvironment: agentEnvironment(env),
+        /*
+          Nothing is registered at the moment options are resolved; the entry point replaces this once
+          `registerTools` has told it the truth. Defaulting to empty rather than to the expected list
+          means a wiring mistake advertises no tools instead of advertising four that are not there.
+        */
+        discoveryTools: [],
     };
 }
 function splitList(raw) {
@@ -744,6 +754,68 @@ export async function serveStdio(server) {
  * ---------------------------------------------------------------------------------------------- */
 export const MCP_PATH = '/mcp';
 /**
+ * Where a client looks to find out what this endpoint is, before it speaks the protocol to it.
+ *
+ * Added 2026-09-02, because the Cloud Run log showed a client asking for exactly this path and
+ * getting a 404 with nothing in it. There is no ratified standard behind the filename; it is the
+ * one clients are already trying, which is the only argument that matters for a discovery path.
+ * The document says so about itself rather than implying an authority it does not have.
+ */
+export const DISCOVERY_PATH = '/.well-known/mcp.json';
+/**
+ * What this endpoint says about itself.
+ *
+ * Everything here is derived from what the process actually built. `tools` is the list
+ * `registerTools` returned, so a deployment that failed to bind a capability advertises fewer
+ * tools rather than advertising a tool that would refuse every call — which is the whole failure
+ * this document could otherwise introduce.
+ *
+ * `readOnly` is computed from the tool names rather than from the mode, because mode is a
+ * statement of intent and the tool list is a fact about what was registered.
+ */
+/**
+ * The address this endpoint tells clients to use.
+ *
+ * NOT the request's `Host`. Behind Cloud Run and Cloudflare the container sees the platform's own
+ * hostname, and the first deployment of this document (2026-09-02) duly published
+ * `https://weir-mcp-….run.app/mcp` — an address the Host allowlist in this very file refuses with
+ * 403. It advertised a door it was built to keep shut.
+ *
+ * The allowlist is the deployment's own statement of the names it answers to, so its first entry is
+ * the canonical one. Scheme follows the host rather than the request: a loopback allowlist is a
+ * developer's machine and is plain HTTP; anything else reached from outside is not.
+ */
+export function canonicalOrigin(options, requestHost) {
+    const host = options.allowedHosts[0] ?? requestHost;
+    if (host === undefined || host.trim() === '')
+        return '';
+    const loopback = /^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(host);
+    return `${loopback ? 'http' : 'https'}://${host}`;
+}
+export function discoveryDocument(options, tools, origin) {
+    const spending = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'];
+    const readOnly = !tools.some((t) => spending.includes(t));
+    return {
+        name: 'weir',
+        description: 'weir.social as a tool: read what a creator published, price it from the chain, and check a ' +
+            'balance. An agent holds the same account a person holds.',
+        endpoint: `${origin}${MCP_PATH}`,
+        transport: 'streamable-http',
+        tools: [...tools],
+        readOnly,
+        authentication: 'none',
+        documentation: `${options.baseUrl}/llms.txt`,
+        manifest: `${options.baseUrl}/.well-known/weir-agent.json`,
+        note: readOnly
+            ? 'This endpoint holds no key and registers no tool that spends or writes. It exits before ' +
+                'listening if a key is placed in its environment. To buy, subscribe, price or publish, run ' +
+                '@projectx-social/mcp yourself with your own key. Nothing hosted here will ever hold yours. ' +
+                'There is no ratified standard for this file; it is served because clients ask for it.'
+            : 'This process has spending tools registered, so it is bound to a key. It is not the hosted ' +
+                'endpoint. There is no ratified standard for this file; it is served because clients ask for it.',
+    };
+}
+/**
  * Whether a request's `Origin` may drive this endpoint.
  *
  * The default — an empty allowlist — refuses **every** request that carries an `Origin` header at
@@ -834,7 +906,7 @@ export async function serveHttp(newServer, options) {
 }
 async function handleHttpRequest(req, res, newServer, options) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    if (url.pathname !== MCP_PATH) {
+    if (url.pathname !== MCP_PATH && url.pathname !== DISCOVERY_PATH) {
         respondJson(res, 404, { error: 'not_found', detail: `MCP is served at ${MCP_PATH}` });
         return;
     }
@@ -848,6 +920,30 @@ async function handleHttpRequest(req, res, newServer, options) {
             error: 'host_refused',
             detail: `Host ${String(req.headers.host)} is not one this endpoint answers to. Set ` +
                 `${ENV.allowedHosts} if this deployment is reached under another name.`,
+        });
+        return;
+    }
+    /*
+      Discovery is answered after the Host check and BEFORE the Origin check, and that ordering is
+      deliberate rather than convenient.
+  
+      Host stays in front because it is the rebinding control and it must run on every request. The
+      Origin check is skipped here alone because it exists to stop a web page DRIVING this endpoint,
+      and this response drives nothing: it is a constant, identical for every caller, containing only
+      what the process already prints to its own log at startup. Refusing it to browsers would hide a
+      public document from the one client that renders it, and protect nothing.
+  
+      Anything but a read is refused rather than ignored, so a client that tries to POST here learns
+      it is at the wrong path instead of receiving a document it did not ask for.
+    */
+    if (url.pathname === DISCOVERY_PATH) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            respondJson(res, 405, { error: 'method_not_allowed', detail: `${DISCOVERY_PATH} answers GET. MCP is served at ${MCP_PATH}.` });
+            return;
+        }
+        respondJson(res, 200, discoveryDocument(options, options.discoveryTools, canonicalOrigin(options, req.headers.host)), {
+            'access-control-allow-origin': '*',
+            'cache-control': 'public, max-age=300',
         });
         return;
     }
@@ -943,9 +1039,9 @@ function asTransport(transport) {
  * anything. A refusal that helpfully told a page it was allowed to read the refusal would be a
  * strange way to end a function whose whole job is keeping pages out.
  */
-function respondJson(res, status, body) {
+function respondJson(res, status, body, extra = {}) {
     const text = JSON.stringify(body);
-    res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(text) });
+    res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(text), ...extra });
     res.end(text);
 }
 //# sourceMappingURL=transport.js.map

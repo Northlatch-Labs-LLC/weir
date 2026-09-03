@@ -572,8 +572,18 @@ describe('the hosted MCP section', () => {
     const manifest = manifestFrom(inputs());
     expect(manifest.mcp.hosted.startsWith('https://')).toBe(true);
     expect(manifest.mcp.mode).toBe('read-only');
+    /*
+      The invariant, not an allowlist. This was a list of four names including `weir_balance`, which
+      the keyless build does not register because balance needs a signer — so the test passed while
+      the document promised a tool the endpoint refuses to have. Adding a name to an allowlist is
+      not a check; refusing every tool that spends is.
+    */
+    expect(manifest.mcp.tools.length).toBeGreaterThan(0);
     for (const tool of manifest.mcp.tools) {
-      expect(['weir_search', 'weir_quote', 'weir_read', 'weir_balance']).toContain(tool);
+      expect(tool.startsWith('weir_')).toBe(true);
+      expect(['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price']).not.toContain(tool);
+      // `weir_balance` reads, but only for a bound signer, and this endpoint has none.
+      expect(tool).not.toBe('weir_balance');
     }
     expect(manifest.mcp.note).toContain('exits before listening');
   });

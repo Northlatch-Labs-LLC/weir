@@ -367,6 +367,7 @@ export function registerTools(server: McpServer, binding: WeirBinding): string[]
   when('search', () => registerSearch(server, binding.port));
   when('quote', () => registerQuote(server, binding.port));
   when('read-preview', () => registerRead(server, binding.port));
+  when('authorship', () => registerAuthorship(server, binding.port));
   when('balance', () => registerBalance(server, binding.port));
   when('buy', () => registerBuy(server, binding.port, ledger, principal));
   when('subscribe', () => registerSubscribe(server, binding.port, ledger, principal));
@@ -375,6 +376,93 @@ export function registerTools(server: McpServer, binding: WeirBinding): string[]
   when('price', () => registerPrice(server, binding.port, ledger, principal));
 
   return registered;
+}
+
+/**
+ * `weir_authorship` — who signed a post, for the caller to check themselves.
+ *
+ * # Why this hands back bytes instead of a yes
+ *
+ * The obvious tool would answer "verified: true". That is worthless here: the party telling you it
+ * verified is the party selling you the post, and a verification you did not perform is one more
+ * assertion to trust. So this returns the exact signed bytes and the signature, and says in its own
+ * description how to check them. The check costs the caller one library call and it removes us from
+ * the trust chain entirely, which is the whole point of the feature existing.
+ *
+ * # Why an absent proof is a normal answer
+ *
+ * A post published before the deployment retained signatures has none. It WAS signed; the signature
+ * was discarded. Reporting that as an error would tell a caller that older posts are suspect, which
+ * is false and would be our fault. `proof` is null and `reason` says so in words.
+ *
+ * Keyless, so it sits with search and quote rather than behind a signer: the whole use of it is to
+ * check a seller BEFORE deciding to spend, and a check available only after you have committed is
+ * not a check.
+ */
+function registerAuthorship(server: McpServer, weir: WeirPort): string {
+  const name = toolName('authorship');
+  server.registerTool(
+    name,
+    {
+      title: logicalName('authorship'),
+      description:
+        'Who signed a post on weir.social, as checkable evidence rather than as our word for it. ' +
+        'Returns the exact bytes that were signed and the signature over them; VERIFY THEM YOURSELF ' +
+        'with verifyPersonalMessageSignature from @mysten/sui/verify against `address` — this server ' +
+        'deliberately does not verify them for you, because a check performed by the seller is not a ' +
+        'check. A null `proof` means the deployment kept none: the post WAS signed and the signature ' +
+        'was discarded, so it is unproven and not forged. `handleStillResolvesToSigner` false means ' +
+        'the account changed hands, which is not a forgery either. A verified signature proves the ' +
+        'holder of that address signed those bytes; it does not prove the work is theirs. Reads only; ' +
+        'it never spends.',
+      inputSchema: {
+        postId: z.string().min(1).max(128).describe('The post id, as `weir_search` returns it.'),
+      },
+      outputSchema: {
+        proof: z
+          .object({
+            address: z.string(),
+            signature: z.string(),
+            statement: z.string(),
+            origin: z.string(),
+            contentSha256: z.string(),
+            issuedAtMs: z.number(),
+          })
+          .nullable(),
+        reason: z.string().nullable(),
+        handleStillResolvesToSigner: z.boolean().nullable(),
+        howToVerify: z.string(),
+      },
+    },
+    async ({ postId }) => {
+      const read = weir.authorship;
+      if (read === undefined) {
+        // Unreachable in practice: the tool is registered only when the port has the method.
+        // Kept because "registered" and "callable" are two facts and only one of them is checked here.
+        return refuse('unbound', 'This server has no authorship reader bound.');
+      }
+      const answer = await read({ postId });
+      const structured =
+        answer.proof === null
+          ? {
+              proof: null,
+              reason: answer.reason,
+              handleStillResolvesToSigner: null,
+              howToVerify: 'There is nothing to verify: no proof was kept for this post.',
+            }
+          : {
+              proof: answer.proof,
+              reason: null,
+              handleStillResolvesToSigner: answer.handleStillResolvesToSigner,
+              howToVerify:
+                'await verifyPersonalMessageSignature(new TextEncoder().encode(proof.statement), ' +
+                'proof.signature) from @mysten/sui/verify, then compare the returned key\'s ' +
+                'toSuiAddress() against proof.address. Do not rebuild the statement yourself.',
+            };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(structured) }], structuredContent: structured };
+    },
+  );
+  return name;
 }
 
 /* ------------------------------------------------------------------------------------------------

@@ -355,6 +355,32 @@ export interface FeedPost {
  * to know — and `nextCursor` is opaque and goes back exactly as it came. The page size is the
  * server's too; there is no way to ask for a bigger one, by design.
  */
+/**
+ * What a deployment can tell you about who signed a post.
+ *
+ * `proof: null` means the deployment kept none — the post was signed, and the signature was
+ * discarded. It is a true answer to the question and not an error; `reason` says so in words.
+ *
+ * `handleStillResolvesToSigner` is `null` when the deployment did not say. `false` is not a
+ * forgery: an account can change hands, and the signature over the bytes remains good.
+ */
+export type Authorship =
+  | { proof: null; reason: string }
+  | {
+      proof: {
+        /** The address that signed. This, never the handle, is what you verify against. */
+        address: string;
+        /** The serialized signature, as `signPersonalMessage` returns it. */
+        signature: string;
+        /** The exact bytes that were signed. Verify these; do not rebuild them yourself. */
+        statement: string;
+        origin: string;
+        contentSha256: string;
+        issuedAtMs: number;
+      };
+      handleStillResolvesToSigner: boolean | null;
+    };
+
 export interface FeedPage {
   posts: FeedPost[];
   truncated: boolean;
@@ -405,6 +431,14 @@ export interface ReadOnlyAgent {
    * acts on the first and waits on the second.
    */
   feed: (input: FeedInput) => Promise<Reading<FeedPage>>;
+  /**
+   * Who signed a post, from the deployment that holds the proof.
+   *
+   * On the read-only surface because it needs no key and no signer: it is the check a buyer makes
+   * BEFORE spending anything. See {@link Authorship} for why `proof: null` is an answer and not a
+   * failure.
+   */
+  authorship: (input: { postId: string }) => Promise<Reading<Authorship>>;
 
   /**
    * One post as an anonymous reader sees it: the plaintext of a PUBLIC post, or `null` for a post
@@ -1658,6 +1692,31 @@ function readSurface(input: {
       return ok({ postId: post.id, handle: post.handle, title: post.title, body, entitledVia: 'public' });
     },
 
+    /**
+     * Who signed a post, and what that does and does not establish.
+     *
+     * A keyless read of `GET /api/posts/{id}/authorship`. The deployment hands back the exact bytes
+     * that were signed and the signature over them, and deliberately does not verify them for you:
+     * a verification the seller performs is another thing you are taking on trust. Verify it with
+     * `verifyPersonalMessageSignature` from `@mysten/sui/verify` against `address`.
+     *
+     * `proof: null` is a real, successful answer and NOT a failure: posts published before the
+     * deployment retained signatures have none, and they were signed. Unproven is not forged, and
+     * collapsing the two would make every older post look fraudulent.
+     */
+    async authorship(input: { postId: string }): Promise<Reading<Authorship>> {
+      const what = 'authorship';
+      const read = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: `/api/posts/${encodeURIComponent(input.postId)}/authorship`,
+        method: 'GET',
+        what,
+      });
+      if (!read.ok) return read;
+      return authorshipFrom(read.value, what);
+    },
+
     async feed(input: FeedInput): Promise<Reading<FeedPage>> {
       const what = 'feed';
       /*
@@ -1680,6 +1739,47 @@ function readSurface(input: {
       return feedPageFrom(read.value, manifest.coinType, what);
     },
   };
+}
+
+/**
+ * The authorship response, checked before it becomes an answer.
+ *
+ * `proof: null` with a reason is a valid answer and passes through as `{ proof: null, reason }`.
+ * A body carrying a proof that is missing any part of the signed bytes is `malformed` rather than a
+ * partial proof: a proof missing a field cannot be verified, and handing one back as if it could be
+ * would send the caller to a verification that fails for our reasons and looks like the author's.
+ */
+function authorshipFrom(body: Record<string, unknown>, what: string): Reading<Authorship> {
+  const proof = body['proof'];
+  if (proof === null || proof === undefined) {
+    const reason = typeof body['reason'] === 'string' ? body['reason'] : 'No proof was kept for this post.';
+    return ok({ proof: null, reason });
+  }
+  if (typeof proof !== 'object') {
+    return fail('malformed', what, 'the authorship route answered 200 with a proof that is not an object.');
+  }
+  const p = proof as Record<string, unknown>;
+  const strings = ['address', 'signature', 'statement', 'origin', 'contentSha256'] as const;
+  for (const key of strings) {
+    if (typeof p[key] !== 'string' || p[key] === '') {
+      return fail('malformed', what, `the authorship route answered 200 without a usable ${key}.`);
+    }
+  }
+  if (typeof p['issuedAtMs'] !== 'number') {
+    return fail('malformed', what, 'the authorship route answered 200 without a numeric issuedAtMs.');
+  }
+  return ok({
+    proof: {
+      address: p['address'] as string,
+      signature: p['signature'] as string,
+      statement: p['statement'] as string,
+      origin: p['origin'] as string,
+      contentSha256: p['contentSha256'] as string,
+      issuedAtMs: p['issuedAtMs'] as number,
+    },
+    handleStillResolvesToSigner:
+      typeof body['handleStillResolvesToSigner'] === 'boolean' ? body['handleStillResolvesToSigner'] : null,
+  });
 }
 
 /**

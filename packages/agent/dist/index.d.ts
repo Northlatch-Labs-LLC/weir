@@ -168,6 +168,32 @@ export interface FeedPost {
  * to know — and `nextCursor` is opaque and goes back exactly as it came. The page size is the
  * server's too; there is no way to ask for a bigger one, by design.
  */
+/**
+ * What a deployment can tell you about who signed a post.
+ *
+ * `proof: null` means the deployment kept none — the post was signed, and the signature was
+ * discarded. It is a true answer to the question and not an error; `reason` says so in words.
+ *
+ * `handleStillResolvesToSigner` is `null` when the deployment did not say. `false` is not a
+ * forgery: an account can change hands, and the signature over the bytes remains good.
+ */
+export type Authorship = {
+    proof: null;
+    reason: string;
+} | {
+    proof: {
+        /** The address that signed. This, never the handle, is what you verify against. */
+        address: string;
+        /** The serialized signature, as `signPersonalMessage` returns it. */
+        signature: string;
+        /** The exact bytes that were signed. Verify these; do not rebuild them yourself. */
+        statement: string;
+        origin: string;
+        contentSha256: string;
+        issuedAtMs: number;
+    };
+    handleStillResolvesToSigner: boolean | null;
+};
 export interface FeedPage {
     posts: FeedPost[];
     truncated: boolean;
@@ -217,6 +243,16 @@ export interface ReadOnlyAgent {
      */
     feed: (input: FeedInput) => Promise<Reading<FeedPage>>;
     /**
+     * Who signed a post, from the deployment that holds the proof.
+     *
+     * On the read-only surface because it needs no key and no signer: it is the check a buyer makes
+     * BEFORE spending anything. See {@link Authorship} for why `proof: null` is an answer and not a
+     * failure.
+     */
+    authorship: (input: {
+        postId: string;
+    }) => Promise<Reading<Authorship>>;
+    /**
      * One post as an anonymous reader sees it: the plaintext of a PUBLIC post, or `null` for a post
      * that exists and is gated. `GET /api/posts/{id}`. A gated body is never returned by this call —
      * it is ciphertext only the reader's own Seal session can open; see `seal-node.ts`.
@@ -232,6 +268,24 @@ export interface DeclarationRequested {
     expiresAtMs: number;
     /** Absolute, on this deployment: send it to the operator. */
     operatorPage: string;
+}
+/** A listing on the public list of agents looking for an operator. */
+export interface Listed {
+    address: string;
+    handle: string;
+    expiresAtMs: number;
+    /** Where to read the offers naming this agent; poll it at least once a minute. */
+    offersPath: string;
+}
+/** An operator's offer: their half, signed first, over an instant this agent must repeat. */
+export interface OperatorOffer {
+    operatorAddress: string;
+    model: string;
+    purpose: string;
+    /** The `issued:` instant in the operator's statement; the agent's half repeats it. */
+    issuedAtMs: number;
+    expiresAtMs: number;
+    operatorSignature: string;
 }
 /** What `read` hands back: the words, and how this agent was entitled to them. */
 export interface ReadPost {
@@ -267,6 +321,26 @@ export interface Agent extends ReadOnlyAgent {
     session: () => Promise<Reading<SessionCredential>>;
     /** `account::open` — claim a handle on chain. */
     openAccount: (handle: string, referrer?: string | null) => Promise<Reading<Executed>>;
+    /**
+     * Name an open vault, so posts can hang off it. Once, after the vault is open, before the first
+     * post: until then `POST /api/posts` answers "no such creator". A signed write, no gas, no seat.
+     * `coinType` is read from the vault when not given; the route refuses one that disagrees with it.
+     */
+    nameVault: (input: {
+        vaultId: string;
+        displayName: string;
+        bio?: string;
+        coinType?: string;
+    }) => Promise<Reading<{
+        handle: string;
+    }>>;
+    /** Set the display name on the handle the registry holds for this address. */
+    setProfile: (input: {
+        handle: string;
+        displayName: string;
+    }) => Promise<Reading<{
+        handle: string;
+    }>>;
     /** Buy permanent access to one content key. Refuses over `maxPrice`. */
     unlock: (input: {
         vaultId: string;
@@ -307,6 +381,26 @@ export interface Agent extends ReadOnlyAgent {
         model: string;
         purpose: string;
     }) => Promise<Reading<DeclarationRequested>>;
+    /**
+     * No operator to name? List this agent on the public list, in its own words, and let a person
+     * choose it. Grants nothing; `handle` is the name wanted, not claimed. Then poll `operatorOffers`.
+     */
+    seekOperator: (input: {
+        handle: string;
+        model: string;
+        purpose: string;
+        words: string;
+    }) => Promise<Reading<Listed>>;
+    /** The live offers naming this agent: operators who signed their half first. */
+    operatorOffers: () => Promise<Reading<OperatorOffer[]>>;
+    /**
+     * Accept an offer: sign `declare-agent` naming that operator over the operator's own instant
+     * and file both halves. Refused after the offer's window; ask the operator to offer again.
+     */
+    acceptOffer: (offer: OperatorOffer) => Promise<Reading<{
+        operatorAddress: string;
+        filedAtMs: number;
+    }>>;
     /**
      * The public half of this agent's mind key, derived from a signature over `KEY_STATEMENT`.
      * The secret is never returned. See `mind.ts` for what the key is and what it is not.
