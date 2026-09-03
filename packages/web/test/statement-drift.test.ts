@@ -353,6 +353,86 @@ describe('the duplication stays removed', () => {
   });
 });
 
+/*
+  The publish digest, which is the one signed value a caller must COMPUTE rather than supply.
+
+  The statement text above is pinned across every client component. The digest inside it was not,
+  and it is written out by hand in four independent production files: the route that verifies it,
+  the agent library, the browser composer, and the room package. Nothing tied any of them together.
+
+  Change the formula in the route and the browser keeps signing yesterday's bytes. Every person
+  publishing then gets "the signature does not prove control of 0x…", which points at their wallet
+  rather than at our typo, and every suite stays green while it happens.
+
+  Found on 2026-09-03 by tracing why `publish()` has the highest betweenness in the graph: it is
+  the seam where the human path re-implements what the machine path implements.
+
+  Read as TEXT, not imported and called. Two implementations that are both wrong in the same way
+  agree perfectly at runtime — which is exactly what the agent package's own test does today, since
+  it compares `publishContentSha256` against a copy of the formula written inside the test. This
+  compares the source lines to the ROUTE's line, so a change to the authority breaks every copy
+  that did not follow it.
+*/
+describe('the publish digest is written the same way everywhere', () => {
+  /** The one line that decides whether a publish signature verifies. */
+  const DIGEST = /\.update\(`\$\{preview\.length\}:\$\{preview\}\$\{(?:text|body)\.length\}:\$\{(?:text|body)\}`\)/;
+
+  /*
+    The route is the authority: it is what rebuilds the bytes and decides whether the signature
+    stands. Every other copy is measured against this one, never against each other.
+  */
+  const ROUTE = 'app/api/posts/route.ts';
+
+  const copies: Array<{ what: string; path: string; pattern: RegExp }> = [
+    { what: 'the agent library', path: '../agent/src/statements.ts', pattern: DIGEST },
+    { what: 'the room package', path: '../room/src/transcript.ts', pattern: DIGEST },
+    /*
+      The browser cannot import node:crypto, so it hashes through SubtleCrypto and the formula sits
+      inside the call rather than after `.update(`. Same bytes, different spelling — pinned with its
+      own pattern rather than excused.
+    */
+    {
+      what: 'the browser composer',
+      path: 'components/StudioComposer.tsx',
+      pattern: /sha256Hex\(`\$\{preview\.length\}:\$\{preview\}\$\{text\.length\}:\$\{text\}`\)/,
+    },
+  ];
+
+  it('the route contains the formula this test is pinned to', () => {
+    // If this fails, the authority moved and every expectation below is measuring nothing.
+    expect(read(ROUTE)).toMatch(DIGEST);
+  });
+
+  for (const { what, path, pattern } of copies) {
+    it(`${what} builds the digest exactly as the route does`, () => {
+      const full = join(root, path);
+      // Conditional for the same reason the agent re-export check above is: this suite runs in
+      // trees where a sibling package is absent, and ENOENT there is a missing package, not drift.
+      if (!existsSync(full)) return;
+      const body = readFileSync(full, 'utf8');
+      expect(
+        pattern.test(body),
+        `${path} no longer builds the publish digest the way ${ROUTE} does. ` +
+          'A publish signed there will not verify. Change all four together or none.',
+      ).toBe(true);
+    });
+  }
+
+  it('the published recipe still describes what the route computes', () => {
+    // The prose an agent reads. `agent-manifest.test.ts` proves the recipe is arithmetically
+    // correct; this proves the guide and the manifest still carry it at all.
+    for (const path of ['public/llms.txt', 'lib/agent-manifest.ts']) {
+      expect(read(path)).toContain('${preview.length}:${preview}${text.length}:${text}');
+    }
+  });
+
+  it('would notice a changed digest', () => {
+    // Teeth. A near-miss — one side dropping a length prefix — must not match.
+    expect(DIGEST.test('.update(`${preview}${text}`)')).toBe(false);
+    expect(DIGEST.test('.update(`${preview.length}:${preview}${text}`)')).toBe(false);
+  });
+});
+
 describe('the drift test itself', () => {
   it('would notice a changed statement', () => {
     // A test that reads files and asserts nothing useful looks identical to one that works. This
