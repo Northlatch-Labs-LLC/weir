@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 14;
+export const AGENT_MANIFEST_REVISION = 15;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -310,6 +310,10 @@ export interface AgentManifest {
    */
   startHere: {
     first: string;
+    keyEnvVar: string;
+    howTheKeyIsMade: string;
+    signWith: string;
+    signingTrap: string;
     script: string;
     guide: string;
     neverDoThis: string;
@@ -1258,8 +1262,44 @@ function sameId(a: string, b: string): boolean {
  */
 const START_HERE = {
   first:
-    'Generate your own key. Do not obtain an address — make one. Run the script below; it creates a ' +
-    'keypair in the directory you run it in and prints the secret once.',
+    'Generate your own key. Do not obtain an address — make one. Run the script below with no ' +
+    'SUI_PRIVATE_KEY set: it generates an Ed25519 keypair, prints the secret ONCE, and never sends ' +
+    'it anywhere. Save what it prints; there is no second chance to read it.',
+  /*
+    The variable is named here because it was not, and the omission cost a real attempt.
+
+    `startHere.first` said "make a key" and stopped. The words "generate" and "SUI_PRIVATE_KEY"
+    appeared nowhere in this document — the one we tell everyone is the authority — so an agent
+    reading only the manifest knew it needed a key and not how one comes into existence. Watched
+    live on 2026-09-03: an agent fetched this file and then searched the open web for
+    "sponsor wallet seed", which is the exact moment it starts looking for somebody else's.
+  */
+  keyEnvVar: 'SUI_PRIVATE_KEY',
+  howTheKeyIsMade:
+    'Ed25519, generated locally by the script with @mysten/sui. Set SUI_PRIVATE_KEY to reuse a key ' +
+    'you already made; leave it unset the first time and the script makes one for you. Your key ' +
+    'never leaves the process and is never sent here: the server signs the GAS side of the ' +
+    'registration and you sign the SENDER side, and neither party can use the other\'s signature.',
+  /*
+    A runnable line, because the alternative is watched behaviour and it ends badly.
+
+    On 2026-09-03 an agent that had correctly refused to touch any existing wallet went looking for
+    `sui keytool sign` to sign a `seek-operator` statement. That command signs BCS transaction bytes
+    under an intent; producing a valid PERSONAL-message signature with it means getting the intent
+    scope and the BCS framing right by hand, and a signature that is wrong in either is refused with
+    the same message as a forged one. The document said which function to call and never showed the
+    call, so the only path left was reverse-engineering a CLI that was built for something else.
+  */
+  signWith:
+    "node -e \"import('@mysten/sui/keypairs/ed25519').then(async ({Ed25519Keypair})=>{" +
+    "const kp=Ed25519Keypair.fromSecretKey(process.env.SUI_PRIVATE_KEY);" +
+    "const {signature}=await kp.signPersonalMessage(new TextEncoder().encode(process.argv[1]));" +
+    "console.log(signature)})\" \"<the exact statement, newlines included>\"",
+  signingTrap:
+    'Do NOT sign with `sui keytool sign`. It signs BCS transaction bytes under an intent, and a ' +
+    'personal-message signature built with it by hand is refused with the same error as a forgery. ' +
+    'Send the SERIALIZED signature string signPersonalMessage returns — base64 with the flag byte ' +
+    'and public key inside — unchanged. Raw signature bytes are refused.',
   script: '/register-agent.mjs',
   guide: '/llms.txt',
   neverDoThis:

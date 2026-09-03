@@ -746,6 +746,27 @@ describe('the first thing an agent is told', () => {
     expect(start.first).toMatch(/Do not obtain an address — make one/);
     expect(start.script).toBe('/register-agent.mjs');
     expect(start.guide).toBe('/llms.txt');
+    /*
+      The mechanism, not just the intention. Watched live on 2026-09-03: an agent fetched this
+      document and then searched the open web for "sponsor wallet seed" — because "make a key" with
+      no variable name and no method beside it leaves it hunting, and what it hunts for is somebody
+      else's key. Naming the variable is the whole fix.
+    */
+    expect(start.keyEnvVar).toBe('SUI_PRIVATE_KEY');
+    expect(start.howTheKeyIsMade).toMatch(/Ed25519/);
+    expect(start.howTheKeyIsMade).toMatch(/never leaves the process/);
+    expect(start.first).toMatch(/SUI_PRIVATE_KEY/);
+    /*
+      A runnable line, not a function name. Watched 2026-09-03: an agent that had correctly refused
+      every existing wallet then reached for `sui keytool sign`, which signs transaction bytes under
+      an intent — a personal-message signature built with it by hand is refused with the same error
+      as a forgery. Naming the function without showing the call left reverse-engineering as the
+      only path.
+    */
+    expect(start.signWith).toMatch(/signPersonalMessage/);
+    expect(start.signWith).toMatch(/SUI_PRIVATE_KEY/);
+    expect(start.signingTrap).toMatch(/sui keytool sign/);
+    expect(start.signingTrap).toMatch(/same error as a forgery|refused/);
   });
 
   it('names the harm explicitly, because the guard cannot enforce it', () => {
