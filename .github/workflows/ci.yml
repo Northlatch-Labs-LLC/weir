@@ -357,6 +357,24 @@ jobs:
           # design is a check nobody reads — which is the failure this guard exists to prevent.
           # The ceremony commit promotes next -> expected and deletes ci-next-digest.
           NEXT=""; [ -f ci-next-digest ] && NEXT="$(tr -d '[:space:]' < ci-next-digest)"
+          # An unfinished ceremony, refused before the comparison rather than tolerated by it.
+          #
+          # ci-next-digest exists only while an upgrade is in flight, and the ceremony commit copies
+          # it into ci-expected-digest and DELETES it. When the two files are equal the copy happened
+          # and the delete did not, which leaves this guard with a second door standing permanently
+          # open: any later corruption of ci-expected-digest passes through the next branch instead
+          # of failing here.
+          #
+          # Found on 2026-09-03 by mutation-testing this guard. The v5 ceremony promoted and did not
+          # delete, so a deliberately corrupted ci-expected-digest did NOT fail. The guard was sound;
+          # the leftover file was the defect. Equal files are never a legitimate state, so they are
+          # refused rather than reported.
+          if [ -n "$NEXT" ] && [ "$NEXT" = "$EXPECTED" ]; then
+            echo "digest-guard: ci-next-digest is identical to ci-expected-digest."
+            echo "That is an upgrade ceremony that promoted the digest and did not delete the next file."
+            echo "Delete sui-contracts/ci-next-digest. It exists only while an upgrade is in flight."
+            exit 1
+          fi
           if [ "$ACTUAL" = "$EXPECTED" ]; then
             echo "digest-guard: OK — matches the deployed digest ($ACTUAL)"
           elif [ -n "$NEXT" ] && [ "$ACTUAL" = "$NEXT" ]; then

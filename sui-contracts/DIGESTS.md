@@ -9,14 +9,36 @@ from `sui move build --dump-bytecode-as-base64 --no-tree-shaking` with the pinne
 change it describes is reviewed. CI accepts a build that matches either file. The ceremony commit copies
 next into expected and deletes next.
 
+## Equal files are refused
+
+If both files exist and hold the **same** value, the guard fails and says so. That state is never
+legitimate: it means a ceremony copied next into expected and did not delete next.
+
+The cost of tolerating it is not theoretical. The v5 ceremony on 2026-09-02 promoted the digest and
+left `ci-next-digest` behind, and for the next day the guard had a second door standing open — a
+deliberately corrupted `ci-expected-digest` passed through the next branch instead of failing.
+Found on 2026-09-03 by mutation-testing the guard rather than by reading it. The guard was sound;
+the leftover file was the defect, and nothing in the check could tell anyone it was there.
+
+So the last step of a ceremony is enforced rather than remembered.
+
 Why two files rather than editing the first: the first is a fact about the chain and must not change until
 the chain does. Editing it on a branch would make CI report the source as deployed when it is not. Before
 2026-09-01 the only alternative was leaving every upgrade PR red on this check for its whole life, and a
 check that is red by design is a check nobody reads.
 
-The external verifier (PVS · digest) learned the second file on 2026-09-01 (protocolx-verify #22, via the
-canonical `verification-tools/ci/digest-compare.sh`): it accepts a build matching either file and says
-which one it matched, the same rule as the workflow above.
+The external verifier does NOT know about the second file, and this paragraph used to say it did.
+
+It was true when written: `verification-tools/ci/digest-compare.sh` accepted either file
+(protocolx-verify #22, 2026-09-01). That path now exists only under `archive/`. The gate the product
+actually ships is `engine/ci/digest-guard.sh`, and it compares against `ci-expected-digest` alone —
+checked on 2026-09-03, the string `ci-next-digest` does not appear in it.
+
+The consequence is the failure this whole two-file scheme exists to prevent, reintroduced one layer
+out: an upgrade branch whose source builds to *next* rather than *expected* passes our own CI and is
+failed by our own external verifier. Recorded here rather than quietly corrected, because a
+convention document that describes a tool it no longer matches is how the first version of this
+problem survived.
 
 ## The `agent_mind` package has its own
 
