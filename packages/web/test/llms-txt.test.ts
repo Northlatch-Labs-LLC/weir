@@ -103,3 +103,68 @@ describe('llms.txt tells an agent the truth', () => {
     expect(body).not.toMatch(/fetch\([^)]*getSecretKey/);
   });
 });
+
+/*
+  The opening section makes structural promises about the contracts — soulbound accounts, separated
+  balances, a covered creation fee. A promise about code, written in prose, in a file the code does
+  not import, is exactly the thing that goes quietly false. These read the contract.
+*/
+describe('the promises in the opening are true of the contract', () => {
+  const contract = (name: string) =>
+    readFileSync(join(process.cwd(), `../../sui-contracts/sources/${name}`), 'utf8');
+
+  it('the account really is soulbound: key, and no store', () => {
+    const src = contract('account.move');
+    const decl = src.split('\n').find((l) => l.includes('public struct SocialAccount has'));
+    expect(decl, 'SocialAccount must exist').toBeTruthy();
+    /*
+      `store` is the whole claim. With it the account becomes transferable by anyone holding it and
+      every sentence about custody in this document becomes false at once.
+    */
+    expect(decl).toContain('has key');
+    expect(decl, 'adding `store` makes the account transferable and this document wrong').not.toContain('store');
+    const prose = llms.replace(/\s+/g, ' ');
+    expect(prose).toMatch(/SocialAccount has key/);
+    expect(prose).toMatch(/lost key is a lost account/i);
+  });
+
+  it('creator earnings and platform commission are genuinely two balances', () => {
+    const src = contract('creator.move');
+    expect(src).toMatch(/earnings: Balance<T>/);
+    expect(src).toMatch(/platform_fees: Balance<T>/);
+    /* If these ever merge into one balance, the separation we advertise stops existing. */
+    expect(llms).toContain('platform_fees');
+    expect(llms).toContain('CreatorCap');
+    expect(llms).toContain('PlatformCap');
+  });
+
+  it('describes the vault-fee sponsorship the route actually implements', () => {
+    const route = readFileSync(join(process.cwd(), 'app/api/agents/sponsor/route.ts'), 'utf8');
+    /*
+      The branch was live and undocumented until 2026-09-03, so readers concluded the fee was
+      theirs. This fails if the document describes a branch the route dropped, or the route grows
+      one the document does not mention.
+    */
+    expect(route).toMatch(/action'\] === 'vault'|action"\] === "vault"/);
+    const prose = llms.replace(/\s+/g, ' ');
+    expect(prose).toMatch(/action.{0,4}vault/);
+    expect(prose).toMatch(/read from the platform object/);
+    /* The fee must be read, never assumed — including assumed zero. */
+    expect(route).not.toMatch(/creationFeeMist\s*[=:]\s*['"`]?0['"`]?\s*[,;]/);
+  });
+
+  it('states the boundary of the offer as plainly as the offer', () => {
+    /*
+      The opposite error is as expensive as the first: an agent that assumes everything is covered
+      reads its first priced call as a fault and reports us broken.
+    */
+    /*
+      Matched against the text with its line wrapping collapsed. Every sentence in this file is
+      hard-wrapped at 100 columns, so a phrase long enough to be worth asserting is usually split
+      across two lines and a naive regex reports it missing when it is present.
+    */
+    const prose = llms.replace(/\s+/g, ' ');
+    expect(prose).toMatch(/fund yourself/i);
+    expect(prose).toMatch(/not a fault to report/i);
+  });
+});
