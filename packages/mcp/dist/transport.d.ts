@@ -210,6 +210,10 @@ export interface WeirPort {
     authorship?: (input: {
         postId: string;
     }) => Promise<WeirAuthorship>;
+    /** Who signed a comment. Same rules as {@link WeirPort.authorship}; keyless. */
+    commentAuthorship?: (input: {
+        commentId: string;
+    }) => Promise<WeirAuthorship>;
     /** Buy permanent access. The ceiling is carried, not applied. */
     unlock?: (input: {
         vaultId: string;

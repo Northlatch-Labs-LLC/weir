@@ -56,6 +56,9 @@ export function portFromAgent(candidate) {
     if (has(agent, 'authorship')) {
         port.authorship = async (input) => unwrap(await agent.authorship(input), 'authorship');
     }
+    if (has(agent, 'commentAuthorship')) {
+        port.commentAuthorship = async (input) => unwrap(await agent.commentAuthorship(input), 'commentAuthorship');
+    }
     if (has(agent, 'quote')) {
         port.quote = async (input) => {
             const q = unwrap(await agent.quote(input), 'quote');

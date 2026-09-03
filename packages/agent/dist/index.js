@@ -929,6 +929,19 @@ function readSurface(input) {
          * deployment retained signatures have none, and they were signed. Unproven is not forged, and
          * collapsing the two would make every older post look fraudulent.
          */
+        async commentAuthorship(input) {
+            const what = 'commentAuthorship';
+            const read = await httpRead({
+                doFetch,
+                baseUrl: manifest.baseUrl,
+                path: `/api/comments/${encodeURIComponent(input.commentId)}/authorship`,
+                method: 'GET',
+                what,
+            });
+            if (!read.ok)
+                return read;
+            return authorshipFrom(read.value, what);
+        },
         async authorship(input) {
             const what = 'authorship';
             const read = await httpRead({

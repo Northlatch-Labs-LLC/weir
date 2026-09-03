@@ -52,7 +52,7 @@ const PROOF = {
  * in somebody's runtime.
  */
 async function connect(answer: WeirAuthorship): Promise<{ client: Client; registered: string[] }> {
-  const port: WeirPort = { authorship: async () => answer };
+  const port: WeirPort = { authorship: async () => answer, commentAuthorship: async () => answer };
   const binding = { port, signer: { kind: 'none' }, policyAvailable: false } as unknown as WeirBinding;
   const server = new McpServer({ name: 'weir-mcp', version: '1.0.0' });
   const registered = registerTools(server, binding);
@@ -62,8 +62,8 @@ async function connect(answer: WeirAuthorship): Promise<{ client: Client; regist
   return { client, registered };
 }
 
-async function call(client: Client, postId: string): Promise<Record<string, unknown>> {
-  const result = (await client.callTool({ name: 'weir_authorship', arguments: { postId } })) as {
+async function call(client: Client, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const result = (await client.callTool({ name: 'weir_authorship', arguments: args })) as {
     isError?: boolean;
     structuredContent?: Record<string, unknown>;
   };
@@ -81,7 +81,7 @@ await check('a keyless server registers it, and still registers nothing that spe
 });
 
 await check('it hands back the exact bytes and never a verdict', async () => {
-  const out = await call(keyless.client, 'p1');
+  const out = await call(keyless.client, { postId: 'p1' });
   assert.deepEqual(out['proof'], PROOF);
   assert.equal(out['reason'], null);
   // No verified/valid/ok field anywhere: the caller decides, not us.
@@ -94,7 +94,7 @@ await check('it hands back the exact bytes and never a verdict', async () => {
 await check('an absent proof is an answer with a reason, not an error', async () => {
   const reason = 'No proof was kept for this post. It is unproven, not unsigned.';
   const { client } = await connect({ proof: null, reason });
-  const out = await call(client, 'p1');
+  const out = await call(client, { postId: 'p1' });
   assert.equal(out['proof'], null);
   assert.equal(out['reason'], reason);
   assert.match(String(out['howToVerify']), /nothing to verify/i);
@@ -102,16 +102,46 @@ await check('an absent proof is an answer with a reason, not an error', async ()
 
 await check('a handle that has moved is reported, and the proof still stands', async () => {
   const { client } = await connect({ proof: PROOF, handleStillResolvesToSigner: false });
-  const out = await call(client, 'p1');
+  const out = await call(client, { postId: 'p1' });
   assert.equal(out['handleStillResolvesToSigner'], false);
   assert.deepEqual(out['proof'], PROOF, 'a moved handle must not suppress the proof');
 });
 
 await check('an unknown handle resolution stays null rather than becoming false', async () => {
   const { client } = await connect({ proof: PROOF, handleStillResolvesToSigner: null });
-  const out = await call(client, 'p1');
+  const out = await call(client, { postId: 'p1' });
   assert.equal(out['handleStillResolvesToSigner'], null);
 });
 
+
+await check('it answers for a comment as well as a post', async () => {
+  const out = await call(keyless.client, { commentId: 'c1' });
+  assert.deepEqual(out['proof'], PROOF);
+});
+
+await check('neither id, or both, is refused rather than half-answered', async () => {
+  for (const args of [{}, { postId: 'p1', commentId: 'c1' }]) {
+    const result = (await keyless.client.callTool({ name: 'weir_authorship', arguments: args })) as {
+      isError?: boolean;
+      content?: { text?: string }[];
+    };
+    assert.equal(result.isError, true, `${JSON.stringify(args)} must be refused`);
+    assert.match((result.content ?? []).map((c) => c.text ?? '').join(''), /exactly one/);
+  }
+});
+
+await check('a server missing either reader does not offer the tool at all', async () => {
+  const { registered } = await connect({ proof: PROOF, handleStillResolvesToSigner: null });
+  assert.ok(registered.includes('weir_authorship'));
+  // And with only one of the two, it must be absent rather than half-honouring its schema.
+  const { McpServer: S } = await import('@modelcontextprotocol/sdk/server/mcp.js');
+  const { registerTools: reg } = await import('../src/tools.js');
+  const half = reg(new S({ name: 'h', version: '0' }), {
+    port: { authorship: async () => ({ proof: null, reason: 'x' }) },
+    signer: { kind: 'none' },
+    policyAvailable: false,
+  } as never);
+  assert.ok(!half.includes('weir_authorship'), `half a binding must not register it: ${half.join(', ')}`);
+});
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures > 0) process.exit(1);

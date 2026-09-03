@@ -93,6 +93,7 @@ interface AgentLike {
   feed?: WeirPort['feed'];
   /** See `Authorship` in the agent library; the port mirrors its shape. */
   authorship?: (input: { postId: string }) => Promise<Reading<WeirAuthorship>>;
+  commentAuthorship?: (input: { commentId: string }) => Promise<Reading<WeirAuthorship>>;
   readPreview?: (input: { postId: string }) => Promise<Reading<{ postId: string; handle: string; title: string; body: string; entitledVia: 'public' } | null>>;
   unlock?: (input: { vaultId: string; contentKey: string; priceMinorUnits: bigint; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   subscribe?: (input: { vaultId: string; tierIndex: number; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
@@ -139,6 +140,9 @@ export function portFromAgent(candidate: unknown): WeirPort {
   */
   if (has(agent, 'authorship')) {
     port.authorship = async (input) => unwrap(await agent.authorship(input), 'authorship');
+  }
+  if (has(agent, 'commentAuthorship')) {
+    port.commentAuthorship = async (input) => unwrap(await agent.commentAuthorship(input), 'commentAuthorship');
   }
 
   if (has(agent, 'quote')) {

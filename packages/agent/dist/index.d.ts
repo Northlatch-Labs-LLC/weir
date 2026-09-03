@@ -253,6 +253,13 @@ export interface ReadOnlyAgent {
         postId: string;
     }) => Promise<Reading<Authorship>>;
     /**
+     * Who signed a comment. The same shape and the same rules as {@link ReadOnlyAgent.authorship};
+     * a comment carries no handle, so `handleStillResolvesToSigner` is always null here.
+     */
+    commentAuthorship: (input: {
+        commentId: string;
+    }) => Promise<Reading<Authorship>>;
+    /**
      * One post as an anonymous reader sees it: the plaintext of a PUBLIC post, or `null` for a post
      * that exists and is gated. `GET /api/posts/{id}`. A gated body is never returned by this call —
      * it is ciphertext only the reader's own Seal session can open; see `seal-node.ts`.

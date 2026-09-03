@@ -12,7 +12,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { statementFor } from '@projectx-social/sdk';
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 import { normaliseAddress } from '../lib/db';
-import { addPost } from '../lib/content';
+import { addPost, findComment } from '../lib/content';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 
 useTestDatabase();
 const ORIGIN = 'https://weir.social';
@@ -33,6 +34,7 @@ vi.mock('@projectx-social/sdk', async (importOriginal) => ({
 }));
 
 const route = await import('../app/api/comments/route');
+const authorship = await import('../app/api/comments/[id]/authorship/route');
 void PACKAGE;
 
 beforeEach(async () => {
@@ -70,5 +72,83 @@ describe('the creator under her own paid post', () => {
     reader = stranger.toSuiAddress();
     expect((await get()).status).toBe(403);
     expect((await post(stranger, 'let me in')).status).toBe(403);
+  });
+});
+
+/*
+  The proof a comment carries, written by the real route.
+
+  Same defect as posts had and fixed the same way: a comment was signed, verified, and the
+  signature discarded, so nobody could check who wrote it. The central test here does what a
+  stranger would do — take the bytes and the signature the endpoint hands back and verify them with
+  the Sui library, with no code of ours in the check.
+*/
+describe('a comment carries proof of who signed it', () => {
+  const ask = async (id: string) => {
+    const res = await authorship.GET(new Request(`${ORIGIN}/api/comments/${id}/authorship`), {
+      params: Promise.resolve({ id }),
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, any> };
+  };
+
+  it('the route stores the exact signature and instant it verified', async () => {
+    const res = await post(owner, 'kept its receipt');
+    expect(res.ok).toBe(true);
+    const written = ((await res.json()) as { comment: { id: string } }).comment;
+    const stored = await findComment(written.id);
+    expect(stored?.authorship).toBeDefined();
+    expect(stored?.authorship?.origin).toBe(ORIGIN);
+    expect(typeof stored?.authorship?.signature).toBe('string');
+  });
+
+  it('hands back bytes a stranger can verify with the Sui library alone', async () => {
+    const res = await post(owner, 'verify me without trusting them');
+    const written = ((await res.json()) as { comment: { id: string } }).comment;
+    const { status, body } = await ask(written.id);
+    expect(status).toBe(200);
+    expect(body.proof).not.toBeNull();
+
+    // The whole feature. No code of ours takes part in this check.
+    const key = await verifyPersonalMessageSignature(
+      new TextEncoder().encode(body.proof.statement),
+      body.proof.signature,
+    );
+    expect(key.toSuiAddress()).toBe(body.proof.address);
+    expect(body.proof.address).toBe(owner.toSuiAddress());
+  });
+
+  it('fails to verify if the text is altered — the proof is doing work', async () => {
+    const res = await post(owner, 'the words as written');
+    const written = ((await res.json()) as { comment: { id: string } }).comment;
+    const { body } = await ask(written.id);
+    const tampered = String(body.proof.statement).replace('as written', 'as changed');
+    expect(tampered).not.toBe(body.proof.statement);
+    await expect(
+      verifyPersonalMessageSignature(new TextEncoder().encode(tampered), body.proof.signature),
+    ).rejects.toThrow();
+  });
+
+  it('says plainly that an older comment has no proof, and does not call that an error', async () => {
+    await testDb().query(
+      `INSERT INTO comments (id, post_id, author, body, created_at_ms) VALUES ($1, 'p-paid', $2, 'from before', 1)`,
+      ['c-legacy', OWNER],
+    );
+    const { status, body } = await ask('c-legacy');
+    expect(status).toBe(200);
+    expect(body.proof).toBeNull();
+    expect(body.reason).toMatch(/discarded/);
+    expect(body.reason).toMatch(/unproven, not unsigned/);
+  });
+
+  it('a missing comment is a 404, which is a different thing from an unproven one', async () => {
+    const { status } = await ask('no-such-comment');
+    expect(status).toBe(404);
+  });
+
+  it('never claims more than custody', async () => {
+    const res = await post(owner, 'custody only');
+    const written = ((await res.json()) as { comment: { id: string } }).comment;
+    const { body } = await ask(written.id);
+    expect(body.whatThisDoesNotProve).toMatch(/custody, not provenance/);
   });
 });

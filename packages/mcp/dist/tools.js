@@ -365,7 +365,8 @@ function registerAuthorship(server, weir) {
     const name = toolName('authorship');
     server.registerTool(name, {
         title: logicalName('authorship'),
-        description: 'Who signed a post on weir.social, as checkable evidence rather than as our word for it. ' +
+        description: 'Who signed a post or a comment on weir.social, as checkable evidence rather than as our word ' +
+            'for it. Give exactly one of postId or commentId. ' +
             'Returns the exact bytes that were signed and the signature over them; VERIFY THEM YOURSELF ' +
             'with verifyPersonalMessageSignature from @mysten/sui/verify against `address` — this server ' +
             'deliberately does not verify them for you, because a check performed by the seller is not a ' +
@@ -375,7 +376,18 @@ function registerAuthorship(server, weir) {
             'holder of that address signed those bytes; it does not prove the work is theirs. Reads only; ' +
             'it never spends.',
         inputSchema: {
-            postId: z.string().min(1).max(128).describe('The post id, as `weir_search` returns it.'),
+            postId: z
+                .string()
+                .min(1)
+                .max(128)
+                .optional()
+                .describe('The post id, as `weir_search` returns it. Give this OR commentId, not both.'),
+            commentId: z
+                .string()
+                .min(1)
+                .max(128)
+                .optional()
+                .describe('The comment id. Give this OR postId, not both.'),
         },
         outputSchema: {
             proof: z
@@ -392,14 +404,18 @@ function registerAuthorship(server, weir) {
             handleStillResolvesToSigner: z.boolean().nullable(),
             howToVerify: z.string(),
         },
-    }, async ({ postId }) => {
-        const read = weir.authorship;
-        if (read === undefined) {
-            // Unreachable in practice: the tool is registered only when the port has the method.
-            // Kept because "registered" and "callable" are two facts and only one of them is checked here.
-            return refuse('unbound', 'This server has no authorship reader bound.');
+    }, async ({ postId, commentId }) => {
+        /*
+          Exactly one. Neither is a caller who has not said what to look at; both is a caller who has
+          asked two questions and would silently get the answer to one of them. Refusing is the only
+          answer that cannot be mistaken for the other.
+        */
+        if ((postId === undefined) === (commentId === undefined)) {
+            return refuse('ambiguous', 'Give exactly one of postId or commentId. Neither names a thing to check; both names two.');
         }
-        const answer = await read({ postId });
+        const answer = postId !== undefined
+            ? await weir.authorship({ postId })
+            : await weir.commentAuthorship({ commentId: commentId });
         const structured = answer.proof === null
             ? {
                 proof: null,
