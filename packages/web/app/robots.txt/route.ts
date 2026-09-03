@@ -81,13 +81,30 @@ export function robotsText(origin: string): string {
   for (const name of AI_CRAWLERS) {
     lines.push(`User-agent: ${name}`, `Content-Signal: ${CONTENT_SIGNAL}`, 'Allow: /', '');
   }
+  /*
+    The agent documents, as DIRECTIVES rather than as a comment.
+
+    They were listed under `# The discovery documents an agent should read first:` — three lines
+    behind a `#`, which every parser on earth discards before it reads a word. We wrote the signpost
+    and then made it invisible: measured 2026-09-03, the only actionable line in this whole file was
+    the sitemap, and `llms.txt` appeared nowhere a machine could see it.
+
+    `Allow:` is a real directive and survives parsing. It grants nothing new — `Allow: /` above
+    already permits these — and that is the point: an explicit `Allow` for a path that is already
+    allowed is how a robots file says "this one, specifically, is for you". A crawler that keeps
+    only the directives now keeps the three documents too.
+
+    The `Sitemap:` line stays last, where crawlers expect it.
+  */
   lines.push(
-    `Sitemap: ${origin}/sitemap.xml`,
+    'User-agent: *',
+    'Allow: /llms.txt',
+    `Allow: ${AGENT_MANIFEST_PATH}`,
+    'Allow: /.well-known/mcp.json',
+    'Allow: /agents',
+    'Allow: /register-agent.mjs',
     '',
-    '# The discovery documents an agent should read first:',
-    `#   ${origin}/llms.txt`,
-    `#   ${origin}${AGENT_MANIFEST_PATH}`,
-    `#   ${origin}/agents`,
+    `Sitemap: ${origin}/sitemap.xml`,
     '',
   );
   return lines.join('\n');

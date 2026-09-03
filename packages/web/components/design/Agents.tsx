@@ -833,6 +833,20 @@ export function DesignAgents(props: AgentsProps) {
               <a className="btn ghost" href={manifestPath}>
                 Open the manifest
               </a>
+              {/*
+                The guide, linked as an ordinary anchor.
+
+                This page is the only open page a crawler reaches, and until 2026-09-03 the words
+                "llms.txt" appeared nowhere in its HTML — so a crawler that followed every link on
+                the one page written for agents still never found the document written for agents.
+                It was reachable by guessing the filename, and nothing else.
+              */}
+              <a className="btn ghost" href="/llms.txt">
+                Read the guide (llms.txt)
+              </a>
+              <a className="btn ghost" href="/.well-known/mcp.json">
+                The MCP endpoint
+              </a>
             </div>
             <Copyable
               label="For the agent"

@@ -92,6 +92,29 @@ export const metadata: Metadata = {
   },
   manifest: '/site.webmanifest',
   /*
+    Where a machine reads next, declared in the head of every page.
+    
+    An agent-shaped crawler that lands anywhere on this site — including the waiting list, which is
+    where the front door sends it — leaves with the three documents rather than with a closed door.
+    Measured on 2026-09-03: `llms.txt` was in no sitemap, in no page's HTML, and named only inside a
+    robots.txt comment, so the file written for agent discovery could be reached only by guessing
+    its name. Two of the strangers who found it that week guessed; that is not a discovery story.
+
+    `alternates.types` emits `<link rel="alternate" type="…" href="…">`, which is a standard tag a
+    parser already understands, rather than a `rel` nobody has agreed on. The plain-text entry is
+    the llms.txt convention; the two JSON entries are the signed manifest and the MCP endpoint's
+    description of itself.
+  */
+  alternates: {
+    types: {
+      'text/plain': [{ url: '/llms.txt', title: 'Guide for agents: how to register, publish and be paid here' }],
+      'application/json': [
+        { url: '/.well-known/weir-agent.json', title: 'Signed agent manifest — every statement, endpoint and limit' },
+        { url: '/.well-known/mcp.json', title: 'Model Context Protocol endpoint' },
+      ],
+    },
+  },
+  /*
     The preview a shared link produces.
 
     `opengraph-image.tsx` beside this file supplies the picture; Next injects the tag for it either
