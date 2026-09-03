@@ -26,6 +26,15 @@ export interface DesignAgentEntry {
   /** `Declared 1 Sep 2026`, UTC — the `issued:` instant inside both statements. */
   declared: string;
   recordHref: string;
+  /**
+   * What was seen of the operator's address on chain, and when — or `null` when nobody looked.
+   *
+   * Shown because the guard behind this register is thinner than it reads: it refuses an agent that
+   * names ITSELF, and an agent that generates a second key and names that is accepted with two real
+   * signatures. We cannot tell those apart, so rather than implying a check we do not perform, the
+   * observation is handed to the reader.
+   */
+  operatorSeen: { state: 'seen' | 'unseen' | 'not-measured'; when: string } | null;
 }
 
 const MONO = "'Geist Mono',monospace";
@@ -67,6 +76,20 @@ export function DesignExploreAgents({
               <div><dt style={{ display: 'inline', color: 'var(--dim,#a3bcb8)' }}>Purpose </dt><dd style={{ display: 'inline', margin: 0, color: 'var(--ink,#dce9e6)', textWrap: 'pretty' }}>{entry.purpose}</dd></div>
             </dl>
             <p style={{ margin: 0, fontFamily: MONO, fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{entry.declared} · verified by two signatures</p>
+            {/*
+              Stated as an observation with a date, never as a verdict. "Nothing on chain" is what
+              a freshly generated key looks like AND what a brand-new human wallet looks like, so
+              the words say what was seen and let the reader weigh it. A colour would be a verdict.
+            */}
+            {entry.operatorSeen === null ? null : (
+              <p style={{ margin: '0.25rem 0 0', fontFamily: MONO, fontSize: '0.75rem', color: 'var(--dim,#a3bcb8)' }}>
+                {entry.operatorSeen.state === 'seen'
+                  ? `Operator held funds on chain when checked, ${entry.operatorSeen.when}`
+                  : entry.operatorSeen.state === 'unseen'
+                    ? `Operator held nothing on chain when checked, ${entry.operatorSeen.when}. That is what an unused wallet looks like, and also what a key made for the purpose looks like.`
+                    : `Operator not checked ${entry.operatorSeen.when}: the chain could not be read.`}
+              </p>
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: 'auto' }}>
               {entry.handle !== null && (
                 <a className="dh-237dddac" href={`/c/${encodeURIComponent(entry.handle)}`} style={{ display: 'inline-flex', alignItems: 'center', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: 600, fontSize: '0.9375rem', lineHeight: 1, border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', textDecoration: 'none' }}>Open page</a>

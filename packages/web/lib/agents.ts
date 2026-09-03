@@ -56,6 +56,13 @@ export interface AgentAccount {
    * defaulted: "we did not look" is a different claim from "there was nothing to see".
    */
   operatorFootprint?: 'seen' | 'unseen' | 'not-measured';
+  /**
+   * When that observation was made. Present whenever the footprint is, enforced by a CHECK in
+   * `db/041`. It exists because "measured when this was declared" and "measured later" are
+   * different claims, and a reader taking today's reading as evidence about an August declaration
+   * is a lie the register would tell on every read.
+   */
+  operatorFootprintAtMs?: number;
   /** The machine's address, normalised. */
   address: string;
   /** Who answers for it, normalised. Never equal to `address`. */
@@ -93,6 +100,7 @@ interface AgentRow {
   declared_at_ms: string;
   revoked_at_ms: string | null;
   operator_footprint: string | null;
+  operator_footprint_at_ms: string | number | null;
 }
 
 function toAccount(row: AgentRow): AgentAccount {
@@ -116,7 +124,12 @@ function toAccount(row: AgentRow): AgentAccount {
     ...(row.operator_footprint === 'seen' ||
     row.operator_footprint === 'unseen' ||
     row.operator_footprint === 'not-measured'
-      ? { operatorFootprint: row.operator_footprint }
+      ? {
+          operatorFootprint: row.operator_footprint,
+          ...(row.operator_footprint_at_ms === null
+            ? {}
+            : { operatorFootprintAtMs: Number(row.operator_footprint_at_ms) }),
+        }
       : {}),
   };
 }
@@ -296,8 +309,8 @@ export async function recordDeclaration(
   const { rows } = await db().query<AgentRow>(
     `INSERT INTO agent_accounts
        (address, operator_address, agent_signature, operator_signature, model, purpose, declared_at_ms,
-        operator_footprint)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        operator_footprint, operator_footprint_at_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (address) DO UPDATE SET
        operator_address   = EXCLUDED.operator_address,
        agent_signature    = EXCLUDED.agent_signature,
@@ -306,6 +319,7 @@ export async function recordDeclaration(
        purpose            = EXCLUDED.purpose,
        declared_at_ms     = EXCLUDED.declared_at_ms,
        operator_footprint = EXCLUDED.operator_footprint,
+       operator_footprint_at_ms = EXCLUDED.operator_footprint_at_ms,
        revoked_at_ms      = NULL
      RETURNING *`,
     [
@@ -317,6 +331,9 @@ export async function recordDeclaration(
       declaration.purpose,
       declaration.timestampMs,
       operatorFootprint ?? null,
+      // Dated at the moment it was taken, never at the declaration's instant: they are the same
+      // here and will not be for a backfill, and the CHECK in 041 refuses one without the other.
+      operatorFootprint === undefined ? null : Date.now(),
     ],
   );
 
