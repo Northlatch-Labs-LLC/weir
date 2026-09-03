@@ -168,3 +168,92 @@ describe('the promises in the opening are true of the contract', () => {
     expect(prose).toMatch(/not a fault to report/i);
   });
 });
+
+/*
+  The key instruction. This is the one piece of advice on the site that, if wrong, costs the reader
+  something it cannot get back — and ours was wrong twice at once until 2026-09-03: it told agents
+  to keep the key in an environment variable, and it printed the secret to stdout. Four agents
+  followed the first. The second is how one runtime's session folder came to hold 86 private keys
+  in plain text.
+*/
+describe('the key advice does not create the exposure it warns about', () => {
+  const script = readFileSync(join(process.cwd(), 'public/register-agent.mjs'), 'utf8');
+
+  it('never prints the secret, only where it was put', () => {
+    /*
+      Matched on the call rather than on prose. `getSecretKey()` reaching any console call is the
+      defect, however the surrounding sentence is worded.
+    */
+    const printed = script
+      .split('\n')
+      .filter((l) => /console\.(log|error|info|warn)/.test(l) && /getSecretKey|secretKey/.test(l));
+    expect(printed, `these lines print the key: ${printed.join(' | ')}`).toEqual([]);
+  });
+
+  it('writes the key with an owner-only mode, and refuses to clobber an existing one', () => {
+    expect(script).toMatch(/mode: 0o600/);
+    /*
+      `wx` rather than a plain write. For a soulbound account, overwriting a key file is not a lost
+      file — it is a lost identity, with no way back to the address that held the vault.
+    */
+    expect(script, 'the write must refuse an existing path, not truncate it').toMatch(/flag: 'wx'/);
+    /* And a key already readable by others is reported, not quietly repaired. */
+    expect(script).toMatch(/0o077/);
+  });
+
+  it('reads the key back before it is used', () => {
+    /*
+      A key believed saved and not saved is the only unrecoverable outcome in this script: the next
+      run generates a different key, a different address, and the first is gone.
+    */
+    expect(script).toMatch(/did not read back/);
+  });
+
+  it('llms.txt teaches the file, not the environment variable', () => {
+    const prose = llms.replace(/\s+/g, ' ');
+    expect(prose).toMatch(/weir-agent\.key/);
+    expect(prose).toMatch(/0600/);
+    expect(prose).toMatch(/does NOT print the key/i);
+    /*
+      The old instruction still WORKS — agents registered under it must not be locked out — but the
+      document must no longer recommend it.
+    */
+    expect(prose).toMatch(/environment variable is readable by every other process/);
+  });
+});
+
+/*
+  Claims about what is published. "Not yet published to npm" sat in this file for a day after the
+  package went live, telling readers they could not run the spending tools they could in fact
+  install with one command.
+*/
+describe('llms.txt does not understate what is available', () => {
+  it('names the MCP package at the version the repository builds', () => {
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), '../mcp/package.json'), 'utf8'),
+    ) as { name: string; version: string };
+    const prose = llms.replace(/\s+/g, ' ');
+    expect(prose).toContain(pkg.name);
+    expect(prose, `llms.txt must name the version it ships (${pkg.version})`).toContain(pkg.version);
+    expect(prose, 'the package is published; this claim outlived the fact').not.toMatch(
+      /not yet published to npm/i,
+    );
+  });
+
+  it('lists the same hosted tools the signed manifest advertises', () => {
+    /*
+      Taken from the manifest rather than from packages/mcp, where the names are computed from a
+      prefix at registration and appear nowhere as literals. The manifest is the signed document an
+      agent verifies against DNS, so it is the right authority for what the hosted server offers —
+      and these two files disagreeing means one of them is lying to a reader who checked.
+    */
+    const manifest = readFileSync(join(process.cwd(), 'lib/agent-manifest.ts'), 'utf8');
+    const line = manifest.split('\n').find((l) => /tools: \['weir_/.test(l));
+    expect(line, 'the manifest must publish a hosted tool list').toBeTruthy();
+    const tools = [...(line ?? '').matchAll(/'(weir_[a-z_]+)'/g)].map((m) => m[1]);
+    expect(tools.length).toBeGreaterThan(3);
+    for (const t of tools) {
+      expect(llms, `llms.txt does not mention the hosted tool ${t}`).toContain(t);
+    }
+  });
+});
