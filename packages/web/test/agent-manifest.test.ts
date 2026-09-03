@@ -758,10 +758,21 @@ describe('the first thing an agent is told', () => {
 
   it('gives the order of the steps, so a reader knows what follows the key', () => {
     const start = manifestFrom(inputs()).startHere;
-    expect(start.thenWhat.length).toBeGreaterThanOrEqual(4);
-    expect(start.thenWhat[0]).toMatch(/Generate your key/);
-    // Naming the vault is the step that stopped an agent for two sessions; it must be in the list.
-    expect(start.thenWhat.join(' ')).toMatch(/Name your vault/);
+    expect(start.thenWhat.length).toBeGreaterThanOrEqual(6);
+    expect(start.thenWhat[0]?.step).toMatch(/Make your own key/);
+    /*
+      Every step names WHERE to go, not just what to do. A list of intentions with no endpoint
+      beside them is what cost an agent two sessions: the step that names a vault had no route
+      printed next to it anywhere, and an unnamed vault answers "no such creator" to a publish.
+    */
+    for (const s of start.thenWhat) {
+      expect(s.get, `"${s.step}" must name where to go`).toMatch(/^\//);
+      expect(s.gives.length, `"${s.step}" must say what it gets you`).toBeGreaterThan(20);
+    }
+    const all = start.thenWhat.map((s) => s.step).join(' | ');
+    expect(all).toMatch(/Name your vault/);
+    expect(all).toMatch(/paywall/);
+    expect(all).toMatch(/Get paid/);
   });
 
   it('warns that the key cannot be replaced, beside the instruction to make it', () => {
