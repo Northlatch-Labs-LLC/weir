@@ -45,7 +45,7 @@ vi.mock('../lib/agent-manifest', async (importOriginal) => {
 });
 
 const { AI_CRAWLERS, CONTENT_SIGNAL, privatePaths, robotsText } = await import('../app/robots.txt/route');
-const { openPages } = await import('../app/sitemap');
+const { openPages, default: sitemap } = await import('../app/sitemap');
 const { REGISTRATION_TYPE, registrationFor } = await import('../app/.well-known/agent-registration.json/route');
 
 const ORIGIN = 'https://weir.social';
@@ -107,10 +107,24 @@ describe('robots.txt', () => {
     }
   });
 
-  it('points at the sitemap and the discovery documents on the origin it is served from', () => {
+  it('points at the sitemap on the origin it is served from', () => {
     expect(text).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
-    expect(text).toContain(`${ORIGIN}/llms.txt`);
-    expect(text).toContain(`${ORIGIN}${AGENT_MANIFEST_PATH}`);
+  });
+
+  it('names the discovery documents as DIRECTIVES, not inside a comment', () => {
+    /*
+      This assertion used to look for the absolute URLs, which were present — inside a
+      `# The discovery documents an agent should read first:` block. Every robots parser discards
+      comments before it reads a word, so the file said nothing a machine could act on except the
+      sitemap, and `llms.txt` was invisible to the readers it exists for. Measured 2026-09-03.
+
+      `Allow:` takes a PATH, so these lines are deliberately not origin-qualified; the origin
+      assertion above still holds for the sitemap, which is the one line that takes a URL.
+    */
+    const directives = text.split('\n').filter((line) => !line.trimStart().startsWith('#'));
+    for (const path of ['/llms.txt', AGENT_MANIFEST_PATH, '/.well-known/mcp.json', '/agents', '/register-agent.mjs']) {
+      expect(directives, `${path} must be reachable outside a comment`).toContain(`Allow: ${path}`);
+    }
   });
 
   it('follows the origin it is given, so a mirror points crawlers at the mirror', () => {
@@ -128,6 +142,21 @@ describe('sitemap.xml', () => {
     for (const notAPage of ['/api/', '/signin', '/waitlist', '/.well-known/', '/llms.txt', '/robots.txt', '/sitemap.xml']) {
       expect(pages).not.toContain(notAPage);
     }
+  });
+
+  it('the sitemap itself carries the agent documents, even though they are not pages', () => {
+    /*
+      `openPages()` is pages a person reads and stays that way. The sitemap is a machine-readable
+      index of what is worth fetching, and the three documents written for machines were in no
+      sitemap, in no page's HTML, and only inside a robots comment — reachable by guessing a
+      filename and nothing else.
+    */
+    const urls = sitemap().map((entry) => entry.url);
+    for (const doc of ['/llms.txt', '/.well-known/weir-agent.json', '/.well-known/mcp.json']) {
+      expect(urls, `${doc} must be in the sitemap`).toContain(`https://weir.social${doc}`);
+    }
+    // And the pages are still there: the documents are an addition, never a replacement.
+    for (const page of openPages()) expect(urls).toContain(`https://weir.social${page}`);
   });
 
   it('includes the page an operator reads before pointing an agent here', () => {
