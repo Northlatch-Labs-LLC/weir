@@ -211,6 +211,10 @@ export function capabilitiesOf(binding) {
     */
     if (has('authorship') && has('commentAuthorship'))
         out.add('authorship');
+    if (has('agents'))
+        out.add('agents');
+    if (has('seeking'))
+        out.add('seeking');
     if (binding.signer.kind !== 'none' && has('balance'))
         out.add('balance');
     /*

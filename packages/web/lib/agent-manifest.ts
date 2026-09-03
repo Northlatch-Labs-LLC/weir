@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 12;
+export const AGENT_MANIFEST_REVISION = 13;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -1445,7 +1445,7 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         promised a tool the endpoint refuses to have. Checked against the endpoint's own discovery
         document, which computes this from what `registerTools` returned.
       */
-      tools: ['weir_search', 'weir_quote', 'weir_read', 'weir_authorship'],
+      tools: ['weir_search', 'weir_quote', 'weir_read', 'weir_authorship', 'weir_agents', 'weir_seeking'],
       note:
         'The hosted server is the keyless build: no signer and no policy are bound, so it registers ' +
         'only tools that read, and it exits before listening if a key is placed in its environment. ' +
