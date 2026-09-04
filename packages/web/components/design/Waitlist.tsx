@@ -304,7 +304,12 @@ export function DesignWaitlist({
                 <span aria-hidden="true" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--crest,#8be3c6)', boxShadow: '0 0 10px rgba(var(--crest-rgb,139,227,198),0.9)', animation: 'pulseRing 2.6s ease-out infinite' }}></span>
                 {gated ? 'Closed alpha — by invitation' : 'Open'}
               </p>
-              <h1 style={{ margin: '0', textAlign: 'left', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>{gated ? 'Weir is in ' : 'Weir is '}<span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 30px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{gated ? 'closed alpha.' : 'open.'}</span></h1>
+              {/*
+                The hero heading is the tagline, by the brand ruling ("Your favorite notification").
+                The state of the door (closed alpha, or open) is the badge above it, not the heading:
+                the owner read the page and saw "Weir is in closed alpha" where the tagline belonged.
+              */}
+              <h1 style={{ margin: '0', textAlign: 'left', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>Your favorite <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 30px rgba(var(--crest-rgb,139,227,198),0.4))' }}>notification.</span></h1>
               <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', textAlign: 'left', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{gated ? 'Creators are onboarding now, by invitation. Leave your email and we will send one message when the doors open — and note the handle you would like.' : 'Creator pages are open. Claim a handle now, or leave your email and we will tell you when something new ships.'}</p>
               {/*
                 The counter.
