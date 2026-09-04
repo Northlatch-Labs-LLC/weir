@@ -77,8 +77,21 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
+    /*
+      The write failed and the agent is told so. The message is logged, not returned: a Postgres
+      error can name a table, a column or a constraint, and that is a description of our schema
+      handed to an unauthenticated caller — now including any MCP-connected agent reaching this
+      route through `weir_declare`. What goes back is that it failed and that nothing was stored,
+      which is what the caller actually needs in order to decide to try again. See the same pattern
+      in `app/api/waitlist/route.ts`.
+    */
+    console.error(
+      JSON.stringify({
+        declarationRequestRecordFailed: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return NextResponse.json(
-      { error: `the request verified but was not recorded: ${error instanceof Error ? error.message : String(error)}` },
+      { error: 'the request verified but the register is not reachable just now — try again' },
       { status: 503 },
     );
   }

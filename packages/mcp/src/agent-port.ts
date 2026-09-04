@@ -96,6 +96,9 @@ interface AgentLike {
   commentAuthorship?: (input: { commentId: string }) => Promise<Reading<WeirAuthorship>>;
   agents?: (input?: { operator?: string }) => Promise<Reading<WeirDeclaredAgent[]>>;
   seeking?: () => Promise<Reading<WeirSeekingAgent[]>>;
+  requestDeclaration?: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<
+    Reading<{ issuedAtMs: number; expiresAtMs: number; operatorPage: string }>
+  >;
   readPreview?: (input: { postId: string }) => Promise<Reading<{ postId: string; handle: string; title: string; body: string; entitledVia: 'public' } | null>>;
   unlock?: (input: { vaultId: string; contentKey: string; priceMinorUnits: bigint; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   subscribe?: (input: { vaultId: string; tierIndex: number; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
@@ -148,6 +151,16 @@ export function portFromAgent(candidate: unknown): WeirPort {
   }
   if (has(agent, 'agents')) port.agents = async (input) => unwrap(await agent.agents(input), 'agents');
   if (has(agent, 'seeking')) port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
+  /*
+    Present only on a KEYED agent: `requestDeclaration` signs, and `createAgent({ keypair: null })`
+    returns a `ReadOnlyAgent` that does not carry it. So the port's method is absent on a hosted
+    binding for the same structural reason `unlock` is, and `capabilitiesOf` never sees `declare`
+    there even before the armed gate is consulted. Untrimmed passthrough: the library trims and
+    signs what it trimmed, and a second trim here would make what is signed depend on two files.
+  */
+  if (has(agent, 'requestDeclaration')) {
+    port.requestDeclaration = async (input) => unwrap(await agent.requestDeclaration(input), 'requestDeclaration');
+  }
 
   if (has(agent, 'quote')) {
     port.quote = async (input) => {

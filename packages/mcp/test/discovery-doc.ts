@@ -28,6 +28,8 @@ import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { DISCOVERY_PATH, canonicalOrigin, describeTools, discoveryDocument, resolveOptions, serveHttp } from '../src/transport.js';
+import type { WeirBinding, WeirPort } from '../src/transport.js';
+import { registerTools } from '../src/tools.js';
 
 const PORT = 8497;
 const HOST = '127.0.0.1';
@@ -95,6 +97,43 @@ check('read-only is derived from the tools, not from the mode', () => {
   const spends = discoveryDocument(options, ['weir_search', 'weir_buy'], 'https://mcp.example');
   assert.equal(spends.readOnly, false);
   assert.doesNotMatch(spends.note, /holds no key/);
+});
+
+check('the hosted discovery document never lists weir_declare, and a build that has it is not read-only', () => {
+  /*
+    Derived, not typed: the keyless read set is what `registerTools` returns over a port offering
+    every read with no signer bound. `weir_declare` cannot be in it — declaring signs a statement
+    naming a human as answerable for the agent, and this endpoint has no key. Asserted here as well
+    as in hosting-artifacts.ts because THIS is the document a client fetches.
+  */
+  const keylessPort = {
+    feed: async () => ({}), quote: async () => ({}), readPreview: async () => ({}),
+    authorship: async () => ({}), commentAuthorship: async () => ({}),
+    agents: async () => ({}), seeking: async () => ({}), balance: async () => ({}),
+    requestDeclaration: async () => ({}),
+  } as unknown as WeirPort;
+  const hosted = registerTools(new McpServer({ name: 'weir-mcp', version: '0.0.0' }), {
+    port: keylessPort,
+    signer: { kind: 'none' },
+    policyAvailable: false,
+  } as unknown as WeirBinding);
+  assert.ok(!hosted.includes('weir_declare'), hosted.join(', '));
+  const d = discoveryDocument(options, hosted, 'https://mcp.example');
+  assert.ok(!d.tools.includes('weir_declare'), d.tools.join(', '));
+  assert.equal(d.readOnly, true);
+  assert.doesNotMatch(d.description, /declare/);
+
+  /*
+    And the other direction: `weir_declare` WRITES. A document listing it while claiming
+    `readOnly: true` would contradict the note printed beside it — "registers no tool that spends or
+    writes" — on the one field a client is most likely to branch on.
+  */
+  const keyed = discoveryDocument(options, ['weir_quote', 'weir_declare'], 'https://mcp.example');
+  assert.equal(keyed.readOnly, false);
+  assert.doesNotMatch(keyed.note, /holds no key/);
+  assert.match(keyed.description, /declare itself to the register/);
+  // It is not a SPENDING tool, so it must not drag in the buy-and-publish clause on its own.
+  assert.doesNotMatch(keyed.description, /buy, subscribe, price and publish/);
 });
 
 check('the document points at the guide and the signed manifest, from the configured base', () => {

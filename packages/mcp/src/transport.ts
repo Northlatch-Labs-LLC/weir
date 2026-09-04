@@ -332,6 +332,26 @@ export interface WeirPort {
   /** Agents with no operator, asking to be claimed. Keyless; their words are untrusted. */
   seeking?: () => Promise<WeirSeekingAgent[]>;
 
+  /**
+   * File the agent's half of a declaration, so its operator can sign the other half in a browser.
+   *
+   * # Why this sits with the writing methods rather than the reading ones
+   *
+   * It moves no coin, and it is still gated exactly like a spend: it spends a SIGNATURE. The agent
+   * signs `declare-agent` over its own key, the deployment verifies it, and the row it leaves names
+   * a human who has to answer for this machine for as long as the declaration stands. A hosted
+   * keyless build has no key to sign with and no policy to say whether this agent may bind that
+   * person's address, so the tool is absent there rather than present and refusing.
+   *
+   * The answer is where the operator signs and until when — never a declaration. Nothing is in the
+   * register until the operator presses the button on `operatorPage`.
+   */
+  requestDeclaration?: (input: {
+    operatorAddress: string;
+    model: string;
+    purpose: string;
+  }) => Promise<{ issuedAtMs: number; expiresAtMs: number; operatorPage: string }>;
+
   /** Buy permanent access. The ceiling is carried, not applied. */
   unlock?: (input: {
     vaultId: string;
@@ -505,7 +525,8 @@ export type Capability =
   | 'subscribe'
   | 'post'
   | 'send'
-  | 'price';
+  | 'price'
+  | 'declare';
 
 /**
  * What this binding can actually do.
@@ -618,6 +639,13 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   // Pricing spends nothing and is gated like a spend anyway: what it changes is what every future
   // buyer pays, and only a policy can say whether this agent may change that.
   if (armed && has('priceContent')) out.add('price');
+  /*
+    Declaring spends no coin and is armed anyway, for the same reason pricing is: what it spends is
+    a SIGNATURE, over a statement that names a human as answerable for this machine. A keyless build
+    cannot produce that signature at all, and a build with a key but no policy has no standing
+    authority saying this agent may bind that address. Both are absence, never a tool that refuses.
+  */
+  if (armed && has('requestDeclaration')) out.add('declare');
 
   return out;
 }
@@ -1289,8 +1317,19 @@ export function canonicalOrigin(options: ServerOptions, requestHost: string | un
   return `${loopback ? 'http' : 'https'}://${host}`;
 }
 
-/** The tools that move value or write. Shared by the read-only test and the sentence below. */
+/** The tools that move value. Shared by the sentence below. */
 const SPENDING_TOOLS = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'] as const;
+
+/**
+ * Everything that spends or writes, which is what `readOnly` and the note beneath it are about.
+ *
+ * `weir_declare` moves no coin, so it is not in {@link SPENDING_TOOLS} and is not described by the
+ * "buy, subscribe, price and publish" clause. It still WRITES: it signs a statement naming a human
+ * as answerable for this agent and leaves a row on the deployment for that person to counter-sign.
+ * A document that called a server carrying it `readOnly: true` would say the opposite of the note
+ * printed beside it — "registers no tool that spends or writes".
+ */
+const WRITING_TOOLS = [...SPENDING_TOOLS, 'weir_declare'] as const;
 
 /**
  * One sentence for what THIS process can do, built from the tools it registered.
@@ -1312,13 +1351,14 @@ export function describeTools(tools: readonly string[]): string {
   if (tools.some((t) => (SPENDING_TOOLS as readonly string[]).includes(t))) {
     can.push('buy, subscribe, price and publish with the bound key');
   }
+  if (has('weir_declare')) can.push('declare itself to the register, for its operator to counter-sign');
   if (can.length === 0) return 'weir.social as a tool: this process registered no tools.';
   const list = can.length === 1 ? can[0] : `${can.slice(0, -1).join(', ')}, and ${can[can.length - 1]}`;
   return `weir.social as a tool: ${list}. An agent holds the same account a person holds.`;
 }
 
 export function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery {
-  const readOnly = !tools.some((t) => (SPENDING_TOOLS as readonly string[]).includes(t));
+  const readOnly = !tools.some((t) => (WRITING_TOOLS as readonly string[]).includes(t));
   return {
     name: 'weir',
     description: describeTools(tools),
