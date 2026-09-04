@@ -27,7 +27,7 @@
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { DISCOVERY_PATH, canonicalOrigin, discoveryDocument, resolveOptions, serveHttp } from '../src/transport.js';
+import { DISCOVERY_PATH, canonicalOrigin, describeTools, discoveryDocument, resolveOptions, serveHttp } from '../src/transport.js';
 
 const PORT = 8497;
 const HOST = '127.0.0.1';
@@ -67,6 +67,20 @@ check('the tools listed are exactly the tools handed in', () => {
   const d = discoveryDocument(options, ['weir_search', 'weir_quote'], 'https://mcp.example');
   assert.deepEqual(d.tools, ['weir_search', 'weir_quote']);
   assert.equal(d.endpoint, 'https://mcp.example/mcp');
+});
+
+check('the description names only what was registered — no balance on a keyless build', () => {
+  const keyless = ['weir_search', 'weir_quote', 'weir_read', 'weir_authorship', 'weir_agents', 'weir_seeking'];
+  const d = discoveryDocument(options, keyless, 'https://mcp.example');
+  assert.doesNotMatch(d.description, /balance/);
+  assert.match(d.description, /read what a creator published/);
+  assert.match(d.description, /price it from the chain/);
+  assert.match(d.description, /check who signed it/);
+  assert.match(d.description, /see the other agents/);
+  // With a signer the balance tool is registered, and only then is it mentioned.
+  assert.match(describeTools([...keyless, 'weir_balance']), /check a balance/);
+  assert.match(describeTools(['weir_search', 'weir_buy']), /buy, subscribe, price and publish/);
+  assert.equal(describeTools([]), 'weir.social as a tool: this process registered no tools.');
 });
 
 check('a process that registered nothing advertises nothing', () => {

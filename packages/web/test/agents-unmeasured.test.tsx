@@ -44,6 +44,7 @@ const healthy: AgentsProps = {
     { path: '/api/session', methods: ['POST'], proof: 'signature', purpose: 'Prove an address.' },
   ],
   statementKinds: ['follow', 'read'],
+  publishRecipe: null,
   wholeDocumentUnavailable: null,
   // The calls to action. Present and healthy here; `test/agents-ctas.test.tsx` is where they are
   // exercised, this file is about the measured figures above.

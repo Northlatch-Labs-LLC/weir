@@ -924,3 +924,55 @@ describe('the manifest and the script agree about the key', () => {
     expect(cmd).toContain('process.env.SUI_PRIVATE_KEY');
   });
 });
+
+/*
+  The recipe's counting rule, pinned with a vector an agent in any language can reproduce.
+
+  "JavaScript string characters" was true and useless to a Python agent: `len()` counts code points,
+  a byte count is a third answer, and every ASCII example agrees under all three. The vector is
+  chosen so the three rules disagree, and it is read back out of both documents rather than retyped,
+  so a changed vector in one place fails here.
+*/
+describe('the publish digest counts UTF-16 code units, and both documents carry a vector that proves it', () => {
+  const VECTOR = { preview: 'hello', text: '🦞 sells' };
+  const utf16 = (s: string) => s.length;
+  const codePoints = (s: string) => [...s].length;
+  const bytes = (s: string) => Buffer.byteLength(s, 'utf8');
+  const digestCounting = (count: (s: string) => number) =>
+    createHash('sha256')
+      .update(`${count(VECTOR.preview)}:${VECTOR.preview}${count(VECTOR.text)}:${VECTOR.text}`)
+      .digest('hex');
+
+  it('the three counting rules disagree on the vector, so a wrong one cannot pass by luck', () => {
+    expect(utf16(VECTOR.text)).toBe(8);
+    expect(codePoints(VECTOR.text)).toBe(7);
+    expect(bytes(VECTOR.text)).toBe(10);
+    expect(new Set([digestCounting(utf16), digestCounting(codePoints), digestCounting(bytes)]).size).toBe(3);
+  });
+
+  it('the route counts UTF-16 code units and nothing else', () => {
+    expect(contentDigest(VECTOR.preview, VECTOR.text)).toBe(digestCounting(utf16));
+    expect(contentDigest(VECTOR.preview, VECTOR.text)).not.toBe(digestCounting(codePoints));
+    expect(contentDigest(VECTOR.preview, VECTOR.text)).not.toBe(digestCounting(bytes));
+  });
+
+  it('the manifest recipe names the rule and carries the vector, and its digest is the route’s', () => {
+    const recipe =
+      manifestFrom(inputs()).authentication.statements.find((s) => s.kind === 'publish')?.computed?.contentSha256 ?? '';
+    expect(recipe).toMatch(/UTF-16 code units/);
+    expect(recipe).toContain(`"${VECTOR.preview}"`);
+    expect(recipe).toContain(`"${VECTOR.text}"`);
+    const hex = /([0-9a-f]{64})/.exec(recipe)?.[1];
+    expect(hex).toBe(contentDigest(VECTOR.preview, VECTOR.text));
+  });
+
+  it('llms.txt carries the same vector, read out of the page rather than retyped', () => {
+    const llms = readFileSync(join(process.cwd(), 'public/llms.txt'), 'utf8');
+    expect(llms).toMatch(/UTF-16 code units/);
+    const m = /preview = "([^"]*)"\s+text = "([^"]*)"[\s\S]*?content-sha256 = ([0-9a-f]{64})/.exec(llms);
+    expect(m).not.toBeNull();
+    const [, preview = '', text = '', hex = ''] = m ?? [];
+    expect({ preview, text }).toEqual(VECTOR);
+    expect(contentDigest(preview, text)).toBe(hex);
+  });
+});

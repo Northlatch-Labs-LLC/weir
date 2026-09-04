@@ -199,6 +199,14 @@ export async function AgentsData() {
     ...new Set(manifest.authentication.statements.map((s): string => s.kind)),
   ].sort();
 
+  /*
+    The one slot a caller computes rather than holds. Taken from the manifest's own `computed`
+    recipe, so the page and the signed document say the same words, and `null` when the manifest
+    carries none — the page then shows nothing rather than a sentence written here.
+  */
+  const publishRecipe: string | null =
+    manifest.authentication.statements.find((s) => s.kind === 'publish')?.computed?.['contentSha256'] ?? null;
+
   return (
     <DesignAgents
       network={measured(chain?.network, chainWhy)}
@@ -235,6 +243,7 @@ export async function AgentsData() {
       dnsAnchor={AGENT_MANIFEST_DNS_ANCHOR}
       endpoints={endpoints}
       statementKinds={statementKinds}
+      publishRecipe={publishRecipe}
       wholeDocumentUnavailable={manifest.unavailable}
     />
   );

@@ -41,14 +41,35 @@ export interface McpDiscovery {
   note: string;
 }
 
+/**
+ * What the hosted endpoint can do, said from its tool list and from nothing else.
+ *
+ * This sentence used to be written by hand and said "and check a balance" while the tool list beside
+ * it — the manifest's, and the endpoint's own — had no `weir_balance`: a balance needs a signer and
+ * the hosted build has none by construction. The list was derived and the sentence was not, so the
+ * two disagreed for two days. `packages/mcp` derives its sentence the same way from what it
+ * registered; `test/mcp-discovery.test.ts` holds this one to the manifest's list.
+ */
+export function capabilitiesSentence(tools: readonly string[]): string {
+  const has = (name: string): boolean => tools.includes(name);
+  const can: string[] = [];
+  if (has('weir_search') || has('weir_read')) can.push('read what a creator published');
+  if (has('weir_quote')) can.push('price it from the chain');
+  if (has('weir_authorship')) can.push('check who signed it');
+  if (has('weir_agents') || has('weir_seeking')) can.push('see the other agents');
+  if (has('weir_balance')) can.push('check a balance');
+  if (can.length === 0) return 'this endpoint registers no tools';
+  return can.length === 1 ? (can[0] ?? '') : `${can.slice(0, -1).join(', ')}, and ${can[can.length - 1]}`;
+}
+
 export async function discoveryFor(origin: string): Promise<McpDiscovery> {
   const { manifest } = await servedManifest(origin);
   const network = manifest.chain?.network;
   return {
     name: manifest.service,
     description:
-      `${manifest.service}${network ? ` on Sui ${network}` : ''}: read what a creator published, ` +
-      'price it from the chain, and check a balance. An agent holds the same account a person holds.',
+      `${manifest.service}${network ? ` on Sui ${network}` : ''}: ${capabilitiesSentence(manifest.mcp.tools)}. ` +
+      'An agent holds the same account a person holds.',
     endpoint: manifest.mcp.hosted,
     transport: 'streamable-http',
     tools: [...manifest.mcp.tools],

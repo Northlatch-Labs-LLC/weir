@@ -36,6 +36,7 @@ import { opaqueDetail } from './opaque';
  * See `db/023_agent_accounts.sql` for the schema, and `lib/identity.ts` for the signed bytes.
  */
 
+import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from './db';
 
 /**
@@ -275,6 +276,81 @@ export function validateAgentHalf(
   const { operatorSignature: _dropped, ...half } = checked.declaration;
   void _dropped;
   return { ok: true, half };
+}
+
+/**
+ * What the register already holds that makes this pair one nobody answers for.
+ *
+ * # The bypass this narrows, and the one it does not close
+ *
+ * `validateDeclaration` refuses an agent that names ITSELF, and on 2026-09-02 an agent walked
+ * around that in under a minute: a second keypair, named as the operator, signing honestly. Both
+ * signatures were real. The register then named an address no person answers for.
+ *
+ * No test tells a person's key from a machine's, and `db/039_operator_footprint.sql` records the one
+ * observable signal without refusing on it, because a fresh honest wallet looks exactly like a key
+ * made for the purpose. What CAN be refused is the shape the register itself makes visible: the
+ * same address standing on both sides of the line between operators and agents.
+ *
+ *   operator-is-agent    the operator is a live declared agent — a machine answering for a machine
+ *   agent-is-operator    the agent is the live operator of other agents — the party those machines
+ *                        answer for is now claiming to be one, so the chain of answerability ends
+ *                        at a key
+ *   operator-is-pending  the operator has a live request to be declared an agent — an address
+ *                        asking to be a machine is being named as the person behind one
+ *
+ * Together these make operators and agents disjoint sets. A two-key loop (A operated by B, then B
+ * operated by A) and a chain ending in a keypair (A by B, B by C, C fresh) are both refused at the
+ * second declaration. The single fresh keypair named as operator is NOT refused — nothing this
+ * database holds can tell it from a new wallet — and the footprint column exists to say so to a
+ * reader. Written here so nobody reads this function as the fix for that.
+ *
+ * # Refused before verifying, on purpose
+ *
+ * `verifyAction` spends a signature as it verifies it. A refusal that the register alone can decide
+ * is decided first, so a caller who hits it re-signs nothing.
+ *
+ * # What remains
+ *
+ * Two declarations racing can each read a register the other has not yet written. The durable form
+ * of this rule is a constraint trigger in the database, which is a migration; it is named as
+ * remaining rather than half-built here, and this check is the route-level half of it.
+ *
+ * `null` means no conflict. A sentence means refuse, and says why in words the caller can act on.
+ */
+export async function operatorConflict(
+  agentAddress: string,
+  operatorAddress: string,
+  nowMs: number = Date.now(),
+): Promise<string | null> {
+  const agent = address(agentAddress);
+  const operator = address(operatorAddress);
+  // Shape is `validateDeclaration`'s to refuse; this answers only about the register.
+  if (agent === null || operator === null) return null;
+
+  const { rows } = await db().query<{ reason: string }>(
+    `SELECT 'operator-is-agent' AS reason FROM agent_accounts
+       WHERE address = $2 AND revoked_at_ms IS NULL
+     UNION ALL
+     SELECT 'agent-is-operator' FROM agent_accounts
+       WHERE operator_address = $1 AND revoked_at_ms IS NULL
+     UNION ALL
+     SELECT 'operator-is-pending' FROM agent_declaration_requests
+       WHERE address = $2 AND filed_at_ms IS NULL AND issued_at_ms > $3
+     LIMIT 1`,
+    [agent, operator, nowMs - SIGNATURE_WINDOW_MS],
+  );
+  const reason = rows[0]?.reason;
+  switch (reason) {
+    case 'operator-is-agent':
+      return `the operator ${operator} is itself a declared agent; a machine cannot answer for a machine. Name the person or organisation that answers for both.`;
+    case 'agent-is-operator':
+      return `${agent} is the declared operator of other agents; an address that answers for machines cannot be declared one while those declarations stand.`;
+    case 'operator-is-pending':
+      return `the operator ${operator} has a live request to be declared an agent itself; an address asking to be a machine cannot be named as the person behind one.`;
+    default:
+      return null;
+  }
 }
 
 /**

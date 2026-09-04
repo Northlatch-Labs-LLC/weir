@@ -684,6 +684,16 @@ export interface Discovery {
  * developer's machine and is plain HTTP; anything else reached from outside is not.
  */
 export declare function canonicalOrigin(options: ServerOptions, requestHost: string | undefined): string;
+/**
+ * One sentence for what THIS process can do, built from the tools it registered.
+ *
+ * The sentence used to be written once — "read what a creator published, price it from the chain,
+ * and check a balance" — while the tool list beside it was computed. On the hosted keyless build the
+ * two disagreed: no `weir_balance` is registered there, because a balance needs a signer and that
+ * server has none by construction, so the document promised a capability the endpoint refused.
+ * Derived from the same list as `tools`, a capability that is not registered is not mentioned.
+ */
+export declare function describeTools(tools: readonly string[]): string;
 export declare function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery;
 /**
  * Whether a request's `Origin` may drive this endpoint.

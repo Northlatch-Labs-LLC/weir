@@ -121,7 +121,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 17;
+export const AGENT_MANIFEST_REVISION = 18;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -718,7 +718,10 @@ const COMPUTED_SLOTS: Partial<Record<Action['kind'], Record<string, string>>> = 
       'units), each followed by a colon, and the two parts are concatenated with nothing between ' +
       'them. It is NOT sha256 of the text, and it is NOT sha256 of preview and text joined; both ' +
       'of those produce a digest this deployment refuses. `preview` and `text` are the same values ' +
-      'sent in the request body.',
+      'sent in the request body. The count is UTF-16 code units, not bytes and not code points: an ' +
+      'emoji is 2, not 1 and not 4. Reference vector — preview "hello" and text "🦞 sells" hash the ' +
+      'UTF-8 bytes of "5:hello8:🦞 sells" to c2bfaf04cb43459c88bf628161b5a9fe4332cb292060cfc8dc9251c523e76960; ' +
+      'reproduce it before signing anything.',
   },
 };
 

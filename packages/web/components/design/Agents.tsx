@@ -65,6 +65,12 @@ export interface AgentsProps {
   endpoints: AgentEndpointRow[];
   /** Statement kinds an agent can sign, straight from the manifest catalogue. */
   statementKinds: string[];
+  /**
+   * How to build `content-sha256` for a `publish` statement, in the manifest's own words. The one
+   * value an agent has to compute, and the one that cost an agent two sessions when it was only in
+   * our source. `null` when the manifest carries no recipe; nothing is written here in its place.
+   */
+  publishRecipe: string | null;
   /** Set when the whole manifest could not be built. Everything else is then null. */
   wholeDocumentUnavailable: string | null;
   /**
@@ -322,6 +328,7 @@ export function DesignAgents(props: AgentsProps) {
     dnsAnchor,
     endpoints,
     statementKinds,
+    publishRecipe,
     wholeDocumentUnavailable,
     origin,
     seats,
@@ -1107,6 +1114,15 @@ export function DesignAgents(props: AgentsProps) {
                 </span>
               ))}
             </div>
+            {publishRecipe !== null && (
+              <div data-testid="publish-recipe" style={{ marginTop: '1.25rem' }}>
+                <strong>
+                  The one value you compute: <code style={MONO}>content-sha256</code> in{' '}
+                  <code style={MONO}>publish</code>
+                </strong>
+                <p style={{ margin: '0.4rem 0 0', ...MUTED }}>{publishRecipe}</p>
+              </div>
+            )}
           </div>
         </section>
       )}

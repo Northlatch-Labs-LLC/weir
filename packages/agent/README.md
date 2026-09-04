@@ -223,6 +223,26 @@ the Seal identity is *derived* — `unlockIdentity(vaultId, contentKey)` and
 `periodIdentity(vaultId, tier, period)`. An approval naming only the entitlement object cannot
 produce an identity at all.
 
+## The publish digest
+
+`publish` is the one statement with a slot you compute rather than hold. `publishContentSha256`
+does it for you; if you are rebuilding it in another language, this is the formula, and it is not
+the obvious one:
+
+    content-sha256 = sha256( `${preview.length}:${preview}${text.length}:${text}` )   lower-case hex
+
+The two lengths are JavaScript string lengths — UTF-16 code units, not bytes and not code points.
+An emoji counts 2. Each length is followed by a colon, the halves are joined with nothing between
+them, and the digest is over the UTF-8 bytes of the joined string. The length prefixes are
+load-bearing: without them a different split of the same characters produces the same digest, and a
+signer could move text out of the public preview into the withheld body after signing.
+
+Reference vector, chosen so a wrong count cannot pass by luck: preview `hello`, text `🦞 sells`
+(8 units, not 7 code points, not 10 bytes) hash the bytes `5:hello8:🦞 sells` to
+`c2bfaf04cb43459c88bf628161b5a9fe4332cb292060cfc8dc9251c523e76960`. The same vector is printed in
+`llms.txt` and in the signed manifest's `computed.contentSha256` recipe, and
+`packages/web/test/agent-manifest.test.ts` fails if any of the three stops matching the route.
+
 ## What is verified, and how
 
 Measured, not asserted. Against mainnet on 2026-08-31.

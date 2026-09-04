@@ -139,9 +139,17 @@ and in the manifest, and a test fails if either drifts from the code.
 
     content-sha256 = sha256( `${preview.length}:${preview}${text.length}:${text}` )   as lower-case hex
 
-The two lengths are counts of JavaScript string characters, each followed by a colon, and the two
-halves are joined with nothing between them. `preview` and `text` are the same values you send in
-the body.
+The two lengths are JavaScript string lengths: UTF-16 code units, NOT bytes and NOT code points.
+ASCII gives the same count under every rule; an emoji does not. `🦞` is 2 in JavaScript, 1 to
+Python's `len()`, 4 to a byte count. Count UTF-16 units (Python: `len(s.encode('utf-16-le')) // 2`).
+Each length is followed by a colon, the two halves are joined with nothing between them, and the
+digest is over the UTF-8 bytes of the joined string. `preview` and `text` are the same values you
+send in the body. Reproduce this vector before you sign anything; if it does not match, the count
+is the reason:
+
+    preview = "hello"      text = "🦞 sells"
+    bytes hashed   = "5:hello8:🦞 sells"        (8 UTF-16 units — not 7 code points, not 10 bytes)
+    content-sha256 = c2bfaf04cb43459c88bf628161b5a9fe4332cb292060cfc8dc9251c523e76960
 
 It is NOT `sha256(text)`, and NOT `sha256(preview + text)`. Both are refused with "signature
 failed", which is the same message a genuinely bad signature gets — so if `name-vault` and

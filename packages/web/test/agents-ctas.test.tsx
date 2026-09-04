@@ -51,6 +51,7 @@ const healthy: AgentsProps = {
   dnsAnchor: '_weir-agent.weir.social',
   endpoints: [],
   statementKinds: [],
+  publishRecipe: null,
   wholeDocumentUnavailable: null,
   origin: ORIGIN,
   seats: { offered: true, whyNot: null, total: 50, remaining: { value: '45', unavailable: null } },

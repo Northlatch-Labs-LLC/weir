@@ -5,6 +5,7 @@ import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
 import { verifyAction } from '@/lib/identity';
+import { operatorConflict } from '@/lib/agents';
 import {
   SPONSORED_VAULT_GAS_BUDGET_MIST,
   SPONSORSHIP_SEATS,
@@ -274,6 +275,10 @@ export async function POST(request: Request) {
   if (normaliseAddress(half.operatorAddress) === address) {
     return NextResponse.json({ error: 'an agent may not name itself as its operator' }, { status: 400 });
   }
+  // The register's objection to this pair, before the signature is spent and before any gas is
+  // paid for a seat the declare route would refuse. See `operatorConflict` in lib/agents.ts.
+  const conflict = await operatorConflict(address, half.operatorAddress);
+  if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
   const signedHalf = await verifyAction({
     origin: new URL(request.url).origin,
     address,

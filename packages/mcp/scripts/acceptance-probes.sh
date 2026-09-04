@@ -16,7 +16,10 @@ JSON='content-type: application/json'
 ACCEPT='accept: application/json'
 INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"acceptance","version":"0"}}}'
 LIST='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
-READ_SET='weir_balance weir_quote weir_read weir_search'   # the read set; none of buy/subscribe/post/send/price
+# The read set: exactly what the keyless build registers, sorted. No balance — a balance needs a
+# signer and the hosted server has none — and none of buy/subscribe/post/send/price.
+# `test/hosting-artifacts.ts` derives this line from `registerTools` and fails if it drifts.
+READ_SET='weir_agents weir_authorship weir_quote weir_read weir_search weir_seeking'
 failures=0
 
 probe() { # <label> <expected-status> <curl args...>
