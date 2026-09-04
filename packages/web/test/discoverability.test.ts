@@ -47,6 +47,7 @@ vi.mock('../lib/agent-manifest', async (importOriginal) => {
 const { AI_CRAWLERS, CONTENT_SIGNAL, privatePaths, robotsText } = await import('../app/robots.txt/route');
 const { openPages, default: sitemap } = await import('../app/sitemap');
 const { REGISTRATION_TYPE, registrationFor } = await import('../app/.well-known/agent-registration.json/route');
+const { GET: securityTxtGET, SECURITY_TXT } = await import('../app/.well-known/security.txt/route');
 
 const ORIGIN = 'https://weir.social';
 
@@ -219,5 +220,46 @@ describe('/.well-known/agent-registration.json', () => {
     const r = await registrationFor('https://mirror.example');
     for (const s of r.services) expect(s.endpoint.startsWith('https://mirror.example/')).toBe(true);
     expect(r.image.startsWith('https://mirror.example/')).toBe(true);
+  });
+});
+
+describe('/.well-known/security.txt', () => {
+  it('is reachable while the door is closed, like every other well-known document', () => {
+    expect(ALWAYS_OPEN).toContain('/.well-known/');
+  });
+
+  it('carries the RFC 9116 fields a scanner requires', () => {
+    expect(SECURITY_TXT).toMatch(/^Contact: mailto:[^\s]+@weir\.social$/m);
+    expect(SECURITY_TXT).toMatch(/^Expires: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/m);
+  });
+
+  it('uses the abuse address already published in /legal/terms, not a new mailbox', () => {
+    // content/legal/terms.md §14.5 publishes abuse@weir.social; minting a fresh security@
+    // mailbox nobody watches yet would be a contact nobody answers.
+    expect(SECURITY_TXT).toContain('Contact: mailto:abuse@weir.social');
+  });
+
+  it('points at the human-readable policy page and names its own canonical URL', () => {
+    expect(SECURITY_TXT).toContain('Policy: https://weir.social/security');
+    expect(SECURITY_TXT).toContain('Canonical: https://weir.social/.well-known/security.txt');
+    expect(SECURITY_TXT).toContain('Preferred-Languages: en');
+  });
+
+  it('expires no more than a year out, per the RFC\'s own recommendation', () => {
+    const expires = /^Expires: (.+)$/m.exec(SECURITY_TXT)?.[1];
+    expect(expires).toBeDefined();
+    const expiresMs = new Date(expires!).getTime();
+    expect(Number.isNaN(expiresMs)).toBe(false);
+    const yearMs = 366 * 24 * 60 * 60 * 1000;
+    expect(expiresMs - Date.now()).toBeLessThanOrEqual(yearMs);
+    expect(expiresMs).toBeGreaterThan(Date.now());
+  });
+
+  it('serves as plain text, not JSON', async () => {
+    const res = await securityTxtGET(new Request('https://weir.social/.well-known/security.txt'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    const body = await res.text();
+    expect(body).toBe(SECURITY_TXT);
   });
 });
