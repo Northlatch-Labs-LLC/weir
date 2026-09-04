@@ -238,6 +238,12 @@ export async function AgentsData() {
       mcp={mcp}
       hostedTools={hostedTools}
       custody={manifest.custody}
+      /*
+        Passed straight through. The block is already the answer — derived from the gate's own list
+        and the live site_mode row inside `agentManifest()` — so anything computed here would be a
+        second opinion about a fact that has one source.
+      */
+      door={manifest.door}
       fee={fee}
       vaultPrice={vaultPrice}
       accountsOpen={

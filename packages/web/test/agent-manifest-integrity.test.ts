@@ -98,6 +98,12 @@ function inputs(overrides: Partial<ManifestInputs> = {}): ManifestInputs {
     seal: ok(SEAL),
     coinTypes: [`0x${'a7'.repeat(32)}::usdc::USDC`],
     platform: ok(PLATFORM),
+    /*
+      A closed door with a date, because that is the state this deployment is actually in and a
+      test that fed the open default would never render the half of the block a reader depends on.
+      Overridden where a case needs the other branch.
+    */
+    door: { peopleGated: true, peopleOnboardFrom: { atMs: 1_796_083_200_000, label: 'people onboard from' } },
     ...overrides,
   };
 }

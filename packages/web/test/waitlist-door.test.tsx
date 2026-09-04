@@ -103,13 +103,21 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('the link out of the waiting list is a door the proxy opens', () => {
-  const proxy = readFileSync(join(web, 'proxy.ts'), 'utf8');
+  /*
+    `ALWAYS_OPEN` moved from `proxy.ts` to `lib/front-door.ts` on 2026-09-04 — the agent manifest
+    reads it too now. Still read as source rather than imported, for the reason it always was:
+    importing the array would assert that a value equals itself.
+  */
+  const door = readFileSync(join(web, 'lib/front-door.ts'), 'utf8');
 
   /** The `ALWAYS_OPEN` array as written, read from the source rather than imported. */
   function alwaysOpen(): string[] {
-    const line = /const ALWAYS_OPEN = \[([^\]]*)\]/.exec(proxy);
-    expect(line, 'ALWAYS_OPEN not found in proxy.ts').not.toBeNull();
-    return [...(line?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+    const line = /const ALWAYS_OPEN = \[([\s\S]*?)\];/.exec(door);
+    expect(line, 'ALWAYS_OPEN not found in lib/front-door.ts').not.toBeNull();
+    // Comments are stripped first: several entries carry a block comment above them containing
+    // quoted paths, and those are prose about the list rather than members of it.
+    const bare = (line?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    return [...bare.matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
   }
 
   it('admits every path the waiting list links to', () => {

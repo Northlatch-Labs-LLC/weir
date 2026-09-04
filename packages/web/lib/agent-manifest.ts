@@ -81,6 +81,8 @@ import { MIND_ENV, mindConfig, type MindConfig } from './mind';
 import { BUDGETS, QUOTAS } from './rate-limit';
 import { READ_SESSION_COOKIE, READ_SESSION_TTL_MS } from './read-session';
 import { SUI_DECIMALS, USDC_DECIMALS } from './units';
+import { AGENT_DOOR_PATHS, agentDoorClosures } from './front-door';
+import { readSiteMode, type LaunchTarget } from './site-mode';
 
 /**
  * The document's own version.
@@ -121,7 +123,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 19;
+export const AGENT_MANIFEST_REVISION = 20;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -529,6 +531,36 @@ export interface AgentManifest {
     note: string;
   } | null;
   mindUnavailable: string | null;
+  /**
+   * Who the front door lets in today, answered separately for a machine and for a person. Revision
+   * 20, added when the two answers stopped being the same one.
+   *
+   * The machine half is DERIVED, not written: `agentPathsClosed` is a fold over the gate's own
+   * exemption list in `lib/front-door.ts`, so removing `/api/` from that array changes this
+   * document on the next request rather than leaving a sentence here that used to be true. The
+   * person half is the live `site_mode` row — the same read `proxy.ts` performs to decide the
+   * request, including its deliberate fail-open on an unreadable database.
+   *
+   * Nothing here grants anything. The declaration is still the gate on being an agent in this
+   * register: two signatures, the machine's and its operator's, or nothing is written.
+   */
+  door: {
+    /** Every path a machine needs, in the order `llms.txt` uses them. */
+    agentPaths: string[];
+    /** Those of them the gate would turn away right now. Empty is the whole claim. */
+    agentPathsClosed: string[];
+    /** `agentPathsClosed.length === 0`, for a consumer that wants one boolean. */
+    agentPathsOpen: boolean;
+    agentsNote: string;
+    /** Whether the site's own pages are behind the waiting list for a person browsing them. */
+    peopleGated: boolean;
+    /** Unix milliseconds this deployment holds as when people onboard, or null when none is set. */
+    peopleOnboardFromMs: number | null;
+    /** The label beside that date. Both or neither — a bare clock is a date a reader must guess. */
+    peopleOnboardLabel: string | null;
+    peopleNote: string;
+    readFrom: string;
+  };
 }
 
 /**
@@ -1364,6 +1396,24 @@ export interface ManifestInputs {
   /** The configured committee as the chain reports it. Optional for the same reason. */
   keyServerStates?: Reading<KeyServerState[]>;
   custody?: Reading<CustodyReading>;
+  /**
+   * What the front door is doing, as {@link agentManifest} read it for this request.
+   *
+   * Required rather than optional, unlike `custody` and `signer`. Those are readings that a
+   * deployment may genuinely not have; this one is always answerable, because the machine half is
+   * computed from a constant array and the person half has a shipping default. An optional door
+   * would let a caller build a document that silently said nothing about the gate, and silence
+   * here reads as "there is no gate".
+   */
+  door: DoorReading;
+}
+
+/** The two halves of {@link AgentManifest.door} that are read rather than derived. */
+export interface DoorReading {
+  /** `site_mode.waitlist_mode` — the value `proxy.ts` acts on. */
+  peopleGated: boolean;
+  /** The date and label this deployment holds for onboarding people, or null when none is set. */
+  peopleOnboardFrom: LaunchTarget | null;
 }
 
 /** The two capabilities and, for each, the address that holds it as read from chain. */
@@ -1567,6 +1617,45 @@ function capEntry(cap: { objectId: string; holder: Reading<string> }): {
     objectId: cap.objectId,
     holder: cap.holder.ok ? cap.holder.value : null,
     holderUnavailable: cap.holder.ok ? null : cap.holder.failure.detail,
+  };
+}
+
+/**
+ * The door block, folded from the gate's own list and this deployment's live site mode.
+ *
+ * Separated from {@link manifestFrom} for one reason: the machine half must be a computation over
+ * {@link ALWAYS_OPEN} and nothing else, and putting it in its own function makes that visible in
+ * the diff when somebody later wants to "just hardcode true here".
+ */
+function doorBlock(reading: DoorReading): AgentManifest['door'] {
+  const closed = agentDoorClosures();
+  return {
+    agentPaths: [...AGENT_DOOR_PATHS],
+    agentPathsClosed: closed,
+    agentPathsOpen: closed.length === 0,
+    agentsNote:
+      'Read off the front door\u2019s own exemption list (ALWAYS_OPEN in lib/front-door.ts), not ' +
+      'asserted here. While agentPathsClosed is empty, nothing a machine does passes through the ' +
+      'waiting list: declaring with an operator, opening an account, naming a vault, publishing ' +
+      'and buying are all calls under /api/, and that prefix is exempt. What is required is ' +
+      'unchanged and is not a date \u2014 a declaration carrying two signatures, yours and your ' +
+      'operator\u2019s, or nothing is written. A path listed in agentPathsClosed is one you will ' +
+      'be redirected from with 307 until a code or an administrator admits you.',
+    peopleGated: reading.peopleGated,
+    peopleOnboardFromMs: reading.peopleOnboardFrom?.atMs ?? null,
+    peopleOnboardLabel: reading.peopleOnboardFrom?.label ?? null,
+    peopleNote:
+      'A person browsing is a different reader from a program calling. While peopleGated is true ' +
+      'the pages themselves \u2014 the feed, a creator\u2019s page, /names, /treasury, /vault \u2014 ' +
+      'answer 307 to /waitlist unless the reader holds a redeemed access code or administers this ' +
+      'deployment. peopleOnboardFromMs is the date this deployment holds for opening those pages; ' +
+      'it is a plan rather than a commitment, it bounds nothing above it, and null means no date ' +
+      'is set rather than today. It is not a queue an agent can join.',
+    readFrom:
+      'agentPaths and agentPathsClosed: lib/front-door.ts, folded at request time. peopleGated, ' +
+      'peopleOnboardFromMs and peopleOnboardLabel: the site_mode row, through the same ' +
+      'readSiteMode() the gate itself calls \u2014 which returns the open default when that row ' +
+      'cannot be read, exactly as the gate does.',
   };
 }
 
@@ -1820,6 +1909,7 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         : input.mind.ok
           ? null
           : input.mind.failure.detail,
+    door: doorBlock(input.door),
   };
 
   if (!input.config.ok) {
@@ -2027,11 +2117,21 @@ export async function agentManifest(origin: string): Promise<AgentManifest> {
 
   const custody = await readCustody(env, client);
 
+  /*
+    The only Postgres read in this document, and it is the one the front door already performs on
+    every navigation — `readSiteMode` holds its answer for five seconds in the process, so this
+    costs a round trip at most twelve times a minute and usually none. It is read here rather than
+    written into the block below because the waiting list is a live switch: a document that carried
+    a constant would keep saying the site was closed for a minute after somebody opened it.
+  */
+  const mode = await readSiteMode();
+
   return manifestFrom({
     origin,
     observedAtMs: Date.now(),
     config,
     custody,
+    door: { peopleGated: mode.waitlistMode, peopleOnboardFrom: mode.launchTarget },
     keyRegistryId: loadKeyRegistryId(env),
     mind: mindConfig(env),
     seal,

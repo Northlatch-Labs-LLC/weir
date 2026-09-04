@@ -5,6 +5,7 @@ import { provenReaderFor } from '@/lib/read-session';
 import { isSiteAdmin } from '@/lib/site-admin';
 import { readSiteMode } from '@/lib/site-mode';
 import { passIsValid, passTokenFrom } from '@/lib/access-codes';
+import { isAlwaysOpen } from '@/lib/front-door';
 
 /**
  * The front door.
@@ -42,104 +43,20 @@ export const config = {
   ],
 };
 
-/** Reachable with the door closed. See the header for why each one is here. */
 /*
-  `/legal` is here for a different reason from the rest.
+  The exemption list itself lives in `lib/front-door.ts`, with the reasoning for every entry.
 
-  `/opengraph-image` is here for a third reason: it is not a page at all.
-
-  It is the picture a link preview fetches, requested by a scraper acting for somebody who was
-  *sent* a link and who will never sign in. Behind the gate it answered 307 to `/waitlist`, so every
-  link to weir.social pasted into a chat client rendered with no preview whatsoever — which reads as
-  a broken link rather than a closed one, and is a worse first impression than the closed page it is
-  guarding.
-
-  The matcher above already exempts every other asset by file extension. This one is a route only
-  because it is drawn per request instead of sitting in `public/`, and it discloses nothing the
-  waiting list does not: the product name and the public tagline. Both `og:image` and
-  `twitter:image` point at it.
+  It moved out of this file when it grew a second reader: `lib/agent-manifest.ts` publishes, in the
+  signed document, whether a machine's own paths are behind this gate — and it answers that by
+  folding over the same array rather than by carrying a sentence somebody typed. Re-exported here
+  because this is still where a reader looks for it.
 */
-/*
-  `/security` is here for a fourth reason: the waiting list links to it.
-
-  The closed page carries one outbound link — "Read the contracts" — and it points here. Without
-  this entry the proxy answered 307 back to `/waitlist`, so the only door out of the only reachable
-  page returned the reader to the page they were standing on.
-
-  It is safe to open because it assumes nothing about who is reading. `app/security/page.tsx`
-  resolves the viewer with `fold(..., () => null)` and passes `signedIn`/`myHandle` down; both props
-  are unused by the render, so a signed-out reader sees exactly what a signed-in one sees. Every
-  figure on it is read from chain state that is public regardless of the gate, and it makes the
-  ownership argument checkable — which is what the waiting list is asking to be believed.
-*/
-/*
-  `/.well-known/` is here for a fifth reason, and it is the only entry whose reader is not a person.
-
-  `/.well-known/weir-agent.json` is the agent manifest: the document from which a machine learns
-  our package ids, the exact statement it must sign, and which endpoints exist. Without this entry
-  the proxy answered 307 to `/waitlist` — **a discovery document that cannot be discovered**, and a
-  redirect an HTTP client reads as "this endpoint returns HTML", not as "come back later".
-
-  It is safe to open on the same reasoning as `/security`: nothing in the response assumes anything
-  about who is reading. Every value in it is already public — ids that appear in every event on
-  chain, statement shapes that any signed request reveals, endpoint paths already in the bundle —
-  and knowing them grants nothing, because every write still needs a fresh single-use signature.
-
-  The matcher above exempts static assets by extension, and `.json` is deliberately NOT in that
-  list, so this route is reached by the proxy rather than skipped by it. This entry is the fix.
-*/
-export const ALWAYS_OPEN = [
-  /*
-    The two files an agent reads before it decides anything, and the one it runs.
-
-    `llms.txt` is the discovery convention; `register-agent.mjs` is the registration path it names.
-    Both must be readable without an account, because an agent with no account is precisely who
-    they are for — gating them behind the thing they exist to obtain would be a closed loop.
-  */
-  '/llms.txt',
-  '/register-agent.mjs',
-  '/waitlist',
-  '/signin',
-  '/auth/callback',
-  '/api/',
-  '/legal',
-  '/opengraph-image',
-  '/security',
-  /*
-    `/agents` is open for the same reason `/security` is, and one more.
-
-    The reader is an operator deciding whether to point a program at us. They have no
-    account and are not asking for one — they are checking whether the ids, the fee and the
-    endpoints are what our manifest claims. Redirecting that reader to a waiting list
-    answers a question they did not ask, and the manifest at `/.well-known/` — which is
-    already open — points at this page as its human-readable companion. Opening one and
-    gating the other would publish a document whose own reference 307s.
-  */
-  '/agents',
-  '/.well-known/',
-  /*
-    `robots.txt` and `sitemap.xml` are read by crawlers, and a crawler behind the gate reads a 307
-    to `/waitlist` — which it records as "this site has no robots.txt", and then does whatever its
-    defaults say. The two files exist to say otherwise, so they are open.
-  */
-  '/robots.txt',
-  '/sitemap.xml',
-  /*
-    `/explore` — the creators directory — and `/explore/agents` beneath it are the two sides of
-    the funnel on the waiting-list page: "see what is here before you commit". A funnel whose
-    both doors 307 back to the page the visitor is standing on is a drawing of a funnel. Only the
-    directories are opened; a creator's own page (`/c/…`) and the feed stay behind the gate, and a
-    visitor who follows a card is returned here with `?from=` set so a code takes them onward.
-  */
-  '/explore',
-];
+export { ALWAYS_OPEN } from '@/lib/front-door';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (ALWAYS_OPEN.some((prefix) => pathname === prefix || pathname.startsWith(prefix))) {
-    return NextResponse.next();
-  }
+  if (isAlwaysOpen(pathname)) return NextResponse.next();
 
   const mode = await readSiteMode();
   if (!mode.waitlistMode) return NextResponse.next();

@@ -138,9 +138,15 @@ describe('the page is wired so it can actually be reached', () => {
       asking for one. If the closed-alpha proxy redirects it to the waiting list, the page exists
       and nobody outside can see it — and the manifest, which IS open, points at it.
     */
-    const proxy = read('proxy.ts');
-    const allowlist = proxy.slice(proxy.indexOf('const ALWAYS_OPEN'), proxy.indexOf('export async function proxy'));
+    /*
+      The list moved to `lib/front-door.ts` on 2026-09-04; the proxy imports it. Both halves are
+      asserted, because "the array names /agents" and "the gate reads that array" became two
+      claims when the file split.
+    */
+    const door = read('lib/front-door.ts');
+    const allowlist = door.slice(door.indexOf('export const ALWAYS_OPEN'), door.indexOf('export function isAlwaysOpen'));
     expect(allowlist).toContain("'/agents'");
+    expect(read('proxy.ts')).toContain("from '@/lib/front-door'");
   });
 
   it('appears in the footer both when the door is open and when it is shut', () => {

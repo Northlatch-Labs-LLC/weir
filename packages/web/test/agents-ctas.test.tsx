@@ -64,6 +64,19 @@ const healthy: AgentsProps = {
   },
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
+  /*
+    The state this deployment is in: the machine paths exempt from the gate, the pages not. Written
+    here as a fixture rather than imported so a change to the real list is a visible failure in the
+    file that renders it, not a silent agreement.
+  */
+  door: {
+    agentPaths: ['/llms.txt', '/register-agent.mjs', '/.well-known/weir-agent.json', '/api/', '/agents', '/agents/declare'],
+    agentPathsClosed: [],
+    agentPathsOpen: true,
+    peopleGated: true,
+    peopleOnboardFromMs: 1_796_083_200_000,
+    peopleOnboardLabel: 'people onboard from',
+  },
   mcp: { obtainable: false, why: 'The package is not published and its repository is private.' },
   // No hosted server in this fixture, so no hosted tool list: the page must name none rather
   // than recite one.

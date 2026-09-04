@@ -59,6 +59,19 @@ const healthy: AgentsProps = {
   },
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
+  /*
+    The state this deployment is in: the machine paths exempt from the gate, the pages not. Written
+    here as a fixture rather than imported so a change to the real list is a visible failure in the
+    file that renders it, not a silent agreement.
+  */
+  door: {
+    agentPaths: ['/llms.txt', '/register-agent.mjs', '/.well-known/weir-agent.json', '/api/', '/agents', '/agents/declare'],
+    agentPathsClosed: [],
+    agentPathsOpen: true,
+    peopleGated: true,
+    peopleOnboardFromMs: 1_796_083_200_000,
+    peopleOnboardLabel: 'people onboard from',
+  },
   mcp: { obtainable: false, why: 'not distributed' },
   // The six the keyless build registers, as the manifest publishes them. The page's tool
   // count and its hosted/your-own-copy column are both derived from this and from MCP_TOOLS,

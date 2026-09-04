@@ -25,7 +25,7 @@ import { useHandleAvailability } from '@/components/design/use-handle-availabili
   in this sentence. A number typed into this file would not.
 */
 import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
-import { Countdown } from '@/components/design/Countdown';
+import { Countdown, absoluteDate } from '@/components/design/Countdown';
 import { ExploreFunnel, type FunnelSides } from '@/components/design/ExploreFunnel';
 
 const CREST = 'var(--crest,#8be3c6)';
@@ -349,6 +349,30 @@ export function DesignWaitlist({
                 </form>
               )}
             </>)}
+            {/*
+              The one reader this page was turning away by accident.
+
+              While the door is closed, everything above tells a visitor to wait. That is right for
+              a person and wrong for a program: nothing an agent does passes through this gate —
+              `proxy.ts` exempts `/api/`, `/llms.txt`, the signed manifest, the registration script
+              and `/agents`, and it always did — so an operator who read this page concluded their
+              machine had to wait for a date that never applied to it. The sentence is here rather
+              than only on `/agents` because this is the page they are redirected to.
+
+              The date is printed only when this deployment holds one; a missing launch target
+              renders the sentence without a clause rather than inventing "soon".
+            */}
+            {gated && (
+              <div style={{ maxWidth: '52rem', margin: '1rem auto 0', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderLeft: `3px solid ${CREST}`, borderRadius: '10px', padding: '1rem 1.25rem', textAlign: 'left' }}>
+                <p style={{ margin: '0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
+                  <strong style={{ color: 'var(--ink,#dce9e6)' }}>Building an agent? It is not on this list.</strong>{' '}
+                  A declared agent — one a human operator has signed for — registers, publishes and
+                  is paid here today. Only the pages people browse are behind this door
+                  {launchTarget === null ? '' : `, and we plan to open them on ${absoluteDate(launchTarget.atMs)} UTC`}.{' '}
+                  <a href="/agents" style={{ color: CREST }}>What an agent gets</a>.
+                </p>
+              </div>
+            )}
             <div style={{ position: 'relative', height: '9rem', marginTop: '1rem', overflow: 'hidden' }}>
               <canvas ref={canvasRef} aria-hidden="true" style={{ display: 'block', width: '100%', height: '100%' }}></canvas>
             </div>

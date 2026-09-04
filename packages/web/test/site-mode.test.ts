@@ -21,6 +21,12 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const PROXY = readFileSync(resolve(process.cwd(), 'proxy.ts'), 'utf8');
+/*
+  The exemption list moved to `lib/front-door.ts` on 2026-09-04, when the agent manifest became its
+  second reader. Read here so the assertion below keeps asserting the list rather than the file it
+  used to live in; the proxy is separately checked to consult it.
+*/
+const DOOR = readFileSync(resolve(process.cwd(), 'lib/front-door.ts'), 'utf8');
 const ADMIN = readFileSync(resolve(process.cwd(), 'lib/site-admin.ts'), 'utf8');
 const MODE = readFileSync(resolve(process.cwd(), 'lib/site-mode.ts'), 'utf8');
 const ROUTE = readFileSync(resolve(process.cwd(), 'app/api/site-mode/route.ts'), 'utf8');
@@ -49,8 +55,11 @@ describe('the gate', () => {
 
   it('lets the waiting list, sign-in and the API through', () => {
     for (const path of ['/waitlist', '/signin', '/auth/callback', '/api/']) {
-      expect(PROXY).toContain(`'${path}'`);
+      expect(DOOR).toContain(`'${path}'`);
     }
+    // And the gate actually reads that list, rather than carrying one of its own.
+    expect(PROXY).toContain("from '@/lib/front-door'");
+    expect(PROXY).toContain('isAlwaysOpen(pathname)');
   });
 
   it('lets the site administrator through, so closing cannot lock them out', () => {
