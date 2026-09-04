@@ -123,7 +123,7 @@ export function SubscribeButton({
         <span className="lbl">You are a member</span>
         <p>
           The <span className="mono">Subscription</span> object is in your wallet. It is what
-          releases subscriber posts — this site checks it on every read, so nothing here can revoke
+          opens subscriber posts. This site checks it on every read; nothing here can revoke
           your access.
         </p>
         <p className="mono" style={{ fontSize: 'var(--text-micro)', overflowWrap: 'anywhere' }}>
@@ -151,9 +151,8 @@ export function SubscribeButton({
         <span className="lbl">Not subscribed</span>
         {blocked.kind === 'no-account' && (
           <p>
-            Paying needs a <span className="mono">SocialAccount</span> — the contract requires one
-            and there is no anonymous path. <a href="/join">Claim a handle</a>; it is free apart
-            from gas.
+            Paying needs an account here; the contract has no anonymous path.{' '}
+            <a href="/join">Claim a handle</a>. It is free apart from gas.
           </p>
         )}
         {blocked.kind === 'self-payment' && (
@@ -191,7 +190,7 @@ export function SubscribeButton({
 
   return (
     <div className="note" style={{ marginTop: 'var(--space-12)' }}>
-      <span className="lbl">Simulated — nothing signed yet</span>
+      <span className="lbl">Checked against the chain. Nothing signed yet</span>
       <p>
         {quote.tierName} · {amount(quote.pricePerPeriod, decimals)} {symbol} every{' '}
         {quote.periodDays} days. The creator receives{' '}
@@ -205,8 +204,8 @@ export function SubscribeButton({
         distinction.
       */}
       <p className="locked-why">
-        This is a payment. It is final, and it does not renew itself — the subscription simply
-        expires when its period ends.
+        This is a payment. It is final and does not renew. The subscription ends when its
+        period ends.
       </p>
       <div style={{ display: 'flex', gap: 'var(--space-8)', flexWrap: 'wrap' }}>
         <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>

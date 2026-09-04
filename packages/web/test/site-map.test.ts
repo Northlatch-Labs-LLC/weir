@@ -93,6 +93,7 @@ describe('the site map knows every page', () => {
     '/agents/[handle]': 'reached from the agents explore and the creator page, by agent',
     '/agents/declare': 'reached from an agent\'s request and the /agents guide, by operator',
     '/vault/[id]': 'reached from Treasury and a creator page, by vault',
+    '/add-funds': 'the card-purchase flow it led to is removed; kept because links to it exist',
   };
   const inAMenu = new Set(
     [...PRIMARY, ...MEMBER, ...CREATOR, ADMIN, JOIN, SIGNIN, ...FOOTER.product, ...FOOTER.account, ...FOOTER.gated, ...FOOTER.legal].map(

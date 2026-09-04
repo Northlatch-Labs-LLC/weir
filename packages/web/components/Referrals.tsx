@@ -22,17 +22,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
-import { formatUnits, USDC_DECIMALS } from '@/lib/units';
+import { formatUnits } from '@/lib/units';
 
 interface Referred { handle: string; owner: string; createdAtMs: number }
 
+/**
+ * A referrer's cut, grouped by the vault's own coin.
+ *
+ * Not one number: a referrer can be credited from vaults denominated in different coins, and a
+ * raw-unit sum across coins is not a figure anything can be scaled by. `decimals` and `symbol` are
+ * `null` when the vault behind this cut has no named profile yet — the amount is real but cannot
+ * be shown at its right scale, so it is reported rather than guessed at USDC's.
+ */
+interface CoinEarning { coinType: string | null; symbol: string | null; decimals: number | null; amount: string }
+
 type Load =
   | { state: 'idle' | 'loading' }
-  | { state: 'ready'; referred: Referred[]; earned: string; payments: number; truncated: boolean }
+  | { state: 'ready'; referred: Referred[]; earned: CoinEarning[]; payments: number; truncated: boolean }
   | { state: 'unmeasured'; detail: string };
 
-const DECIMALS = USDC_DECIMALS;
-const units = (raw: string) => formatUnits(BigInt(raw), USDC_DECIMALS);
+/** One coin's cut, formatted at its own decimals — or flagged unmeasured when they could not be read. */
+function formatEarning(e: CoinEarning): string {
+  if (e.decimals === null) return 'not measured';
+  const amount = formatUnits(BigInt(e.amount), e.decimals);
+  return e.symbol === null || e.symbol === '' ? amount : `${amount} ${e.symbol}`;
+}
 
 export function Referrals() {
   const { signer } = useSigner();
@@ -45,7 +59,7 @@ export function Referrals() {
     try {
       const r = await fetch(`/api/referrals?address=${encodeURIComponent(address)}`);
       const b = (await r.json()) as {
-        referred?: Referred[]; earned?: string; payments?: number; truncated?: boolean; error?: string;
+        referred?: Referred[]; earned?: CoinEarning[]; payments?: number; truncated?: boolean; error?: string;
       };
       if (b.referred === undefined || b.earned === undefined) {
         setLoad({ state: 'unmeasured', detail: b.error ?? `the chain returned ${r.status}` });
@@ -73,7 +87,7 @@ export function Referrals() {
       <div className="panel">
         <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
           Your referral link is your address. Sign in to see it, along with who has used it and what
-          it has paid you — both read from chain events rather than from a table this server keeps.
+          it has paid you. Both are read from chain events, not from a table this server keeps.
         </p>
         <SignIn />
         {error !== null && <p className="unmeasured">{error}</p>}
@@ -106,8 +120,8 @@ export function Referrals() {
           </button>
         </div>
         <p className="section-note" style={{ marginBottom: 0 }}>
-          Whoever registers through this is attributed to you permanently — the referrer is written
-          into their account at creation and the protocol has no setter for it.
+          Whoever registers through this is attributed to you permanently. The referrer is written
+          into their account when it opens, and the contract has no way to change it.
         </p>
       </div>
 
@@ -116,7 +130,7 @@ export function Referrals() {
           <span className="lbl">Not measured</span>
           <p>
             Your referrals could not be read ({load.detail}). This is <strong>not</strong> zero
-            referrals — it is an unanswered question.
+            referrals. It is an unanswered question.
           </p>
         </div>
       )}
@@ -134,8 +148,10 @@ export function Referrals() {
           >
             <div className="stat">
               <span className="k">Earned</span>
-              <span className="v" style={{ color: BigInt(load.earned) > 0n ? 'var(--text-prize)' : undefined }}>
-                {units(load.earned)}
+              <span className="v" style={{ color: load.earned.length > 0 ? 'var(--text-prize)' : undefined }}>
+                {load.earned.length === 0
+                  ? '0'
+                  : load.earned.map((e) => formatEarning(e)).join(', ')}
               </span>
             </div>
             <div className="stat">
@@ -157,7 +173,7 @@ export function Referrals() {
 
           {load.referred.length === 0 ? (
             <div className="card empty" style={{ marginTop: 'var(--space-16)' }}>
-              Nobody has registered through your link yet. This is a measured zero — the event log
+              Nobody has registered through your link yet. This is a measured zero; the event log
               was read.
             </div>
           ) : (

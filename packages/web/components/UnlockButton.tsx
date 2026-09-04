@@ -127,7 +127,7 @@ export function UnlockButton({
           <a href={`https://suiscan.xyz/mainnet/tx/${digest}`} target="_blank" rel="noreferrer">
             <span className="mono">{digest.slice(0, 14)}…</span>
           </a>{' '}
-          Reload to read it — entitlement is decided on the server, from the objects you now own.
+          Reload to read it. The page checks what your wallet holds on every load.
         </p>
       </div>
     );
@@ -153,14 +153,14 @@ export function UnlockButton({
       <p className="unmeasured" style={{ margin: 0 }}>
         {blocked.kind === 'no-account' ? (
           <>
-            Buying needs an account — free apart from gas. <a href="/join">Claim a handle</a>.
+            Buying needs an account. It is free apart from gas. <a href="/join">Claim a handle</a>.
           </>
         ) : blocked.kind === 'self-payment' ? (
           'This is your own vault, so there is nothing to buy.'
         ) : blocked.kind === 'insufficient-balance' ? (
           `Not enough to cover ${priceLabel}.`
         ) : blocked.kind === 'price-moved' ? (
-          `The creator changed the price since this page was loaded: it is now ${blocked.live} units, not ${blocked.listed}. Reload to see the current price before buying.`
+          'The price changed after this page loaded. Reload to see the current price before buying.'
         ) : (
           'This post is not currently for sale.'
         )}
@@ -171,7 +171,7 @@ export function UnlockButton({
   if (quote !== null) {
     return (
       <div className="note">
-        <span className="lbl">Simulated — nothing signed yet</span>
+        <span className="lbl">Checked against the chain. Nothing signed yet</span>
         <p>
           {priceLabel} for this post, permanently. The creator receives{' '}
           <strong>{quote.creatorReceives}</strong> and the platform{' '}

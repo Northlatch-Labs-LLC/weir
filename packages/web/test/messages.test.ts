@@ -99,8 +99,8 @@ describe('what the sender is told before pressing Send', () => {
      * A badge is a claim. "Not encrypted" asserts the message will go in plaintext, which is a
      * different statement from "we do not know", and only one of them is true here.
      */
-    expect(source).toMatch(/Not measured — .*key could not be read/);
-    expect(source).toContain('Nothing will be sent until it can');
+    expect(source).toMatch(/Not measured: .*key could not be read/);
+    expect(source).toContain('Nothing is sent until it can be');
   });
 
   it('names plaintext explicitly when the recipient has published no key', () => {

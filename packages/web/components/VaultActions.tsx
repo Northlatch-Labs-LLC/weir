@@ -34,7 +34,7 @@ export function VaultActions({ vaultId, known }: { vaultId: string; known: boole
       <div className="card">
         <span className="k">SUPPORT THIS VAULT</span>
         <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-12)' }}>
-          Sign in to deposit, see your position and withdraw it. Your deposit stays yours — this is
+          Sign in to deposit, see your position and withdraw it. Your deposit stays yours; this is
           the one place on the platform where the money comes back.
         </p>
         <SignIn />

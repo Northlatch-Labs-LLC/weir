@@ -128,8 +128,7 @@ export function TipButton({
     return (
       <div className="panel">
         <p className="locked-why" style={{ marginTop: 0 }}>
-          Send this creator any amount, once. It buys nothing and expires never — it is simply
-          theirs.
+          Send this creator any amount, once. It buys nothing and it is simply theirs.
         </p>
         <SignIn compact />
       </div>
@@ -184,7 +183,7 @@ export function TipButton({
         <p className="unmeasured" style={{ marginBottom: 0 }}>
           {blocked.kind === 'no-account' ? (
             <>
-              Tipping needs an account — free apart from gas. <a href="/join">Claim a handle</a>.
+              Tipping needs an account. It is free apart from gas. <a href="/join">Claim a handle</a>.
             </>
           ) : blocked.kind === 'self-payment' ? (
             'This is your own vault.'
@@ -198,7 +197,7 @@ export function TipButton({
 
       {quote !== null ? (
         <div className="note" style={{ marginTop: 'var(--space-12)' }}>
-          <span className="lbl">Simulated — nothing signed yet</span>
+          <span className="lbl">Checked against the chain. Nothing signed yet</span>
           <p>
             The creator receives <strong>{quote.creatorReceives}</strong> and the platform{' '}
             <strong>{quote.platformReceives}</strong>.

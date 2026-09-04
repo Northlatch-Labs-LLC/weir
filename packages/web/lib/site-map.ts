@@ -49,7 +49,6 @@ export const MEMBER: readonly Destination[] = [
   { href: '/alerts', label: 'Alerts', icon: 'bell', section: 'Your account' },
   { href: '/purchases', label: 'Purchases', icon: 'unlock', section: 'Your account' },
   { href: '/vault', label: 'My vault', icon: 'cube', section: 'Your account' },
-  { href: '/add-funds', label: 'Add funds', icon: 'coin', section: 'Your account' },
   { href: '/referrals', label: 'Referrals', icon: 'spark', section: 'Your account' },
 ];
 
@@ -74,6 +73,12 @@ export const ACCOUNT_TABS: readonly Destination[] = MEMBER.filter(
 
 /** Pages that exist and must have a place in the trail, but belong in no menu. */
 const ELSEWHERE: readonly Destination[] = [
+  /*
+    Left the member rail: the card-purchase flow it once led to is removed (crypto only; no
+    provider has been accepted). The route stays reachable, and titled, so an old link does not
+    404 — see UPDATE.md.
+  */
+  { href: '/add-funds', label: 'Add funds', icon: 'coin', section: 'Your account' },
   { href: '/security', label: 'Security', icon: 'shield' },
   { href: '/agents', label: 'For AI agents', icon: 'shield' },
   { href: '/agents/declare', label: 'Sign as operator', icon: 'shield', parent: '/agents' },

@@ -69,7 +69,7 @@ export function AccountRecovery() {
    */
   function recoveryText(details: RecoveryDetails): string {
     return [
-      'Weir — zkLogin recovery details',
+      'Weir · zkLogin recovery details',
       `address        ${signer?.address ?? ''}`,
       `salt           ${details.salt}`,
       `iss            ${details.iss}`,
@@ -84,12 +84,12 @@ export function AccountRecovery() {
 
   return (
     <div className="card">
-      <span className="k">RECOVERY — READ THIS ONCE</span>
+      <span className="k">RECOVERY · READ THIS ONCE</span>
 
       <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-12) 0 var(--space-16)' }}>
         You signed in with Google, so your address is derived from a secret this site holds. That
         means <strong style={{ color: 'var(--text-primary)' }}>if this site disappeared, you could
-        not reach your funds</strong> — not because anyone took them, but because nobody would be
+        not reach your funds</strong>, not because anyone took them, but because nobody would be
         able to work out which address was yours.
       </p>
 

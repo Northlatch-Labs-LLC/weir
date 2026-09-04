@@ -80,7 +80,7 @@ describe('StudioComposer', () => {
     mockCreator({ stage: 'ready', vaults: [vault(null)] });
     render(<StudioComposer />);
 
-    await waitFor(() => expect(screen.getByText('No published vault')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No named vault')).toBeTruthy());
     expect(screen.queryByLabelText(/^TITLE$/)).toBeNull();
   });
 
@@ -91,7 +91,7 @@ describe('StudioComposer', () => {
 
     await waitFor(() => expect(screen.getByText('Not measured')).toBeTruthy());
     // The distinction that matters: this must not send somebody to open a second vault.
-    expect(screen.queryByText('No published vault')).toBeNull();
+    expect(screen.queryByText('No named vault')).toBeNull();
     expect(screen.queryByLabelText(/^TITLE$/)).toBeNull();
   });
 });

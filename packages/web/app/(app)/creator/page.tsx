@@ -73,7 +73,7 @@ export default async function CreatorPage() {
         kicker="Creator studio"
         title="Open a vault, and set what a subscription"
         accent="costs."
-        lede="Open your creator vault, set your membership tiers, and start earning. Three steps, in the order the contract requires them."
+        lede="Open your creator vault and set what a membership costs. Three steps, in the order the contract requires them."
       />
       <PageTabs label="Creator studio" items={CREATOR} />
       {mine !== null && mine.handle !== null && mine.decimals !== null && (
@@ -81,7 +81,7 @@ export default async function CreatorPage() {
           <h2 id="perks-title" style={{ marginTop: 0 }}>What a tip also gets them</h2>
           <p style={{ color: 'var(--text-secondary)' }}>
             A tip reaches you whether or not you offer anything for it. This is where you say what
-            else it brings — a message you answer first, early access, a name in the credits.
+            else it brings: a message you answer first, early access, a name in the credits.
             Thresholds are lifetime totals: what somebody has given you in all, not this month.
           </p>
           <PerksEditor handle={mine.handle} symbol={mine.symbol} decimals={mine.decimals} />
@@ -123,7 +123,7 @@ export default async function CreatorPage() {
             ),
             (failure) => (
               <div data-reveal className="note crit">
-                <span className="lbl">Could not read this — {failure.kind}</span>
+                <span className="lbl">Could not read this: {failure.kind}</span>
                 <p>
                   The platform&rsquo;s live terms could not be read, so this page will not tell you
                   what a vault costs. {failure.detail} A fee quoted from a stale constant is how
@@ -135,8 +135,8 @@ export default async function CreatorPage() {
 
           <p style={{ color: 'var(--text-secondary)', marginBottom: 0, marginTop: 'var(--space-16)' }}>
             The rate above is what a vault opened <em>today</em> would carry. Your own vault keeps
-            the rate it was opened with, permanently — that is the point of the snapshot explained
-            below, and it is the reason opening early is worth something.
+            the rate it was opened with, permanently. That is the point of the snapshot explained
+            below, and the reason opening early is worth something.
           </p>
         </div>
 
@@ -148,7 +148,7 @@ export default async function CreatorPage() {
           <span className="lbl">The fee is fixed into your vault, not looked up</span>
           <p>
             The fee rate is written into your vault the day it is created and never read from the
-            platform again. Weir cannot raise the rate on a vault that already exists — a fee{' '}
+            platform again. Weir cannot raise the rate on a vault that already exists. A fee{' '}
             <em>cut</em> reaches you only if you choose to adopt it. That is the whole reason the
             number is copied rather than looked up.
           </p>

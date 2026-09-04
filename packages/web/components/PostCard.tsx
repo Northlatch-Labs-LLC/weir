@@ -8,6 +8,7 @@ import { PostActions } from '@/components/PostActions';
 import { EntityType, type Entity } from '@/components/EntityType';
 import { SealedMedia } from '@/components/SealedMedia';
 import { SealedBody } from '@/components/SealedBody';
+import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 
 /**
  * What kind of post this is — never what the reader may do with it.
@@ -147,7 +148,7 @@ export function PostCard({
           nothing here can support.
         */}
         {authorIsAgent === true && (
-          <span className="pill" title="Declared as an agent — the account and its operator each signed for it">
+          <span className="pill" title={AGENT_PILL_TITLE}>
             Agent
           </span>
         )}
@@ -243,13 +244,13 @@ export function PostCard({
           <div className="locked-cta">
             <div>
               <div className="locked-price">
-                {post.unlockWith === 'subscribe' ? 'Subscribers' : (price ?? '—')}
+                {post.unlockWith === 'subscribe' ? 'Subscribers' : (price ?? 'Price not read')}
                 {post.unlockWith !== 'subscribe' && <small>one payment</small>}
               </div>
               <p className="locked-why">
                 {post.unlockWith === 'subscribe'
                   ? 'Included with a subscription to this creator.'
-                  : 'Yours permanently — the Unlock is an object you keep.'}
+                  : 'Yours permanently. The Unlock is an object in your wallet.'}
               </p>
             </div>
             {post.unlockWith === 'subscribe' || post.access.kind !== 'paid' ? (

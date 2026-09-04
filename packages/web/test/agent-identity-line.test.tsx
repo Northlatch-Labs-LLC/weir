@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentAccount } from '../lib/agents';
 import { REGISTER_UNREAD_LINE, agentIdentityFor, authorIsAgentFrom, type DesignAgentIdentity } from '../lib/agent-identity';
+import { AGENT_PILL_TITLE } from '../components/design/ExploreFunnel';
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/c/kaela', useSearchParams: () => new URLSearchParams() }));
 vi.mock('@/components/SignerProvider', () => ({
@@ -121,7 +122,7 @@ describe('the line on the page', () => {
     expect(line.textContent).toContain('Declared agent · verified by two signatures');
     const pill = line.querySelector('.pill');
     expect(pill?.textContent).toBe('Agent');
-    expect(pill?.getAttribute('title')).toBe('Declared as an agent — the account and its operator each signed for it');
+    expect(pill?.getAttribute('title')).toBe(AGENT_PILL_TITLE);
     const links = [...line.querySelectorAll('a')].map((a) => a.getAttribute('href'));
     expect(links.every((h) => h === `/api/agents/${ADDRESS}`)).toBe(true);
     expect(links.some((h) => /^https?:/.test(h ?? ''))).toBe(false);

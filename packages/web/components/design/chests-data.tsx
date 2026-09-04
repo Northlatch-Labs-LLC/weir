@@ -69,7 +69,7 @@ export async function ChestsData({
       ? potsReading.value.truncated
         ? 'more settled payments than one page can total'
         : ''
-      : `${potsReading.failure.kind} — ${potsReading.failure.source}`;
+      : `${potsReading.failure.kind}: ${potsReading.failure.source}`;
   /* A truncated walk holds subtotals. They are not totals and are not shown as any. */
   const potsUsable = pots !== null && !pots.truncated;
 
@@ -149,7 +149,7 @@ export async function ChestsData({
         potSize: '1.0625rem',
         potStyle: 'normal',
         potColor: SAND,
-        potNote: 'no tips yet — the log was read',
+        potNote: 'no tips yet; the log was read',
       };
     }
     // A total exists and cannot be priced. Refused rather than shown against a guessed scale.
@@ -177,7 +177,7 @@ export async function ChestsData({
     note:
       profile.vaultId === null
         ? 'This creator has not opened a vault, so there is nowhere for a chest to settle yet.'
-        : 'It buys no access. Any perks are the creator\u2019s own promise, kept by them.',
+        : "It buys no access. Any perks are the creator's own promise, kept by them.",
     noteColor: profile.vaultId === null ? SAND : DIM,
     giveLabel: signedIn ? `Give to @${profile.handle}` : 'Sign in to give',
     href: signedIn ? `/c/${profile.handle}` : `/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`,

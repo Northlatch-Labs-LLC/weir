@@ -151,7 +151,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
       <div className="note crit">
         <span className="lbl">Not measured</span>
         <p>
-          The vault could not be read ({load.detail}). This is <strong>not</strong> a zero balance —
+          The vault could not be read ({load.detail}). This is <strong>not</strong> a zero balance:
           nothing is shown and nothing is offered, because a page that displayed 0 here would be
           telling you your deposit is gone.
         </p>
@@ -195,7 +195,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
         <span className="k">YOUR DEPOSIT</span>
         <div style={{ display: 'grid', gap: 'var(--space-20)', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginTop: 'var(--space-12)' }}>
           <div className="stat">
-            <span className="k">Principal — yours</span>
+            <span className="k">Principal (yours)</span>
             <span className="v" style={{ color: principal > 0n ? 'var(--text-prize)' : undefined }}>
               {sui(position?.principalMist ?? '0')}
             </span>
@@ -224,7 +224,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
           <span className="k">TAKE IT BACK</span>
           <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-10) 0 var(--space-16)' }}>
             In full, at any time, with no waiting period and no approval. If the vault&rsquo;s liquid
-            balance is short, the contract unwinds delegated stake in this same transaction — the
+            balance is short, the contract unwinds delegated stake in this same transaction. The
             forgone yield is the creator&rsquo;s loss, never yours.
           </p>
 
@@ -239,7 +239,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
             </div>
           ) : quote?.what === 'withdraw' ? (
             <div className="note">
-              <span className="lbl">Simulated — nothing signed yet</span>
+              <span className="lbl">Checked against the chain. Nothing signed yet</span>
               <p>Gas <strong>{sui(quote.gasMist)} SUI</strong>. The principal returns to this address.</p>
               <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
                 <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
@@ -253,11 +253,11 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
               <input
                 className="comment-input" style={{ maxWidth: 220 }} inputMode="decimal"
                 aria-label="Amount of SUI to withdraw"
-                placeholder={`All of it — ${sui(position?.principalMist ?? '0')} SUI`}
+                placeholder={`All of it: ${sui(position?.principalMist ?? '0')} SUI`}
                 value={amount} onChange={(e) => setAmount(e.target.value)}
               />
               <button className="btn" type="button" disabled={busy} onClick={() => void simulate('withdraw')}>
-                {busy ? 'Simulating…' : 'Withdraw'}
+                {busy ? 'Checking…' : 'Withdraw'}
               </button>
             </div>
           )}
@@ -273,7 +273,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
           </p>
           {quote?.what === 'rebate' ? (
             <div className="note">
-              <span className="lbl">Simulated — nothing signed yet</span>
+              <span className="lbl">Checked against the chain. Nothing signed yet</span>
               <p>Gas <strong>{sui(quote.gasMist)} SUI</strong>.</p>
               <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
                 <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
@@ -284,7 +284,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
             </div>
           ) : (
             <button className="btn" type="button" disabled={busy} onClick={() => void simulate('rebate')}>
-              {busy ? 'Simulating…' : 'Claim my share'}
+              {busy ? 'Checking…' : 'Claim my share'}
             </button>
           )}
         </div>

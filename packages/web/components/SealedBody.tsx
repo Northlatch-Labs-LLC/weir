@@ -267,7 +267,7 @@ export function SealedBody({
       {state.phase === 'loading'
         ? 'Opening this post…'
         : state.phase === 'settling'
-          ? 'Your purchase is still settling on chain — opening this shortly'
+          ? 'Your purchase is still settling on chain. It opens in a moment.'
           : state.phase === 'needs-signer'
             ? 'Sign in to read this'
             : state.reason}

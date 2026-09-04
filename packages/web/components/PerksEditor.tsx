@@ -232,7 +232,7 @@ export function PerksEditor({
 
       {loaded && drafts.length === 0 && (
         <p className="section-note">
-          Nothing yet. A tip already reaches you — this is where you say what, if anything, it also gets them.
+          Nothing yet. A tip already reaches you: this is where you say what, if anything, it also gets them.
         </p>
       )}
 
@@ -270,7 +270,7 @@ export function PerksEditor({
       <div className="note warn perks-edit__honest">
         <span className="lbl">This part is not enforced by the contract</span>
         <p>
-          A tip settles on chain and cannot be reversed — but it mints no object, so nothing here can
+          A tip settles on chain and cannot be reversed, but it mints no object, so nothing here can
           hold you to what you promise. Your page says so beside these, in those words. Everything
           else on Weir is enforced by code; this is your word, and we would rather label it than let
           a reader assume otherwise.

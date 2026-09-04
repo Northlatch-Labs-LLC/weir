@@ -52,29 +52,29 @@ export async function VaultData({
 
   if (viewer === null) {
     return shell(
-      [{ k: 'Session', v: 'Not signed in. Sign in to see what you have pooled.' }],
+      [{ k: 'Session', v: 'Not signed in. Sign in to see your support vault.' }],
       'No object read',
-      '—',
+      'none',
     );
   }
 
   const caps = await findStakeCaps(viewer);
   if (!caps.ok) {
     return shell(
-      [{ k: 'Not measured', v: `${caps.failure.kind} — ${caps.failure.detail}` }],
+      [{ k: 'Not measured', v: `${caps.failure.kind}: ${caps.failure.detail}` }],
       'Could not look for your vault',
-      '—',
+      'none',
     );
   }
   const first = caps.value[0];
   if (first === undefined) {
     return shell(
       [
-        { k: 'Vaults owned', v: '0 — we looked, and this address holds no StakeCap.' },
+        { k: 'Vaults owned', v: '0. We looked, and this address holds no support vault.' },
         { k: 'What that means', v: 'You have not opened a support vault. Pooling behind a creator does not need one; opening a vault is what a creator does.' },
       ],
       'No vault on this address',
-      '—',
+      'none',
     );
   }
 
@@ -91,9 +91,9 @@ export async function VaultData({
 
   if (vault === null) {
     return shell(
-      [{ k: 'Not measured', v: reading.ok ? '' : `${reading.failure.kind} — ${reading.failure.detail}` }],
+      [{ k: 'Not measured', v: reading.ok ? '' : `${reading.failure.kind}: ${reading.failure.detail}` }],
       first.vaultId,
-      '—',
+      'none',
       href,
       'View on Suiscan',
     );
@@ -140,7 +140,7 @@ export async function VaultData({
     { k: 'rebate_bps', v: `${vault.rebateBps.toString()} bps (${Number(vault.rebateBps) / 100}% of yield to poolers)` },
     { k: 'fee_bps_snapshot', v: `${vault.feeBpsSnapshot.toString()} bps, fixed when this vault was opened` },
     /* Not cosmetic: false would mean liquid + staked < principal, which the contract must never allow. */
-    { k: 'solvent', v: vault.solvent ? 'true — liquid + staked covers the principal' : 'FALSE — the invariant is violated' },
+    { k: 'solvent', v: vault.solvent ? 'true: liquid plus staked covers the principal' : 'FALSE: the invariant is violated' },
     { k: 'ladder_capture', v: `${((Number(LADDER_DEPTH) / Number(RUNGS)) * 100).toFixed(1)}% of theoretical maximum, derived from RUNGS` },
     { k: 'positions_table', v: vault.positionsTableId },
   ];
@@ -175,7 +175,7 @@ async function membersFor(
   if (!reading.ok) {
     return {
       rows: [],
-      summary: `Not measured — ${reading.failure.kind}: ${reading.failure.detail}`,
+      summary: `Not measured: ${reading.failure.kind}, ${reading.failure.detail}`,
       reconciles: false,
     };
   }
@@ -207,12 +207,12 @@ async function membersFor(
   const n = view.rows.length;
   const pooled = `${formatUnits(view.principalSumMist, 9)} SUI`;
   const summary = view.truncated
-    ? `${n} members shown, but the walk hit its ceiling — there are more, and the sum below is partial.`
+    ? `${n} members shown, but the read stopped at its ceiling. There are more, and the sum below is partial.`
     : n === 0
       ? 'Nobody is pooled here yet. The table was read and holds no live position.'
       : view.reconciles
         ? `${n} member${n === 1 ? '' : 's'} · ${pooled} pooled, which is exactly total_principal · ${formatUnits(view.claimableSumMist, 9)} SUI claimable by them right now${view.dormant > 0 ? ` · ${view.dormant} withdrawn slot${view.dormant === 1 ? '' : 's'} not counted` : ''}.`
-        : `${n} member${n === 1 ? '' : 's'} · the rows sum to ${pooled} but total_principal says ${formatUnits(totalPrincipalMist, 9)} SUI — these should be equal, and are not.`;
+        : `${n} member${n === 1 ? '' : 's'} · the rows sum to ${pooled} but total_principal says ${formatUnits(totalPrincipalMist, 9)} SUI. These should be equal, and are not.`;
 
   return { rows: view.rows.map(row), summary, reconciles: view.reconciles };
 }

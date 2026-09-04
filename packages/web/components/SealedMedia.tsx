@@ -195,7 +195,7 @@ export function SealedMedia({
             response.status === 403
               ? 'this is not unlocked for you'
               : response.status === 503
-                ? 'still checking what you own — try again in a moment'
+                ? 'Still checking what you own. Try again in a moment.'
                 : 'this media could not be retrieved',
           );
         }
@@ -349,7 +349,7 @@ export function SealedMedia({
           {state.phase === 'needs-signer'
             ? 'Sign in to view this'
             : state.phase === 'settling'
-              ? 'Your purchase is still settling on chain — opening this shortly'
+              ? 'Your purchase is still settling on chain. It opens in a moment.'
               : state.reason}
         </span>
       )}

@@ -17,7 +17,7 @@ export default function PurchasesPage() {
         kicker="Your account"
         title="Everything you hold, read from the"
         accent="objects themselves."
-        lede="Every subscription and unlocked post. Expired subscriptions stay on the list — a receipt for something that has lapsed is still a receipt."
+        lede="Every subscription and unlocked post. Expired subscriptions stay on the list. A receipt for something that has lapsed is still a receipt."
       />
       <AccountTabs />
       <Purchases />
@@ -26,7 +26,7 @@ export default function PurchasesPage() {
           <p>
             A <span className="mono">Subscription</span> and an <span className="mono">Unlock</span>{' '}
             are objects you own on Sui. This platform cannot revoke one, edit one, or take it away by
-            shutting down — so each line links to the object rather than asking you to take our word.
+            shutting down, so each line links to the object rather than asking you to take our word.
           </p>
       </div>
     </>

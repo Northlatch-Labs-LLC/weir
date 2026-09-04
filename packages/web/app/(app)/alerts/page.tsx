@@ -42,7 +42,7 @@ export default async function NotificationsPage() {
         kicker="Your account"
         title="What happened"
         accent="while you were away."
-        lede="Payments, unlocks and new supporters — read from what settled to your address on chain, newest first."
+        lede="Payments, unlocks and new supporters, read from what settled to your address on chain, newest first."
       />
       <AccountTabs />
       <NotificationsData viewer={viewer} myHandle={handle} bare />

@@ -20,7 +20,6 @@
 
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
-import { AddFundsButton } from '@/components/AddFundsButton';
 import { SignIn } from '@/components/SignIn';
 
 const MIST_PER_SUI = 1_000_000_000n;
@@ -165,20 +164,20 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
           onClick={() => void simulate()}
           disabled={stage.name === 'simulating'}
         >
-          {stage.name === 'simulating' ? 'Simulating…' : 'Simulate deposit'}
+          {stage.name === 'simulating' ? 'Checking…' : 'Check the deposit'}
         </button>
       </div>
 
       <p className="k" style={{ marginTop: 14 }}>
-        MINIMUM 1 SUI · SIMULATED BEFORE ANYTHING IS SIGNED
+        MINIMUM 1 SUI · CHECKED ON CHAIN BEFORE ANYTHING IS SIGNED
       </p>
 
       {stage.name === 'needs-account' && (
         <div className="note warn">
           <span className="lbl">Account required</span>
           <p>
-            This address has no Weir account yet. Accounts are free and claim your handle —
-            you need one before you can deposit.
+            This address has no Weir account yet. You need one to deposit. Claiming a handle
+            is free apart from gas.
           </p>
         </div>
       )}
@@ -190,7 +189,7 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
             <table style={{ marginTop: 4 }}>
               <tbody>
                 <tr>
-                  <td>Deposited — stays yours, withdrawable</td>
+                  <td>Deposited (stays yours, withdrawable)</td>
                   <td className="num">{sui(BigInt(stage.quote.amountMist))} SUI</td>
                 </tr>
                 <tr>
@@ -231,8 +230,8 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
               target="_blank"
             >
               {stage.digest.slice(0, 10)}…
-            </a>{' '}
-            — your principal is redeemable in full at any time.
+            </a>
+            . Your principal is redeemable in full at any time.
           </p>
         </div>
       )}
@@ -245,12 +244,10 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
           </p>
           {signer !== null && (
             <div style={{ marginTop: 12 }}>
-              {/*
-                Offered here because the most common reason a deposit cannot be simulated is that
-                the wallet is empty, and telling somebody "not enough balance" without a way to fix
-                it is where a supporter who wanted to help gives up.
-              */}
-              <AddFundsButton walletAddress={signer.address} asset="SUI" />
+              <p className="unmeasured" style={{ margin: 0 }}>
+                If this wallet is short of SUI, add some from wherever you hold it, then check
+                again.
+              </p>
             </div>
           )}
         </div>

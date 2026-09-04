@@ -52,7 +52,7 @@ export function DesignVault({
                 <h1 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.034em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)' }}><span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>My Vault</span></h1>
               </div>
             </section>
-            <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>The deposit stays yours; the yield doesn't. Park SUI here and it is delegated to a validator. The staking yield goes to the creator; the principal never does — withdrawable in full, any time, with no lock-up, no notice, and no approval from them or from us. That is not a policy. There is no function in the contract that lets anyone but you touch it.</p>
+            <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>The deposit stays yours; the yield doesn't. Park SUI here and it is delegated to a validator. The staking yield goes to the creator; the principal never does. It is withdrawable in full, any time, with no lock-up, no notice and no approval from them or from us. That is not a policy: there is no function in the contract that lets anyone but you touch it.</p>
 
             <div style={{ height: '1px', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px)', marginBlock: '2.5rem' }}></div>
 
@@ -71,7 +71,7 @@ export function DesignVault({
                   </div>
                 </Fragment>))}
               </dl>
-              <p style={{ margin: '1.25rem 0 0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Fields render verbatim and unlabelled. The object is the source: naming a field here would be our interpretation of it rather than what it actually says.</p>
+              <p style={{ margin: '1.25rem 0 0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Fields are shown as the chain holds them. Naming them here would be our reading of the object, not what it says.</p>
             </section>
 
             {members !== null && (
@@ -119,7 +119,7 @@ export function DesignVault({
             </div>
 
             <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <button className="dh-f10f4630" type="button" onClick={() => { window.location.href = '/creator'; }} style={{ padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', cursor: 'pointer', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>Back to the page</button>
+              <button className="dh-f10f4630" type="button" onClick={() => { window.location.href = '/creator'; }} style={{ padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', cursor: 'pointer', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>Back to the creator studio</button>
             </div>
           </div>
     </>

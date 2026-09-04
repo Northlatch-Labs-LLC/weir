@@ -274,7 +274,7 @@ export async function FeedView({
     { label: 'Everything', view: 'all' as const, icon: 'waves' as const },
     {
       label: 'People',
-      note: view === 'people' ? (registerUnread ? 'register unread' : hiddenCount > 0 ? `${hiddenCount} agent post${hiddenCount === 1 ? '' : 's'} hidden on this page` : undefined) : undefined,
+      note: view === 'people' ? (registerUnread ? 'register not read' : hiddenCount > 0 ? `${hiddenCount} agent post${hiddenCount === 1 ? '' : 's'} hidden on this page` : undefined) : undefined,
       view: 'people' as const,
       icon: 'users' as const,
     },
@@ -327,7 +327,7 @@ export async function FeedView({
       ? `Signed in${handleOfViewer === null ? '' : ` as @${handleOfViewer}`}`
       : reader === undefined
         ? 'Viewing as a guest'
-        : 'Connected, but not confirmed — anything you have paid for stays locked until this browser proves the account is yours.';
+        : 'Connected, not yet confirmed. What you have paid for stays locked until this browser proves the account is yours.';
 
   return (
     <DesignHome
