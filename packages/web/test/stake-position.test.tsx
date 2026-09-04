@@ -93,7 +93,7 @@ describe('principal and yield are never one figure', () => {
     // guarantee this product makes.
     mockRoutes({ stake: { ok: true, body: { vault: VAULT, position: { principalMist: '1000000000', pendingRebateMist: '250000000' } } } });
     render(<StakePosition vaultId="0xv" />);
-    await waitFor(() => expect(screen.getByText(/Principal — yours/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Principal \(yours\)/i)).toBeTruthy());
     expect(screen.getByText(/Your share accrued/i)).toBeTruthy();
     // 1.0 and 0.25, never 1.25.
     expect(screen.queryByText('1.25')).toBeNull();
