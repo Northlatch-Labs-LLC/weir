@@ -6,7 +6,7 @@ import { waitlistTotal } from '@/lib/waitlist-store';
 import { funnelSides } from '@/components/design/explore-funnel-data';
 
 export const metadata: Metadata = {
-  title: 'Join the waiting list',
+  title: 'Join the list',
   description:
     'Weir is a creator network on Sui. Leave an email and we will tell you when something ships — ' +
     'one email, no newsletter.',

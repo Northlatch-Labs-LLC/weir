@@ -1,4 +1,4 @@
-# Weir — Terms of Service
+# Weir: Terms of Service
 
 **Effective date:** 21 August 2026
 **Operator:** Northlatch Labs LLC, a Wyoming limited liability company (registration filed with the Wyoming Secretary of State; the Filing ID will be published on this page upon approval)

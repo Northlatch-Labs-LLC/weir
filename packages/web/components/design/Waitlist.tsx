@@ -284,7 +284,7 @@ export function DesignWaitlist({
 
   const wlEmail = email;
   const wlHandle = handle;
-  const wlSubmitLabel = sending ? 'Adding…' : 'Join the waiting list';
+  const wlSubmitLabel = sending ? 'Adding…' : gated ? 'Join the waiting list' : 'Join the list';
   const onWlEmail = (e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value);
   const onWlHandle = (e: ChangeEvent<HTMLInputElement>) => setHandle(e.target.value);
   const wlPerks = perksFor(gated).map((p) => ({ ...p, icon: <Icon name={p.icon} size={15} color={CREST} /> }));

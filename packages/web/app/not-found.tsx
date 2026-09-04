@@ -11,7 +11,7 @@ export default function NotFound() {
         kicker="Not found"
         title="There is nothing at"
         accent="this address."
-        lede="The link may be old, or the page may have moved. Everything that exists is one of these."
+        lede="The link may be old, or the page may have moved. The main pages are these."
       />
       <ul className="nf-list">
         {PRIMARY.map((d) => (

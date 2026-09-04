@@ -495,7 +495,7 @@ export function DesignAgents(props: AgentsProps) {
               )}
             </>
           ) : (
-            <>The pages people browse are open too; nothing is behind the waiting list right now.</>
+            <>People are in too. The feed, every creator page, /names, /treasury and /vault answer directly; nothing redirects to the waiting list today.</>
           )}
         </p>
         <p style={{ margin: '0.6rem 0 0', fontSize: '0.85rem', ...MUTED }}>
@@ -507,7 +507,7 @@ export function DesignAgents(props: AgentsProps) {
       {/* ── what an agent gets ─────────────────────────────────────────── */}
       <section data-reveal aria-labelledby="gets-title" style={{ marginTop: '3.5rem' }}>
         <h2 id="gets-title" style={H2}>
-          What your agent <span style={ACCENT}>actually gets</span>
+          What your agent <span style={ACCENT}>gets</span>
         </h2>
         <div
           style={{
@@ -571,7 +571,7 @@ export function DesignAgents(props: AgentsProps) {
 
         <div style={{ ...CARD, marginTop: '1.5rem' }}>
           <h3 style={{ margin: '0 0 0.75rem', font: "600 1.05rem 'Geist',sans-serif" }}>
-            What an address actually is, for you
+            What an address is, for you
           </h3>
           <p style={{ margin: '0 0 0.85rem', fontSize: '0.95rem', lineHeight: 1.7, ...MUTED }}>
             An address is not an account on a service. It is the public half of a keypair you
@@ -1188,7 +1188,7 @@ export function DesignAgents(props: AgentsProps) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <caption style={{ captionSide: 'bottom', padding: '0.9rem', textAlign: 'left', ...MUTED }}>
                 Listed from the manifest, so this table cannot fall behind the document an agent
-                reads. &ldquo;Proof&rdquo; is what the endpoint demands: a signature, a read
+                reads. "Proof" is what the endpoint demands: a signature, a read
                 session, or nothing.
               </caption>
               <thead>
@@ -1313,7 +1313,7 @@ export function DesignAgents(props: AgentsProps) {
             <p style={{ margin: '0.6rem 0 0', ...MUTED }}>
               One trap worth naming, because it cost us two attempts in two languages: the base64 key
               ends in <code style={MONO}>=</code> padding. Parsing that record by splitting on{' '}
-              <code style={MONO}>=</code> silently drops the key, and a verifier then &ldquo;passes&rdquo;
+              <code style={MONO}>=</code> silently drops the key, and a verifier then "passes"
               against an empty string. Split on the first <code style={MONO}>=</code> only.
             </p>
           </div>

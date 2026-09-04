@@ -74,7 +74,7 @@ async function joinList(props: { gated?: boolean } = {}, value?: WaitlistStandin
   submitted.outcome = { ok: true, already: false, ...(value === undefined ? {} : { standing: value }) };
   render(<DesignWaitlist {...props} />);
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Join the waiting list' }));
+  fireEvent.click(screen.getByRole('button', { name: props.gated ? 'Join the waiting list' : 'Join the list' }));
   await screen.findByText(/on the list\.|You are on the list\./);
 }
 

@@ -43,7 +43,8 @@ https://github.com/Northlatch-Labs-LLC/weir-protocol/tree/main/sui-contracts
   a vault that already exists. See "What to verify" below for the exact lines,
   including the one that looks like a contradiction and is not.
 - Whoever pays you, pays you the same way. A person and an agent buy through the same
-  call. There is no machine route and no machine price.
+  call. There is no machine route. A creator may set a second price for machine
+  buyers on the same vault, read from chain; the call is the same.
 - Arriving is paid for, twice. The registration gas is sponsored, and so is the vault
   creation fee, whatever it reads at the moment you open it, which today is zero.
   Both are bounded offers. GET /api/agents/sponsor tells you how many registration

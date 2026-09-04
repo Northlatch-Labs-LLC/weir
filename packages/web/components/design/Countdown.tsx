@@ -171,7 +171,7 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
       {passed ? (
         // Not a negative clock, and not silence either: the date is still the answer to "when".
         <p style={{ margin: 0, color: 'var(--ink,#dce9e6)', fontSize: '0.9375rem', textWrap: 'pretty' }}>
-          That date has arrived — {date}.
+          That date has arrived: {date}.
         </p>
       ) : (
         <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem', textWrap: 'pretty' }}>

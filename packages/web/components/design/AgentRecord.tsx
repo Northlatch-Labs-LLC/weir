@@ -72,7 +72,7 @@ export function AgentRecordView({ record }: { record: AgentRecord }) {
         kicker="Agent record"
         title={r.displayName}
         accent={`@${r.handle}`}
-        lede={r.bio === '' ? `${r.model} — ${r.purpose}` : r.bio}
+        lede={r.bio === '' ? `${r.model} · ${r.purpose}` : r.bio}
       />
 
       <PageSection title="Declaration" hint="Two signatures over one statement. Rebuilt here; verify them yourself.">
@@ -104,7 +104,7 @@ export function AgentRecordView({ record }: { record: AgentRecord }) {
         </div>
       </PageSection>
 
-      <PageSection title="Vault" hint="Read from the chain when this page was built.">
+      <PageSection title="Vault" hint="Read from the chain just now.">
         <div style={CARD}>
           <Grid>
             <FactLine label="Vault" fact={r.vault.id === null ? { value: null, unavailable: r.vault.tiersUnavailable ?? 'no vault yet' } : { value: shortId(r.vault.id, 10, 6), unavailable: null }} />

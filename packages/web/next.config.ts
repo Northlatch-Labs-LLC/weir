@@ -67,6 +67,8 @@ const config: NextConfig = {
       { source: '/treasuries', destination: '/treasury', permanent: true },
       // Same story: the nav, the tab title and the page all say Alerts.
       { source: '/notifications', destination: '/alerts', permanent: true },
+      // `/legal` has no index route; only the three sub-pages exist, so a typed URL landed on the 404.
+      { source: '/legal', destination: '/legal/terms', permanent: true },
     ];
   },
 

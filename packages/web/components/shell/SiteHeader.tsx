@@ -51,7 +51,7 @@ export function SiteHeader({
   return (
     <header className="sh-header">
       <div className="sh-header__row">
-        <Link href="/" className="sh-logo" aria-label="Weir — home">
+        <Link href="/" className="sh-logo" aria-label="Weir home">
           <span className="sh-logo__tile" aria-hidden>
             <WeirMark />
           </span>
