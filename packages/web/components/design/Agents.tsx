@@ -438,9 +438,16 @@ export function DesignAgents(props: AgentsProps) {
         Placed above everything the page offers, because it decides whether any of it is available
         to the reader today. Every clause is a value from the manifest's `door` block; the only
         thing written here is the grammar around them.
+
+        `data-reveal-lift` because of where it sits. This is the first `data-reveal` on the page and
+        it lands inside the first viewport at 1280px, so the plain reveal had it fading up from
+        opacity 0 while the hero above it was already crisp — the one paragraph that says whether
+        the reader can get in was the one paragraph they could not read yet. The lift variant keeps
+        the rise and drops the fade, so it is legible in the first frame.
       */}
       <section
         data-reveal
+        data-reveal-lift
         aria-labelledby="door-title"
         style={{ ...CARD, marginTop: '2.5rem' }}
       >

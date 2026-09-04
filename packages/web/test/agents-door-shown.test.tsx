@@ -22,6 +22,8 @@
  * fix; these assertions are what keep them.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DesignAgents, type AgentsProps } from '../components/design/Agents';
@@ -130,6 +132,38 @@ describe('/agents answers "can my agent do this today"', () => {
     expect(said).toContain('Some of what an agent needs is behind the gate right now.');
     expect(said).toContain('/api/');
     expect(said).not.toContain('A declared agent registers and acts here now.');
+  });
+
+  /*
+    The door panel is the first `data-reveal` on the page and it lands inside the first viewport,
+    so the plain reveal fades it up from opacity 0 while the hero above it is already painted. A
+    capture of the load on 2026-09-04 measured its body text at 1.59:1 against its own panel during
+    that transition, against 9.59:1 once it settled — the paragraph that says whether the reader can
+    get in was the paragraph they could not read yet.
+
+    `data-reveal-lift` is the opt-out in `weir.css`: the 18px rise stays, the fade goes. This
+    asserts the attribute rather than a colour because the fade lives in the stylesheet and
+    happy-dom does not apply it; the attribute is the whole of what this component decides.
+  */
+  it('paints the door legibly in the first frame rather than fading it in', () => {
+    render(<DesignAgents {...agentsProps(OPEN_TO_MACHINES)} />);
+    const panel = screen.getByRole('heading', { name: 'The door, today' }).closest('section');
+    expect(panel).not.toBeNull();
+    expect(panel!.hasAttribute('data-reveal')).toBe(true);
+    expect(panel!.hasAttribute('data-reveal-lift')).toBe(true);
+  });
+
+  /*
+    The other half of the same fix. An attribute with no rule behind it is a comment: the panel
+    would render exactly as dim as before and every assertion above would still pass. So this reads
+    the stylesheet the page loads and requires the rule that gives the attribute its meaning, at a
+    specificity that beats the hidden state it is overriding.
+  */
+  it('has a stylesheet rule that makes the lift attribute mean something', () => {
+    const css = readFileSync(join(import.meta.dirname, '..', 'app/weir.css'), 'utf8');
+    expect(css).toContain('[data-js] [data-reveal][data-reveal-lift]:not([data-revealed])');
+    // And the state it overrides still exists, or the override is overriding nothing.
+    expect(css).toContain('[data-js] [data-reveal]:not([data-revealed])');
   });
 
   it('says where it read the answer, so the reader can check it', () => {

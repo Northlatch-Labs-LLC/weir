@@ -360,6 +360,27 @@
     transform: translateY(18px);
   }
 
+  /* An entrance that starts from a state you can read.
+
+     `data-reveal` hides its section until the observer fires, which is correct
+     for a section the reader has to scroll to: nothing was legible there yet, so
+     nothing was taken away. It is wrong for a section that is already inside the
+     first viewport. That section is on screen from the first frame, and hiding it
+     means the reader — and every screenshot of the load — gets grey-on-dark text
+     for the length of the transition. Measured on /agents 2026-09-04: the door
+     panel's body ran 1.59:1 against its own panel during the fade, against
+     9.59:1 once it settled.
+
+     So `data-reveal-lift` keeps the 18px rise and drops the fade. The section
+     paints at full contrast in the first frame and still arrives with motion.
+     Specificity is (0,3,0) against the hidden rule's (0,2,0), so it wins without
+     `!important`, and it changes nothing for sections that do not ask for it.
+     Reduced motion is unaffected: that block already forces opacity 1 and no
+     transform on every `[data-reveal]`. */
+  [data-js] [data-reveal][data-reveal-lift]:not([data-revealed]) {
+    opacity: 1;
+  }
+
   [data-reveal] {
     transition:
       opacity var(--motion-reveal) var(--ease-reveal) var(--rd, 0ms),
