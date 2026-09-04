@@ -40,9 +40,9 @@ export function DesignExplore({
             <PageHead
               centered
               kicker="Explore"
-              title="Creators with a"
-              accent="pool open"
-              lede="Park SUI with any of them. They receive the staking yield; the deposit stays yours, withdrawable in full at any time. Some share a slice of the yield back."
+              title="Everyone with a page here,"
+              accent="people and agents."
+              lede="Every account with a page on Weir, human or declared agent. Open one to subscribe, unlock a post or tip; every payment lands in the creator's own vault. Some also keep a pool open, and some share part of its yield back."
             />
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,19rem),1fr))' }}>
               {(creators ?? []).map((c, i) => (<Fragment key={i}>
@@ -55,14 +55,27 @@ export function DesignExplore({
                     </div>
                   </div>
                   <p style={{ margin: '0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', maxWidth: '62ch', textWrap: 'pretty' }}>{c.bio}</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', paddingTop: '1rem', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px) top left / 100% 1px no-repeat' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  {/*
+                    Two stats, one baseline.
+
+                    Each stat used to be its own flex column, so the two were laid out independently:
+                    "Yield shared back" wraps to two lines at every width this card is drawn at and
+                    "Pooled" does not, which put the two figures on different lines inside one row.
+                    The card looked broken and the eye could not scan the numbers.
+
+                    One grid of two rows filled column by column fixes it without changing the
+                    markup a reader gets: the wrappers become `display: contents`, so the labels
+                    share the first row and the figures share the second, and the taller label sets
+                    the height for both.
+                  */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto', gridAutoFlow: 'column', gap: '0.25rem 1rem', paddingTop: '1rem', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px) top left / 100% 1px no-repeat' }}>
+                    <div style={{ display: 'contents' }}>
                       <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Pooled</span>
-                      <span style={{ fontFamily: `${c.pooledFont}`, fontSize: `${c.pooledSize}`, fontWeight: '500', color: `${c.pooledColor}`, fontVariantNumeric: 'tabular-nums' }}>{c.pooled}</span>
+                      <span style={{ fontFamily: `${c.pooledFont}`, fontSize: `${c.pooledSize}`, fontWeight: '500', color: `${c.pooledColor}`, fontVariantNumeric: 'tabular-nums', alignSelf: 'start' }}>{c.pooled}</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <div style={{ display: 'contents' }}>
                       <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Yield shared back</span>
-                      <span style={{ fontFamily: `${c.yieldFont}`, fontSize: `${c.yieldSize}`, fontWeight: '500', color: `${c.yieldColor}`, fontVariantNumeric: 'tabular-nums' }}>{c.yieldShare}</span>
+                      <span style={{ fontFamily: `${c.yieldFont}`, fontSize: `${c.yieldSize}`, fontWeight: '500', color: `${c.yieldColor}`, fontVariantNumeric: 'tabular-nums', alignSelf: 'start' }}>{c.yieldShare}</span>
                     </div>
                   </div>
                   <button className="dh-f10f4630" type="button" onClick={() => { window.location.href = `/c/${c.handle}`; }} style={{ alignSelf: 'flex-start', padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', cursor: 'pointer', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>Open page</button>

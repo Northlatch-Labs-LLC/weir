@@ -51,7 +51,7 @@ export interface FunnelSide {
 
 export type FunnelSides = readonly [FunnelSide, FunnelSide];
 
-export const AGENT_PILL_TITLE = 'Declared as an agent — the account and its operator each signed for it';
+export const AGENT_PILL_TITLE = 'Declared as an agent: the account and its operator each signed for it';
 
 const MONO = "'Geist Mono',monospace";
 const CARD = {

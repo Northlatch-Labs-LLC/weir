@@ -46,7 +46,7 @@ export function DesignJoin({
         : availability === 'checking'
           ? 'Checking the registry…'
           : availability === 'taken'
-            ? `@${joinHandle.toLowerCase()} is taken — it resolves to a page already on chain.`
+            ? `@${joinHandle.toLowerCase()} is taken; it resolves to a page already on chain.`
             : availability === 'available'
               ? `@${joinHandle.toLowerCase()} is free. It stays first-come until the transaction mints it.`
               : availability === 'unreadable'
@@ -79,7 +79,7 @@ export function DesignJoin({
   const joinYieldLabel = `${joinYield}%`;
   const yieldNote =
     joinYield === 0
-      ? 'You keep all of it. Perfectly normal — and the number is public, so say why if you like.'
+      ? 'You keep all of it. Perfectly normal, and the number is public, so say why if you like.'
       : `Poolers get ${joinYield}% of the yield their deposit earns; you keep ${100 - joinYield}%. It is written on the object, so nobody has to trust you to keep it there.`;
 
   const onJoinHandle = (e: React.ChangeEvent<HTMLInputElement>) => setHandle(e.target.value);
@@ -104,7 +104,7 @@ export function DesignJoin({
               kicker="For creators"
               title="Two revenue lines."
               accent="One page."
-              lede={`Subscriptions and unlocks settle on chain and we take ${feeLabel} at settlement. The pool costs your supporters nothing they keep — and it is the line that converts the people who will never subscribe.`}
+              lede={`Subscriptions and unlocks settle on chain and we take ${feeLabel} at settlement. The pool costs your supporters nothing they keep, and it is the line that converts the people who will never subscribe.`}
             />
 
             {isGuest && (<>
@@ -131,7 +131,7 @@ export function DesignJoin({
                     <input id="jt" type="number" min="0" step="0.5" value={joinTier} onChange={onJoinTier} style={{ width: '8rem', background: 'var(--bg,#04161d)', border: '1px solid var(--line,#1c3d47)', borderRadius: '10px', padding: '0.6rem 0.875rem', color: 'var(--ink,#dce9e6)', fontFamily: '\'Geist Mono\',monospace', fontVariantNumeric: 'tabular-nums', fontSize: '0.9375rem' }}/>
                     <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>USDC · every 30 days</span>
                   </div>
-                  <p style={{ margin: '1rem 0 0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>You keep <span style={{ fontFamily: '\'Geist Mono\',monospace', fontVariantNumeric: 'tabular-nums', color: 'var(--ink,#dce9e6)', fontWeight: '500' }}>{joinNet}</span> of every payment. The {feeLabel} is taken at settlement, in the same transaction — computed here with the integer maths the contract uses, not a rounded estimate.</p>
+                  <p style={{ margin: '1rem 0 0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>You keep <span style={{ fontFamily: '\'Geist Mono\',monospace', fontVariantNumeric: 'tabular-nums', color: 'var(--ink,#dce9e6)', fontWeight: '500' }}>{joinNet}</span> of every payment. The {feeLabel} is taken at settlement, in the same transaction, computed here with the integer maths the contract uses, not a rounded estimate.</p>
                 </div>
 
                 <div style={{ paddingTop: '2rem', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px) top left / 100% 1px no-repeat' }}>
@@ -178,8 +178,8 @@ export function DesignJoin({
             <section data-reveal aria-labelledby="share-title" style={{ marginTop: '3rem', background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.92))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.55)', padding: '2rem' }}>
               <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>The share you can set</p>
               <h2 id="share-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}>Give back part of the yield, <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>and backing you costs nothing</span></h2>
-              <p style={{ margin: '1rem 0 0', maxWidth: '62ch', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>When a rung matures the deposit comes out first, then the platform fee. What is left is yours, and the share is taken from that — your money, never the platform&rsquo;s cut. Each supporter&rsquo;s part accrues in proportion to what they deposited, and they claim it themselves.</p>
-              <p style={{ margin: '1rem 0 0', maxWidth: '62ch', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>The number lives on the vault object where anyone can read it, so nobody has to be trusted to honour it. Set it above zero and pooling behind you costs a supporter nothing they keep and pays them a little for staying — which is the part of an audience a subscription never reaches.</p>
+              <p style={{ margin: '1rem 0 0', maxWidth: '62ch', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>When a rung matures the deposit comes out first, then the platform fee. What is left is yours, and the share is taken from that: your money, never the platform&rsquo;s cut. Each supporter&rsquo;s part accrues in proportion to what they deposited, and they claim it themselves.</p>
+              <p style={{ margin: '1rem 0 0', maxWidth: '62ch', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>The number lives on the vault object where anyone can read it, so nobody has to be trusted to honour it. Set it above zero and pooling behind you costs a supporter nothing they keep and pays them a little for staying, which is the part of an audience a subscription never reaches.</p>
             </section>
           </div>
     </>

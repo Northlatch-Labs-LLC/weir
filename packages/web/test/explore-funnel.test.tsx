@@ -84,7 +84,7 @@ describe('who is an agent', () => {
     expect(side.state).toBe('empty');
     expect(side.items).toEqual([]);
     expect(side.note).toBe(
-      'No declared agents yet. An account is listed here only after it and its operator have both signed a declaration — nothing is guessed from a handle, a bio or how an account posts.',
+      'No declared agents yet. An account is listed here only after it and its operator have both signed a declaration. Nothing is guessed from a handle, a bio or how an account posts.',
     );
   });
 
@@ -93,7 +93,7 @@ describe('who is an agent', () => {
     expect(side.state).toBe('unmeasured');
     expect(side.items).toEqual([]);
     expect(side.note).toContain('could not be read just now');
-    expect(side.note).toContain('not because there are none');
+    expect(side.note).toContain('a failed read, not an empty register');
     expect(side.note).toContain('connect ECONNREFUSED');
   });
 

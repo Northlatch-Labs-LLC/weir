@@ -11,7 +11,11 @@ import { DesignSignin } from '@/components/design/Signin';
  * component, and `safeNext` keeps it to a same-site path — an open redirect on a sign-in page is how
  * a phishing link borrows your domain.
  */
-export const metadata: Metadata = { title: titleFor('/signin') };
+export const metadata: Metadata = {
+  title: titleFor('/signin'),
+  description:
+    'Sign in with Google or connect a Sui wallet. Either way you get a Sui address only you control, and Weir never holds it.',
+};
 
 export const dynamic = 'force-dynamic';
 

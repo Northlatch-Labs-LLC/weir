@@ -6,7 +6,11 @@ import { PageHead } from '@/components/design/PageHead';
 import { readProtocol } from '@/lib/chain';
 import { fold } from '@projectx-social/sdk';
 
-export const metadata: Metadata = { title: titleFor('/join') };
+export const metadata: Metadata = {
+  title: titleFor('/join'),
+  description:
+    'Pick a handle and claim it on chain. Gas only, no password, no email; nobody can take the account away.',
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +43,7 @@ export default async function Join({
         kicker="Join"
         title="An account is an object you"
         accent="hold."
-        lede="Pick a handle and claim it on chain. No password and no email — your account is an object only your address holds, so it cannot be sold, lent or taken."
+        lede="Pick a handle and claim it on chain. No password and no email: your account is an object only your address holds, so it cannot be sold, lent or taken."
       />
 
 
@@ -58,7 +62,7 @@ export default async function Join({
           <h2 style={{ marginTop: 0 }}>What you get, and what it costs</h2>
           <p style={{ color: 'var(--text-secondary)' }}>
             A handle is a <span className="mono">SocialAccount</span> object on Sui that your address
-            owns. It is your name here — <span className="mono">@yourname</span> — and the thing the
+            owns. It is your name here, <span className="mono">@yourname</span>, and the thing the
             contracts check before anyone can subscribe to you, tip you or unlock what you publish.
           </p>
           <div style={{ display: 'grid', gap: 'var(--space-16)', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
@@ -94,12 +98,12 @@ export default async function Join({
             of magnitude is safe to state and is what the question is actually asking.
           */}
           <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-16)', marginBottom: 0 }}>
-            Gas is what Sui charges to write your account to the chain — a fraction of a cent, paid to
+            Gas is what Sui charges to write your account to the chain: a fraction of a cent, paid to
             the network&rsquo;s validators rather than to us. Your wallet shows the exact amount before
             you approve it, and nothing is charged if you decline.
           </p>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 0, marginTop: 'var(--space-16)' }}>
-            Registering does not make you a creator — that is a separate decision, and opening a
+            Registering does not make you a creator; that is a separate decision, and opening a
             vault comes later. An account on its own lets you follow, comment, subscribe and be paid
             back from a vault you support.
           </p>
@@ -129,7 +133,7 @@ export default async function Join({
           ) : null,
         (failure) => (
           <div data-reveal className="note crit" style={{ marginTop: 20 }}>
-            <span className="lbl">Could not read this — {failure.kind}</span>
+            <span className="lbl">Could not read this: {failure.kind}</span>
             <p>
               The platform&rsquo;s terms could not be read, so this page cannot tell you whether
               registration is currently open. {failure.detail}
@@ -142,7 +146,7 @@ export default async function Join({
         <span className="lbl">What claiming a handle actually does</span>
         <p>
           It writes your address into a shared registry on Sui and mints you an account object.
-          Handles are unique, first come, and rejected rather than normalised — asking for{' '}
+          Handles are unique, first come, and rejected rather than normalised: asking for{' '}
           <span className="mono">Alice</span> does not quietly give you{' '}
           <span className="mono">alice</span>. One account per address, enforced by the contract.
         </p>
@@ -150,7 +154,7 @@ export default async function Join({
 
       <footer>
         Registration is free. The protocol&rsquo;s creation fee applies to creator vaults, not to
-        identities — a signup paywall on a social product leaves nobody to monetise.
+        identities. A signup paywall on a social product leaves nobody to sell to.
       </footer>
         </>
   );
