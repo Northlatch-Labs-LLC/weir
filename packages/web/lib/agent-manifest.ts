@@ -61,6 +61,9 @@ import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   BPS_DENOMINATOR,
+  HANDLE_CHARSET_PATTERN,
+  MAX_HANDLE_LEN,
+  MIN_HANDLE_LEN,
   SEAL_PERIOD_MS,
   classify,
   createClient,
@@ -123,7 +126,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 21;
+export const AGENT_MANIFEST_REVISION = 22;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -324,6 +327,23 @@ export interface AgentManifest {
     neverDoThis: string;
     thenWhat: ReadonlyArray<{ step: string; do: string; get: string; gives: string }>;
     soulbound: string;
+    /**
+     * The rule `account::assert_handle_valid` enforces, so an agent can reject a bad handle
+     * before it pays gas to be told no. Added in revision 22, after an outside review noted the
+     * bounds were nowhere in the API-facing documentation, only in the contract and the SDK.
+     *
+     * Every number here is `@projectx-social/sdk`'s `MIN_HANDLE_LEN` / `MAX_HANDLE_LEN` /
+     * `HANDLE_CHARSET_PATTERN`, not retyped — the same constants `handleProblem` checks against
+     * and the same drift test (`sdk/test/accounts-layout.test.ts`) pins to `account.move`. A
+     * change to the rule changes this field by construction; a hand-typed copy here could not.
+     */
+    handleRules: {
+      minLength: number;
+      maxLength: number;
+      /** The regex source `handleProblem` tests each character against, byte-wise. */
+      charsetPattern: string;
+      charsetNote: string;
+    };
   };
   observedAtMs: number;
   note: string;
@@ -1600,6 +1620,17 @@ const START_HERE = {
     'The account is soulbound to the key you just made: `key` without `store`. There is no rotation ' +
     'and no recovery. Lose it and the account is gone, and no administrator can restore it because ' +
     'none holds that power.',
+  handleRules: {
+    minLength: MIN_HANDLE_LEN,
+    maxLength: MAX_HANDLE_LEN,
+    charsetPattern: HANDLE_CHARSET_PATTERN.source,
+    charsetNote:
+      'Byte-wise, not character-wise: every permitted byte is ASCII, so any multi-byte character ' +
+      'is rejected. Uppercase is rejected, not folded — a handle that renders identically to ' +
+      'another in some fonts is an impersonation vector, and the cheapest defence is one script. ' +
+      'Enforced on chain by account::assert_handle_valid; this client-side copy only saves a ' +
+      'round trip.',
+  },
 } as const;
 
 const NULL_CONVENTION =

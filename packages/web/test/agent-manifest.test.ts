@@ -29,7 +29,16 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { contentDigest } from '@/app/api/posts/route';
-import { fail, ok, type PlatformState, type ProjectXSocialConfig, type SealConfig } from '@projectx-social/sdk';
+import {
+  fail,
+  HANDLE_CHARSET_PATTERN,
+  MAX_HANDLE_LEN,
+  MIN_HANDLE_LEN,
+  ok,
+  type PlatformState,
+  type ProjectXSocialConfig,
+  type SealConfig,
+} from '@projectx-social/sdk';
 
 /** The deployment the published statements are bound to. */
 const ORIGIN = 'https://weir.social';
@@ -930,6 +939,22 @@ describe('the first thing an agent is told', () => {
 
   it('warns that the key cannot be replaced, beside the instruction to make it', () => {
     expect(manifestFrom(inputs()).startHere.soulbound).toMatch(/no rotation and no recovery|no rotation/);
+  });
+
+  it('publishes the handle rules from the SDK constants, not as retyped prose', () => {
+    /*
+      An outside review noted the bounds were nowhere in the API-facing documentation, only in
+      the contract and the SDK. This checks the manifest cannot silently drift from either: it
+      reads the same MIN_HANDLE_LEN, MAX_HANDLE_LEN and HANDLE_CHARSET_PATTERN that
+      `handleProblem` checks a handle against, which `sdk/test/accounts-layout.test.ts` in turn
+      pins to `account.move`.
+    */
+    const { handleRules } = manifestFrom(inputs()).startHere;
+    expect(handleRules.minLength).toBe(MIN_HANDLE_LEN);
+    expect(handleRules.maxLength).toBe(MAX_HANDLE_LEN);
+    expect(handleRules.charsetPattern).toBe(HANDLE_CHARSET_PATTERN.source);
+    expect(handleRules.charsetNote).toMatch(/byte-wise|Byte-wise/);
+    expect(handleRules.charsetNote).toMatch(/not folded/);
   });
 });
 

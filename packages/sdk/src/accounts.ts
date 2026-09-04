@@ -62,6 +62,14 @@ export const REGISTRY_BCS_FIELDS = ['id', 'by_handle', 'by_address'] as const;
 export const MIN_HANDLE_LEN = 3;
 export const MAX_HANDLE_LEN = 30;
 
+/**
+ * The one permitted byte per character: lowercase ASCII letters, digits, and underscore —
+ * `account.move`'s `0x61-0x7A`, `0x30-0x39` and `0x5F`. Named and exported so a caller that wants
+ * to *publish* the rule (the agent manifest does) reads it from here rather than retyping the
+ * three ranges as prose that can drift from what `handleProblem` actually checks.
+ */
+export const HANDLE_CHARSET_PATTERN = /^[a-z0-9_]$/;
+
 export type HandleProblem =
   | { kind: 'too-short'; min: number }
   | { kind: 'too-long'; max: number }
@@ -84,7 +92,7 @@ export function handleProblem(handle: string): HandleProblem | null {
 
   for (const character of handle) {
     const ok =
-      /^[a-z0-9_]$/.test(character) && new TextEncoder().encode(character).length === 1;
+      HANDLE_CHARSET_PATTERN.test(character) && new TextEncoder().encode(character).length === 1;
     if (!ok) return { kind: 'bad-character', character };
   }
   return null;
