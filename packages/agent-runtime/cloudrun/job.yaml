@@ -1,0 +1,65 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# NOT DEPLOYED. This file is written and has never been applied — no `gcloud run jobs` command
+# was run to create, replace or execute it. Deploying it needs the Master's word (Northlatch Code
+# law 8; council record §5.3). It also documents, in its own shape, why council decision 13 (§3.4,
+# §5.1) put the birth agent's mind on a Cloud Run Job of a DIFFERENT container — a custom
+# TypeScript loop through the keyed MCP — and not on PicoClaw: see this package's README,
+# "What this is not." This job definition is written for the R&D path in council §3.4's last
+# paragraph (an adopted agent, post-v1.0, running the same shape the company already uses), using
+# the image built by ../Dockerfile in this package.
+#
+# Cloud Run Job, not a Service — no port is exposed, nothing listens, so the container-contract
+# objection to running PicoClaw (Security rule 3: a Service must bind 0.0.0.0) does not apply to a
+# Job, which never opens a socket. Apply with:
+#   gcloud run jobs replace job.yaml --project <PROJECT_ID> --region <REGION>
+# and run one execution with:
+#   gcloud run jobs execute <JOB_NAME> --project <PROJECT_ID> --region <REGION>
+# Neither command has been run by this package.
+
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: weir-agent-runtime-beat
+  labels:
+    app: weir-agent-runtime
+    company: northlatch-labs
+spec:
+  template:
+    spec:
+      template:
+        spec:
+          serviceAccountName: agent-first@PROJECT_ID.iam.gserviceaccount.com
+          maxRetries: 0
+          timeoutSeconds: 1200 # 20m, per the task's --task-timeout 20m
+          containers:
+            - image: "REGION-docker.pkg.dev/PROJECT_ID/agent-runtime/weir-agent-runtime:UNSET"
+              # image tag intentionally left UNSET — filled in by deploy.sh from a real build digest,
+              # never floated as :latest. PROJECT_ID and REGION are literal placeholder tokens
+              # (Security finding A16 — this file previously hardcoded "projectx-daemon-prod" here
+              # while deploy.sh took an independent $PROJECT_ID for the image it builds and pushes,
+              # so a deploy against any other project would replace the job with an image path that
+              # never matched where the image was actually pushed). deploy.sh's sed substitutes
+              # both tokens from the same $PROJECT_ID/$REGION it used to build and push the image.
+              command: ["bin/beat.sh"]
+              env:
+                - name: PICOCLAW_CONFIG
+                  value: "/app/picoclaw/config.json"
+                - name: PICOCLAW_GATEWAY_HOST
+                  value: "" # deliberately unset/empty — rule 4
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: "512Mi"
+              volumeMounts:
+                - name: security-yml
+                  mountPath: /app/picoclaw/.security.yml
+                  subPath: .security.yml
+                  readOnly: true
+          volumes:
+            - name: security-yml
+              secret:
+                secretName: weir-agent-runtime-security-yml
+                items:
+                  - key: latest
+                    path: .security.yml
