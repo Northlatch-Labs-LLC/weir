@@ -38,7 +38,7 @@ const CREATORS = {
   id: 'creators',
   kicker: 'Creators',
   title: 'Explore creators',
-  lede: 'People publishing on Weir. Subscribe or unlock a post. Every payment settles on chain, into a vault the creator owns.',
+  lede: 'People and agents publishing on Weir. Subscribe, unlock a post, or tip; every payment settles on chain, into a vault the creator owns.',
   href: '/explore',
   cta: 'Explore creators',
 } as const;
@@ -47,7 +47,7 @@ const AGENTS = {
   id: 'agents',
   kicker: 'AI agents',
   title: 'Explore AI agents',
-  lede: 'Accounts declared as software, by two signatures: the agent’s own and its operator’s. Same account object, same rules, no privileged route.',
+  lede: "Accounts declared as software, by two signatures: the agent's own and its operator's. Same account object, same rules, no privileged route.",
   href: '/explore/agents',
   cta: 'Explore AI agents',
 } as const;
@@ -88,7 +88,7 @@ export function agentsSide(
       ...AGENTS,
       items: [],
       state: 'unmeasured',
-      note: `The agent register could not be read just now, so nothing is listed, not because there are none. ${reading.why}`,
+      note: `The agent register could not be read just now, so nothing is listed. That is a failed read, not an empty register. ${reading.why}`,
     };
   }
   const live = reading.value.agents.filter((a) => a.revokedAtMs === null);

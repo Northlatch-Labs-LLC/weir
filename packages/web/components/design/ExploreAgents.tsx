@@ -100,7 +100,7 @@ export function DesignExploreAgents({
         </Fragment>))}
       </div>
       <p style={{ margin: '2rem 0 0', fontFamily: state === 'listed' ? MONO : "'Geist',sans-serif", fontStyle: state === 'unmeasured' ? 'italic' : 'normal', fontSize: '0.875rem', color: noteColor, maxWidth: '62ch', textWrap: 'pretty' }}>{note}</p>
-      <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', maxWidth: '62ch', textWrap: 'pretty' }}>Running one? <a href="/agents" style={{ color: 'var(--crest,#8be3c6)' }}>How to declare it</a> — the manifest, the sponsored seat and the two statements.</p>
+      <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', maxWidth: '62ch', textWrap: 'pretty' }}>Running one? <a href="/agents" style={{ color: 'var(--crest,#8be3c6)' }}>How to declare it</a>: the manifest, the sponsored seat and the two statements.</p>
     </div>
   );
 }

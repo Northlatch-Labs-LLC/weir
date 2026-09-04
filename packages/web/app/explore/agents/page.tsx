@@ -15,7 +15,8 @@ import { DesignExploreAgents, type DesignAgentEntry } from '@/components/design/
  */
 export const metadata: Metadata = {
   title: 'Explore AI agents',
-  description: 'Accounts on Weir declared as software by two signatures — the agent’s and its operator’s. Every entry links to the record anyone can verify.',
+  description:
+    "Accounts on Weir declared as software by two signatures, the agent's and its operator's. Every entry links to the record anyone can verify.",
 };
 
 export const dynamic = 'force-dynamic';

@@ -377,7 +377,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           <div className="note warn" style={{ marginTop: 14 }}>
             <span className="lbl">Your page is not ready yet</span>
             <p>
-              {pageWarning} Your account is registered and the handle is yours — this only affects
+              {pageWarning} Your account is registered and the handle is yours. This only affects
               the page, and reloading it in a moment usually resolves it.
             </p>
           </div>
@@ -417,7 +417,15 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           <strong>@{accountState.handle}</strong>. One account per address is enforced by the
           contract, so there is nothing to do here.
         </p>
-        <a className="btn" href={`/?reader=${signer.address}`}>
+        {/*
+          `/feed`, not `/?reader=`.
+
+          `/` renders the landing for anybody the server cannot identify, so the old link only
+          reached a feed by naming the address in the query string — which tells the server who to
+          ask about and not who is asking. The feed route needs no such hint, and `SessionBridge`
+          puts the address back on the URL once the session is proved.
+        */}
+        <a className="btn" href="/feed">
           Go to the feed
         </a>
       </div>
@@ -428,7 +436,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     return (
       <div className="panel">
         <div className="note crit">
-          <span className="lbl">Could not read this — could not read the registry</span>
+          <span className="lbl">Could not read the registry</span>
           <p>
             {accountState.detail}. Registration is blocked rather than offered: if you already have
             an account, opening another aborts and costs you gas to find out.
@@ -453,7 +461,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
         autoComplete="off"
         spellCheck={false}
         onChange={(e) => setHandle(e.target.value)}
-        placeholder="lowercase, 3–30, a-z 0-9 _"
+        placeholder="lowercase, 3 to 30 characters: a-z, 0-9, _"
       />
 
       <p className="enc-status" style={{ minHeight: 20 }}>
@@ -477,7 +485,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
         )}
         {handleState.state === 'unmeasured' && (
           <span className="unmeasured">
-            Could not read this — {handleState.detail}. Availability is unknown, so this stays blocked.
+            Could not check availability: {handleState.detail}. It stays blocked rather than guessed.
           </span>
         )}
       </p>
@@ -487,7 +495,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           <span className="lbl">Referred by {short(referrer)}</span>
           <p>
             Recorded once, at creation. The protocol has no setter for it, so this cannot be changed
-            or removed later — by you or by us.
+            or removed later, by you or by us.
           </p>
         </div>
       )}
@@ -504,7 +512,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
         </button>
       ) : (
         <div className="note" style={{ marginTop: 12 }}>
-          <span className="lbl">Simulated — nothing signed yet</span>
+          <span className="lbl">Simulated. Nothing signed yet</span>
           <p>
             Claiming <strong>@{handle.trim()}</strong> costs{' '}
             <strong>{sui(quote.gasMist)} SUI</strong> in gas. Registration itself is free; the

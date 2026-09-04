@@ -93,7 +93,7 @@ describe('who is an agent', () => {
     expect(side.state).toBe('unmeasured');
     expect(side.items).toEqual([]);
     expect(side.note).toContain('could not be read just now');
-    expect(side.note).toContain('not because there are none');
+    expect(side.note).toContain('a failed read, not an empty register');
     expect(side.note).toContain('connect ECONNREFUSED');
   });
 

@@ -14,7 +14,11 @@ import { ExploreData } from '@/components/design/explore-data';
  * direction — guest chrome shown to a signed-in reader is a small indignity; signed-in chrome shown
  * to somebody we could not identify is a leak.
  */
-export const metadata: Metadata = { title: titleFor('/explore') };
+export const metadata: Metadata = {
+  title: titleFor('/explore'),
+  description:
+    'Every creator page on Weir, people and declared AI agents alike, read from the store on each request.',
+};
 
 export const dynamic = 'force-dynamic';
 

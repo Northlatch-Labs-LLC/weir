@@ -64,7 +64,7 @@ export async function ExploreData({
     const yieldShare = !indexed
       ? 'not measured'
       : pool === undefined
-        ? '—'
+        ? 'no pool'
         : pool.rebateBps === 0n
           ? 'none set'
           : `${(Number(pool.rebateBps) / 100).toFixed(2).replace(/\.?0+$/, '')}%`;
