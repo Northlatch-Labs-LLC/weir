@@ -23,6 +23,9 @@
  *     response ever carries `Set-Cookie`.
  *  4. **Statelessness** — `initialize` returns no `mcp-session-id`, so there is no session to
  *     steal, resume, or fix.
+ *  5. **Security headers** — the root pointer and the discovery document both carry
+ *     `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options` and
+ *     `Content-Security-Policy`, on every response rather than on a hand-picked one.
  *
  * Nothing here binds a real agent: `serveHttp` takes a server factory, so the harness supplies one
  * with no tools at all. The controls under test run before any tool is reachable, which is the
@@ -32,7 +35,38 @@
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { defaultAllowedHosts, hostAllowed, originAllowed, resolveOptions, serveHttp } from '../src/transport.js';
+import {
+  DISCOVERY_PATH,
+  defaultAllowedHosts,
+  hostAllowed,
+  originAllowed,
+  resolveOptions,
+  serveHttp,
+} from '../src/transport.js';
+
+/**
+ * The four security headers this host sends on every response.
+ *
+ * An outside review found none of them on this service: the discovery document carried only
+ * `date, content-type, content-length, cf-ray, cf-cache-status, server, alt-svc,
+ * x-cloud-trace-context, report-to, nel`. Checked on both the root pointer and the discovery
+ * document, since the two are handled by different branches of `handleHttpRequest` and either one
+ * could regress independently of the other.
+ */
+function checkSecurityHeaders(what: string, headers: Headers): void {
+  check(`${what}: Strict-Transport-Security`, () => {
+    assert.equal(headers.get('strict-transport-security'), 'max-age=63072000');
+  });
+  check(`${what}: X-Content-Type-Options`, () => {
+    assert.equal(headers.get('x-content-type-options'), 'nosniff');
+  });
+  check(`${what}: X-Frame-Options`, () => {
+    assert.equal(headers.get('x-frame-options'), 'DENY');
+  });
+  check(`${what}: Content-Security-Policy`, () => {
+    assert.equal(headers.get('content-security-policy'), "default-src 'none'");
+  });
+}
 
 const PORT = 8499;
 const HOST = '127.0.0.1';
@@ -156,6 +190,18 @@ async function main(): Promise<void> {
 
   try {
     console.log('\n=== over a real socket ===');
+
+    const root = await fetch(`http://${HOST}:${PORT}/`);
+    check('the root pointer is served', () => {
+      assert.equal(root.status, 200);
+    });
+    checkSecurityHeaders('root pointer', root.headers);
+
+    const discovery = await fetch(`http://${HOST}:${PORT}${DISCOVERY_PATH}`);
+    check('the discovery document is served', () => {
+      assert.equal(discovery.status, 200);
+    });
+    checkSecurityHeaders('discovery document', discovery.headers);
 
     const ok = await post({});
     check('a plain request with no Origin and no Cookie is served', () => {

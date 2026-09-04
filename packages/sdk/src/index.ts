@@ -85,6 +85,7 @@ export {
   handleProblem,
   MIN_HANDLE_LEN,
   MAX_HANDLE_LEN,
+  HANDLE_CHARSET_PATTERN,
   REGISTRY_BCS_FIELDS,
 } from './accounts.js';
 

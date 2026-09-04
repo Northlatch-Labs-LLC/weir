@@ -1522,6 +1522,36 @@ async function handleHttpRequest(
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
   /*
+    Four headers, on every response this handler produces — the root pointer, the discovery
+    document, every refusal below, and the MCP protocol responses the SDK transport writes
+    further down. Set with `res.setHeader` rather than folded into `respondJson`'s `writeHead`
+    call, because that call is not the only writer: `transport.handleRequest(req, res)` below
+    writes its own status and headers straight to `res`, and a header set here survives that —
+    Node merges `writeHead`'s own headers on top of whatever `setHeader` already staged, it does
+    not replace them.
+
+    This host serves JSON only and nothing here is a page, so all four are safe to enforce rather
+    than only report:
+
+      - `Strict-Transport-Security` — without it, a client's first plaintext hit to this host is
+        strippable. There is no HTTP listener beside this one to downgrade to, so the ceiling
+        costs nothing.
+      - `X-Content-Type-Options: nosniff` — correct for a body that is always `application/json`.
+      - `X-Frame-Options: DENY` — there is nothing here a page could usefully frame.
+      - `Content-Security-Policy: default-src 'none'` — this server serves no HTML, no script, no
+        style, and loads nothing of its own; refusing every fetch directive breaks no response it
+        sends.
+
+    None of this is `Access-Control-*`: no CORS header exists on this service and none is wanted.
+    `discoveryDocument`'s own `access-control-allow-origin: *` is set separately, further down,
+    because that one openness is deliberate and scoped to one path — see the comment there.
+  */
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+
+  /*
     The root path, named on purpose rather than folded into the generic 404 below.
 
     A program that reached the right hostname and asked for `/` has done nothing wrong; it is
