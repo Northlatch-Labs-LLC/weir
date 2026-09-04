@@ -40,8 +40,12 @@ const LINE = 'rgba(var(--crest-rgb,139,227,198),0.18)';
 
 /**
  * The date as an unambiguous string.
+ *
+ * Exported since 2026-09-04: `/agents` and the waiting list's own agent line print the same date
+ * from the same reading, and two formatters would eventually disagree about a month name or a time
+ * zone on two pages describing one number.
  */
-function absoluteDate(atMs: number): string {
+export function absoluteDate(atMs: number): string {
   return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'long',

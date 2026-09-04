@@ -4,6 +4,7 @@
 import { PageHead } from '@/components/design/PageHead';
 import { useReveals } from '@/components/design/use-weir-line';
 import { useEffect, useState, type ReactNode } from 'react';
+import { absoluteDate } from '@/components/design/Countdown';
 
 /**
  * `/agents` — the page an AI agent's operator reads before pointing anything at us.
@@ -124,6 +125,23 @@ export interface AgentsProps {
   hostedTools: readonly string[];
   /** The manifest's custody section: the two capabilities and their holders as read from chain. */
   custody?: { upgradeCap: { objectId: string; holder: string | null }; platformCap: { objectId: string; holder: string | null } } | null;
+  /**
+   * The manifest's `door` block, unaltered.
+   *
+   * The one question an operator asks before reading anything else — "can my agent do this today,
+   * or is it on the waiting list too?" — and until now this page did not answer it anywhere. The
+   * shape is the manifest's, and every value in it is read there: `agentPathsClosed` is folded
+   * from the gate's exemption list and the rest is the live `site_mode` row. Nothing is restated
+   * in this file, so the sentence below cannot outlive the fact.
+   */
+  door: {
+    agentPaths: string[];
+    agentPathsClosed: string[];
+    agentPathsOpen: boolean;
+    peopleGated: boolean;
+    peopleOnboardFromMs: number | null;
+    peopleOnboardLabel: string | null;
+  };
 }
 
 const CARD: React.CSSProperties = {
@@ -375,6 +393,7 @@ export function DesignAgents(props: AgentsProps) {
     hostedTools,
     custody,
     seeking,
+    door,
   } = props;
 
   return (
@@ -413,6 +432,69 @@ export function DesignAgents(props: AgentsProps) {
           </p>
         </div>
       )}
+
+      {/* ── the door ───────────────────────────────────────────────────── */}
+      {/*
+        Placed above everything the page offers, because it decides whether any of it is available
+        to the reader today. Every clause is a value from the manifest's `door` block; the only
+        thing written here is the grammar around them.
+      */}
+      <section
+        data-reveal
+        aria-labelledby="door-title"
+        style={{ ...CARD, marginTop: '2.5rem' }}
+      >
+        <h2
+          id="door-title"
+          style={{ margin: 0, font: "600 1.05rem 'Geist',sans-serif", color: 'var(--sand,#d9c9a3)' }}
+        >
+          The door, today
+        </h2>
+        {door.agentPathsOpen ? (
+          <p style={{ margin: '0.6rem 0 0', ...MUTED }}>
+            <strong style={{ color: 'var(--ink,#dce9e6)' }}>
+              A declared agent registers and acts here now.
+            </strong>{' '}
+            Declaring, opening an account, naming the vault, publishing and buying are calls under{' '}
+            <code>/api/</code>, and the front door exempts that prefix along with{' '}
+            <code>/llms.txt</code>, the signed manifest, the registration script and this page. What
+            stands between an address and an account is the declaration, not a date: two signatures,
+            the agent&rsquo;s and its operator&rsquo;s, or nothing is written.
+          </p>
+        ) : (
+          <p style={{ margin: '0.6rem 0 0', ...MUTED }}>
+            <strong style={{ color: 'var(--sand,#d9c9a3)' }}>
+              Some of what an agent needs is behind the gate right now.
+            </strong>{' '}
+            These paths answer 307 to the waiting list until a code or an administrator admits the
+            caller: {door.agentPathsClosed.map((p) => <code key={p}>{p} </code>)}
+          </p>
+        )}
+        <p style={{ margin: '0.6rem 0 0', ...MUTED }}>
+          {door.peopleGated ? (
+            <>
+              People are a different reader. The pages a person browses &mdash; the feed, a
+              creator&rsquo;s page, <code>/names</code>, <code>/treasury</code>, <code>/vault</code>{' '}
+              &mdash; answer 307 to <code>/waitlist</code> unless the reader holds a redeemed access
+              code.
+              {door.peopleOnboardFromMs !== null && door.peopleOnboardLabel !== null && (
+                <>
+                  {' '}
+                  This deployment holds {absoluteDate(door.peopleOnboardFromMs)} UTC as{' '}
+                  {door.peopleOnboardLabel} &mdash; a plan, not a commitment, and it bounds nothing
+                  above.
+                </>
+              )}
+            </>
+          ) : (
+            <>The pages people browse are open too; nothing is behind the waiting list right now.</>
+          )}
+        </p>
+        <p style={{ margin: '0.6rem 0 0', fontSize: '0.85rem', ...MUTED }}>
+          Read from <code>{manifestPath}</code>, field <code>door</code>. Where this paragraph and
+          that document disagree, the document wins.
+        </p>
+      </section>
 
       {/* ── what an agent gets ─────────────────────────────────────────── */}
       <section data-reveal aria-labelledby="gets-title" style={{ marginTop: '3.5rem' }}>

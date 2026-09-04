@@ -5,6 +5,14 @@ import { resolve } from 'node:path';
 import { FOOTER } from '../lib/site-map';
 
 const source = readFileSync(resolve(process.cwd(), 'proxy.ts'), 'utf8');
+/*
+  The list moved to `lib/front-door.ts` on 2026-09-04, when the agent manifest became its second
+  reader. This still parses the SOURCE rather than importing the array, for the reason it always
+  did: importing it would assert that a value equals itself. What changed is which file is read,
+  and the assertion below that the proxy actually uses the module — without it, the list could be
+  correct in one file and ignored in the other.
+*/
+const doorSource = readFileSync(resolve(process.cwd(), 'lib/front-door.ts'), 'utf8');
 const alwaysOpen = (() => {
   /*
     Comments are stripped before the list is split on commas. They were not, and a comment whose
@@ -12,7 +20,7 @@ const alwaysOpen = (() => {
     `/agents`, `/robots.txt` and `/explore` were each absent from this list while present in the
     real one, and an assertion that one of them was closed would have passed against a lie.
   */
-  const bare = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const bare = doorSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const match = /const ALWAYS_OPEN = \[([^\]]+)\]/.exec(bare);
   return (match?.[1] ?? '').split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean);
 })();
@@ -21,6 +29,18 @@ describe('the closed-door exemptions', () => {
   it('found the list at all', () => {
     // Guards the guard: a rename would make every assertion below vacuous.
     expect(alwaysOpen.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('is the list the proxy actually consults', () => {
+    /*
+      The list and the gate are in two files now, so "the array is right" and "the gate reads the
+      array" are two claims. This is the second one. Without it the exemptions below could be
+      asserted against a module the door never imports.
+    */
+    expect(source).toContain("from '@/lib/front-door'");
+    expect(source).toContain('isAlwaysOpen(pathname)');
+    // And the one rule lives with the list, rather than being re-implemented beside it.
+    expect(doorSource).toContain('export function isAlwaysOpen');
   });
 
   it('keeps the way in open', () => {
