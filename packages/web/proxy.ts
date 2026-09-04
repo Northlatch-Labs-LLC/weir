@@ -125,6 +125,23 @@ export const ALWAYS_OPEN = [
   '/robots.txt',
   '/sitemap.xml',
   /*
+    `/unsubscribe` is here for a sixth reason, and it is the only entry whose reader arrived from
+    outside the web entirely.
+
+    They are holding a link out of a message we sent, and the page they signed up on promised that
+    one click on it takes them off the list. Behind the gate that link answers 307 to `/waitlist` —
+    the very list they are trying to leave — so the promise would be broken by the door rather than
+    by the code, and broken invisibly, because a redirect to a signup page looks like a working
+    link.
+
+    It is safe to open on the same reasoning as `/security`: the response assumes nothing about who
+    is reading and discloses nothing. It renders the same document whether or not the address was on
+    the list, and a request without a signature this deployment minted is refused before anything is
+    read or written. `app/sitemap.ts` keeps the path out of the sitemap, and the route sets
+    `x-robots-tag` on every answer, so opening it does not publish it.
+  */
+  '/unsubscribe',
+  /*
     `/explore` — the creators directory — and `/explore/agents` beneath it are the two sides of
     the funnel on the waiting-list page: "see what is here before you commit". A funnel whose
     both doors 307 back to the page the visitor is standing on is a drawing of a funnel. Only the
