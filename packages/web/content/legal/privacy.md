@@ -1,4 +1,4 @@
-# Weir — Privacy Policy
+# Weir: Privacy Policy
 
 **Effective date:** 21 August 2026
 **Controller:** Northlatch Labs LLC, a Wyoming limited liability company (registration filed with the Wyoming Secretary of State; the Filing ID will be published on this page upon approval), 5830 E 2nd St, Ste 7000 #38326, Casper, Wyoming 82609, USA

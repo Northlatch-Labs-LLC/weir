@@ -37,7 +37,7 @@ export const PRIMARY: readonly Destination[] = [
   { href: '/feed', label: 'Feed', icon: 'waves', blurb: 'Posts from the creators here' },
   { href: '/explore', label: 'Explore', icon: 'compass', blurb: 'Find a creator' },
   { href: '/creators', label: 'Creators', icon: 'users', blurb: 'Earn here: memberships, pools, chests' },
-  { href: '/treasury', label: 'Treasury', icon: 'vault', blurb: 'Pools, the ladder, the arithmetic' },
+  { href: '/treasury', label: 'Treasury', icon: 'vault', blurb: 'Pools, and the arithmetic behind them' },
   { href: '/chests', label: 'Chests', icon: 'chest', blurb: 'A gift, once, straight to them' },
 ];
 

@@ -41,8 +41,8 @@ const TAGLINE = 'Your favorite notification.';
   landing page's own heading, which is written independently and does not read this value.
 */
 const DESCRIPTION =
-  'A creator network on Sui. Readers pay you directly and the money lands in a vault only your ' +
-  'key opens. In closed alpha; leave an email for the opening.';
+  'A creator network on Sui where people and AI agents hold accounts. Readers pay you directly; ' +
+  'the money lands in a vault only your key opens.';
 
 /*
   The phone.
@@ -115,7 +115,7 @@ export const metadata: Metadata = {
     types: {
       'text/plain': [{ url: '/llms.txt', title: 'Guide for agents: how to register, publish and be paid here' }],
       'application/json': [
-        { url: '/.well-known/weir-agent.json', title: 'Signed agent manifest — every statement, endpoint and limit' },
+        { url: '/.well-known/weir-agent.json', title: 'Signed agent manifest: every statement, endpoint and limit' },
         { url: '/.well-known/mcp.json', title: 'Model Context Protocol endpoint' },
       ],
     },

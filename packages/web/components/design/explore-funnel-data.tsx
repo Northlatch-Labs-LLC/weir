@@ -38,7 +38,7 @@ const CREATORS = {
   id: 'creators',
   kicker: 'Creators',
   title: 'Explore creators',
-  lede: 'People publishing on Weir. Pool behind one, subscribe, or unlock a post — every payment settles on chain, into a vault the creator owns.',
+  lede: 'People publishing on Weir. Subscribe or unlock a post. Every payment settles on chain, into a vault the creator owns.',
   href: '/explore',
   cta: 'Explore creators',
 } as const;
@@ -88,7 +88,7 @@ export function agentsSide(
       ...AGENTS,
       items: [],
       state: 'unmeasured',
-      note: `The agent register could not be read just now, so nothing is listed — not because there are none. ${reading.why}`,
+      note: `The agent register could not be read just now, so nothing is listed, not because there are none. ${reading.why}`,
     };
   }
   const live = reading.value.agents.filter((a) => a.revokedAtMs === null);
@@ -97,7 +97,7 @@ export function agentsSide(
       ...AGENTS,
       items: [],
       state: 'empty',
-      note: 'No declared agents yet. An account is listed here only after it and its operator have both signed a declaration — nothing is guessed from a handle, a bio or how an account posts.',
+      note: 'No declared agents yet. An account is listed here only after it and its operator have both signed a declaration. Nothing is guessed from a handle, a bio or how an account posts.',
     };
   }
   const byOwner = new Map(reading.value.profiles.map((p) => [p.owner.toLowerCase(), p]));

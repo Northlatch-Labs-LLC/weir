@@ -30,22 +30,21 @@ const LINE = 'rgba(var(--line-rgb,28,61,71),0.9)';
 
 const GUARANTEES: readonly DesignGuarantee[] = [
   { icon: <Icon name="lock" size={18} />, title: 'One predicate, in one place', body: 'A gated body is released only against a Subscription or Unlock object held on chain. There is no second code path, no admin override, no support tool that can hand it over.', mechanism: 'a failed read locks, never unlocks' },
-  { icon: <Icon name="eye" size={18} />, title: 'Nothing to leak client-side', body: 'A body you have not bought is not in the payload at all. There is no blurred paragraph in the HTML, no hidden div, no CSS to disable — the browser never received the words.', mechanism: 'gates render from absence, not from concealment' },
-  { icon: <Icon name="shield" size={18} />, title: 'Encrypted before it is stored', body: 'A paid post\u2019s words and media live on Walrus as ciphertext, sealed to the same identity, so one unlock opens both. Seal releases the key against the object in your wallet, not against a row here \u2014 the paywall is key custody, not our server agreeing to say no. A subscriber post\u2019s words are sealed too, to the month they were published \u2014 a lapsed subscription keeps what it paid for and opens nothing published after. Its media, and everything in a free post, are gated by this server rather than sealed.', mechanism: 'Seal keys · Walrus blobs · your object' },
-  { icon: <Icon name="vault" size={18} />, title: 'No custody, by construction', body: 'A pooled deposit is delegated from a vault your address owns. We never take possession, so there is nothing for us to freeze, lend, rehypothecate or lose in a bankruptcy.', mechanism: 'no deployed function moves your principal; upgrades need 2 of 3 keys' },
+  { icon: <Icon name="eye" size={18} />, title: 'Nothing to leak client-side', body: 'A body you have not bought is not in the payload at all. There is no blurred paragraph in the HTML, no hidden div, no CSS to disable: the browser never received the words.', mechanism: 'gates render from absence, not from concealment' },
+  { icon: <Icon name="shield" size={18} />, title: 'Encrypted before it is stored', body: 'A paid post\u2019s words and media live on Walrus as ciphertext, sealed to the same identity, so one unlock opens both. Seal releases the key against the object in your wallet, not against a row here. The paywall is key custody, not our server agreeing to say no. A subscriber post\u2019s words are sealed too, to the month they were published: a lapsed subscription keeps what it paid for and opens nothing published after. Its media, and everything in a free post, are gated by this server rather than sealed.', mechanism: 'Seal keys · Walrus blobs · your object' },
+  { icon: <Icon name="vault" size={18} />, title: 'No custody, by construction', body: 'We never take possession of a deposit, so there is nothing for us to freeze, lend, rehypothecate or lose in a bankruptcy.', mechanism: 'no deployed function moves your principal; upgrades need 2 of 3 keys' },
   { icon: <Icon name="key" size={18} />, title: 'An account nobody can close', body: 'Sign in with Google through zkLogin and you get a real Sui address: Google never learns the address, the chain never learns the account. Your subscriptions and unlocks are objects in your wallet, not rows in ours.', mechanism: 'if this site went dark, your access survives it' },
-  { icon: <Icon name="check" size={18} />, title: 'Verifiable by strangers', body: 'The package digest, the tier object, the vault object and every settlement are public. You do not have to believe our dashboard — you can read the chain and disagree with us.', mechanism: 'every figure names its source or says not measured' },
+  { icon: <Icon name="check" size={18} />, title: 'Verifiable by strangers', body: 'The package digest, the tier object, the vault object and every settlement are public. You do not have to believe our dashboard: you can read the chain and disagree with us.', mechanism: 'every figure names its source or says not measured' },
 ];
 
 const ONLY_CHAIN: readonly DesignOnlyChain[] = [
-  { figure: '0', title: 'Support that costs the supporter nothing', body: 'Only programmable money lets a supporter fund you with interest instead of principal. On a card network there is no way to lend a creator your yield and keep your money — the rails cannot express it.' },
   { figure: '∞', title: 'A paywall that outlives the platform', body: "Your subscriber's access is an object in their wallet. Ours is not the server that grants it, so our uptime, our terms of service and our continued existence are not conditions of your business." },
-  { figure: '1:1', title: 'Numbers anyone can check', body: 'Every fee, payout and balance is a public record with a digest. Nobody has to trust a screenshot of a dashboard — a competitor, a journalist or a tax authority can verify it independently.' },
+  { figure: '1:1', title: 'Numbers anyone can check', body: 'Every fee, payout and balance is a public record with a digest. Nobody has to trust a screenshot of a dashboard: a competitor, a journalist or a tax authority can verify it independently.' },
 ];
 
 const CMP_SOURCES: readonly string[] = [
-  "Patreon — 10% platform fee plus payment processing, roughly 13–16% all-in. Verified against Patreon's help centre and 2026 fee analyses, 19 Aug 2026.",
-  "OnlyFans — 20%, the platform's own published rate, 19 Aug 2026.",
+  "Patreon: 10% platform fee plus payment processing, roughly 13 to 16% all-in. Verified against Patreon's help centre, 19 Aug 2026.",
+  "OnlyFans: 20%, the platform's own published rate, 19 Aug 2026.",
   'Both are re-verified before any paid campaign. If a competitor’s rate moves in our favour we still print theirs rather than ours, and we date it.',
 ];
 
@@ -87,10 +86,9 @@ export async function SecurityData({
       : `${feePercent}, taken at settlement in the same transaction that pays you. Read from the Platform object; the contract caps it at ${ceiling}.`;
 
   const CMP_ROWS: readonly DesignCmpRow[] = [
-    { icon: <Icon name="scales" size={16} />, q: 'What does the platform take?', weir: weirFeeAnswer, patreon: '10% platform fee plus payment processing — roughly 13–16% all-in, depending on the tier and the payment method.', of: '20% flat, deducted before payout.' },
+    { icon: <Icon name="scales" size={16} />, q: 'What does the platform take?', weir: weirFeeAnswer, patreon: '10% platform fee plus payment processing, roughly 13 to 16% all-in depending on the tier and the payment method.', of: '20% flat, deducted before payout.' },
     { icon: <Icon name="vault" size={16} />, q: 'Who holds the money between the supporter paying and you being paid?', weir: 'Nobody. Settlement and payout are one transaction, so there is no interval and no balance for us to hold.', patreon: 'Patreon holds it until a payout cycle releases it to your bank or PayPal.', of: 'OnlyFans holds it until a payout cycle releases it, with a minimum balance before withdrawal.' },
-    { icon: <Icon name="drop" size={16} />, q: 'Can someone support you without spending money?', weir: 'Yes. They pool SUI, you take the staking yield it earns, and they keep the principal — withdrawable in full at any time.', patreon: 'No. Support means a recurring charge to their card.', of: 'No. Support means a subscription or a tip.' },
-    { icon: <Icon name="lock" size={16} />, q: 'What actually enforces the paywall?', weir: "A Seal key over a Walrus blob, released against a Subscription or Unlock object in the buyer's wallet. A failed read locks.", patreon: "A row in Patreon's database, checked by Patreon's servers.", of: "A row in OnlyFans' database, checked by their servers." },
+    { icon: <Icon name="lock" size={16} />, q: 'What enforces the paywall?', weir: "A Seal key over a Walrus blob, released against a Subscription or Unlock object in the buyer's wallet. A failed read locks.", patreon: "A row in Patreon's database, checked by Patreon's servers.", of: "A row in OnlyFans' database, checked by their servers." },
     { icon: <Icon name="shield" size={16} />, q: 'What happens to your business if your account is terminated?', weir: 'Your supporters keep their subscriptions and unlocks as objects, and your pool stays in a vault your address owns. Losing us does not lose them.', patreon: 'Access ends with the account. The membership list and the paid posts go with it.', of: 'Access ends with the account, and payouts can be withheld pending review.' },
   ];
 
@@ -112,7 +110,7 @@ export async function SecurityData({
       clip: feePercent === null ? 'border-box' : 'text',
       figureGlow: feePercent === null ? 'none' : 'drop-shadow(0 0 24px rgba(var(--crest-rgb,139,227,198),0.45))',
     },
-    { name: 'Patreon', figure: '13–16%', note: 'A 10% platform fee plus payment processing. The all-in figure is the one a creator actually feels.', bg: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.6),rgba(var(--pb,9,32,42),0.8))', border: LINE, shadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.04)', rule: LINE, nameColor: DIM, figureColor: INK, figureBg: 'none', clip: 'border-box', figureGlow: 'none' },
+    { name: 'Patreon', figure: '13 to 16%', note: 'A 10% platform fee plus payment processing. The all-in figure is the one a creator actually feels.', bg: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.6),rgba(var(--pb,9,32,42),0.8))', border: LINE, shadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.04)', rule: LINE, nameColor: DIM, figureColor: INK, figureBg: 'none', clip: 'border-box', figureGlow: 'none' },
     { name: 'OnlyFans', figure: '20%', note: "The platform's published rate, before any payout hold. Flat, and the highest of the three.", bg: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.6),rgba(var(--pb,9,32,42),0.8))', border: LINE, shadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.04)', rule: LINE, nameColor: DIM, figureColor: INK, figureBg: 'none', clip: 'border-box', figureGlow: 'none' },
   ];
 
@@ -152,10 +150,10 @@ export async function SecurityData({
     product has ever created.
   */
   const rows: { key: string; name: string; icon: string; rail: string; id: string | null; what: string }[] = [
-    { key: 'package', name: 'Weir package — running', icon: 'cube', rail: 'linear-gradient(180deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', id: config.ok ? config.value.latestPackageId : null, what: 'The code that executes: subscriptions, unlocks, tier objects, the settlement that takes the platform fee in the same transaction, and the key registry. This is the package to read.' },
-    { key: 'origin', name: 'Original publication', icon: 'layers', rail: 'linear-gradient(180deg,var(--teal,#7fd8dd),var(--sand,#d9c9a3))', id: config.ok ? config.value.packageId : null, what: 'Where these types were first published. Move binds type identity to that address forever, so every object Weir has ever made carries this id in its type tag — it is how you recognise one as ours. It is not the code that runs today.' },
-    { key: 'keys', name: 'Key registry', icon: 'key', rail: 'linear-gradient(180deg,var(--sand,#d9c9a3),var(--crest,#8be3c6))', id: keyRegistry, what: 'The published encryption key for each address, used for direct messages between people. and it is the module added in the upgrade — which is why the original package above does not contain it.' },
-    { key: 'platform', name: 'Platform object', icon: 'vault', rail: 'linear-gradient(180deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', id: config.ok ? config.value.platformId : null, what: 'Holds the live economic terms — the fee, the referral share, the treasury. Every figure this site prints about fees is read from here.' },
+    { key: 'package', name: 'Weir package (running)', icon: 'cube', rail: 'linear-gradient(180deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', id: config.ok ? config.value.latestPackageId : null, what: 'The code that executes: subscriptions, unlocks, tier objects, the settlement that takes the platform fee in the same transaction, and the key registry. This is the package to read.' },
+    { key: 'origin', name: 'Original publication', icon: 'layers', rail: 'linear-gradient(180deg,var(--teal,#7fd8dd),var(--sand,#d9c9a3))', id: config.ok ? config.value.packageId : null, what: 'Where these types were first published. Move binds type identity to that address forever, so every object Weir has ever made carries this id in its type tag: it is how you recognise one as ours. It is not the code that runs today.' },
+    { key: 'keys', name: 'Key registry', icon: 'key', rail: 'linear-gradient(180deg,var(--sand,#d9c9a3),var(--crest,#8be3c6))', id: keyRegistry, what: 'The published encryption key for each address, used for direct messages between people. This module was added in the upgrade, which is why the original package above does not contain it.' },
+    { key: 'platform', name: 'Platform object', icon: 'vault', rail: 'linear-gradient(180deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', id: config.ok ? config.value.platformId : null, what: 'Holds the live economic terms: the fee, the referral share, the treasury. Every figure this site prints about fees is read from here.' },
     { key: 'registry', name: 'Account registry', icon: 'layers', rail: 'linear-gradient(180deg,var(--teal,#7fd8dd),var(--sand,#d9c9a3))', id: config.ok ? config.value.registryId : null, what: 'Maps handles to addresses. This is what decides whether a name is free, and it is the same table the mint transaction writes to.' },
   ];
 
@@ -163,17 +161,17 @@ export async function SecurityData({
     const present = row.id !== null && row.id !== '';
     return {
       name: row.name,
-      tag: present ? 'live' : 'not set',
+      tag: present ? 'live' : 'not published',
       tagColor: present ? CREST : SAND,
       tagBorder: present ? 'rgba(var(--crest-rgb,139,227,198),0.32)' : 'rgba(var(--sand-rgb,217,201,163),0.32)',
       icon: <Icon name={row.icon} size={16} />,
       rail: row.rail,
-      id: present ? row.id : null,
+      id: present ? row.id : 'not published',
       idColor: present ? INK : SAND,
       idStyle: present ? 'normal' : 'italic',
       what: row.what,
       copyLabel: present ? 'Copy id' : 'Nothing to copy',
-      linkLabel: present ? 'View on Suiscan' : 'Not published — set at deploy',
+      linkLabel: present ? 'View on Suiscan' : 'Not published; set at deploy',
       linkColor: present ? TEAL : DIM,
       href: present && row.id !== null ? scan(row.id) : undefined,
       onCopy: undefined,

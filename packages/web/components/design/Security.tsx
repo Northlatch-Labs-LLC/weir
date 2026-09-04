@@ -87,7 +87,7 @@ export function DesignSecurity({
               kicker="Security"
               title="A policy can be revised."
               accent="A contract cannot."
-              lede="Every platform promises it will treat you fairly. We are making a narrower claim: for the things that matter here, there is no function that would let us treat you otherwise. Below is each guarantee and the mechanism that enforces it — not a padlock icon."
+              lede="Every platform promises it will treat you fairly. We are making a narrower claim: for the things that matter here, there is no function that would let us treat you otherwise. Below is each guarantee and the mechanism that enforces it. Not a padlock icon."
             />
 
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,19rem),1fr))' }}>
@@ -170,7 +170,7 @@ export function DesignSecurity({
               <div style={{ textAlign: 'center' }}>
                 <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Published on chain</p>
                 <h2 id="pub-title" style={{ margin: '0 auto 0.75rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', textWrap: 'balance' }}>Read the <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>contracts yourself</span></h2>
-                <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', marginBottom: '2.5rem' }}>Every claim on this page is enforced by code at one of these addresses. Copy an id, open it in an explorer, and check us. A slot reading <span style={{ color: 'var(--alert,#f2a29b)', fontStyle: 'italic' }}>not published</span> is one we have not deployed yet — never a placeholder dressed as a live address.</p>
+                <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', marginBottom: '2.5rem' }}>Every claim on this page is enforced by code at one of these addresses. Copy an id, open it in an explorer, and check us. A slot reading <span style={{ color: 'var(--alert,#f2a29b)', fontStyle: 'italic' }}>not published</span> is one we have not deployed yet, never a placeholder dressed as a live address.</p>
               </div>
 
               <div style={{ display: 'grid', gap: '1.25rem' }}>
@@ -194,7 +194,7 @@ export function DesignSecurity({
                 </Fragment>))}
               </div>
 
-              <p style={{ margin: '1.25rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', maxWidth: '72ch' }}>Network: Sui mainnet. Module source is published with the package — an explorer will show you the bytecode and, where verification is available, the Move source that produced it. If a figure on this site disagrees with one of these objects, the object is right.</p>
+              <p style={{ margin: '1.25rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', maxWidth: '72ch' }}>Network: Sui mainnet. Module source is published with the package: an explorer will show you the bytecode and, where verification is available, the Move source that produced it. If a figure on this site disagrees with one of these objects, the object is right.</p>
             </section>
 
             <div data-reveal style={{ marginTop: '3rem', border: '1px solid rgba(var(--alert-rgb,242,162,155),0.3)', borderLeft: '3px solid var(--alert,#f2a29b)', borderRadius: '10px', padding: '1.5rem', maxWidth: '72ch' }}>

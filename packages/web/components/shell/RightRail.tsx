@@ -39,7 +39,7 @@ export async function RightRail() {
       <section className="rr-section" aria-labelledby="rr-creators">
         <div className="rr-head">
           <span className="k" id="rr-creators">
-            Pool behind someone
+            Creators
           </span>
           <Link className="rr-more" href="/explore">
             View all
