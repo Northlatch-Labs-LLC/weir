@@ -159,13 +159,19 @@ export async function POST(request: Request) {
       Fails closed and says so. The signatures are spent by now, so a caller who is told this must
       sign again — telling them it worked when the row is not there would put an agent in the
       register in name only, and the next reader would find nothing.
+
+      The message is logged, not returned: a Postgres error can name a table, a column or a
+      constraint, and that is a description of our schema handed to an unauthenticated caller —
+      the same reasoning, and the same shape of fix, as the waiting room's own write failure in
+      `app/api/agents/declare/pending/route.ts` (Security F1, 2026-09-04).
     */
+    console.error(
+      JSON.stringify({
+        declarationRecordFailed: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return NextResponse.json(
-      {
-        error: `both signatures verified but the declaration was not recorded: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      },
+      { error: 'both signatures verified but the register is not reachable just now — try again' },
       { status: 503 },
     );
   }

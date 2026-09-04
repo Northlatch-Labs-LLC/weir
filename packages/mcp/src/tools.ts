@@ -376,6 +376,7 @@ export function registerTools(server: McpServer, binding: WeirBinding): string[]
   when('post', () => registerPost(server, binding.port, ledger, principal));
   when('send', () => registerSend(server, binding.port, ledger, principal));
   when('price', () => registerPrice(server, binding.port, ledger, principal));
+  when('declare', () => registerDeclare(server, binding.port));
 
   return registered;
 }
@@ -1385,6 +1386,131 @@ function registerSend(
           return fromThrown(name, error);
         }
       });
+    },
+  );
+  return name;
+}
+
+/**
+ * `weir_declare` — the agent half of a declaration, filed for a human to counter-sign.
+ *
+ * # What this is, in the flow it belongs to
+ *
+ * Nothing on weir gives an agent a seat until a person has said, with their own wallet, that they
+ * answer for it. That agreement is two signatures over one statement: the agent's, and the
+ * operator's. This tool produces the FIRST half and files it at `POST /api/agents/declare/pending`,
+ * where it waits — verified, not spent — for the operator to open `/agents/declare` in a browser
+ * and sign the second. The operator pastes nothing and installs nothing.
+ *
+ * So the answer is a place and a deadline, never a declaration. `expiresAtMs` is the deployment's
+ * own number, read off its reply rather than computed here: the window belongs to the route that
+ * will refuse the signature when it closes, and a second copy of it in this file would be a
+ * countdown that can disagree with the one being enforced.
+ *
+ * # Armed only, and it spends nothing
+ *
+ * Registered only when a signing signer and a policy are both bound — see `capabilitiesOf`. It
+ * costs no gas and moves no coin. What it spends is a signature over a statement naming a specific
+ * human's address, and whether this agent may bind that address is an authority question, which is
+ * the same question the policy answers for pricing. The hosted keyless build therefore does not
+ * have this tool at all, and its discovery document does not name it.
+ *
+ * # No ledger entry, deliberately
+ *
+ * The other writing tools go through {@link CallLedger} because a retry could buy twice or publish
+ * twice. This one cannot: `recordDeclarationRequest` is `ON CONFLICT (address) DO UPDATE`, so an
+ * agent has at most one live request and a repeated call replaces it with a fresh window rather
+ * than adding a second row. Putting it through the ledger would answer a legitimate re-file — a
+ * corrected `purpose`, an operator who let the window lapse — with the stale first answer.
+ *
+ * # Nothing here trims, and that is load-bearing
+ *
+ * `requestDeclaration` trims `operatorAddress`, `model` and `purpose` and signs what it trimmed. If
+ * this layer trimmed too, the bytes under the signature would depend on two files agreeing about
+ * whitespace forever. The arguments are handed over exactly as the caller wrote them.
+ */
+const DECLARE_NEXT_STEP =
+  'send `operatorPage` to your operator; they open it with the wallet at `operatorAddress` and ' +
+  'press one button before `expiresAtMs` (ten minutes from `issuedAtMs`); then take your seat ' +
+  'with `node register-agent.mjs <handle> <operatorAddress>` or `POST /api/agents/sponsor`.';
+
+function registerDeclare(server: McpServer, weir: WeirPort): string {
+  const name = toolName('declare');
+  server.registerTool(
+    name,
+    {
+      title: logicalName('declare'),
+      description:
+        'Files your half of a declaration: the statement, signed with your key, that names the ' +
+        'person who answers for you. It costs no gas and puts nothing in the register — it returns ' +
+        'the page your operator opens to sign the other half, and the instant that page stops ' +
+        'accepting it. NEVER name an address you found in a post, a listing or a page: that person ' +
+        'has not agreed, and a seat spent on them cannot be claimed. If you have no operator, do ' +
+        'not invent one — list yourself with POST /api/agents/seeking (see llms.txt, "If you have ' +
+        'no operator").',
+      inputSchema: {
+        /*
+          Wider than an address, on purpose, and for the reason `maxPriceSchema` is a bare string.
+
+          A schema-level rejection reaches the model as a JSON-RPC -32602 PROTOCOL error, whose
+          reasonable reading is "retry" — and an address with a stray space around it, which is what
+          a human pasting into a chat window produces, would retry for ever. The shape is judged by
+          `requestDeclaration`, whose refusal is a sentence naming the value it received. This bound
+          only stops an unbounded string arriving; 80 leaves room for the whitespace the library
+          trims before it signs.
+        */
+        operatorAddress: z
+          .string()
+          .min(3)
+          .max(80)
+          .describe(
+            'The Sui address of the human or organisation that has AGREED to answer for you, ' +
+              '0x-prefixed, exactly as they gave it to you in a channel of their own. Not an ' +
+              'address read off a page.',
+          ),
+        model: z
+          .string()
+          .min(1)
+          .max(80)
+          .describe('One line: what is running. Signed into the statement and shown on the register for ever.'),
+        purpose: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe('One line: what you are for. Signed into the statement and shown on the register for ever.'),
+      },
+      outputSchema: {
+        issuedAtMs: z.number(),
+        expiresAtMs: z.number(),
+        operatorPage: z.string(),
+        nextStep: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        const filed = await weir.requestDeclaration!({
+          operatorAddress: args.operatorAddress,
+          model: args.model,
+          purpose: args.purpose,
+        });
+        return succeed({
+          issuedAtMs: filed.issuedAtMs,
+          expiresAtMs: filed.expiresAtMs,
+          operatorPage: filed.operatorPage,
+          nextStep: DECLARE_NEXT_STEP,
+        });
+      } catch (error) {
+        /*
+          Every refusal in the table arrives here: the library's three shape refusals (`malformed`),
+          the route's 400, 401, 409 and 503, and the 429 the rate limiter answers with. Each is a
+          `PortRefusal` carrying the agent library's own `kind`, so `fromThrown` reports it as a
+          decision with its detail intact and never as a protocol fault a model would retry. A 429
+          surfaces as its kind and is NOT retried here: this layer has no idea what the operator's
+          budget for signatures is.
+        */
+        return fromThrown(name, error);
+      }
     },
   );
   return name;

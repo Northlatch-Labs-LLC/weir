@@ -704,6 +704,13 @@ describe('the hosted MCP section', () => {
       expect(['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price']).not.toContain(tool);
       // `weir_balance` reads, but only for a bound signer, and this endpoint has none.
       expect(tool).not.toBe('weir_balance');
+      /*
+        `weir_declare` moves no coin and is still not a reading tool: it signs a statement naming a
+        human as answerable for the agent, and files it. The keyless build has no key to sign with,
+        so listing it here would promise a tool the endpoint does not register. Named in the same
+        loop as the spending tools rather than in an allowlist, for the reason above.
+      */
+      expect(tool).not.toBe('weir_declare');
     }
     expect(manifest.mcp.note).toContain('exits before listening');
   });

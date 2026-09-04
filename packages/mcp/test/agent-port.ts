@@ -87,6 +87,10 @@ class StubAgent {
   async feed() {
     return ok({ posts: [], truncated: false, nextCursor: null });
   }
+  async requestDeclaration(input: { operatorAddress: string; model: string; purpose: string }) {
+    this.calls.push({ method: 'requestDeclaration', input });
+    return ok({ issuedAtMs: 1_788_400_000_000, expiresAtMs: 1_788_400_600_000, operatorPage: 'https://weir.social/agents/declare' });
+  }
 }
 
 const signer: Signer = { address: hex('f'), scheme: 'ed25519', signPersonalMessage: async () => ({}), signTransaction: async () => ({}) };
@@ -144,6 +148,34 @@ async function main(): Promise<void> {
   }
   check('the spending tools register for a keyed agent', () =>
     assert.ok(['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'].every((t) => registered.includes(t)), registered.join(', ')));
+
+  /*
+    `requestDeclaration` exists only on a KEYED `Agent`; `createAgent({ keypair: null })` returns a
+    `ReadOnlyAgent` without it. So the port's method is absent on a hosted binding for the same
+    structural reason `unlock` is, and `weir_declare` cannot appear there even before the armed gate
+    is consulted. Both directions are asserted: bound when the agent has it, absent when it does not.
+  */
+  check('requestDeclaration is bound when the agent has it and absent otherwise', () => {
+    assert.equal(typeof port.requestDeclaration, 'function');
+    assert.ok(registered.includes('weir_declare'), registered.join(', '));
+    const readOnlyPort = portFromAgent({ quote: async () => ok({}), authorship: async () => ok({}) });
+    assert.equal(readOnlyPort.requestDeclaration, undefined);
+    const caps = capabilitiesOf({ port: readOnlyPort, signer: { kind: 'signing', signer }, policyAvailable: true } as never);
+    assert.ok(!caps.has('declare'), 'an armed binding over an agent that cannot declare must not offer it');
+  });
+
+  const declared = await client.callTool({
+    name: 'weir_declare',
+    arguments: { operatorAddress: hex('b'), model: 'pi-coding-agent', purpose: 'reads Move contracts' },
+  });
+  check('declare reaches the agent and reports the deployment\'s page and window', () => {
+    assert.equal(declared.isError, undefined, textOf(declared));
+    const d = parsed(declared);
+    assert.equal(d['operatorPage'], 'https://weir.social/agents/declare');
+    assert.equal(d['expiresAtMs'], 1_788_400_600_000);
+    const call = agent.calls.find((c) => c.method === 'requestDeclaration')?.input as { operatorAddress: string };
+    assert.equal(call.operatorAddress, hex('b'));
+  });
 
   const quote = await client.callTool({ name: 'weir_quote', arguments: { vaultId: VAULT, contentKey: 'k' } });
   check('quote is JSON: the bigint became a decimal string and the coin became a currency', () => {

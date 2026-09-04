@@ -27,6 +27,42 @@ vi.mock('@/lib/chain', () => ({
     observedAtMs: 0,
   }),
 }));
+// A store fault the pending route's catch branch must turn into the fixed sentence, never echo.
+// Named the way `agent-mind.test.ts` names its walrus fault: a flag one test arms and the mock
+// checks, so every other test in this file still hits the real, disposable database.
+const declarationStoreFault = vi.hoisted(() => ({ next: null as string | null }));
+vi.mock('@/lib/agent-declarations', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/agent-declarations')>();
+  return {
+    ...actual,
+    recordDeclarationRequest: async (input: Parameters<typeof actual.recordDeclarationRequest>[0]) => {
+      if (declarationStoreFault.next !== null) {
+        const message = declarationStoreFault.next;
+        declarationStoreFault.next = null;
+        throw new Error(message);
+      }
+      return actual.recordDeclarationRequest(input);
+    },
+  };
+});
+
+// Same shape, for the register route's own write: `recordDeclaration` in `lib/agents`, faulted
+// once per arming, real database otherwise. See the note beside `declarationStoreFault` above.
+const declarationRecordFault = vi.hoisted(() => ({ next: null as string | null }));
+vi.mock('@/lib/agents', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/agents')>();
+  return {
+    ...actual,
+    recordDeclaration: async (...args: Parameters<typeof actual.recordDeclaration>) => {
+      if (declarationRecordFault.next !== null) {
+        const message = declarationRecordFault.next;
+        declarationRecordFault.next = null;
+        throw new Error(message);
+      }
+      return actual.recordDeclaration(...args);
+    },
+  };
+});
 
 const pending = await import('../app/api/agents/declare/pending/route');
 const declare = await import('../app/api/agents/declare/route');
@@ -124,6 +160,44 @@ describe('the waiting room', () => {
   it('GET needs an operator and refuses a non-address', async () => {
     expect((await pending.GET(new Request(`${ORIGIN}/api/agents/declare/pending`))).status).toBe(400);
     expect((await listPending('not-an-address')).status).toBe(400);
+  });
+
+  it('a write that throws after the signature verifies answers a fixed sentence, never the raw database error — Security F1, 2026-09-04', async () => {
+    // A realistic Postgres-shaped message: names a table and a constraint, the exact detail a
+    // caller — now including an MCP-connected agent through `weir_declare` — must never see.
+    declarationStoreFault.next = 'duplicate key value violates unique constraint "agent_declaration_requests_pkey" on agent_declaration_requests';
+    const issued = Date.now();
+    const r = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) });
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error: string };
+    expect(body.error).toBe('the request verified but the register is not reachable just now — try again');
+    expect(body.error).not.toContain('constraint');
+    expect(body.error).not.toContain('agent_declaration_requests');
+
+    // The fault was one-shot: the next attempt, against the real database, succeeds normally.
+    expect(declarationStoreFault.next).toBeNull();
+    const retried = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) });
+    expect(retried.status, await retried.clone().text()).toBe(201);
+  });
+
+  it('the register route: a write that throws after both signatures verify answers a fixed sentence, never the raw database error — Security F1, 2026-09-04', async () => {
+    declarationRecordFault.next = 'duplicate key value violates unique constraint "agent_accounts_pkey" on agent_accounts';
+    const issued = Date.now();
+    const half = { address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) };
+    const r = await postDeclare({ ...half, operatorSignature: await operatorHalf(issued) });
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error: string };
+    expect(body.error).toBe('both signatures verified but the register is not reachable just now — try again');
+    expect(body.error).not.toContain('constraint');
+    expect(body.error).not.toContain('agent_accounts');
+
+    // The fault was one-shot; both signatures were spent by the failed attempt, so the honest
+    // retry the fixed sentence tells the caller to make needs fresh ones, not a resend of these.
+    expect(declarationRecordFault.next).toBeNull();
+    const freshIssued = Date.now() + 1;
+    const freshHalf = { address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: freshIssued, agentSignature: await agentHalf(freshIssued) };
+    const retried = await postDeclare({ ...freshHalf, operatorSignature: await operatorHalf(freshIssued) });
+    expect(retried.status, await retried.clone().text()).toBe(201);
   });
 });
 

@@ -63,6 +63,16 @@ export function portFromAgent(candidate) {
         port.agents = async (input) => unwrap(await agent.agents(input), 'agents');
     if (has(agent, 'seeking'))
         port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
+    /*
+      Present only on a KEYED agent: `requestDeclaration` signs, and `createAgent({ keypair: null })`
+      returns a `ReadOnlyAgent` that does not carry it. So the port's method is absent on a hosted
+      binding for the same structural reason `unlock` is, and `capabilitiesOf` never sees `declare`
+      there even before the armed gate is consulted. Untrimmed passthrough: the library trims and
+      signs what it trimmed, and a second trim here would make what is signed depend on two files.
+    */
+    if (has(agent, 'requestDeclaration')) {
+        port.requestDeclaration = async (input) => unwrap(await agent.requestDeclaration(input), 'requestDeclaration');
+    }
     if (has(agent, 'quote')) {
         port.quote = async (input) => {
             const q = unwrap(await agent.quote(input), 'quote');

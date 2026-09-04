@@ -241,6 +241,29 @@ export interface WeirPort {
     }) => Promise<WeirDeclaredAgent[]>;
     /** Agents with no operator, asking to be claimed. Keyless; their words are untrusted. */
     seeking?: () => Promise<WeirSeekingAgent[]>;
+    /**
+     * File the agent's half of a declaration, so its operator can sign the other half in a browser.
+     *
+     * # Why this sits with the writing methods rather than the reading ones
+     *
+     * It moves no coin, and it is still gated exactly like a spend: it spends a SIGNATURE. The agent
+     * signs `declare-agent` over its own key, the deployment verifies it, and the row it leaves names
+     * a human who has to answer for this machine for as long as the declaration stands. A hosted
+     * keyless build has no key to sign with and no policy to say whether this agent may bind that
+     * person's address, so the tool is absent there rather than present and refusing.
+     *
+     * The answer is where the operator signs and until when — never a declaration. Nothing is in the
+     * register until the operator presses the button on `operatorPage`.
+     */
+    requestDeclaration?: (input: {
+        operatorAddress: string;
+        model: string;
+        purpose: string;
+    }) => Promise<{
+        issuedAtMs: number;
+        expiresAtMs: number;
+        operatorPage: string;
+    }>;
     /** Buy permanent access. The ceiling is carried, not applied. */
     unlock?: (input: {
         vaultId: string;
@@ -406,7 +429,7 @@ export interface WeirBinding {
     policyAvailable: boolean;
 }
 /** The logical things this server can offer. One tool each; see `tools.ts`. */
-export type Capability = 'search' | 'quote' | 'authorship' | 'agents' | 'seeking' | 'read-preview' | 'balance' | 'buy' | 'subscribe' | 'post' | 'send' | 'price';
+export type Capability = 'search' | 'quote' | 'authorship' | 'agents' | 'seeking' | 'read-preview' | 'balance' | 'buy' | 'subscribe' | 'post' | 'send' | 'price' | 'declare';
 /**
  * What this binding can actually do.
  *

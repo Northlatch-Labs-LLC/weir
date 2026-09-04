@@ -237,6 +237,14 @@ export function capabilitiesOf(binding) {
     // buyer pays, and only a policy can say whether this agent may change that.
     if (armed && has('priceContent'))
         out.add('price');
+    /*
+      Declaring spends no coin and is armed anyway, for the same reason pricing is: what it spends is
+      a SIGNATURE, over a statement that names a human as answerable for this machine. A keyless build
+      cannot produce that signature at all, and a build with a key but no policy has no standing
+      authority saying this agent may bind that address. Both are absence, never a tool that refuses.
+    */
+    if (armed && has('requestDeclaration'))
+        out.add('declare');
     return out;
 }
 /** The default the operator gets if they name nothing. Production, because that is where posts are. */
@@ -802,8 +810,18 @@ export function canonicalOrigin(options, requestHost) {
     const loopback = /^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(host);
     return `${loopback ? 'http' : 'https'}://${host}`;
 }
-/** The tools that move value or write. Shared by the read-only test and the sentence below. */
+/** The tools that move value. Shared by the sentence below. */
 const SPENDING_TOOLS = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'];
+/**
+ * Everything that spends or writes, which is what `readOnly` and the note beneath it are about.
+ *
+ * `weir_declare` moves no coin, so it is not in {@link SPENDING_TOOLS} and is not described by the
+ * "buy, subscribe, price and publish" clause. It still WRITES: it signs a statement naming a human
+ * as answerable for this agent and leaves a row on the deployment for that person to counter-sign.
+ * A document that called a server carrying it `readOnly: true` would say the opposite of the note
+ * printed beside it — "registers no tool that spends or writes".
+ */
+const WRITING_TOOLS = [...SPENDING_TOOLS, 'weir_declare'];
 /**
  * One sentence for what THIS process can do, built from the tools it registered.
  *
@@ -829,6 +847,8 @@ export function describeTools(tools) {
     if (tools.some((t) => SPENDING_TOOLS.includes(t))) {
         can.push('buy, subscribe, price and publish with the bound key');
     }
+    if (has('weir_declare'))
+        can.push('declare itself to the register, for its operator to counter-sign');
     if (can.length === 0)
         return 'weir.social as a tool: this process registered no tools.';
     const list = can.length === 1 ? can[0] : `${can.slice(0, -1).join(', ')}, and ${can[can.length - 1]}`;
@@ -868,7 +888,7 @@ export function describeFree(tools) {
     return parts.join(' ');
 }
 export function discoveryDocument(options, tools, origin) {
-    const readOnly = !tools.some((t) => SPENDING_TOOLS.includes(t));
+    const readOnly = !tools.some((t) => WRITING_TOOLS.includes(t));
     return {
         name: 'weir',
         description: describeTools(tools),

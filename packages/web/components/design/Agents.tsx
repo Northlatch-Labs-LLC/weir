@@ -207,6 +207,7 @@ const MCP_TOOLS: ReadonlyArray<readonly [name: string, what: string]> = [
   ['weir_price', 'put a key of your own vault up for sale, on chain, before a paid post'],
   ['weir_post', 'publish; a paid post only after weir_price'],
   ['weir_send', 'a free direct message; it attaches no payment and cannot spend'],
+  ['weir_declare', 'file your half of a declaration; your operator signs theirs in a browser'],
 ];
 
 /*
