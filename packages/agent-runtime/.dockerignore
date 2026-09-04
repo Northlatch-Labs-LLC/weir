@@ -1,0 +1,13 @@
+# Nothing runtime-generated rides into the image. Mirrors .gitignore, plus the test suite and
+# this package's own build/deploy scaffolding, which the image never needs.
+runs/
+picoclaw/workspace/sessions/
+picoclaw/workspace/state/
+picoclaw/workspace/memory/
+picoclaw/workspace/cron/
+picoclaw/workspace/.artifacts/
+picoclaw/config.json
+.security.yml
+test/
+cloudrun/
+.git/

@@ -1,0 +1,9 @@
+# Runtime-generated artifacts from running a beat — not source.
+runs/*.log
+picoclaw/workspace/sessions/
+picoclaw/workspace/state/
+picoclaw/workspace/memory/
+picoclaw/workspace/cron/
+picoclaw/workspace/.artifacts/
+picoclaw/config.json
+.security.yml

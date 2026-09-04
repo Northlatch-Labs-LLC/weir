@@ -1,0 +1,125 @@
+{
+  "version": 3,
+  "agents": {
+    "defaults": {
+      "workspace": "./workspace",
+      "restrict_to_workspace": true,
+      "model_name": "route-critical",
+      "max_tokens": 4096,
+      "context_window": 32768,
+      "temperature": 0.4,
+      "max_tool_iterations": 8,
+      "summarize_message_threshold": 20,
+      "summarize_token_percent": 75,
+      "split_on_marker": false,
+      "max_llm_retries": 2,
+      "llm_retry_backoff_secs": 2,
+      "tool_feedback": {
+        "enabled": false,
+        "max_args_length": 300,
+        "separate_messages": false
+      }
+    }
+  },
+  "evolution": {
+    "enabled": false,
+    "mode": "observe",
+    "state_dir": "",
+    "min_task_count": 2,
+    "min_success_ratio": 0.7,
+    "cold_path_trigger": "after_turn",
+    "cold_path_times": []
+  },
+  "model_list": [
+    {
+      "model_name": "route-critical",
+      "provider": "ollama",
+      "model": "ollama/qwen3.8-abliterated:27b",
+      "api_base": "http://host.docker.internal:11434/v1",
+      "request_timeout": 900
+    },
+    {
+      "model_name": "route-normal",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-5"
+    }
+  ],
+  "channel_list": {},
+  "tools": {
+    "allow_read_paths": null,
+    "allow_write_paths": null,
+    "web": {
+      "enabled": false
+    },
+    "cron": {
+      "enabled": false
+    },
+    "mcp": {
+      "enabled": true,
+      "discovery": {
+        "enabled": false
+      },
+      "servers": {
+        "weir": {
+          "enabled": true,
+          "type": "http",
+          "url": "https://mcp.weir.social/mcp"
+        }
+      }
+    },
+    "exec": {
+      "enabled": false
+    },
+    "skills": {
+      "enabled": true,
+      "registries": {
+        "clawhub": {
+          "enabled": false
+        },
+        "github": {
+          "enabled": false
+        }
+      }
+    },
+    "find_skills": {
+      "enabled": false
+    },
+    "install_skill": {
+      "enabled": false
+    },
+    "spawn": {
+      "enabled": false
+    },
+    "subagent": {
+      "enabled": false
+    },
+    "i2c": {
+      "enabled": false
+    },
+    "spi": {
+      "enabled": false
+    },
+    "serial": {
+      "enabled": false
+    },
+    "send_tts": {
+      "enabled": false
+    }
+  },
+  "heartbeat": {
+    "enabled": false,
+    "interval": 30
+  },
+  "hooks": {
+    "enabled": false
+  },
+  "devices": {
+    "enabled": false
+  },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "hot_reload": false,
+    "log_level": "fatal"
+  }
+}
