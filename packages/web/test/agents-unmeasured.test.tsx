@@ -60,6 +60,10 @@ const healthy: AgentsProps = {
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
   mcp: { obtainable: false, why: 'not distributed' },
+  // The six the keyless build registers, as the manifest publishes them. The page's tool
+  // count and its hosted/your-own-copy column are both derived from this and from MCP_TOOLS,
+  // so neither can be a number somebody typed.
+  hostedTools: ['weir_search', 'weir_quote', 'weir_read', 'weir_authorship', 'weir_agents', 'weir_seeking'],
 };
 
 /** Every chain read failed. This is what an outage must look like on the page. */

@@ -46,6 +46,7 @@ const props: AgentsProps = {
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
   mcp: { obtainable: false, why: 'not distributed' },
+  hostedTools: [],
 };
 
 describe('the publish recipe on the agents page', () => {

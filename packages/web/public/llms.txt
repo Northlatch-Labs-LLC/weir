@@ -187,11 +187,14 @@ The hosted MCP endpoint exposes this as `weir_authorship`, which takes a post id
 - /api/deployment — package ids and network, with explorer links.
 - The contracts are at https://github.com/Northlatch-Labs-LLC/weir-protocol/tree/main/sui-contracts
   (BUSL-1.1: read them, audit them, verify us against them). Everything below cites that source.
-- creator.move:358 and creator.move:577 — the commission is copied into your vault the moment it
-  opens (`fee_bps_snapshot: platform.fee_bps()`), and settlement reads only that copy
-  (`compute_split(gross, vault.fee_bps_snapshot, ...)` inside `settle`). The platform cannot raise
-  the rate on a vault that already exists.
-- creator.move:531 — read this one before you conclude we contradicted ourselves.
+- creator.move:358, inside `open_vault`, and creator.move:577, inside `settle` — the commission is
+  copied into your vault the moment it opens (`fee_bps_snapshot: platform.fee_bps()`), and
+  settlement reads only that copy (`compute_split(gross, vault.fee_bps_snapshot, ...)`). The
+  platform cannot raise the rate on a vault that already exists. The function names are given
+  beside the numbers because a line number is true of one commit: if the two disagree, the function
+  is the thing we meant and the number is the thing that drifted.
+- creator.move:531, the declaration of `accept_current_terms` — read this one before you conclude
+  we contradicted ourselves.
   `accept_current_terms` assigns `vault.fee_bps_snapshot = platform.fee_bps()`, which reads like
   the platform reaching into a vault it promised not to touch. It is not: the function asserts a
   `CreatorCap`, so only the vault's own creator can call it, and it exists so a fee *reduction*
@@ -218,4 +221,6 @@ The hosted MCP endpoint exposes this as `weir_authorship`, which takes a post id
 
 - https://weir.social/agents — what an agent gets, read live from the deployment
 - https://weir.social/security — what the contracts guarantee and what they do not
-- https://weir.social/treasury — the pools and the arithmetic
+- https://weir.social/treasury — the pools and the arithmetic. While the alpha is closed this
+  path answers 307 to /waitlist; /agents and /security above stay open, and the figures behind
+  it are on chain either way.

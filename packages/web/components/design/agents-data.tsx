@@ -145,6 +145,16 @@ export async function AgentsData() {
     command: JSON.stringify({ mcpServers: { weir: { url: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp' } } }, null, 2),
   };
 
+  /*
+    The hosted tool list, from the manifest and from nowhere else.
+
+    `manifest.mcp.tools` is computed from what the keyless build's `registerTools` returned, so it
+    is the only list in this repository that cannot be wrong about the endpoint. An absent manifest
+    section yields an empty array, and the page then names no hosted tool rather than reciting the
+    four names it used to carry — one of which (`weir_balance`) that server cannot register.
+  */
+  const hostedTools: readonly string[] = manifest.mcp?.tools ?? [];
+
   const custody = manifest.custody;
   const chain = manifest.chain;
   const money = manifest.money;
@@ -226,6 +236,7 @@ export async function AgentsData() {
       registerScriptPath={registerScriptPath}
       seeking={seeking}
       mcp={mcp}
+      hostedTools={hostedTools}
       custody={manifest.custody}
       fee={fee}
       vaultPrice={vaultPrice}
