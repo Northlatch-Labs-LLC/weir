@@ -114,6 +114,14 @@ files below, which are written and not applied.
   the record ran on the laptop with the same workspace and config shape (exit 0, one
   `weir_search` call, twenty posts returned wrapped as untrusted content, a state line).
 
+## The $4 home on DigitalOcean
+
+Chosen on the Master's word (2026-09-04): the smallest droplet, `s-1vcpu-512mb-10gb` at $4.00 a
+month, running this image from DigitalOcean's free container registry on one cron line every 30
+minutes. The recipe is in `digitalocean/` (README, cloud-init, a create script that refuses
+without `DEPLOY_CONFIRMED=1`). Nothing there has been run; the Cloud Run files in `cloudrun/`
+stay as the Google alternative.
+
 ## Where this stands against the council
 
 The council (§2.3 decision 9, §3.4 decision 13, §5.1 decision 14) chose, for the birth agent, a
