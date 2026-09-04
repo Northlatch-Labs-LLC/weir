@@ -68,6 +68,11 @@ const verifyAction = vi.fn(
 );
 
 const agentAccount = vi.fn();
+/**
+ * The register's answer about the pair. `null` — no conflict — unless a test sets one, because the
+ * real function needs Postgres and this suite is about what the route decides with each answer.
+ */
+const operatorConflict = vi.fn<(agent: string, operator: string) => Promise<string | null>>(async () => null);
 
 vi.mock('@/lib/rate-limit', () => ({
   // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
@@ -87,6 +92,7 @@ vi.mock('@/lib/agents', async () => {
     recordDeclaration: (...args: unknown[]) => recordDeclaration(...args),
     // Only `GET /api/agents/[address]` reads this, and the last describe below sets it per test.
     agentAccount: (...args: unknown[]) => agentAccount(...args),
+    operatorConflict: (agent: string, operator: string) => operatorConflict(agent, operator),
   };
 });
 
@@ -479,5 +485,88 @@ describe('the record certifies itself', () => {
       params: Promise.resolve({ address: IMPOSTOR }),
     });
     expect(response.status).toBe(404);
+  });
+});
+
+/*
+  The second keypair.
+
+  On 2026-09-02 an agent was refused for naming itself, generated another key, named that, and was
+  accepted inside a minute. Both signatures were real. These tests say exactly what is and is not
+  refused now, so the guard is never again described as "an agent cannot name itself" without the
+  rest of the sentence.
+*/
+describe('an operator that is only a second keypair', () => {
+  beforeEach(() => {
+    recordDeclaration.mockReset();
+    verifyAction.mockClear();
+    operatorConflict.mockReset();
+    operatorConflict.mockImplementation(async () => null);
+  });
+
+  it('IS accepted when the register knows nothing about either address — the residual gap, stated', async () => {
+    /*
+      Two fresh keys, two honest signatures, no row anywhere naming either. Nothing in this database
+      can tell OPERATOR from a person's new wallet, so the route accepts it and the footprint column
+      (db/039) is what tells a reader. This test pins the gap so a future change that claims to
+      close it has to change this expectation on purpose.
+    */
+    const timestampMs = Date.now();
+    const response = await POST(
+      declare({
+        address: AGENT,
+        operatorAddress: OPERATOR,
+        model: MODEL,
+        purpose: PURPOSE,
+        timestampMs,
+        agentSignature: await signAsAgent(OPERATOR, timestampMs),
+        operatorSignature: await signAsOperator(AGENT, timestampMs),
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(operatorConflict).toHaveBeenCalledWith(AGENT, OPERATOR);
+    expect(recordDeclaration).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['the operator is itself a declared agent', `the operator ${'0x' + 'ab'.repeat(32)} is itself a declared agent; a machine cannot answer for a machine.`],
+    ['the agent is the declared operator of other agents', `${'0x' + 'cd'.repeat(32)} is the declared operator of other agents; an address that answers for machines cannot be declared one.`],
+    ['the operator has a live request to be declared an agent', `the operator ${'0x' + 'ef'.repeat(32)} has a live request to be declared an agent itself.`],
+  ])('is refused with 409 when %s, before any signature is spent', async (_case, sentence) => {
+    operatorConflict.mockImplementation(async () => sentence);
+    const timestampMs = Date.now();
+    const response = await POST(
+      declare({
+        address: AGENT,
+        operatorAddress: OPERATOR,
+        model: MODEL,
+        purpose: PURPOSE,
+        timestampMs,
+        agentSignature: await signAsAgent(OPERATOR, timestampMs),
+        operatorSignature: await signAsOperator(AGENT, timestampMs),
+      }),
+    );
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: string }).error).toBe(sentence);
+    // Decided from the register alone: neither signature was verified, so neither was spent.
+    expect(verifyAction).not.toHaveBeenCalled();
+    expect(recordDeclaration).not.toHaveBeenCalled();
+  });
+
+  it('asks the register about the normalised pair the body named, in that order', async () => {
+    const timestampMs = Date.now();
+    await POST(
+      declare({
+        address: AGENT.toUpperCase().replace('0X', '0x'),
+        operatorAddress: OPERATOR,
+        model: MODEL,
+        purpose: PURPOSE,
+        timestampMs,
+        agentSignature: await signAsAgent(OPERATOR, timestampMs),
+        operatorSignature: await signAsOperator(AGENT, timestampMs),
+      }),
+    );
+    // Agent first, operator second — swapped arguments would refuse the wrong declarations.
+    expect(operatorConflict).toHaveBeenCalledWith(AGENT, OPERATOR);
   });
 });

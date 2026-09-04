@@ -24,6 +24,9 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_ENVIRONMENT, ENV } from '../src/transport.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTools } from '../src/tools.js';
+import type { WeirBinding, WeirPort } from '../src/transport.js';
 
 let checks = 0;
 let failures = 0;
@@ -141,7 +144,55 @@ check('the probe script carries all seven probes from the shape', () => {
   for (const needle of ['Host rebind.example', 'Origin https://evil.example', 'a Cookie is refused', 'GET / is 404', 'Set-Cookie', 'mcp-session-id', 'tools/list is the read set']) {
     assert.ok(probes.includes(needle), `missing probe: ${needle}`);
   }
-  assert.ok(/READ_SET='weir_balance weir_quote weir_read weir_search'/.test(probes));
+});
+
+/*
+  The read set, derived rather than typed.
+
+  This line used to pin `READ_SET='weir_balance weir_quote weir_read weir_search'` — four names, one of
+  which the hosted build never registers (a balance needs a signer) and none of the three read tools
+  added since. The probe would have failed against the live endpoint, and the test would have passed,
+  because both were copies of the same stale list. Now the expected set is what `registerTools`
+  returns for a keyless binding over a port that offers every read, sorted the way the script sorts.
+*/
+const keylessReadSet = ((): string[] => {
+  const noop = async () => ({ ok: true, value: null });
+  const port = {
+    feed: noop, quote: noop, readPreview: noop, authorship: noop, commentAuthorship: noop,
+    agents: noop, seeking: noop, balance: noop,
+  } as unknown as WeirPort;
+  const binding = { port, signer: { kind: 'none' }, policyAvailable: false } as unknown as WeirBinding;
+  return registerTools(new McpServer({ name: 'weir-mcp', version: '0.0.0' }), binding).sort();
+})();
+
+check('the probe script expects exactly the read set the keyless build registers', () => {
+  const m = /READ_SET='([^']*)'/.exec(code(probes));
+  assert.ok(m, 'no READ_SET line');
+  assert.deepEqual((m?.[1] ?? '').split(' ').sort(), keylessReadSet);
+  assert.ok(!keylessReadSet.includes('weir_balance'), 'a keyless build must not register a balance tool');
+});
+
+/*
+  The signed manifest's `mcp.tools` is a list written by hand in packages/web. It described four
+  tools including `weir_balance` for two days while the endpoint registered three. Read here as text
+  — the web application is not a dependency of this package — and compared to the same derivation.
+  Absent (the published library tree), the pin is reported as not verified rather than passed.
+*/
+check('the web manifest lists exactly the tools the keyless build registers', () => {
+  const manifestSource = join(root, 'packages', 'web', 'lib', 'agent-manifest.ts');
+  let src: string;
+  try {
+    src = readFileSync(manifestSource, 'utf8');
+  } catch {
+    console.log("  skip  the web's source is not in this tree — the manifest tool list is NOT verified here");
+    return;
+  }
+  const at = src.indexOf('KEYLESS hosted build');
+  assert.ok(at > 0, 'the manifest no longer marks its hosted tool list');
+  const m = /tools: \[([^\]]*)\]/.exec(src.slice(at));
+  assert.ok(m, 'no tools list after the KEYLESS marker');
+  const listed = [...(m?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((x) => x[1] ?? '').sort();
+  assert.deepEqual(listed, keylessReadSet);
 });
 
 console.log(`${checks - failures}/${checks} checks passed, ${failures} failed`);

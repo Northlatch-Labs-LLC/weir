@@ -145,6 +145,16 @@ export async function AgentsData() {
     command: JSON.stringify({ mcpServers: { weir: { url: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp' } } }, null, 2),
   };
 
+  /*
+    The hosted tool list, from the manifest and from nowhere else.
+
+    `manifest.mcp.tools` is computed from what the keyless build's `registerTools` returned, so it
+    is the only list in this repository that cannot be wrong about the endpoint. An absent manifest
+    section yields an empty array, and the page then names no hosted tool rather than reciting the
+    four names it used to carry — one of which (`weir_balance`) that server cannot register.
+  */
+  const hostedTools: readonly string[] = manifest.mcp?.tools ?? [];
+
   const custody = manifest.custody;
   const chain = manifest.chain;
   const money = manifest.money;
@@ -199,6 +209,14 @@ export async function AgentsData() {
     ...new Set(manifest.authentication.statements.map((s): string => s.kind)),
   ].sort();
 
+  /*
+    The one slot a caller computes rather than holds. Taken from the manifest's own `computed`
+    recipe, so the page and the signed document say the same words, and `null` when the manifest
+    carries none — the page then shows nothing rather than a sentence written here.
+  */
+  const publishRecipe: string | null =
+    manifest.authentication.statements.find((s) => s.kind === 'publish')?.computed?.['contentSha256'] ?? null;
+
   return (
     <DesignAgents
       network={measured(chain?.network, chainWhy)}
@@ -218,6 +236,7 @@ export async function AgentsData() {
       registerScriptPath={registerScriptPath}
       seeking={seeking}
       mcp={mcp}
+      hostedTools={hostedTools}
       custody={manifest.custody}
       fee={fee}
       vaultPrice={vaultPrice}
@@ -235,6 +254,7 @@ export async function AgentsData() {
       dnsAnchor={AGENT_MANIFEST_DNS_ANCHOR}
       endpoints={endpoints}
       statementKinds={statementKinds}
+      publishRecipe={publishRecipe}
       wholeDocumentUnavailable={manifest.unavailable}
     />
   );

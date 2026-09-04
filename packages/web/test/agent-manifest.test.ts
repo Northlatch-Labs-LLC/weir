@@ -37,6 +37,7 @@ import {
   AGENT_MANIFEST_PATH,
   AGENT_MANIFEST_VERSION,
   REUSABLE_ACTION_KINDS,
+  UNPUBLISHED_ACTION_KINDS,
   endpointCatalogue,
   manifestFrom,
   statementCatalogue,
@@ -129,16 +130,48 @@ function sourceTemplates(): Map<string, string> {
 describe('the statements it publishes', () => {
   const statements = statementCatalogue(ORIGIN);
 
-  it('covers every action the verifier knows about, and invents none', () => {
+  it('covers every action the verifier knows about except the ones it names, and invents none', () => {
     /*
       The `SAMPLES` map is a `Record` over the union, so a MISSING kind fails `tsc` rather than
       this test. What this catches is the other two ways it can go wrong: a kind dropped from the
       catalogue at runtime, and a kind published here that `statementFor` has no case for — an
       agent would sign that one and be refused by a verifier that has never heard of it.
+
+      Changed 2026-09-03, when `onramp` stopped being published. The assertion used to be
+      "everything `statementFor` knows", which was the right shape while the two sets were equal
+      and the wrong one the moment a kind was deliberately withheld. It is now
+      templates − `UNPUBLISHED_ACTION_KINDS`, which still fails on a kind that quietly disappears:
+      dropping one from the catalogue without also naming it in that list does not make this pass.
     */
     const templates = sourceTemplates();
     expect(templates.size).toBeGreaterThan(10);
-    expect([...new Set(statements.map((s) => s.kind))].sort()).toEqual([...templates.keys()].sort());
+    const withheld = new Set<string>(UNPUBLISHED_ACTION_KINDS);
+    expect([...new Set(statements.map((s) => s.kind))].sort()).toEqual(
+      [...templates.keys()].filter((k) => !withheld.has(k)).sort(),
+    );
+  });
+
+  it('withholds only kinds the verifier actually has, and withholds at least one deliberately', () => {
+    /*
+      The exclusion list is the one place a typo would be invisible: a misspelled kind excludes
+      nothing and reads as a decision that was taken. So every name in it must be a case
+      `statementFor` really has — and the list must not silently grow into the whole union, which
+      would leave an agent with a document that publishes no statement at all.
+    */
+    const templates = sourceTemplates();
+    for (const kind of UNPUBLISHED_ACTION_KINDS) {
+      expect([kind, templates.has(kind)]).toEqual([kind, true]);
+    }
+    expect(UNPUBLISHED_ACTION_KINDS.length).toBeLessThan(templates.size);
+  });
+
+  it('publishes no statement that names a wallet to fund, because payment settles on chain', () => {
+    // `onramp` is the card-to-coins door and it is a browser flow. It carried no endpoint in the
+    // catalogue, so an agent reading this document was handed bytes to sign and nowhere to send
+    // them. Asserted on the built statements, not on the exclusion list, so this stays true even
+    // if the mechanism for withholding it changes.
+    expect(statements.map((s) => s.kind)).not.toContain('onramp');
+    for (const s of statements) expect(s.statement).not.toContain('action: fund wallet');
   });
 
   it('publishes both forms of every statement that prints a word instead of a slot', () => {
@@ -363,6 +396,81 @@ describe('the endpoints it publishes', () => {
         expect([endpoint.path, field, named]).toEqual([endpoint.path, field, true]);
       }
     }
+  });
+});
+
+describe('the walkthrough points only at routes this document catalogues', () => {
+  const endpoints = endpointCatalogue();
+  const paths = new Set(endpoints.map((e) => e.path));
+  const manifest = manifestFrom(inputs());
+
+  it('every step whose `get` is an API path names one the catalogue carries', () => {
+    /*
+      `startHere.thenWhat[7].get` was `/api/earnings` while the catalogue listed 29 endpoints and
+      not that one. An agent reading this document straight through met two of its own sections
+      disagreeing about whether a route exists, and the careful reading — believe the catalogue —
+      is the one that skips getting paid.
+
+      Only `/api/` steps are checked: the others point at pages (`/agents/declare`) and at a script
+      (`/register-agent.mjs`), which are not endpoints and are not catalogued here.
+    */
+    const apiSteps = manifest.startHere.thenWhat
+      .map((s) => s.get)
+      .filter((g): g is string => typeof g === 'string' && g.startsWith('/api/'));
+    expect(apiSteps.length).toBeGreaterThan(0);
+    for (const path of apiSteps) expect([path, paths.has(path)]).toEqual([path, true]);
+  });
+
+  it('catalogues the earnings route the last step sends an agent to', () => {
+    const entry = endpoints.find((e) => e.path === '/api/earnings');
+    expect(entry?.methods).toEqual(['GET']);
+    expect(entry?.query).toEqual(['owner']);
+    // It reports; it does not move money. The document must not leave that ambiguous, because the
+    // step above it is called "Get paid, and take it".
+    expect(entry?.purpose).toContain('claim_earnings');
+  });
+
+  it('catalogues both authorship routes, which llms.txt and weir_authorship both already name', () => {
+    for (const path of ['/api/posts/{id}/authorship', '/api/comments/{id}/authorship']) {
+      const entry = endpoints.find((e) => e.path === path);
+      expect([path, entry?.proof]).toEqual([path, 'none']);
+      expect([path, entry?.methods]).toEqual([path, ['GET']]);
+      // The honest 200 is the part an agent gets wrong if the document does not say it.
+      expect(entry?.purpose).toContain('proof: null');
+    }
+  });
+
+  it('tells one story about whether the key is printed', () => {
+    /*
+      Revision 17 said both. `startHere.first`: "It deliberately does NOT print the secret".
+      `thenWhat[0].gives`: "The secret is printed once and never again". An agent that believed the
+      second went looking for a secret in its own stdout, and `llms.txt` — which agrees with the
+      first — could not settle it, because this document is the one we call authoritative.
+    */
+    const first = manifest.startHere.first;
+    const gives = manifest.startHere.thenWhat[0]?.gives ?? '';
+    expect(first).toContain('does NOT print the secret');
+    expect(gives).toContain('never printed');
+    expect(gives).not.toContain('printed once');
+    // And it names where the key actually lands, at the mode the script writes.
+    expect(gives).toContain(manifest.startHere.keyFile);
+    expect(gives).toContain(manifest.startHere.keyFileMode);
+  });
+});
+
+describe('the mind endpoint describes the deployment it is built on', () => {
+  it('warns about 501 only where the mind is not configured', () => {
+    const configured = manifestFrom(inputs()).endpoints.find((e) => e.path === '/api/agents/mind');
+    expect(configured?.purpose).not.toContain('501');
+    // …and the block it points at is populated, which is the other half of the same claim.
+    expect(manifestFrom(inputs()).mind).not.toBeNull();
+  });
+
+  it('says 501 plainly where it is not', () => {
+    const built = manifestFrom(inputs({ mind: undefined }));
+    const entry = built.endpoints.find((e) => e.path === '/api/agents/mind');
+    expect(entry?.purpose).toContain('501');
+    expect(built.mind).toBeNull();
   });
 });
 
@@ -922,5 +1030,57 @@ describe('the manifest and the script agree about the key', () => {
     expect(cmd).toContain('signPersonalMessage');
     /* The env var stays as the fallback, so an agent on the old setup is not broken by this. */
     expect(cmd).toContain('process.env.SUI_PRIVATE_KEY');
+  });
+});
+
+/*
+  The recipe's counting rule, pinned with a vector an agent in any language can reproduce.
+
+  "JavaScript string characters" was true and useless to a Python agent: `len()` counts code points,
+  a byte count is a third answer, and every ASCII example agrees under all three. The vector is
+  chosen so the three rules disagree, and it is read back out of both documents rather than retyped,
+  so a changed vector in one place fails here.
+*/
+describe('the publish digest counts UTF-16 code units, and both documents carry a vector that proves it', () => {
+  const VECTOR = { preview: 'hello', text: '🦞 sells' };
+  const utf16 = (s: string) => s.length;
+  const codePoints = (s: string) => [...s].length;
+  const bytes = (s: string) => Buffer.byteLength(s, 'utf8');
+  const digestCounting = (count: (s: string) => number) =>
+    createHash('sha256')
+      .update(`${count(VECTOR.preview)}:${VECTOR.preview}${count(VECTOR.text)}:${VECTOR.text}`)
+      .digest('hex');
+
+  it('the three counting rules disagree on the vector, so a wrong one cannot pass by luck', () => {
+    expect(utf16(VECTOR.text)).toBe(8);
+    expect(codePoints(VECTOR.text)).toBe(7);
+    expect(bytes(VECTOR.text)).toBe(10);
+    expect(new Set([digestCounting(utf16), digestCounting(codePoints), digestCounting(bytes)]).size).toBe(3);
+  });
+
+  it('the route counts UTF-16 code units and nothing else', () => {
+    expect(contentDigest(VECTOR.preview, VECTOR.text)).toBe(digestCounting(utf16));
+    expect(contentDigest(VECTOR.preview, VECTOR.text)).not.toBe(digestCounting(codePoints));
+    expect(contentDigest(VECTOR.preview, VECTOR.text)).not.toBe(digestCounting(bytes));
+  });
+
+  it('the manifest recipe names the rule and carries the vector, and its digest is the route’s', () => {
+    const recipe =
+      manifestFrom(inputs()).authentication.statements.find((s) => s.kind === 'publish')?.computed?.contentSha256 ?? '';
+    expect(recipe).toMatch(/UTF-16 code units/);
+    expect(recipe).toContain(`"${VECTOR.preview}"`);
+    expect(recipe).toContain(`"${VECTOR.text}"`);
+    const hex = /([0-9a-f]{64})/.exec(recipe)?.[1];
+    expect(hex).toBe(contentDigest(VECTOR.preview, VECTOR.text));
+  });
+
+  it('llms.txt carries the same vector, read out of the page rather than retyped', () => {
+    const llms = readFileSync(join(process.cwd(), 'public/llms.txt'), 'utf8');
+    expect(llms).toMatch(/UTF-16 code units/);
+    const m = /preview = "([^"]*)"\s+text = "([^"]*)"[\s\S]*?content-sha256 = ([0-9a-f]{64})/.exec(llms);
+    expect(m).not.toBeNull();
+    const [, preview = '', text = '', hex = ''] = m ?? [];
+    expect({ preview, text }).toEqual(VECTOR);
+    expect(contentDigest(preview, text)).toBe(hex);
   });
 });

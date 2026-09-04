@@ -191,8 +191,8 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
         }}
       >
         {gated
-          ? 'Until then, access is by invitation.'
-          : 'Weir is already open; this is the next milestone.'}
+          ? 'This is the date we plan to open on, not a commitment we have made. Until then, access is by invitation.'
+          : 'Weir is already open; this is the next milestone we plan for.'}
       </p>
     </section>
   );

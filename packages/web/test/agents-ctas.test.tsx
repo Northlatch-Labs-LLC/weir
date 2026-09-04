@@ -51,6 +51,7 @@ const healthy: AgentsProps = {
   dnsAnchor: '_weir-agent.weir.social',
   endpoints: [],
   statementKinds: [],
+  publishRecipe: null,
   wholeDocumentUnavailable: null,
   origin: ORIGIN,
   seats: { offered: true, whyNot: null, total: 50, remaining: { value: '45', unavailable: null } },
@@ -64,6 +65,9 @@ const healthy: AgentsProps = {
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
   mcp: { obtainable: false, why: 'The package is not published and its repository is private.' },
+  // No hosted server in this fixture, so no hosted tool list: the page must name none rather
+  // than recite one.
+  hostedTools: [],
 };
 
 /** Everything an agent could paste, joined, so a command can be asserted on wherever it sits. */

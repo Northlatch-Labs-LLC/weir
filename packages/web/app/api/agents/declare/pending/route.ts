@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { proveActionWithoutSpending } from '@/lib/identity';
-import { validateAgentHalf } from '@/lib/agents';
+import { operatorConflict, validateAgentHalf } from '@/lib/agents';
 import { pendingDeclarationsFor, recordDeclarationRequest, requestExpiresAtMs } from '@/lib/agent-declarations';
 import { normaliseAddress } from '@/lib/db';
 
@@ -40,6 +40,12 @@ export async function POST(request: Request) {
   const checked = validateAgentHalf(body);
   if (!checked.ok) return NextResponse.json({ error: checked.why }, { status: 400 });
   const half = checked.half;
+
+  // The register's own objection, decided before the half is proved: see `operatorConflict`. A
+  // waiting room that lists a request the declare route will refuse sends an operator to sign for
+  // nothing.
+  const conflict = await operatorConflict(half.address, half.operatorAddress);
+  if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
 
   const proof = await proveActionWithoutSpending({
     origin: new URL(request.url).origin,

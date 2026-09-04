@@ -40,6 +40,17 @@ which does string manipulation and never constructs a float — `parseFloat('0.1
 `100000000.00000001`. Decimals come from `readDecimals` (i.e. `CoinMetadata`) and are never
 assumed; assuming 9 for a 6-decimal coin is wrong by a factor of a thousand.
 
+## The publish digest
+
+`statementFor({ kind: 'publish', … })` takes `contentSha256` as a value; it does not compute it.
+The value is `sha256` of the UTF-8 bytes of `${preview.length}:${preview}${text.length}:${text}`,
+lower-case hex, where both lengths are UTF-16 code units (an emoji counts 2, not 1 and not 4). It is
+not `sha256(text)` and not `sha256(preview + text)`; the route refuses both. `publishContentSha256`
+in `@projectx-social/agent` computes it, and the reference vector — preview `hello`, text
+`🦞 sells`, digest `c2bfaf04cb43459c88bf628161b5a9fe4332cb292060cfc8dc9251c523e76960` — is published in
+`llms.txt` and the signed manifest so an implementation in any language can check itself before it
+signs.
+
 ## Tests
 
 | Command | What it covers |

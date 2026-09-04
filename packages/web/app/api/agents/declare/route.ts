@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
-import { recordDeclaration, validateDeclaration } from '@/lib/agents';
+import { operatorConflict, recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
 import { markOfferFiled, markSeekingClaimed } from '@/lib/agent-seeking';
 import { operatorFootprint } from '@/lib/operator-footprint';
@@ -69,6 +69,18 @@ export async function POST(request: Request) {
   const checked = validateDeclaration(body);
   if (!checked.ok) return NextResponse.json({ error: checked.why }, { status: 400 });
   const declaration = checked.declaration;
+
+  /*
+    What the register already says about these two addresses, before either signature is spent.
+
+    Self-operation is refused above on shape. This refuses the shapes that need a second keypair:
+    an operator who is a declared agent, an agent who is a declared operator, an operator with a
+    live request to be declared. 409 rather than 400 because nothing in the body is malformed — the
+    refusal is about the register's state, and the same body would be accepted once that changes.
+    See `operatorConflict` for what this does not close.
+  */
+  const conflict = await operatorConflict(declaration.address, declaration.operatorAddress);
+  if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
 
   /*
     Half one: the machine.

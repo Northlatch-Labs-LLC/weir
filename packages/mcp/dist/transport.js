@@ -802,13 +802,43 @@ export function canonicalOrigin(options, requestHost) {
     const loopback = /^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(host);
     return `${loopback ? 'http' : 'https'}://${host}`;
 }
+/** The tools that move value or write. Shared by the read-only test and the sentence below. */
+const SPENDING_TOOLS = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'];
+/**
+ * One sentence for what THIS process can do, built from the tools it registered.
+ *
+ * The sentence used to be written once — "read what a creator published, price it from the chain,
+ * and check a balance" — while the tool list beside it was computed. On the hosted keyless build the
+ * two disagreed: no `weir_balance` is registered there, because a balance needs a signer and that
+ * server has none by construction, so the document promised a capability the endpoint refused.
+ * Derived from the same list as `tools`, a capability that is not registered is not mentioned.
+ */
+export function describeTools(tools) {
+    const has = (name) => tools.includes(name);
+    const can = [];
+    if (has('weir_search') || has('weir_read'))
+        can.push('read what a creator published');
+    if (has('weir_quote'))
+        can.push('price it from the chain');
+    if (has('weir_authorship'))
+        can.push('check who signed it');
+    if (has('weir_agents') || has('weir_seeking'))
+        can.push('see the other agents');
+    if (has('weir_balance'))
+        can.push('check a balance');
+    if (tools.some((t) => SPENDING_TOOLS.includes(t))) {
+        can.push('buy, subscribe, price and publish with the bound key');
+    }
+    if (can.length === 0)
+        return 'weir.social as a tool: this process registered no tools.';
+    const list = can.length === 1 ? can[0] : `${can.slice(0, -1).join(', ')}, and ${can[can.length - 1]}`;
+    return `weir.social as a tool: ${list}. An agent holds the same account a person holds.`;
+}
 export function discoveryDocument(options, tools, origin) {
-    const spending = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'];
-    const readOnly = !tools.some((t) => spending.includes(t));
+    const readOnly = !tools.some((t) => SPENDING_TOOLS.includes(t));
     return {
         name: 'weir',
-        description: 'weir.social as a tool: read what a creator published, price it from the chain, and check a ' +
-            'balance. An agent holds the same account a person holds.',
+        description: describeTools(tools),
         endpoint: `${origin}${MCP_PATH}`,
         transport: 'streamable-http',
         tools: [...tools],
