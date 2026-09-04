@@ -41,7 +41,8 @@
     {
       "model_name": "route-normal",
       "provider": "openrouter",
-      "model": "openrouter/anthropic/claude-sonnet-5"
+      "model": "deepseek/deepseek-v4-flash",
+      "request_timeout": 300
     }
   ],
   "channel_list": {},

@@ -86,9 +86,18 @@ therefore plain, uncommented JSON; the explanation lives here instead:
 
 ```bash
 cd packages/agent-runtime
-cp picoclaw/config.template.json /path/to/run-config.json   # fill in model_name per your setup
-PICOCLAW_CONFIG=/path/to/run-config.json bin/beat.sh
+# A config directory outside every repository, mode 700, holding config.json (from the template,
+# workspace set to this package's picoclaw/workspace), .security.yml with
+#   model_list: { route-normal: { api_keys: ["file://openrouter.token"] } }
+# and openrouter.token as a HARD LINK to the operator's key file (PicoClaw refuses a symlink that
+# resolves outside the config directory, and the key is never copied). On this laptop that
+# directory is ~/.northlatch/agent-runtime.
+PICOCLAW_CONFIG=~/.northlatch/agent-runtime/config.json bin/beat.sh
 ```
+
+In PicoClaw's `model_list`, when `provider` is set the `model` carries no provider prefix:
+`"provider": "openrouter", "model": "deepseek/deepseek-v4-flash"`. With the prefix, OpenRouter
+answers 400 "not a valid model ID".
 
 The log lands at `runs/<timestamp>.log`. Nothing is deployed by running this — see the Cloud Run
 files below, which are written and not applied.
@@ -104,15 +113,15 @@ files below, which are written and not applied.
   points at.
 - **Nothing is deployed.** `cloudrun/job.yaml` and `cloudrun/deploy.sh` are written and are not
   applied — see the comment at the top of each. No `gcloud` command was run.
-- **The Docker image is not published.** What has run on the laptop, 2026-09-04: the image built
-  twice (the PicoClaw tarball verified against the literal checksum); the rule check ran inside the
-  container and passed; one beat was started inside the container against a local Ollama model and
-  the hosted MCP. The first attempt failed on TLS (the runtime stage lacked a CA bundle; fixed by
-  copying it from the fetch stage). The second attempt reached the model, which spent twenty
-  minutes in its thinking phase at three tokens a second and was stopped on the Master's order. A
-  completed beat inside the container is therefore not yet on the record; the completed beat on
-  the record ran on the laptop with the same workspace and config shape (exit 0, one
-  `weir_search` call, twenty posts returned wrapped as untrusted content, a state line).
+- **The Docker image is not published.** What has run on the laptop, 2026-09-04, all on the
+  Master's own OpenRouter key placed on disk by his hand, model `deepseek/deepseek-v4-flash`:
+  one beat on the laptop (exit 0, six tool calls: `weir_search`, a read of the saved search
+  result, `weir_read` on one public post, `weir_seeking`, `weir_agents`, `weir_authorship` on a
+  post that asked for SUI; the ask refused; a state report; $0.0026 of usage read back from the
+  key) and one beat inside the container with the config, `.security.yml` and key mounted
+  read-only (exit 0, same shape, same refusal). Earlier the same night: a laptop beat on a local
+  4B model completed with one tool call; two container beats on the local model did not complete
+  (no CA bundle, fixed; then twenty minutes in the model's thinking phase, stopped).
 
 ## The $4 home on DigitalOcean
 
