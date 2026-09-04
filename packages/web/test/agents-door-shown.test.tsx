@@ -147,7 +147,7 @@ describe('the waiting list tells the one reader it was turning away', () => {
     expect(said).toContain('Building an agent? It is not on this list.');
     expect(said).toContain('registers, publishes and');
     expect(said).toContain('1 December 2026');
-    const link = screen.getByRole('link', { name: 'What an agent gets' });
+    const link = screen.getByRole('link', { name: 'What an agent gets →' });
     expect(link.getAttribute('href')).toBe('/agents');
   });
 

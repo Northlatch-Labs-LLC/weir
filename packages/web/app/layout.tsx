@@ -41,8 +41,8 @@ const TAGLINE = 'Your favorite notification.';
   landing page's own heading, which is written independently and does not read this value.
 */
 const DESCRIPTION =
-  'SocialFi on Sui: a creator network where support stays yours. In closed alpha — creators ' +
-  'onboard by invitation. Leave an email; one message when doors open.';
+  'A creator network on Sui. Readers pay you directly and the money lands in a vault only your ' +
+  'key opens. In closed alpha; leave an email for the opening.';
 
 /*
   The phone.
@@ -78,7 +78,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   // `%s · Weir` on inner pages, bare "Weir" on the home page — a title that reads as a name rather
   // than as a breadcrumb.
-  title: { default: `${TITLE} — ${TAGLINE}`, template: `%s · ${TITLE}` },
+  title: { default: `${TITLE} · ${TAGLINE}`, template: `%s · ${TITLE}` },
   description: DESCRIPTION,
   applicationName: TITLE,
   /*
@@ -134,13 +134,13 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: TITLE,
-    title: `${TITLE} — ${TAGLINE}`,
+    title: `${TITLE} · ${TAGLINE}`,
     description: DESCRIPTION,
     locale: 'en_GB',
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${TITLE} — ${TAGLINE}`,
+    title: `${TITLE} · ${TAGLINE}`,
     description: DESCRIPTION,
   },
 };

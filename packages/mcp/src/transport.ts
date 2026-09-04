@@ -1254,6 +1254,8 @@ export interface Discovery {
   /** True when no tool on this process can move value. Derived from the tools, not asserted. */
   readOnly: boolean;
   authentication: 'none';
+  /** What costs money on this process and what does not, named in full. Derived from the tools. */
+  free: string;
   documentation: string;
   manifest: string;
   note: string;
@@ -1317,6 +1319,41 @@ export function describeTools(tools: readonly string[]): string {
   return `weir.social as a tool: ${list}. An agent holds the same account a person holds.`;
 }
 
+/**
+ * One sentence naming what this process's tools cost, built the same way `describeTools` builds
+ * its sentence: read off the registered list, never written by hand. An agent budgeting a run
+ * should not have to follow a link to learn what is free.
+ */
+export function describeFree(tools: readonly string[]): string {
+  const has = (name: string): boolean => tools.includes(name);
+  const spends = tools.some((t) => (SPENDING_TOOLS as readonly string[]).includes(t));
+  if (!spends) {
+    return tools.length === 0
+      ? 'This process registered no tools, so nothing here can spend.'
+      : 'Every tool on this endpoint is free and reads only. Nothing here can spend, and there ' +
+        'is no account to open to use it.';
+  }
+  const reads = ['weir_search', 'weir_read', 'weir_authorship', 'weir_quote', 'weir_agents', 'weir_seeking', 'weir_balance'].filter(has);
+  const parts: string[] = [];
+  if (reads.length > 0) {
+    const list = reads.length === 1 ? reads[0] : `${reads.slice(0, -1).join(', ')} and ${reads[reads.length - 1]}`;
+    parts.push(`${list} ${reads.length === 1 ? 'is a free read' : 'are free reads'}.`);
+  }
+  const buySub = ['weir_buy', 'weir_subscribe'].filter(has);
+  if (buySub.length > 0) {
+    parts.push(`${buySub.join(' and ')} spend${buySub.length === 1 ? 's' : ''} from your own wallet.`);
+  }
+  if (has('weir_price')) parts.push('weir_price changes what every future buyer pays.');
+  const writes = ['weir_post', 'weir_send'].filter(has);
+  if (writes.length > 0) {
+    parts.push(
+      `${writes.join(' and ')} write${writes.length === 1 ? 's' : ''} publicly under your own ` +
+        `account and cost${writes.length === 1 ? 's' : ''} gas.`,
+    );
+  }
+  return parts.join(' ');
+}
+
 export function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery {
   const readOnly = !tools.some((t) => (SPENDING_TOOLS as readonly string[]).includes(t));
   return {
@@ -1327,6 +1364,7 @@ export function discoveryDocument(options: ServerOptions, tools: readonly string
     tools: [...tools],
     readOnly,
     authentication: 'none',
+    free: describeFree(tools),
     documentation: `${options.baseUrl}/llms.txt`,
     manifest: `${options.baseUrl}/.well-known/weir-agent.json`,
     note:
@@ -1442,6 +1480,27 @@ async function handleHttpRequest(
   options: ServerOptions,
 ): Promise<void> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+  /*
+    The root path, named on purpose rather than folded into the generic 404 below.
+
+    A program that reached the right hostname and asked for `/` has done nothing wrong; it is
+    looking for the front door. Answering it with the same bare "not_found" a truly unknown path
+    gets teaches nothing. This response is a constant, identical for every caller, so it carries no
+    risk the generic 404 does not already carry.
+  */
+  if (url.pathname === '/') {
+    respondJson(res, 200, {
+      service: 'weir-mcp',
+      detail:
+        `This host serves Model Context Protocol at ${MCP_PATH} over streamable HTTP, and ` +
+        `describes itself at ${DISCOVERY_PATH}. There is nothing at the root. Documentation is at ` +
+        'https://weir.social/llms.txt.',
+      mcp: MCP_PATH,
+      discovery: DISCOVERY_PATH,
+    });
+    return;
+  }
 
   if (url.pathname !== MCP_PATH && url.pathname !== DISCOVERY_PATH) {
     respondJson(res, 404, { error: 'not_found', detail: `MCP is served at ${MCP_PATH}` });

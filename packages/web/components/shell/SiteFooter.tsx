@@ -160,7 +160,7 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
       <div className="sf__foot">
         <p className="sf__verify">
           {deployment === null ? (
-            <>Verify everything on chain — package ids load from the server.</>
+            <>Verify everything on chain. The package ids are loading.</>
           ) : (
             <>
               Verify everything on chain: package{' '}

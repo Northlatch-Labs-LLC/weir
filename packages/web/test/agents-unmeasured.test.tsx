@@ -154,7 +154,7 @@ describe('when the whole manifest could not be built', () => {
 describe('the signature section tells the truth in both states', () => {
   it('describes how to verify when the manifest is signed', () => {
     render(<DesignAgents {...healthy} />);
-    expect(screen.getByText(/Signature — live/)).toBeTruthy();
+    expect(screen.getByText(/Signature: live/)).toBeTruthy();
   });
 
   it('says it is unsigned, and why, when no key is configured', () => {
@@ -165,7 +165,7 @@ describe('the signature section tells the truth in both states', () => {
         manifestUnsigned="PROJECTX_SOCIAL_AGENT_MANIFEST_KEY is not set"
       />,
     );
-    expect(screen.getByText(/Signature — not configured/)).toBeTruthy();
+    expect(screen.getByText(/Signature: not configured/)).toBeTruthy();
     expect(screen.getByText(/is not set/)).toBeTruthy();
     // It must not still be telling agents the document proves origin.
     expect(screen.getByText(/cannot tell this document apart/i)).toBeTruthy();

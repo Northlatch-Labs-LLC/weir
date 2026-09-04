@@ -123,7 +123,7 @@ export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
  * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
  * number that changes for reasons nobody meant is a number consumers learn to ignore.
  */
-export const AGENT_MANIFEST_REVISION = 20;
+export const AGENT_MANIFEST_REVISION = 21;
 
 /**
  * Where the detached signature is served, and where the digest is.
@@ -503,6 +503,12 @@ export interface AgentManifest {
    */
   mcp: {
     hosted: string;
+    /**
+     * `/.well-known/mcp.json` on the hosted host: the discovery document a client asks for before
+     * it speaks the protocol. No published document named this path before revision 21; a client
+     * that wanted it had to guess. Read from `hosted`'s own origin rather than written twice.
+     */
+    discovery: string;
     mode: 'read-only';
     tools: string[];
     note: string;
@@ -1859,6 +1865,7 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
     },
     mcp: {
       hosted: 'https://mcp.weir.social/mcp',
+      discovery: 'https://mcp.weir.social/.well-known/mcp.json',
       mode: 'read-only' as const,
       /*
         Exactly what the KEYLESS hosted build registers. `weir_balance` was listed here and is not

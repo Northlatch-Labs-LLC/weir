@@ -656,6 +656,8 @@ export interface Discovery {
     /** True when no tool on this process can move value. Derived from the tools, not asserted. */
     readOnly: boolean;
     authentication: 'none';
+    /** What costs money on this process and what does not, named in full. Derived from the tools. */
+    free: string;
     documentation: string;
     manifest: string;
     note: string;
@@ -694,6 +696,12 @@ export declare function canonicalOrigin(options: ServerOptions, requestHost: str
  * Derived from the same list as `tools`, a capability that is not registered is not mentioned.
  */
 export declare function describeTools(tools: readonly string[]): string;
+/**
+ * One sentence naming what this process's tools cost, built the same way `describeTools` builds
+ * its sentence: read off the registered list, never written by hand. An agent budgeting a run
+ * should not have to follow a link to learn what is free.
+ */
+export declare function describeFree(tools: readonly string[]): string;
 export declare function discoveryDocument(options: ServerOptions, tools: readonly string[], origin: string): Discovery;
 /**
  * Whether a request's `Origin` may drive this endpoint.

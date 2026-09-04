@@ -185,13 +185,13 @@ describe('the confirmation is a sentence at every value', () => {
 describe('the openness claim follows the gate', () => {
   it('says the site is open when it is', async () => {
     await joinList({ gated: false }, standing());
-    expect(panelText()).toContain('Arrival order, not a queue. Nothing is served in turn — Weir is already live and open to read.');
+    expect(panelText()).toContain('Arrival order, not a queue. Nothing is served in turn; Weir is already live and open to read.');
   });
 
   it('does not tell a turned-away reader the door is open', async () => {
     await joinList({ gated: true }, standing());
     const text = panelText();
-    expect(text).toContain('Arrival order, not a queue. Nothing is served in turn — the doors have not opened yet.');
+    expect(text).toContain('Arrival order, not a queue. Nothing is served in turn; the doors have not opened yet.');
     expect(text).not.toContain('already live and open to read');
   });
 });
@@ -245,7 +245,7 @@ describe('the handle field never fails silently', () => {
     handle `account.move` would refuse as typed.
   */
   it('warns about an uppercase letter rather than absorbing it', async () => {
-    expect(await noteFor('Alice')).toBe('Lowercase only — the contract rejects capitals rather than converting them.');
+    expect(await noteFor('Alice')).toBe('Lowercase only. The contract rejects capitals rather than converting them.');
   });
 
   /*
@@ -280,7 +280,7 @@ describe('the handle field never fails silently', () => {
 
     await waitFor(() => {
       expect(panelText()).toContain(
-        `Not a valid handle. Use ${MIN_HANDLE_LEN}–${MAX_HANDLE_LEN} characters: lowercase letters, numbers and underscores.`,
+        `Not a valid handle. Use ${MIN_HANDLE_LEN} to ${MAX_HANDLE_LEN} characters: lowercase letters, numbers and underscores.`,
       );
     });
     expect(panelText()).not.toContain('Optional.');
@@ -301,6 +301,6 @@ describe('the handle field never fails silently', () => {
   });
 
   it('still says the field is optional when it is empty', async () => {
-    expect(await noteFor('')).toBe('Optional. We will note it — it is yours once you mint it on chain.');
+    expect(await noteFor('')).toBe('Optional. We will note it. It is yours once you mint it on chain.');
   });
 });

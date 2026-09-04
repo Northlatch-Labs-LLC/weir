@@ -141,7 +141,7 @@ check('the probe script is executable and fails closed', () => {
   assert.ok(/exit 1/.test(probes));
 });
 check('the probe script carries all seven probes from the shape', () => {
-  for (const needle of ['Host rebind.example', 'Origin https://evil.example', 'a Cookie is refused', 'GET / is 404', 'Set-Cookie', 'mcp-session-id', 'tools/list is the read set']) {
+  for (const needle of ['Host rebind.example', 'Origin https://evil.example', 'a Cookie is refused', 'GET / is 200', 'Set-Cookie', 'mcp-session-id', 'tools/list is the read set']) {
     assert.ok(probes.includes(needle), `missing probe: ${needle}`);
   }
 });

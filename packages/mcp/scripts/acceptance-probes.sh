@@ -36,8 +36,8 @@ probe 'Host rebind.example is refused (403 host_refused)'      403 -X POST "$MCP
 probe 'Origin https://evil.example is refused (403 origin_refused)' 403 -X POST "$MCP" -H "Origin: https://evil.example" -H "$JSON" -d "$INIT"
 # 3. Cookies: refused, not ignored.
 probe 'a Cookie is refused (400 cookie_refused)'               400 -X POST "$MCP" -H "Cookie: a=b" -H "$JSON" -d "$INIT"
-# 4. Only /mcp exists.
-probe 'GET / is 404'                                            404 "$BASE/"
+# 4. The root answers with a pointer document; only /mcp speaks the protocol.
+probe 'GET / is 200 (a pointer document, not the protocol)'    200 "$BASE/"
 # 5 + 6. A served response issues no cookie and no session id.
 headers=$(curl -s -D - -o /dev/null --max-time 15 -X POST "$MCP" -H "$JSON" -H "$ACCEPT" -d "$INIT")
 if echo "$headers" | grep -qi '^set-cookie:'; then echo 'FAIL  a served response set a cookie'; failures=$((failures+1)); else echo '  ok  no Set-Cookie on a served response'; fi

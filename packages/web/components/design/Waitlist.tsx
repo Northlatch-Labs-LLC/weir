@@ -184,21 +184,21 @@ export function DesignWaitlist({
   */
   const wlHandleNote =
     handle.trim() === ''
-      ? 'Optional. We will note it — it is yours once you mint it on chain.'
+      ? 'Optional. We will note it. It is yours once you mint it on chain.'
       : shapeProblem !== null
         ? shapeProblem
         : hasUppercase
-          ? 'Lowercase only — the contract rejects capitals rather than converting them.'
+          ? 'Lowercase only. The contract rejects capitals rather than converting them.'
           : availability === 'malformed'
-            ? `Not a valid handle. Use ${MIN_HANDLE_LEN}–${MAX_HANDLE_LEN} characters: lowercase letters, numbers and underscores.`
+            ? `Not a valid handle. Use ${MIN_HANDLE_LEN} to ${MAX_HANDLE_LEN} characters: lowercase letters, numbers and underscores.`
             : availability === 'checking'
               ? 'Checking the registry…'
               : availability === 'taken'
-                ? 'Taken — this handle already has a page.'
+                ? 'Taken. This handle already has a page.'
                 : availability === 'available'
                   ? 'Available right now.'
                   : availability === 'unreadable'
-                    ? 'Could not check availability just now — you can still note it.'
+                    ? 'We could not check availability just now. You can still note it.'
                     : 'Optional.';
   const wlHandleColor =
     shapeProblem !== null || hasUppercase || availability === 'malformed' || availability === 'taken'
@@ -233,9 +233,9 @@ export function DesignWaitlist({
     }
     switch (outcome.kind) {
       case 'invalid-email':
-        return { icon: 'warn', title: 'That email does not look right', body: outcome.detail, detail: 'Nothing was sent. Please check it and try again.', accent: SAND };
+        return { icon: 'warn', title: 'That email does not look right', body: outcome.detail, detail: 'Nothing was sent. Check it and try again.', accent: SAND };
       case 'handle-on-list':
-        return { icon: 'warn', title: 'That handle is taken', body: 'Someone on the list asked for it first.', detail: 'Choose another — your email has not been added yet.', accent: SAND };
+        return { icon: 'warn', title: 'That handle is taken', body: 'Someone on the list asked for it first.', detail: 'Choose another; your email has not been added yet.', accent: SAND };
       case 'unconfigured':
         return { icon: 'warn', title: 'The list is unavailable right now', body: 'We could not add you.', detail: 'Please try again later.', accent: SAND };
       case 'transport':
@@ -302,7 +302,7 @@ export function DesignWaitlist({
             <div style={{ textAlign: 'left', maxWidth: '52rem' }}>
               <p style={{ margin: '0 0 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.7)', boxShadow: '0 0 22px -10px rgba(var(--crest-rgb,139,227,198),0.7)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                 <span aria-hidden="true" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--crest,#8be3c6)', boxShadow: '0 0 10px rgba(var(--crest-rgb,139,227,198),0.9)', animation: 'pulseRing 2.6s ease-out infinite' }}></span>
-                {gated ? 'Closed alpha — by invitation' : 'Open'}
+                {gated ? 'Closed alpha · by invitation' : 'Open'}
               </p>
               {/*
                 The hero heading states the door plainly. The tagline ("Your favorite notification")
@@ -310,8 +310,8 @@ export function DesignWaitlist({
                 something a reader finds, not something the page announces. Honest first, then a
                 little mystery — never the other way round.
               */}
-              <h1 style={{ margin: '0', textAlign: 'left', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>{gated ? 'Weir is in ' : 'Weir is '}<span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 30px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{gated ? 'closed alpha.' : 'open.'}</span></h1>
-              <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', textAlign: 'left', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{gated ? 'Creators are onboarding now, by invitation. Leave your email and we will send one message when the doors open — and note the handle you would like.' : 'Creator pages are open. Claim a handle now, or leave your email and we will tell you when something new ships.'}</p>
+              <h1 style={{ margin: '0', textAlign: 'left', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>No payouts to request. <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 30px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{gated ? 'Weir is in closed alpha.' : 'Weir is open.'}</span></h1>
+              <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', textAlign: 'left', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{gated ? 'Creators are onboarding now, by invitation. Leave your email and we will send one message when the doors open. Tell us the handle you want and we will note it.' : 'Creator pages are open. Claim a handle now, or leave your email and we will tell you when something new ships.'}</p>
               {/*
                 The counter.
 
@@ -367,10 +367,10 @@ export function DesignWaitlist({
               <div style={{ maxWidth: '52rem', margin: '1rem auto 0', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderLeft: `3px solid ${CREST}`, borderRadius: '10px', padding: '1rem 1.25rem', textAlign: 'left' }}>
                 <p style={{ margin: '0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
                   <strong style={{ color: 'var(--ink,#dce9e6)' }}>Building an agent? It is not on this list.</strong>{' '}
-                  A declared agent — one a human operator has signed for — registers, publishes and
+                  A declared agent, one a human operator has signed for, registers, publishes and
                   is paid here today. Only the pages people browse are behind this door
                   {launchTarget === null ? '' : `, and we plan to open them on ${absoluteDate(launchTarget.atMs)} UTC`}.{' '}
-                  <a href="/agents" style={{ color: CREST }}>What an agent gets</a>.
+                  <a href="/agents" style={{ color: CREST }}>What an agent gets →</a>
                 </p>
               </div>
             )}
@@ -481,8 +481,8 @@ export function DesignWaitlist({
                         */}
                         <p style={{ margin: '0.4rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
                           {gated
-                            ? 'Arrival order, not a queue. Nothing is served in turn — the doors have not opened yet.'
-                            : 'Arrival order, not a queue. Nothing is served in turn — Weir is already live and open to read.'}
+                            ? 'Arrival order, not a queue. Nothing is served in turn; the doors have not opened yet.'
+                            : 'Arrival order, not a queue. Nothing is served in turn; Weir is already live and open to read.'}
                         </p>
                       </div>
 
@@ -508,7 +508,7 @@ export function DesignWaitlist({
                           {standing.referred === 0
                             ? 'Nobody has joined through your link yet.'
                             : `${standing.referred.toLocaleString()} ${standing.referred === 1 ? 'person has' : 'people have'} joined through your link.`}{' '}
-                          Sharing it pays nothing and does not change your place — it just shows who brought whom. The referral that pays is on chain, and it settles to an address, not to an email.
+                          Sharing it pays nothing and does not change your place; it just shows who brought whom. The referral that pays is on chain, and it settles to an address, not to an email.
                         </p>
                       </div>
                     </div>
@@ -546,7 +546,7 @@ export function DesignWaitlist({
                 <section aria-label="How the list works" style={{ border: '1px solid rgba(var(--sand-rgb,217,201,163),0.3)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1.5rem' }}>
                   <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>How the list works</p>
                   {/* One paragraph, one claim per sentence, and nothing it says is contradicted elsewhere on the page. */}
-                  <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>No points, no tiers, no queue-jumping. Your place is the order you joined, and inviting friends does not change it. Your email is used to tell you when {gated ? 'the doors open' : 'something new ships'} and for nothing else — one click unsubscribes.</p>
+                  <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>No points, no tiers, no queue-jumping. Your place is the order you joined, and inviting friends does not change it. Your email is used to tell you when {gated ? 'the doors open' : 'something new ships'} and for nothing else. One click unsubscribes.</p>
                 </section>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
