@@ -32,12 +32,12 @@ export default function Studio() {
       <PageTabs label="Creator studio" items={CREATOR} />
 
         <div data-reveal className="card">
-          <h2 style={{ marginTop: 0 }}>Where a post actually lives</h2>
+          <h2 style={{ marginTop: 0 }}>Where a post lives</h2>
           <p style={{ color: 'var(--text-secondary)' }}>
-            The words are stored by this platform. The <em>entitlement</em> — who is allowed to read
-            them — is not: it is a subscription or a purchase recorded against your vault on Sui. A
-            reader who bought a post holds that access at the chain level and keeps it, whether or
-            not they are still subscribed and whether or not you change your mind later.
+            The words are stored by this platform. Who may read them is not: that is a subscription
+            or a purchase recorded against your vault on Sui. A reader who bought a post holds that
+            access on chain and keeps it, whether or not they are still subscribed and whether or
+            not you change your mind later.
           </p>
           <div style={{ display: 'grid', gap: 'var(--space-16)', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
             <div className="stat">
@@ -55,8 +55,8 @@ export default function Studio() {
           </div>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 0, marginTop: 'var(--space-16)' }}>
             Publishing needs a creator page to file the post under, which means a vault that has been
-            opened and named. If you have not done that yet, <a href="/creator">start there</a> — it
-            is three transactions, and this page will tell you which one is missing.
+            opened and named. If you have not done that yet, <a href="/creator">start there</a>. It
+            is three steps, and this page tells you which one is missing.
           </p>
         </div>
 
@@ -67,7 +67,7 @@ export default function Studio() {
         <footer>
           A paid post is priced by a transaction against your vault before it can be published. The
           contract reads that price when somebody unlocks it, so a post published without one would
-          show a buy button that aborts every time.
+          show a buy button that fails every time.
         </footer>
           </>
   );

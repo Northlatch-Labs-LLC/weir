@@ -36,8 +36,16 @@ export interface ReferredAccount {
 export interface ReferralEarnings {
   /** People who named this address when they registered. */
   referred: ReferredAccount[];
-  /** Cumulative `referral_cut` paid to this address, in the vault coin's smallest units. */
-  earned: bigint;
+  /**
+   * Cumulative `referral_cut` paid to this address, per vault, in that vault's own smallest
+   * units.
+   *
+   * Not summed into one figure here: a referrer can be credited by vaults denominated in
+   * different coins, and a SUI cut and a USDC cut added together as raw integers is not a number
+   * anything can be scaled by. The caller resolves each vault's coin type and decimals and groups
+   * by that — the same join `readChestPots`' callers already do for `byVault`.
+   */
+  earnedByVault: Map<string, bigint>;
   /** How many payments carried a cut to this address. */
   payments: number;
   /** True when a page ceiling stopped either walk. The figures are recent, not complete. */
@@ -106,20 +114,22 @@ export async function readReferrals(address: string): Promise<Reading<ReferralEa
       referred.push({ handle: e['handle'], owner: e['owner'], createdAtMs });
     });
 
-    let earned = 0n;
+    const earnedByVault = new Map<string, bigint>();
     let payments = 0;
     await walk(`${config.value.packageId}::creator::PaymentSettled`, (e) => {
       if (!sameAddress(e['referrer'], address)) return;
+      if (typeof e['vault'] !== 'string') return;
       const cut = BigInt(String(e['referral_cut'] ?? '0'));
       // A settled payment can name a referrer and still carry a zero cut — if the share is set to
       // zero, or the fee rounded to nothing on a very small payment. Counted as a payment either
       // way, because it happened; adding zero to the total is correct and hiding it would not be.
-      earned += cut;
+      const priorMist = earnedByVault.get(e['vault']);
+      earnedByVault.set(e['vault'], priorMist === undefined ? cut : priorMist + cut);
       payments += 1;
     });
 
     referred.sort((a, b) => b.createdAtMs - a.createdAtMs);
-    return ok({ referred, earned, payments, truncated });
+    return ok({ referred, earnedByVault, payments, truncated });
   } catch (error) {
     const failure = classify(error, source);
     return fail(failure.kind, source, failure.detail);

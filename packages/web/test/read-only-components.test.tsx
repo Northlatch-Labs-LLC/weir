@@ -77,7 +77,7 @@ describe('Referrals', () => {
      */
     mockJson({
       referred: [{ handle: 'nova', owner: '0xnova', createdAtMs: 1_700_000_000_000 }],
-      earned: '0', payments: 0, truncated: false,
+      earned: [], payments: 0, truncated: false,
     });
     render(<Referrals />);
     await waitFor(() => expect(screen.getByText(/nova/)).toBeTruthy());
@@ -86,7 +86,7 @@ describe('Referrals', () => {
   it('flags a truncated walk rather than presenting it as complete', async () => {
     // The ceiling was hit, so this is not everybody. Saying so is the difference between a list a
     // reader can trust and one they cannot.
-    mockJson({ referred: [], earned: '0', payments: 0, truncated: true });
+    mockJson({ referred: [], earned: [], payments: 0, truncated: true });
     render(<Referrals />);
     await waitFor(() => expect(screen.getByText(/not complete|recent|more/i)).toBeTruthy());
   });

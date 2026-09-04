@@ -72,7 +72,7 @@ export function DesignHome({
                   kicker="Feed"
                   title="What's new"
                   accent="above the waterline."
-                  lede="Posts from the creators on Weir. A paid post stays locked until something your address holds on chain says otherwise."
+                  lede="Posts from the creators here. A paid post opens when your wallet holds the unlock or the subscription for it."
                 />
                 <PageTabs label="Feed view" items={feedTabs} />
                 <p className="feed-session">{sessionLabel}</p>

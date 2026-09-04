@@ -108,7 +108,7 @@ export function Comments({ postId, reader }: { postId: string; reader?: string }
             onChange={(e) => setText(e.target.value)}
           />
           <button className="btn" type="button" disabled={busy} onClick={() => void submit()}>
-            {busy ? 'Signing…' : 'Post'}
+            {busy ? 'Signing…' : 'Post comment'}
           </button>
         </div>
       )}

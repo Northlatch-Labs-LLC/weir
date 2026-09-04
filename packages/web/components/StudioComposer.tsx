@@ -566,8 +566,7 @@ export function StudioComposer() {
       <div className="panel">
         <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
           Posts are filed under a creator page, and the publish route reads that page&rsquo;s owner
-          from chain before it accepts anything — so the composer opens once a wallet is connected
-          and it knows who it would be publishing as.
+          from chain before it accepts anything. The composer opens once a wallet is connected.
         </p>
         <SignIn />
       </div>
@@ -597,10 +596,10 @@ export function StudioComposer() {
   if (target === null) {
     return (
       <div className="note warn">
-        <span className="lbl">No published vault</span>
+        <span className="lbl">No named vault</span>
         <p>
-          Posts hang off a creator page, and this address has none yet — either no vault, or a vault
-          that has not been named. <a href="/creator">Set one up</a>; it takes one transaction.
+          Posts hang off a creator page, and this address has none yet: either no vault, or a vault
+          that has not been named. <a href="/creator">Set one up</a>.
         </p>
       </div>
     );
@@ -623,7 +622,7 @@ export function StudioComposer() {
           >
             {targets.map((t) => (
               <option key={t.vaultId} value={t.vaultId}>
-                @{t.handle} — {t.vaultId.slice(0, 14)}…
+                @{t.handle} · {t.vaultId.slice(0, 14)}…
               </option>
             ))}
           </select>
@@ -641,16 +640,16 @@ export function StudioComposer() {
           <input id="t" className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div>
-          <label className="k" htmlFor="p">PREVIEW — always visible, even when locked</label>
+          <label className="k" htmlFor="p">PREVIEW · always visible, even when locked</label>
           <input id="p" className="field" value={preview} onChange={(e) => setPreview(e.target.value)} />
         </div>
         <div>
-          <label className="k" htmlFor="b">BODY — withheld until the reader is entitled</label>
+          <label className="k" htmlFor="b">BODY · shown only to readers who hold access</label>
           <textarea id="b" rows={8} className="field" value={text} onChange={(e) => setText(e.target.value)} />
         </div>
 
         <div>
-          <label className="k" htmlFor="img">IMAGE — optional, stored on Walrus</label>
+          <label className="k" htmlFor="img">IMAGE · optional, stored on Walrus</label>
           <input
             id="img"
             type="file"
@@ -671,8 +670,8 @@ export function StudioComposer() {
               */}
               {access === 'paid' ? (
                 <>
-                  <span className="enc-tag">encrypted</span> stored as ciphertext — unreadable
-                  without an entitlement, even to somebody holding the blob. Kept for{' '}
+                  <span className="enc-tag">encrypted</span> stored encrypted. Unreadable
+                  without an unlock or subscription, even to somebody holding the file. Kept for{' '}
                   <strong>{retentionDays('durable')} days</strong>, about two years.
                 </>
               ) : (
@@ -684,7 +683,7 @@ export function StudioComposer() {
                     ? 'readable by anyone from any Walrus aggregator, without this platform. '
                     : 'stored unencrypted, so the words are gated but the image is not. '}
                   Kept for <strong>{retentionDays('ephemeral')} days</strong>, then{' '}
-                  <strong>deleted</strong> — the post stays, the picture goes.
+                  <strong>deleted</strong>. The post stays; the picture goes.
                 </>
               )}
             </p>
@@ -695,10 +694,9 @@ export function StudioComposer() {
             <div className="note" style={{ marginTop: 'var(--space-12)' }}>
               <span className="lbl">Image stored</span>
               <p>
-                <span className="mono">{media.blobId.slice(0, 14)}…</span> — the storage lease runs
-                to Walrus epoch {media.endEpoch}. Storage is a lease, not permanence: unless it is
-                extended before then, the image is deleted and this post keeps its words without its
-                picture.
+                <span className="mono">{media.blobId.slice(0, 14)}…</span> The lease runs to Walrus
+                epoch {media.endEpoch}. Unless it is extended before then, the image is deleted and
+                this post keeps its words without its picture.
               </p>
             </div>
           )}
@@ -723,15 +721,15 @@ export function StudioComposer() {
               setStage({ name: 'idle' });
             }}
           >
-            <option value="public">Public — anyone</option>
+            <option value="public">Public: anyone</option>
             <option value="subscribers">Subscribers only</option>
-            <option value="paid">Paid — bought once</option>
+            <option value="paid">Paid: bought once</option>
           </select>
         </div>
 
         {access === 'subscribers' && target !== null && target.tiers.filter((t) => t.active).length > 1 && (
           <div>
-            <label className="k" htmlFor="tier">TIER — the lowest seat that can open this post</label>
+            <label className="k" htmlFor="tier">TIER · the lowest tier that can open this post</label>
             <select
               id="tier"
               className="field"
@@ -745,7 +743,7 @@ export function StudioComposer() {
                 .filter((t) => t.active)
                 .map((t) => (
                   <option key={t.index} value={t.index}>
-                    {t.index === 0 ? `${t.name} — every subscriber` : `${t.name} and above`}
+                    {t.index === 0 ? `${t.name}: every subscriber` : `${t.name} and above`}
                   </option>
                 ))}
             </select>
@@ -755,7 +753,7 @@ export function StudioComposer() {
         {access === 'paid' && (
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr' }}>
             <div>
-              <label className="k" htmlFor="k">CONTENT KEY — what a reader buys, on chain</label>
+              <label className="k" htmlFor="k">CONTENT KEY · the name of what a reader buys, on chain</label>
               <input id="k" className="field" value={contentKey} onChange={(e) => setContentKey(e.target.value)} />
               {/*
                 Said before publishing, not after — an `Unlock` cannot be withdrawn.
@@ -777,7 +775,7 @@ export function StudioComposer() {
               {keyPrice.name === 'known' && keyPrice.price !== null && (
                 <p className="enc-status" style={{ marginTop: 6 }}>
                   <span className="enc-tag">in use</span> already sells at{' '}
-                  {formatUnits(keyPrice.price, target?.decimals ?? 6)} {target?.symbol ?? ''} — everyone who has bought it receives this
+                  {formatUnits(keyPrice.price, target?.decimals ?? 6)} {target?.symbol ?? ''}. Everyone who bought it reads this
                   post too, at no extra charge
                 </p>
               )}
@@ -813,7 +811,7 @@ export function StudioComposer() {
         */}
         {access === 'paid' && reservedKey === null && derivedMachineKey !== null && (
           <div className="note">
-            <span className="lbl">Machine edition — optional</span>
+            <span className="lbl">Machine edition (optional)</span>
             <p>
               The same words, sold to agents under a second key on the same vault. It is a separate
               price, a separate purchase and a separate key: a machine buyer&rsquo;s Unlock does not
@@ -833,8 +831,8 @@ export function StudioComposer() {
             {machineKeyPrice.name === 'known' && machineOnChainPrice !== null && (
               <p className="enc-status">
                 <span className="enc-tag">on sale</span> machines already pay{' '}
-                {formatUnits(machineOnChainPrice, target?.decimals ?? 6)} {target?.symbol ?? ''} for this key — pricing it again replaces
-                that, and every Unlock already sold stays valid
+                {formatUnits(machineOnChainPrice, target?.decimals ?? 6)} {target?.symbol ?? ''} for this key. Pricing it again replaces
+                that; every Unlock already sold stays valid
               </p>
             )}
             {machineKeyPrice.name === 'known' && machineOnChainPrice === null && (
@@ -890,9 +888,9 @@ export function StudioComposer() {
           <div className="note warn">
             <span className="lbl">Price it on chain first</span>
             <p>
-              A paid post cannot be sold until its key has a price on the vault — the contract reads
+              A paid post cannot be sold until its key has a price on the vault. The contract reads
               the price itself and refuses content that has none. Publishing before that would put a
-              buy button on the feed that aborts every time.
+              buy button on the feed that fails every time.
             </p>
           </div>
         )}
@@ -950,7 +948,7 @@ export function StudioComposer() {
           <div className="note">
             <span className="lbl">Published</span>
             <p>
-              <a href="/">Back to the feed</a> — post {stage.id}.
+              Post {stage.id} is live. <a href="/">Back to the feed</a>.
             </p>
           </div>
         )}

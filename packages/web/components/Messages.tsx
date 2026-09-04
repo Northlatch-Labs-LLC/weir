@@ -294,7 +294,7 @@ export function Messages() {
             'Every message already sent to your previous key will stop opening, permanently. ' +
             'Nothing here can re-wrap them.\n\nPublish the new key?'
         : `Publishing your encryption key costs about ${gas} SUI in gas.\n\n` +
-            'It goes into the shared registry on Sui, where anyone can read it — which is what ' +
+            'It goes into the shared registry on Sui, where anyone can read it, which is what ' +
             'stops this server from hiding it from people who want to write to you.',
     );
     if (!confirmed) return false;
@@ -490,7 +490,7 @@ export function Messages() {
       <div className="panel">
         <p style={{ marginTop: 0 }}>
           Messages are private between you and the other party. Reading them is signed, not just
-          sending — so nobody can read a conversation by typing an address.
+          sending, so nobody can read a conversation by typing an address.
         </p>
         <SignIn />
         {error !== null && <p className="unmeasured">{error}</p>}
@@ -504,7 +504,7 @@ export function Messages() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span className="k">INBOX</span>
           <button className="btn ghost" type="button" disabled={busy} onClick={() => void loadInbox()}>
-            {busy ? '…' : threads === null ? 'Load' : 'Refresh'}
+            {busy ? '…' : threads === null ? 'Load inbox' : 'Refresh'}
           </button>
         </div>
 
@@ -527,7 +527,7 @@ export function Messages() {
           </div>
         ) : (
           <p className="enc-status" style={{ marginTop: 12 }}>
-            <span className="enc-tag">encrypted</span> key held in this tab only — closing it
+            <span className="enc-tag">encrypted</span> key held in this tab only. Closing the tab
             forgets the key, not your messages.
           </p>
         )}
@@ -557,7 +557,7 @@ export function Messages() {
       <div className="panel">
         {open === null ? (
           <>
-            <label className="k" htmlFor="to">NEW MESSAGE — RECIPIENT ADDRESS</label>
+            <label className="k" htmlFor="to">NEW MESSAGE · RECIPIENT ADDRESS</label>
             <input
               id="to"
               className="comment-input"
@@ -606,8 +606,8 @@ export function Messages() {
               )}
               {r.state === 'undecryptable' && (
                 <div className="locked-strip">
-                  Encrypted, and your current key does not open it — it was sent to a key you have
-                  since rotated away from.
+                  Encrypted, and your current key does not open it. It was sent to a key you have
+                  since replaced.
                 </div>
               )}
               {r.state === 'locked' && (
@@ -620,8 +620,8 @@ export function Messages() {
                         ? // Named, not hidden and not guessed. The price exists; what it means does
                           // not, and a figure printed anyway would be indistinguishable from a real
                           // one.
-                          `Locked — the amount is not shown: ${money(r.price)} for this coin.`
-                        : `Locked — ${money(r.price)} to open.`}
+                          "Locked. The price could not be shown: this coin's scale was not read."
+                        : `Locked. ${money(r.price)} to open.`}
                   </div>
                 </>
               )}
@@ -635,8 +635,8 @@ export function Messages() {
               // Not a badge. Neither "encrypted" nor "not encrypted" is known to be true here, and
               // showing either would be a claim this component cannot make.
               <span className="unmeasured">
-                Not measured — {short(recipient)}&rsquo;s key could not be read ({theirKey.detail}).
-                Nothing will be sent until it can.
+                Not measured: {short(recipient)}&rsquo;s key could not be read ({theirKey.detail}).
+                Nothing is sent until it can be.
               </span>
             ) : willEncrypt ? (
               <>

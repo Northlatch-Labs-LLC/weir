@@ -17,7 +17,7 @@ export default function MessagesPage() {
         kicker="Your account"
         title="Encrypted in your browser, when both of you"
         accent="hold a key."
-        lede="Private messages, encrypted in your browser. Only you and the person you write to can read them — not this server, not anyone else."
+        lede="Private messages, encrypted in your browser. Only you and the person you write to can read them. Not this server, not anyone else."
       />
       <AccountTabs />
 
@@ -46,7 +46,7 @@ export default function MessagesPage() {
           visible to whoever operates this site, and encrypting the words does not change
           that. Messages sent to someone who has not published a key are sent in plaintext, and each
           message says which it is. Rotating your key makes everything sent to the old one
-          unreadable — there is no re-wrapping, because nothing here can re-wrap without your key.
+          unreadable; nothing here can re-wrap it without your key.
           And because the derivation relies on a signature being reproducible, it works with a
           keypair wallet and <strong>not with zkLogin</strong>, whose signatures change every
           session.

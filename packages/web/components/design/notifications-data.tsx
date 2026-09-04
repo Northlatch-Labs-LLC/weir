@@ -114,14 +114,14 @@ export async function NotificationsData({
       icon: <Icon name="warn" size={15} color={ALERT} />,
       markColor: ALERT,
       text: 'Not measured',
-      meta: reading.ok ? '' : `${reading.failure.kind} — your activity could not be read`,
+      meta: reading.ok ? '' : `${reading.failure.kind}: your activity could not be read`,
     });
   } else if (feed.truncated) {
     items.push({
       icon: <Icon name="warn" size={15} color={SAND} />,
       markColor: SAND,
       text: 'Older activity not walked',
-      meta: 'The event ceiling stopped the walk — these are recent, not complete.',
+      meta: 'The read stopped at its ceiling. These are recent, not complete.',
     });
   }
 

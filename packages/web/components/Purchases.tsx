@@ -100,7 +100,7 @@ export function Purchases() {
         <span className="lbl">Not measured</span>
         <p>
           Your purchases could not be read ({load.detail}). This is <strong>not</strong> an empty
-          history — it is an unanswered question, and the two look identical if nothing says so.
+          history. It is an unanswered question.
         </p>
       </div>
     );
@@ -123,8 +123,8 @@ export function Purchases() {
 
       {nothing && (
         <div className="card empty">
-          Nothing bought yet. Unlock a post or join a membership and it appears here — the chain was read and your address holds no
-          subscriptions or unlocks.
+          Nothing bought yet. The chain was read and your address holds no subscription or unlock.
+          Unlock a post or join a membership and it appears here.
         </div>
       )}
 
@@ -166,7 +166,7 @@ export function Purchases() {
                 <a href={`https://suiscan.xyz/mainnet/object/${s.objectId}`} target="_blank" rel="noreferrer">
                   <span className="mono">{s.objectId.slice(0, 14)}…</span>
                 </a>{' '}
-                — the object you hold
+                the object you hold
               </p>
             </div>
           ))}

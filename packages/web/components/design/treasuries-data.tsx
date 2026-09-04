@@ -72,7 +72,7 @@ export async function TreasuriesData({
   const unlockedNow = position === null ? null : position + 1;
   const epochLabel =
     epoch === null
-      ? 'epoch not measured — the chain could not be read, so no rung is claimed as unlocked'
+      ? 'epoch not measured: the chain could not be read, so no rung is shown as unlocked'
       : `epoch ${epoch.toString()} · ${unlockedNow} of ${rungCount} rungs unlocked now`;
 
   /*
@@ -114,7 +114,7 @@ export async function TreasuriesData({
           yieldShare: !indexed
             ? 'not measured'
             : pool === undefined
-              ? '—'
+              ? 'none'
               : pool.rebateBps === 0n
                 ? 'none set'
                 : `${(Number(pool.rebateBps) / 100).toFixed(2).replace(/\.?0+$/, '')}%`,
@@ -123,7 +123,7 @@ export async function TreasuriesData({
           validator: !indexed
             ? 'not measured'
             : pool === undefined
-              ? '—'
+              ? 'none'
               : `${pool.validator.slice(0, 6)}…${pool.validator.slice(-4)}`,
           /* One bar per rung, filled only as far as this vault has actually funded. */
           rungs: ladder.map((rung, index) => ({

@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Feed',
-  description: 'Posts from the creators on Weir. Paid bodies stay locked until an unlock or a subscription held by your address says otherwise.',
+  description: 'Posts from the creators on Weir. A paid post opens when your wallet holds the unlock or the subscription for it.',
 };
 
 export default async function FeedPage({

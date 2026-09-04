@@ -49,7 +49,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 /** Drives the component to the quoted state, which is where every interesting assertion lives. */
 async function quoted() {
   const view = render(<DepositCheckout vaultId="0xv" />);
-  fireEvent.click(screen.getByText('Simulate deposit'));
+  fireEvent.click(screen.getByText('Check the deposit'));
   await waitFor(() => expect(screen.getByText(/What will happen/i)).toBeTruthy());
   return view;
 }
@@ -78,7 +78,7 @@ describe('before anything is signed', () => {
     render(<DepositCheckout vaultId="0xv" />);
     const input = document.querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'one sui' } });
-    fireEvent.click(screen.getByText('Simulate deposit'));
+    fireEvent.click(screen.getByText('Check the deposit'));
     await waitFor(() => expect(screen.getByText(/Enter an amount in SUI/i)).toBeTruthy());
     expect(fetchMock.mock.calls.length).toBe(0);
   });
@@ -104,7 +104,7 @@ describe('the quote', () => {
     // `deposit` authenticates against a SocialAccount; without one the contract aborts.
     mockRoutes({ prepare: { needsAccount: true } });
     render(<DepositCheckout vaultId="0xv" />);
-    fireEvent.click(screen.getByText('Simulate deposit'));
+    fireEvent.click(screen.getByText('Check the deposit'));
     await waitFor(() => expect(screen.getByText(/Account required/i)).toBeTruthy());
   });
 
@@ -115,7 +115,7 @@ describe('the quote', () => {
      */
     mockRoutes({ prepare: { error: 'insufficient balance' } });
     render(<DepositCheckout vaultId="0xv" />);
-    fireEvent.click(screen.getByText('Simulate deposit'));
+    fireEvent.click(screen.getByText('Check the deposit'));
     await waitFor(() => expect(screen.getByText(/Nothing was signed/i)).toBeTruthy());
   });
 });

@@ -155,7 +155,7 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
 
       {loadError !== null && (
         <p className="form-note warn">
-          {loadError} Your names are unaffected — this is our reader, not your wallet.
+          {loadError} Your names are unaffected: this is our reader, not your wallet.
         </p>
       )}
 
@@ -204,7 +204,7 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
                       disabled={busy !== null}
                       onClick={() => void prepare(`clear-${name.nftId}`, { kind: 'point-nowhere', nftId: name.nftId })}
                     >
-                      Stop it resolving
+                      Stop it pointing anywhere
                     </button>
                   )}
                   {!isDisplayed && (
@@ -247,7 +247,7 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
         <p className="form-note warn">
           {owned.unconfirmed} object{owned.unconfirmed === 1 ? '' : 's'} in this wallet look like
           names but the registry did not confirm {owned.unconfirmed === 1 ? 'it' : 'them'}. Nothing
-          is wrong with your names — we are not showing what we could not verify.
+          is wrong with your names: we are not showing what we could not verify.
         </p>
       )}
 

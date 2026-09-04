@@ -71,7 +71,7 @@ export function DesignTreasuries({
     against. What it can state exactly is what comes back, and that is all of it.
   */
   const simPrincipal = valid
-    ? `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI — all of it, whenever you ask`
+    ? `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI, all of it, whenever you ask`
     : 'not a number';
   const simNote =
     simWho === 'creator'
@@ -113,7 +113,7 @@ export function DesignTreasuries({
               kicker="Treasury"
               title="The pot that yield alone"
               accent="fills."
-              lede={`Pooled SUI is delegated to validators. The staking yield it earns flows into the treasury; the principal never does. Nothing in this pot came out of anybody's balance — it is interest, gathered. The ladder below is why a withdrawal never waits on an epoch boundary, and why the capture is ${capturePct} rather than 100%. We publish the cost in the same breath as the convenience.`}
+              lede={`Pooled SUI is delegated to validators. The staking yield it earns flows into the treasury; the principal never does. Nothing in this pot came out of anybody's balance; it is interest, gathered. The ladder below is why a withdrawal never waits on an epoch boundary, and why the capture is ${capturePct} rather than 100%. We publish the cost in the same breath as the convenience.`}
             />
 
             <p style={{ margin: '0 0 1rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>The pools that fill it</p>
@@ -163,8 +163,8 @@ export function DesignTreasuries({
             <section data-reveal aria-labelledby="ladder-title" style={{ marginTop: '3rem', display: 'grid', gap: '3rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,20rem),1fr))', alignItems: 'start' }}>
               <div>
                 <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>The withdrawal ladder</p>
-                <h2 id="ladder-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}>Seven rungs, so <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>nobody waits</span></h2>
-                <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>Stake is split across seven staggered positions so that at any point in the epoch cycle there is an unlocked rung to withdraw from. The cost of that convenience is precise and we publish it: the ladder captures about {capturePct} of the theoretical maximum yield instead of 100%.</p>
+                <h2 id="ladder-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}>{ladder.length} rungs, so <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>nobody waits</span></h2>
+                <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>Stake is split across {ladder.length} staggered positions so that at any point in the epoch cycle there is an unlocked rung to withdraw from. The cost of that convenience is precise and we publish it: the ladder captures about {capturePct} of the theoretical maximum yield instead of 100%.</p>
                 <p style={{ margin: '1rem 0 0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>The {givenUpPct} we give up buys the sentence the whole product rests on: withdraw in full, any time, no notice.</p>
               </div>
               <div style={{ background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.07),0 14px 34px -26px rgba(var(--shade-rgb,0,0,0),0.85)', padding: '1.75rem' }}>
@@ -242,32 +242,32 @@ export function DesignTreasuries({
                   <span aria-hidden="true" style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)', paddingTop: '0.15rem' }}>02</span>
                   <span>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>Then the platform fee, at the rate stamped into the vault</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>Taken from the yield, never the principal — and at the rate recorded when that vault opened, so a later rise cannot reach a vault that already exists.</p>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>Taken from the yield, never the principal, and at the rate recorded when that vault opened, so a later rise cannot reach a vault that already exists.</p>
                   </span>
                 </li>
                 <li style={{ display: 'grid', gridTemplateColumns: '2rem 1fr', gap: '0 0.875rem', alignItems: 'start' }}>
                   <span aria-hidden="true" style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)', paddingTop: '0.15rem' }}>03</span>
                   <span>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>What remains is the creator&rsquo;s, and the share is carved out of it</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>Out of their money, never the platform&rsquo;s. A creator may set it to anything up to all of it — at 100% they keep none of their own yield.</p>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>Out of their money, never the platform&rsquo;s. A creator may set it to anything up to all of it; at 100% they keep none of their own yield.</p>
                   </span>
                 </li>
                 <li style={{ display: 'grid', gridTemplateColumns: '2rem 1fr', gap: '0 0.875rem', alignItems: 'start' }}>
                   <span aria-hidden="true" style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)', paddingTop: '0.15rem' }}>04</span>
                   <span>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>Your part accrues in proportion to what you deposited</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>Every harvest, against your own position — twice the deposit earns twice the share. It is held in a pool the contract pays out of.</p>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>Every harvest, against your own position: twice the deposit earns twice the share. It is held in a pool the contract pays out of.</p>
                   </span>
                 </li>
                 <li style={{ display: 'grid', gridTemplateColumns: '2rem 1fr', gap: '0 0.875rem', alignItems: 'start' }}>
                   <span aria-hidden="true" style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)', paddingTop: '0.15rem' }}>05</span>
                   <span>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>You claim it yourself</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>One transaction, whenever you like. Nobody releases it for you and nobody can withhold it — the pool pays against your position, not against anyone&rsquo;s approval.</p>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>One transaction, whenever you like. Nobody releases it for you and nobody can withhold it; the pool pays against your position, not against anyone&rsquo;s approval.</p>
                   </span>
                 </li>
               </ol>
-              <p style={{ margin: '1.75rem 0 0', paddingTop: '1.25rem', borderTop: '1px solid rgba(var(--line-rgb,28,61,71),0.9)', maxWidth: '62ch', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>A creator who sets a share is paying supporters out of their own earnings. What it buys is an audience that can back them at no cost to itself — which, for most creators, is nearly all of the audience. The number is on the vault object, public, so nobody has to be trusted to honour it.</p>
+              <p style={{ margin: '1.75rem 0 0', paddingTop: '1.25rem', borderTop: '1px solid rgba(var(--line-rgb,28,61,71),0.9)', maxWidth: '62ch', fontSize: '0.9375rem', lineHeight: '1.65', color: 'var(--ink-2,#b9cdc9)', textWrap: 'pretty' }}>A creator who sets a share is paying supporters out of their own earnings. What it buys is an audience that can back them at no cost to itself, which, for most creators, is nearly all of the audience. The number is on the vault object, public, so nobody has to be trusted to honour it.</p>
             </section>
           </div>
     </>

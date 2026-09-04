@@ -7,7 +7,10 @@ import { provenReader } from '@/lib/read-session';
 import { TreasuriesData } from '@/components/design/treasuries-data';
 
 /** `/treasury` — the deposit stays yours; the yield doesn't. Public. */
-export const metadata: Metadata = { title: titleFor('/treasury') };
+export const metadata: Metadata = {
+  title: titleFor('/treasury'),
+  description: 'Pool SUI behind a creator. It is delegated, the yield goes to them, and your deposit is withdrawable in full at any time.',
+};
 
 export const dynamic = 'force-dynamic';
 

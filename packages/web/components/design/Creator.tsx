@@ -11,6 +11,7 @@
  */
 
 import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-identity';
+import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { Fragment, type ReactNode } from 'react';
 import { PostCard } from '@/components/PostCard';
@@ -148,7 +149,7 @@ export function DesignCreator({
                 {profile.agent?.state === 'declared' && (
                   <div data-agent-identity="declared" style={{ margin: '0.625rem 0 0', maxWidth: '58ch' }}>
                     <p style={{ margin: '0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.9375rem', color: 'var(--ink-2,#b9cdc9)' }}>
-                      <span className="pill" title="Declared as an agent — the account and its operator each signed for it">Agent</span>
+                      <span className="pill" title={AGENT_PILL_TITLE}>Agent</span>
                       <span>Declared agent · verified by two signatures · <a href={profile.agent.recordPath} style={{ color: 'var(--crest,#8be3c6)' }}>the record</a></span>
                     </p>
                     <details style={{ margin: '0.375rem 0 0', fontSize: '0.875rem', color: 'var(--dim,#a3bcb8)' }}>
@@ -203,7 +204,7 @@ export function DesignCreator({
                   </ul>
                   <div style={{ marginTop: '1.5rem', border: '1px solid var(--line,#1c3d47)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1rem 1.5rem', maxWidth: '62ch' }}>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>Tip</p>
-                    <p style={{ margin: '0.25rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Send any amount, once. It settles on chain and the platform takes its usual fee; the rest lands in their vault. It buys no access and expires never; any perks below are the creator\u2019s own promise.</p>
+                    <p style={{ margin: '0.25rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Send any amount, once. It settles on chain; the platform fee comes off and the rest lands in their vault. It buys no access. Any perks listed below are the creator's own promise.</p>
                     {/*
                       The control the copy above describes.
                     */}
@@ -232,7 +233,7 @@ export function DesignCreator({
                           <p style={{ margin: '0.875rem 0 0', fontSize: '0.875rem', lineHeight: '1.5', color: 'var(--ink-2,#b9cdc9)' }}>This creator says they answer supporters first. Anyone with an account can message them; this is where they start.</p>
                         )}
                         {perksPartial && (
-                          <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', lineHeight: '1.5', color: 'var(--sand,#d9c9a3)' }}>We read the most recent payments only, so your total may be higher than the figure above. If a perk you have earned is not marked, tell the creator — the chain has the record.</p>
+                          <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', lineHeight: '1.5', color: 'var(--sand,#d9c9a3)' }}>We read the most recent payments only, so your total may be higher than the figure above. If a perk you have earned is not marked, tell the creator: the chain has the record.</p>
                         )}
                         {/*
                           The label this list must carry.
@@ -240,7 +241,7 @@ export function DesignCreator({
                           object, so nothing can hold a creator to what is written here, and a reader
                           who assumed otherwise would be assuming it because we let them.
                         */}
-                        <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', lineHeight: '1.5', color: 'var(--dim,#a3bcb8)' }}>The tip settles on chain and cannot be reversed. These are the creator&rsquo;s own promises, kept by them — not by the contract.</p>
+                        <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', lineHeight: '1.5', color: 'var(--dim,#a3bcb8)' }}>The tip settles on chain and cannot be reversed. These are the creator&rsquo;s own promises, kept by them, not by the contract.</p>
                       </div>
                     )}
                   </div>
@@ -279,7 +280,7 @@ export function DesignCreator({
                 <div>
                   <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Below the waterline</p>
                   <h2 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', lineHeight: '1.15', letterSpacing: '-0.03em' }}>Pool, <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>don't pay</span></h2>
-                  <p style={{ margin: '0.75rem 0 0', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)', fontSize: '0.9375rem', lineHeight: '1.6' }}>Park SUI in the vault of <strong style={{ color: 'var(--ink,#dce9e6)', fontWeight: '600' }}>{profile.sui}</strong>. It is delegated to a validator, the staking yield goes to them, and your principal stays yours — withdrawable in full at any time. The cost to you is the yield you would have earned yourself.</p>
+                  <p style={{ margin: '0.75rem 0 0', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)', fontSize: '0.9375rem', lineHeight: '1.6' }}>Park SUI in the vault of <strong style={{ color: 'var(--ink,#dce9e6)', fontWeight: '600' }}>{profile.sui}</strong>. It is delegated to a validator and the staking yield goes to them. Your principal stays yours, withdrawable in full at any time. The cost to you is the yield you would have earned yourself.</p>
                 </div>
                 <div>
                   <div className="weir-pool-deposit">{depositSlot}</div>
@@ -289,7 +290,7 @@ export function DesignCreator({
                     <p style={{ margin: '0.75rem 0 0', padding: '0.75rem 0.875rem', borderRadius: '8px', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)' }}>{depositShare}</p>
                   )}
                 </div>
-                {vaultHref !== undefined && (<a className="dh-f2bac7c4" href={vaultHref} style={{ width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box', padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', border: '1px solid transparent', cursor: 'pointer', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>Inspect the vault object</a>)}
+                {vaultHref !== undefined && (<a className="dh-f2bac7c4" href={vaultHref} style={{ width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box', padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', border: '1px solid transparent', cursor: 'pointer', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>Open the vault page</a>)}
               </aside>
             </div>
           </div>

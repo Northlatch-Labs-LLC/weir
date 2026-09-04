@@ -21,7 +21,7 @@ export default function EarningsPage() {
         kicker="Creator studio"
         title="What you were paid, and what you can"
         accent="take out."
-        lede="What buyers paid, what the platform took, and what you can withdraw right now — three figures read from your vault on chain."
+        lede="What buyers paid, what the platform took, and what you can withdraw right now: three figures, read from your vault on chain."
       />
       <PageTabs label="Creator studio" items={CREATOR} />
 
@@ -31,8 +31,8 @@ export default function EarningsPage() {
         <span className="lbl">Nothing here can hold your money</span>
         <p>
           Withdrawing checks no pause switch on chain. There is
-          no approval queue, no processing period and no minimum payout — those are all names for a
-          float, and this contract does not have one. The platform&rsquo;s fee was fixed into your
+          no approval queue, no processing period and no minimum payout. Those are all names for a
+          float, and this contract has none. The platform&rsquo;s fee was fixed into your
           vault the day it was created and cannot be raised on it afterwards.
         </p>
       </div>

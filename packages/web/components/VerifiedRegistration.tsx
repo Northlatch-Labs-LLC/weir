@@ -167,7 +167,7 @@ export function VerifiedRegistration() {
         <p style={{ color: 'var(--text-secondary)' }}>
           The name is registered to your address for {quote.quote.years} year
           {quote.quote.years === 1 ? '' : 's'}. It is an object you hold, so it is yours to point,
-          transfer or sell — this platform has no say over it.
+          transfer or sell. This platform has no say over it.
         </p>
         <p className="mono" style={{ fontSize: 'var(--text-micro)', overflowWrap: 'anywhere' }}>
           {digest}
@@ -192,7 +192,7 @@ export function VerifiedRegistration() {
       <span className="k">.SUI NAME</span>
       <h2 style={{ marginTop: 'var(--space-12)' }}>Register a .sui name</h2>
       <p style={{ color: 'var(--text-secondary)' }}>
-        A name is an object your address holds — yours to point, transfer or sell, and this platform
+        A name is an object your address holds: yours to point, transfer or sell. This platform
         has no say over it. Buying it here costs SuiNS&rsquo;s own price plus our service fee, and it
         is a purchase rather than a sign-up: your account is separate and already exists.
       </p>
@@ -260,7 +260,7 @@ export function VerifiedRegistration() {
             simulating the exact bytes about to be signed.
           */}
           <div className="panel" style={{ marginTop: 'var(--space-16)' }}>
-            <span className="k">SIMULATED — NOTHING SIGNED YET</span>
+            <span className="k">CHECKED AGAINST THE CHAIN. NOTHING SIGNED YET</span>
             <dl className="quote-lines">
               <div>
                 <dt>
@@ -285,10 +285,10 @@ export function VerifiedRegistration() {
               </div>
             </dl>
             <p className="locked-why" style={{ marginBottom: 0 }}>
-              Priced at ${quote.quote.suiUsd.toFixed(4)} per SUI, live from Pyth — the same feed
+              Priced at ${quote.quote.suiUsd.toFixed(4)} per SUI, live from Pyth, the same feed
               SuiNS charges against. The name is ${quote.quote.baseUsd} and our fee is $
               {quote.quote.feeUsd}. The rate moves, so the amount taken is settled on chain, capped
-              above this quote rather than followed blindly.
+              at this quote rather than followed blindly.
             </p>
           </div>
 

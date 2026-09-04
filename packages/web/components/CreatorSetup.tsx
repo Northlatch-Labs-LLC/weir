@@ -219,7 +219,7 @@ export function CreatorSetup() {
         <p style={{ color: 'var(--text-secondary)' }}>
           Payments to <strong>@{setup.handle}</strong> will settle into it, split in the same
           transaction. The platform fee is fixed into the vault at creation and can never be raised
-          on it — only lowered, and only if you accept the new terms.
+          on it. It can only be lowered, and only if you accept the new terms.
         </p>
         <p className="section-note">
           Creation fee: <strong>{free ? 'none' : `${sui(setup.creationFeeMist)} SUI`}</strong>,
@@ -240,7 +240,7 @@ export function CreatorSetup() {
             disabled={busy || quote?.what === 'vault'}
           >
             <legend className="lbl" style={{ marginBottom: 'var(--space-8)' }}>
-              Denomination — permanent
+              Denomination (permanent)
             </legend>
             <p style={{ color: 'var(--text-secondary)', marginTop: 0 }}>
               This is the vault&rsquo;s type parameter. It is fixed when the vault is created and
@@ -282,7 +282,7 @@ export function CreatorSetup() {
 
         {quote?.what === 'vault' ? (
           <div className="note">
-            <span className="lbl">Simulated — nothing signed yet</span>
+            <span className="lbl">Checked against the chain. Nothing signed yet</span>
             <p>Opening the vault costs <strong>{sui(quote.gasMist)} SUI</strong> in gas.</p>
             <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
               <button className="btn" type="button" disabled={busy}
@@ -299,7 +299,7 @@ export function CreatorSetup() {
             onClick={() => void simulate('vault', '/api/creator/vault', {
               accountId: setup.accountId, coinType: chosenCoin, creationFeeMist: setup.creationFeeMist,
             })}>
-            {busy ? 'Simulating…' : chosenCoin === null ? 'Choose a denomination' : 'Open a vault'}
+            {busy ? 'Checking…' : chosenCoin === null ? 'Choose a denomination' : 'Open a vault'}
           </button>
         )}
         {error !== null && <p className="unmeasured">{error}</p>}
@@ -340,12 +340,12 @@ export function CreatorSetup() {
             <span className="lbl">{vault.accepting ? 'Retiring this page' : 'This page is closed'}</span>
             <p style={{ color: 'var(--text-secondary)' }}>
               {vault.accepting
-                ? 'Closing stops new subscriptions, unlocks and tips. Nothing already bought is affected — earnings stay withdrawable, existing subscribers keep their access, and your posts stay readable. You can reopen it whenever you like.'
+                ? 'Closing stops new subscriptions, unlocks and tips. Nothing already bought is affected: earnings stay withdrawable, existing subscribers keep their access, and your posts stay readable. You can reopen it whenever you like.'
                 : 'It takes no new payments. Everything already bought still works, and reopening restores it exactly as it was.'}
             </p>
             {quote?.what === `accepting:${vault.vaultId}` ? (
               <div className="note">
-                <span className="lbl">Simulated — nothing signed yet</span>
+                <span className="lbl">Checked against the chain. Nothing signed yet</span>
                 <p>
                   {vault.accepting ? 'Closing' : 'Reopening'} costs{' '}
                   <strong>{sui(quote.gasMist)} SUI</strong> in gas.
@@ -365,7 +365,7 @@ export function CreatorSetup() {
                   vaultId: vault.vaultId, capId: vault.capId, coinType: vault.coinType,
                   accepting: !vault.accepting,
                 })}>
-                {busy ? 'Simulating…' : vault.accepting ? 'Close this page' : 'Reopen this page'}
+                {busy ? 'Checking…' : vault.accepting ? 'Close this page' : 'Reopen this page'}
               </button>
             )}
           </div>
@@ -375,7 +375,7 @@ export function CreatorSetup() {
               <div className="note warn" style={{ marginBottom: 'var(--space-16)' }}>
                 <span className="lbl">Not published yet</span>
                 <p>
-                  The vault exists on chain and can take payments, but nothing here points at it —
+                  The vault exists on chain and can take payments, but nothing here points at it,
                   so it has no page and your posts have nowhere to hang. Name it to publish.
                 </p>
               </div>
@@ -434,7 +434,7 @@ export function CreatorSetup() {
           ) : vault.tiers.length === 0 ? (
             <>
               <div className="note warn" style={{ marginBottom: 'var(--space-16)' }}>
-                <span className="lbl">No tier — nobody can subscribe</span>
+                <span className="lbl">No tier yet, so nobody can subscribe</span>
                 <p>
                   Tips and one-off unlocks already work. A subscription needs a tier, because
                   <span className="mono"> subscribe</span> takes a tier index and there is nothing to index.
@@ -495,7 +495,6 @@ export function CreatorSetup() {
       */}
       <div className="feed-head">
         <h2>Support without spending</h2>
-        <p className="section-note" style={{ margin: 0 }}>the thing nobody else offers</p>
       </div>
       <StakeVaultSetup accountId={setup.accountId} />
 
@@ -519,7 +518,7 @@ function TierForm({
   if (quote !== null) {
     return (
       <div className="note">
-        <span className="lbl">Simulated — nothing signed yet</span>
+        <span className="lbl">Checked against the chain. Nothing signed yet</span>
         <p>
           Adding <strong>{tier.name}</strong> at {tier.price} {vault.symbol} every {tier.days} days costs{' '}
           <strong>{sui(quote.gasMist)} SUI</strong> in gas.
@@ -573,7 +572,7 @@ function TierForm({
             periodMs: (BigInt(tier.days.trim() === '' ? '0' : tier.days.trim()) * BigInt(DAY_MS)).toString(),
           });
         }}>
-        {busy ? 'Simulating…' : 'Add tier'}
+        {busy ? 'Checking…' : 'Add tier'}
       </button>
     </div>
   );

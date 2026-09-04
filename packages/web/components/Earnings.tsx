@@ -180,7 +180,7 @@ export function Earnings() {
       <div className="panel">
         <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
           Your earnings sit in your vault on chain, not in a balance this platform keeps for you.
-          There is no approval queue and no processing delay — withdrawing checks no pause switch,
+          There is no approval queue and no processing delay. Withdrawing checks no pause switch,
           so nothing here can hold your money.
         </p>
         <SignIn />
@@ -195,7 +195,7 @@ export function Earnings() {
         <span className="lbl">Not measured</span>
         <p>
           Your vault could not be read ({load.detail}), so no balance is shown and no withdrawal is
-          offered. This is <strong>not</strong> a zero balance — it is an unanswered question.
+          offered. This is <strong>not</strong> a zero balance: it is an unanswered question.
         </p>
       </div>
     );
@@ -276,16 +276,16 @@ export function Earnings() {
                 <span className="lbl">No CreatorCap at this address</span>
                 <p>
                   The contract requires the capability to withdraw, and this address does not hold
-                  one. It may be in multisig custody — withdraw from wherever it lives.
+                  one. Withdraw from the wallet that holds it.
                 </p>
               </div>
             ) : balance === 0n ? (
               <p className="section-note" style={{ margin: 0 }}>
-                Nothing to withdraw yet. This is a measured zero — the vault was read.
+                Nothing to withdraw yet. This is a measured zero; the vault was read.
               </p>
             ) : quoted ? (
               <div className="note">
-                <span className="lbl">Simulated — nothing signed yet</span>
+                <span className="lbl">Checked against the chain. Nothing signed yet</span>
                 <p>
                   Withdrawing <strong>{units(quote.amount, vault.decimals)}</strong> costs{' '}
                   <strong>{sui(quote.gasMist)} SUI</strong> in gas. The coin goes to the address you
@@ -307,12 +307,12 @@ export function Earnings() {
                   style={{ maxWidth: 220 }}
                   inputMode="decimal"
                   aria-label={`Amount to withdraw from @${vault.handle}`}
-                  placeholder={`All of it — ${units(vault.earnings, vault.decimals)}`}
+                  placeholder={`All of it: ${units(vault.earnings, vault.decimals)}`}
                   value={amounts[vault.vaultId] ?? ''}
                   onChange={(e) => setAmounts((a) => ({ ...a, [vault.vaultId]: e.target.value }))}
                 />
                 <button className="btn" type="button" disabled={busy} onClick={() => void simulate(vault)}>
-                  {busy ? 'Simulating…' : 'Withdraw'}
+                  {busy ? 'Checking…' : 'Withdraw'}
                 </button>
               </div>
             )}

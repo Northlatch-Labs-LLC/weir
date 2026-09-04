@@ -64,7 +64,7 @@ export default async function NamesPage() {
         kicker="Names"
         title="A name of your own, bought once and"
         accent="owned outright."
-        lede="A .sui name is an object in your wallet, not a row in this platform’s database. It is a separate thing from an account — you can hold either without the other."
+        lede="A .sui name is an object in your wallet, not a row in this platform's database. It is separate from an account: you can hold either without the other."
       />
 
       <VerifiedRegistration />

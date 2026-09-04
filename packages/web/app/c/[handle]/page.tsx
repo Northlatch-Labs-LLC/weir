@@ -62,7 +62,11 @@ export async function generateMetadata({
   */
   const crumb = titleFor(`/c/${encodeURIComponent(handle)}`);
   const title = stored === null || stored.displayName === handle ? crumb : `${stored.displayName} (${crumb})`;
-  return stored === null || stored.bio === '' ? { title } : { title, description: stored.bio };
+  return stored === null
+    ? { title }
+    : stored.bio === ''
+      ? { title, description: `@${handle} on Weir. Posts, membership and a vault paid on chain.` }
+      : { title, description: stored.bio };
 }
 
 export default async function CreatorPage({
@@ -343,11 +347,11 @@ export default async function CreatorPage({
       */
       action: holdsSubscription ? (
         <p style={{ margin: 0, color: CREST, fontSize: '0.9375rem', fontWeight: 600 }}>
-          You hold this membership — subscriber posts are open.
+          You hold this membership. Subscriber posts are open to you.
         </p>
       ) : coinDecimals === null || profile.vaultId === null || profile.coinType === null ? (
         <p style={{ margin: 0, color: ALERT, fontSize: '0.9375rem' }}>
-          Not offered for sale — the coin&rsquo;s decimals could not be read, so it cannot be priced.
+          Not for sale right now: the coin&rsquo;s scale could not be read, so no price can be shown.
         </p>
       ) : viewer === null ? (
         <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
@@ -458,7 +462,7 @@ export default async function CreatorPage({
       </p>
     ) : coinDecimals === null ? (
       <p style={{ margin: 0, color: ALERT, fontSize: '0.9375rem' }}>
-        Not offered — the coin&rsquo;s decimals could not be read, so an amount cannot be priced.
+        Not offered right now: the coin&rsquo;s scale could not be read, so an amount cannot be priced.
       </p>
     ) : viewer === null ? (
       <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>

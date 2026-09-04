@@ -151,7 +151,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
   const confirmable = (what: string, describe: string) =>
     quote?.what === what ? (
       <div className="note">
-        <span className="lbl">Simulated — nothing signed yet</span>
+        <span className="lbl">Checked against the chain. Nothing signed yet</span>
         <p>{describe} Gas <strong>{sui(quote.gasMist)} SUI</strong>.</p>
         <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
           <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
@@ -202,12 +202,11 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
         <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 'var(--space-10)' }}>Open a support vault</h2>
         <p style={{ color: 'var(--text-secondary)' }}>
           Supporters deposit SUI, it is delegated to a validator, and you receive the yield. Their
-          principal is never touched and they can withdraw in full at any time — which is what makes
-          this something people say yes to.
+          principal is never touched and they can withdraw in full at any time.
         </p>
 
         <label className="k" htmlFor="validator" style={{ display: 'block', marginTop: 'var(--space-16)' }}>
-          VALIDATOR — PERMANENT, CANNOT BE CHANGED LATER
+          VALIDATOR · PERMANENT, CANNOT BE CHANGED LATER
         </label>
         <input
           id="validator" className="comment-input" style={{ width: '100%', marginTop: 'var(--space-6)' }}
@@ -215,7 +214,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
         />
         <p className="locked-why">
           Their commission is taken from the yield before your vault sees it, and they can change it
-          at any epoch boundary — so no figure is shown here that would be stale by next week. Check
+          at any epoch boundary. No figure is shown here because it would be stale within days. Check
           it live with <span className="mono">sui validator display-metadata</span> or on an
           explorer before you commit.{' '}
           {suggested !== null
@@ -228,7 +227,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
             className="btn" type="button" disabled={busy} style={{ marginTop: 'var(--space-12)' }}
             onClick={() => void simulate('open', '/api/stake/vault', { accountId, validator })}
           >
-            {busy ? 'Simulating…' : 'Open the vault'}
+            {busy ? 'Checking…' : 'Open the vault'}
           </button>
         )}
         {error !== null && <p className="unmeasured">{error}</p>}
@@ -247,7 +246,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
       {caps !== 'unknown' && caps.length > 1 && (
         <div className="panel" style={{ marginBottom: 'var(--space-20)' }}>
           <label className="k" htmlFor="sv">
-            YOU HOLD {caps.length} SUPPORT VAULTS — SHOWING
+            YOU HOLD {caps.length} SUPPORT VAULTS · SHOWING
           </label>
           <select
             id="sv"
@@ -262,7 +261,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
           >
             {caps.map((c, i) => (
               <option key={c.vaultId} value={c.vaultId}>
-                Vault {i + 1} — {c.vaultId.slice(0, 16)}…
+                Vault {i + 1} · {c.vaultId.slice(0, 16)}…
               </option>
             ))}
           </select>
@@ -309,7 +308,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
               <span className="lbl">Nothing here is earning yet</span>
               <p>
                 Sui will not delegate less than {suiOf(MIN_STAKE_MIST)} SUI. Until this vault holds
-                that much, deposits sit liquid and produce no yield for you — it is{' '}
+                that much, deposits sit liquid and produce no yield for you. It is{' '}
                 {suiOf(health.shortfallMist)} SUI short. Nobody&rsquo;s principal is at risk; it
                 simply is not working.
               </p>
@@ -348,7 +347,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
         </div>
 
         <p className="locked-why">
-          Principal shown here is <strong>not yours</strong> — it belongs to the people who deposited
+          Principal shown here is <strong>not yours</strong>: it belongs to the people who deposited
           it and they can take it back at any moment. Only the yield column is your revenue.
         </p>
       </div>
@@ -357,7 +356,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
         <span className="k">CLAIM YOUR YIELD</span>
         {yieldMist === 0n ? (
           <p className="section-note" style={{ marginBottom: 0 }}>
-            Nothing realised yet. A tranche must mature before its yield exists — this is a measured
+            Nothing realised yet. A tranche must mature before its yield exists: this is a measured
             zero, not a failed read.
           </p>
         ) : confirmable('yield', `Withdraws ${sui(claim.trim() === '' ? (vault?.creatorYieldMist ?? '0') : claim)} SUI of yield.`) ?? (
@@ -365,7 +364,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
             <input
               className="comment-input" style={{ maxWidth: 200 }} inputMode="decimal"
               aria-label="Amount of yield to claim"
-              placeholder={`All of it — ${sui(vault?.creatorYieldMist ?? '0')}`}
+              placeholder={`All of it: ${sui(vault?.creatorYieldMist ?? '0')}`}
               value={claim} onChange={(e) => setClaim(e.target.value)}
             />
             <button
@@ -381,7 +380,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
                 void simulate('yield', '/api/stake/yield', { vaultId: cap.vaultId, capId: cap.capId, amountMist });
               }}
             >
-              {busy ? 'Simulating…' : 'Claim'}
+              {busy ? 'Checking…' : 'Claim'}
             </button>
           </div>
         )}
@@ -393,7 +392,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
           A percentage of the yield handed back to the people funding it, out of{' '}
           <strong>your</strong> share rather than the platform&rsquo;s. It starts at zero, because a
           share nobody chose should not quietly redirect your revenue. Setting it to 100% is
-          allowed — some creators run the vault purely as a savings product for their audience.
+          allowed. Some creators run the vault purely as a savings product for their audience.
         </p>
         {confirmable('rebate', `Sets the supporters' share to ${rebate || '0'}%.`) ?? (
           <div style={{ display: 'flex', gap: 'var(--space-8)', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -418,7 +417,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
                 });
               }}
             >
-              {busy ? 'Simulating…' : 'Set share'}
+              {busy ? 'Checking…' : 'Set share'}
             </button>
           </div>
         )}

@@ -17,7 +17,10 @@ export const dynamic = 'force-dynamic';
 /** "Vault 0x1234…abcd", as the trail names it. An id the map does not recognise keeps the site's default. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  return { title: titleFor(`/vault/${id}`) };
+  return {
+    title: titleFor(`/vault/${id}`),
+    description: 'One support vault on Sui: what is pooled, what is delegated, what it has earned, and the solvency check, read live.',
+  };
 }
 
 /**
@@ -54,7 +57,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
         kicker="Support vault"
         title="Support without"
         accent="spending."
-        lede="Your deposit stays yours and is withdrawable in full at any time. Only the staking yield it earns goes to the creator — never the principal."
+        lede="Your deposit stays yours and is withdrawable in full at any time. Only the staking yield it earns goes to the creator, never the principal."
       />
 
 
@@ -153,7 +156,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                       <p>
                         Sui will not delegate less than {sui(MIN_STAKE_MIST)} SUI, and this vault
                         holds {sui(v.totalPrincipalMist)}. The balance sits liquid and earns nothing
-                        until it reaches the minimum — another{' '}
+                        until it reaches the minimum. Another{' '}
                         <strong>{sui(health.shortfallMist)} SUI</strong> deposited here starts it
                         working. Principal is untouched either way and stays withdrawable in full.
                       </p>
@@ -166,7 +169,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                         yield arrives continuously. At {sui(v.totalPrincipalMist)} SUI it can fund{' '}
                         {health.rungs.toString()} of them, so yield arrives in bursts instead. A
                         further <strong>{sui(health.shortfallMist)} SUI</strong> would fill the
-                        ladder. Nothing is wrong or at risk — it simply earns less evenly.
+                        ladder. Nothing is wrong or at risk; it earns less evenly.
                       </p>
                     </div>
                   );
@@ -185,7 +188,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                   ),
                   (failure) => (
                     <div data-reveal className="note crit">
-                      <span className="lbl">Could not read this — {failure.kind}</span>
+                      <span className="lbl">Could not read this: {failure.kind}</span>
                       <p>
                         The vault list could not be read, so this page cannot confirm the object was
                         created here. No deposit form is offered on an unverified vault.
@@ -199,24 +202,22 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
           ),
           (failure) => (
             <div data-reveal className="note crit" style={{ marginTop: 'var(--space-24)' }}>
-              <span className="lbl">Could not read this — {failure.kind}</span>
+              <span className="lbl">Could not read this: {failure.kind}</span>
               <p>This vault could not be read. {failure.detail}</p>
             </div>
           ),
         )}
 
         <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
-          <span className="lbl">What you are actually agreeing to</span>
+          <span className="lbl">What you are agreeing to</span>
           <p>
             Your SUI is delegated to a validator and the rewards go to the creator. You are lending
             your money&rsquo;s <em>earning power</em>, not the money. There is no lock-up, no notice
-            period and no approval step — <span className="mono">withdraw</span> unwinds delegated
+            period and no approval step. <span className="mono">withdraw</span> unwinds delegated
             stake in the same transaction if it has to.
           </p>
           <p>
-            Be realistic about the size of it. At current staking rates a deposit generates roughly
-            a thousandth of itself per month for the creator. This is a way to support someone at no
-            cost to you, not a substitute for paying them.
+            This is a way to support someone at no cost to you, not a substitute for paying them.
           </p>
         </div>
           </>

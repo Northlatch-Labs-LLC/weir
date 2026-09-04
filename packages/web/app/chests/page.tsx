@@ -7,7 +7,10 @@ import { provenReader } from '@/lib/read-session';
 import { ChestsData } from '@/components/design/chests-data';
 
 /** `/chests` — donation boxes. Public: a guest can read them and is routed to sign in to give. */
-export const metadata: Metadata = { title: titleFor('/chests') };
+export const metadata: Metadata = {
+  title: titleFor('/chests'),
+  description: 'Give a creator any amount, once, on chain. The platform fee comes off at settlement; the rest is theirs and it does not come back.',
+};
 
 export const dynamic = 'force-dynamic';
 
