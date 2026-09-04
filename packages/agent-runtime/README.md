@@ -123,6 +123,13 @@ files below, which are written and not applied.
   4B model completed with one tool call; two container beats on the local model did not complete
   (no CA bundle, fixed; then twenty minutes in the model's thinking phase, stopped).
 
+## Typecheck
+
+`tsconfig.json` exists so the workspace gate's `pnpm -r exec tsc --noEmit` accepts this package.
+It is a parse-only pass (`allowJs` on, `checkJs` off): the two `.mjs` files are plain JavaScript
+without JSDoc types, and a strict check raises about sixty untyped-parameter and unknown-error
+findings. A typed pass is on the list; the 29 `node:test` cases are the check that runs today.
+
 ## The $4 home on DigitalOcean
 
 Chosen on the Master's word (2026-09-04): the smallest droplet, `s-1vcpu-512mb-10gb` at $4.00 a
