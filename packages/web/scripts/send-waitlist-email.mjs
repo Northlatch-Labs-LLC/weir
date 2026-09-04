@@ -65,7 +65,10 @@ import {
 /** The variable that stands for the word to send. Its NAME is here; nothing else is. */
 const APPROVAL_VAR = 'WEIR_EMAIL_SEND_APPROVED';
 
-/** Where the links point. Overridable only so a dry run can be read against a local server. */
+/**
+ * Where the links point on a real send, always. `--origin` can move them for a dry run and is
+ * refused outright with `--really-send`, which is the check below rather than a promise here.
+ */
 const DEFAULT_ORIGIN = 'https://weir.social';
 
 const argv = process.argv.slice(2);
@@ -92,7 +95,9 @@ send-waitlist-email — one templated message to the waiting list, or to one add
                       {{unsubscribe_url}}.
   --list              every address in waitlist_signups.
   --to=<address>      one address, for a test send to somewhere we control.
-  --origin=<url>      where the unsubscribe links point (default ${DEFAULT_ORIGIN}).
+  --origin=<url>      where the unsubscribe links point, for reading a dry run against a
+                      local server. Refused with --really-send; a real send always uses
+                      ${DEFAULT_ORIGIN}.
   --really-send       send for real. Also needs ${APPROVAL_VAR}=1 in the environment.
 
 Dry run by default: renders every message, sends nothing, writes nothing.
@@ -125,7 +130,26 @@ async function main() {
     fail(`Give exactly one of --list or --to=<address>.\n${USAGE}`);
   }
 
+  const asked = flag('really-send');
+
   const given = option('origin');
+  /*
+    `--origin` is a dry-run option and this is what makes that sentence true rather than a comment.
+    The value ends up in the `List-Unsubscribe` header and in both bodies of every message, so a run
+    that carries it for real hands the whole list a way out that points somewhere the deployment
+    does not serve — and the send log records every one of those as a clean send, because the
+    provider accepted the message and returned an id. There is nothing downstream that catches it.
+    An operator reruns a line out of shell history exactly once for this to happen to the list.
+  */
+  if (asked && given !== undefined && given !== '') {
+    fail(
+      '--origin was given together with --really-send. It is a dry-run option: a real send always ' +
+        `points every unsubscribe link at ${DEFAULT_ORIGIN}, because a link anywhere else is a way ` +
+        'out that does not work for every recipient at once.\n' +
+        'Nothing was sent, nothing was claimed, and the database was not opened. Drop --origin to ' +
+        'send, or drop --really-send to read the run.',
+    );
+  }
   const origin = given === undefined || given === '' ? DEFAULT_ORIGIN : given;
 
   const template = loadTemplate(templatePath);
@@ -138,7 +162,6 @@ async function main() {
   const secret = requireSecret(process.env[UNSUBSCRIBE_SECRET_VAR]);
 
   const approved = process.env[APPROVAL_VAR] === '1';
-  const asked = flag('really-send');
   if (asked && !approved) {
     fail(
       `--really-send was given but ${APPROVAL_VAR} is not set to 1.\n` +

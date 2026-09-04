@@ -8,12 +8,27 @@ Nothing in this branch has sent anything, and nothing in it can send anything on
 | Piece | Where | What it is |
 |---|---|---|
 | The token | `lib/email-token.ts` | HMAC-SHA256 over one address under the purpose `weir.waitlist.unsubscribe.v1`. Unforgeable without the secret, single-purpose, no expiry. Also builds the `List-Unsubscribe` / `List-Unsubscribe-Post` header pair (RFC 8058). |
-| The way out | `app/unsubscribe/route.ts` | `GET` and `POST` at `/unsubscribe?token=…`. Verifies, deletes the `waitlist_signups` row, answers a plain page. Idempotent; answers identically whether or not the address was on the list; refuses an unsigned token before touching Postgres. |
+| The way out | `app/unsubscribe/route.ts` | `/unsubscribe?token=…`. `GET` verifies the token and renders one page with one button — a form that `POST`s the same token back — and changes nothing. `POST` is the only verb that deletes the `waitlist_signups` row; it is also the verb RFC 8058 one-click uses, so a provider's own unsubscribe button still needs no page. Idempotent; answers identically whether or not the address was on the list; refuses an unsigned token before touching Postgres. |
 | The delete | `lib/waitlist-unsubscribe.ts` | One statement, keyed on the address, returning nothing. |
 | The door | `proxy.ts`, `app/sitemap.ts` | `/unsubscribe` is exempt from the waiting-list gate, and deliberately absent from the sitemap. |
 | The sender | `lib/email-sender.ts` | One POST to `https://api.resend.com/emails`, from `Weir <hello@weir.social>`, reply-to `hello@weir.social`. Refuses a template whose bodies do not carry `{{unsubscribe_url}}`. Has a dry run that renders without sending and needs no key. |
 | The record | `db/042_waitlist_email_sends.sql`, `lib/waitlist-email-log.ts` | One row per address per template, claimed **before** the provider is called. The primary key is the duplicate guard. |
 | The command | `scripts/send-waitlist-email.mjs` | Dry run by default. Sends only with `--really-send` **and** `WEIR_EMAIL_SEND_APPROVED=1`. |
+
+### Why `GET` shows a button instead of removing the row
+
+RFC 8058 Section 1 records that "anti-spam software often fetches all resources in mail header
+fields automatically, without any action by the user", and that "there is no mechanical way for a
+sender to tell whether a request was made automatically by anti-spam software or manually requested
+by a user". The same URL is in the `List-Unsubscribe` header and in both bodies, so a destructive
+`GET` means a recipient's own mail gateway or link scanner takes them off the list before they have
+opened the message — silently, and with no record that separates that removal from a real one,
+because the row is gone and the route deliberately tells the caller nothing.
+
+The one-click promise is unaffected. `List-Unsubscribe-Post: List-Unsubscribe=One-Click` tells a
+conforming provider to `POST`, so a provider's unsubscribe button still removes the address in one
+act with no page in between. The cost is one button press for a reader who clicked the link in the
+body, and the form carries no script, so it works in any client that renders HTML.
 
 ## The two environment variables
 
@@ -139,7 +154,12 @@ WEIR_EMAIL_SEND_APPROVED=1 node --env-file=.env.local scripts/send-waitlist-emai
 ```
 
 `--origin=http://localhost:3000` points the unsubscribe links at a local server, for reading a dry
-run against a running app. It has no effect on anything else and must never be used on a real send.
+run against a running app. It is a dry-run option and the script enforces that rather than asking:
+`--origin` together with `--really-send` is refused before the template is read, before the database
+is opened and before anything is claimed, and the run exits non-zero. A real send always points
+every unsubscribe link at `https://weir.social`, because the origin ends up in the
+`List-Unsubscribe` header and in both bodies of every message — one wrong value hands the whole list
+a way out that does not work, and the send log records every one of those as a clean send.
 
 ## When a send fails on the wire
 
