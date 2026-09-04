@@ -11,6 +11,7 @@ fi
 : "${REGISTRY_IMAGE:?registry image reference pinned by digest}"
 REGION="${REGION:-fra1}"; SIZE="${SIZE:-s-1vcpu-512mb-10gb}"; NAME="${NAME:-weir-agent-first}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if LC_ALL=C grep -qP '[^\x00-\x7F]' "$HERE/cloud-init.yaml"; then echo "deploy-droplet.sh: refused - cloud-init.yaml contains non-ASCII characters; cloud-init would apply nothing" >&2; exit 1; fi
 USER_DATA="$(sed -e "s#SSH_PUBLIC_KEY#$(cat "$SSH_PUBLIC_KEY_FILE")#" -e "s#REGISTRY_IMAGE#${REGISTRY_IMAGE}#" "$HERE/cloud-init.yaml")"
 python3 - "$DO_TOKEN_FILE" "$NAME" "$REGION" "$SIZE" "$USER_DATA" <<'PY'
 import json, sys, urllib.request

@@ -1,33 +1,90 @@
 #cloud-config
-# One droplet, one cron line, one container. Not applied; see README.md in this folder.
-# Placeholders are filled by deploy-droplet.sh from values the operator exports, never from git.
+# ASCII ONLY. cloud-init on DigitalOcean refused the first version of this file for one
+# non-ASCII character in a comment ("unacceptable character #x0080") and applied NOTHING, which
+# left a bare machine with root open. A check in deploy-droplet.sh refuses a non-ASCII file.
+# Heron's home: one droplet, one root-owned timer, one container. Security's corrections of
+# 2026-09-04 are built in: SSH keys only, no root login, no password auth; Docker from Debian's
+# signed repository (never a script piped to root); the `agent` user is NOT in the docker group
+# and has no sudo; the beat runs from a root-owned systemd timer; the image reference lives in
+# /srv/agent/image.env, placed over SSH, and MUST be pinned by a sha256 digest or image id (the
+# unit refuses otherwise). The image is built ON the droplet from the package's own source, because
+# Docker stays down on the laptop by the Master's word; no registry is used.
+# Secrets (/srv/agent/config.json 0600, /srv/agent/.security.yml 0600, /srv/agent/openrouter.token
+# 0600) are placed over SSH by the desk from the company's pile; nothing secret is in this file.
 package_update: true
-packages: [ca-certificates, curl, gnupg]
+package_upgrade: true
+packages: [docker.io, ca-certificates, logrotate, unattended-upgrades]
+ssh_pwauth: false
+disable_root: true
 users:
   - name: agent
-    groups: [docker]
     shell: /bin/bash
-    sudo: false
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "SSH_PUBLIC_KEY"
+  - name: ops
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys:
       - "SSH_PUBLIC_KEY"
 write_files:
-  - path: /srv/agent/beat.cron
+  - path: /etc/ssh/sshd_config.d/99-heron.conf
     permissions: "0644"
     content: |
-      # every 30 minutes: one beat; beat.sh's lock refuses an overlap
-      */30 * * * * agent /usr/bin/docker run --rm -v /srv/agent/config.json:/app/picoclaw/config.json:ro -v /srv/agent/.security.yml:/app/picoclaw/.security.yml:ro -v /srv/agent/runs:/app/runs -e PICOCLAW_CONFIG=/app/picoclaw/config.json REGISTRY_IMAGE >> /srv/agent/cron.log 2>&1
-  - path: /etc/logrotate.d/agent-beat
+      PasswordAuthentication no
+      PermitRootLogin no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+  - path: /usr/local/sbin/heron-beat
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # One beat of Heron. Refuses unless the image reference is pinned by digest. Runs as root
+      # (the timer's owner); the container itself runs as its own non-root user with no port.
+      set -euo pipefail
+      . /srv/agent/image.env
+      case "$IMAGE" in *@sha256:*|sha256:*) ;; *) echo "heron-beat: refused - IMAGE is not pinned by a sha256 digest or image id" >&2; exit 1;; esac
+      mkdir -p /srv/agent/runs /srv/agent/state
+      exec /usr/bin/docker run --rm --pull=never \
+        -v /srv/agent/config.json:/app/picoclaw/config.json:ro \
+        -v /srv/agent/.security.yml:/app/picoclaw/.security.yml:ro \
+        -v /srv/agent/openrouter.token:/app/picoclaw/openrouter.token:ro \
+        -v /srv/agent/runs:/app/runs \
+        -e PICOCLAW_CONFIG=/app/picoclaw/config.json \
+        "$IMAGE"
+  - path: /etc/systemd/system/heron-beat.service
     permissions: "0644"
     content: |
-      /srv/agent/cron.log /srv/agent/runs/*.log { size 5M rotate 4 compress missingok notifempty }
+      [Unit]
+      Description=One beat of Heron (PicoClaw one-shot in its container)
+      After=docker.service network-online.target
+      Requires=docker.service
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/heron-beat
+      StandardOutput=append:/srv/agent/beat.log
+      StandardError=append:/srv/agent/beat.log
+  - path: /etc/systemd/system/heron-beat.timer
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Heron beats every 30 minutes
+      [Timer]
+      OnBootSec=3min
+      OnUnitActiveSec=30min
+      RandomizedDelaySec=60
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+  - path: /etc/logrotate.d/heron
+    permissions: "0644"
+    content: |
+      /srv/agent/beat.log /srv/agent/runs/*.log { size 5M rotate 4 compress missingok notifempty }
 runcmd:
-  - install -d -o agent -g agent -m 0750 /srv/agent /srv/agent/runs
-  - curl -fsSL https://get.docker.com | sh
+  - install -d -m 0750 /srv/agent /srv/agent/runs /srv/agent/state
+  - systemctl restart ssh
   - systemctl enable --now docker
-  - usermod -aG docker agent
-  # The registry credential and the two secret files are placed by the operator's hand over SSH:
-  #   /srv/agent/config.json      (from picoclaw/config.template.json, workspace /app/picoclaw/workspace)
-  #   /srv/agent/.security.yml    (model_list.route-normal.api_keys only; mode 0600, owner agent)
-  #   docker login registry.digitalocean.com  (read-only registry token)
-  - cp /srv/agent/beat.cron /etc/cron.d/agent-beat
-  - chmod 0644 /etc/cron.d/agent-beat
+  - systemctl daemon-reload
+  # The timer is enabled by the desk over SSH after the secrets and image.env are placed,
+  # so the first beat never runs against a half-placed home.
