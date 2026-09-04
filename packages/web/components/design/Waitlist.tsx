@@ -292,13 +292,20 @@ export function DesignWaitlist({
   return (
     <>
           <div className="weir-page" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '4rem 1.5rem 4rem' }}>
-            <div style={{ textAlign: 'center', maxWidth: '52rem', marginInline: 'auto' }}>
-              <p style={{ margin: '0 auto 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.7)', boxShadow: '0 0 22px -10px rgba(var(--crest-rgb,139,227,198),0.7)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
+            {/*
+              Left to right, not center-stacked (the brand ruling). The badge, heading, lede and
+              counter form one left-aligned column instead of a centred block with no media query;
+              the form and the rest of the page continue to sit below it, as they already did.
+              Every word of copy is unchanged — only `textAlign` and the `auto` margins that centred
+              the block move.
+            */}
+            <div style={{ textAlign: 'left', maxWidth: '52rem' }}>
+              <p style={{ margin: '0 0 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.7)', boxShadow: '0 0 22px -10px rgba(var(--crest-rgb,139,227,198),0.7)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                 <span aria-hidden="true" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--crest,#8be3c6)', boxShadow: '0 0 10px rgba(var(--crest-rgb,139,227,198),0.9)', animation: 'pulseRing 2.6s ease-out infinite' }}></span>
                 {gated ? 'Closed alpha — by invitation' : 'Open'}
               </p>
-              <h1 style={{ margin: '0 auto', textAlign: 'center', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>{gated ? 'Weir is in ' : 'Weir is '}<span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 30px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{gated ? 'closed alpha.' : 'open.'}</span></h1>
-              <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{gated ? 'Creators are onboarding now, by invitation. Leave your email and we will send one message when the doors open — and note the handle you would like.' : 'Creator pages are open. Claim a handle now, or leave your email and we will tell you when something new ships.'}</p>
+              <h1 style={{ margin: '0', textAlign: 'left', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>{gated ? 'Weir is in ' : 'Weir is '}<span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 30px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{gated ? 'closed alpha.' : 'open.'}</span></h1>
+              <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', textAlign: 'left', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{gated ? 'Creators are onboarding now, by invitation. Leave your email and we will send one message when the doors open — and note the handle you would like.' : 'Creator pages are open. Claim a handle now, or leave your email and we will tell you when something new ships.'}</p>
               {/*
                 The counter.
 
@@ -312,7 +319,7 @@ export function DesignWaitlist({
                 at.
               */}
               {total !== null && total > 0 && (
-                <p style={{ margin: '1rem auto 0', textAlign: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
+                <p style={{ margin: '1rem 0 0', textAlign: 'left', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                   <span style={{ color: CREST }}>{total.toLocaleString()}</span>
                   {total === 1 ? ' person on the list' : ' people on the list'}
                 </p>
@@ -320,12 +327,12 @@ export function DesignWaitlist({
             </div>
 
             {gated && (<>
-              <div style={{ maxWidth: '52rem', margin: '1.75rem auto 0', border: '1px solid rgba(var(--sand-rgb,217,201,163),0.35)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1rem 1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left' }}>
+              <div style={{ maxWidth: '52rem', margin: '1.75rem 0 0', border: '1px solid rgba(var(--sand-rgb,217,201,163),0.35)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1rem 1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left' }}>
                 <p style={{ margin: '0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>Have an invitation? Enter your access code to go straight in.</p>
                 <button className="dh-b46baf10" type="button" aria-expanded={showCode} aria-controls="wl-access-code" onClick={() => setShowCode((v) => !v)} style={{ flex: '0 0 auto', padding: '0.6rem 1.1rem', borderRadius: '10px', font: '600 0.875rem \'Geist\',sans-serif', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', cursor: 'pointer', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease' }}>Enter a code</button>
               </div>
               {showCode && (
-                <form id="wl-access-code" onSubmit={(e) => { e.preventDefault(); void redeem(); }} style={{ maxWidth: '52rem', margin: '0.75rem auto 0', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', textAlign: 'left' }}>
+                <form id="wl-access-code" onSubmit={(e) => { e.preventDefault(); void redeem(); }} style={{ maxWidth: '52rem', margin: '0.75rem 0 0', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', textAlign: 'left' }}>
                   <label style={{ flex: '1 1 16rem', display: 'grid', gap: '0.35rem' }}>
                     <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Access code</span>
                     <input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} autoCapitalize="characters" autoComplete="off" spellCheck={false} placeholder="XXXX-XXXX-XXXX" disabled={redeeming} style={{ font: '500 1rem \'Geist Mono\',monospace', letterSpacing: '0.08em', padding: '0.65rem 0.85rem', borderRadius: '10px', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', background: 'rgba(var(--pd,11,37,48),0.7)', color: 'var(--ink,#dce9e6)' }} />

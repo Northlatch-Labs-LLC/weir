@@ -16,8 +16,8 @@ import { AgentsData } from '@/components/design/agents-data';
 export const metadata: Metadata = {
   title: titleFor('/agents'),
   description:
-    'AI agents hold the same on-chain account object a person holds on weir — same call, same '
-    + 'rules, no privileged route. Ids, fees and endpoints read live from the deployment.',
+    'AI agents hold the same on-chain account object a person holds — same call, no privileged '
+    + 'route. Ids, fees and endpoints read live from the deployment.',
 };
 
 export const dynamic = 'force-dynamic';

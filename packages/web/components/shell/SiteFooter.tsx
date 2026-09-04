@@ -92,7 +92,7 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
           </span>
           <div>
             <p className="sf__word">weir</p>
-            <p className="sf__tag">Support that stays yours.</p>
+            <p className="sf__tag">Your favorite notification.</p>
           </div>
         </div>
         {/* A shut door lists only what the proxy lets through. */}

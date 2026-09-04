@@ -29,14 +29,20 @@ import './weir.css';
   checkable — `/security` and the package ids in the footer — rather than in the chrome.
 */
 const TITLE = 'Weir';
-const TAGLINE = 'Support that stays yours.';
+/*
+  The brand ruling: Weir's tagline is "Your favorite notification." It carries the `<title>`
+  template and the OpenGraph/Twitter title below — the places a tagline belongs. The line the
+  footer showed here before, "Support that stays yours.", was never the ruled tagline; it moved to
+  `SiteFooter.tsx` only if it is doing headline work there, per the same ruling.
+*/
+const TAGLINE = 'Your favorite notification.';
 /*
   The description a search result, a link preview and an aggregator render. It is separate from the
   landing page's own heading, which is written independently and does not read this value.
 */
 const DESCRIPTION =
-  'SocialFi on Sui: a creator network where support stays yours. Now in closed alpha — creators ' +
-  'onboard by invitation. Leave an email for one message when the doors open.';
+  'SocialFi on Sui: a creator network where support stays yours. In closed alpha — creators ' +
+  'onboard by invitation. Leave an email; one message when doors open.';
 
 /*
   The phone.
