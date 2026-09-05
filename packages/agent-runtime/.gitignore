@@ -12,3 +12,8 @@ picoclaw/config.json
 # never itself the source of truth.
 agent-runtime-src.tgz
 agent-runtime-src.sha
+
+# The deploy's own run record: what --create made and what a rollback destroyed, on this machine.
+# The directory and its README are committed; the record itself is not source, and a deploy must
+# not make the tree dirty for the next one's `git status --porcelain` precondition.
+digitalocean/runs/deploy-runs.jsonl

@@ -32,12 +32,29 @@ Group=root
 
 # The model credential, decrypted for the life of this beat only and mounted into the container from
 # $CREDENTIALS_DIRECTORY. Never written to /srv/heron in the clear.
-LoadCredentialEncrypted=openrouter:/srv/heron/creds/openrouter.cred
+#
+# /etc/heron/creds, not /srv/heron/creds. There is ONE sealed-credential directory on this host and
+# every unit, --seal, the README and --plan name the same one: the split meant `--seal openrouter`
+# wrote where this unit does not look, this unit failed to start at every tick, and the dead man
+# reported a live host as dead (Security's B3 on step 6).
+LoadCredentialEncrypted=openrouter:/etc/heron/creds/openrouter.cred
 
 ExecStart=/srv/heron/bin/heron-beat
 
-# Phase one's output and the sink phase two writes. The only writable paths.
-ReadWritePaths=/srv/heron/runs /srv/heron/state
+# ProtectSystem=strict mounts the whole hierarchy read-only except /dev, /proc and /sys; the
+# ReadWritePaths below are the exceptions carved back out of it. Without a ProtectSystem= at all,
+# ReadWritePaths carves an exception out of nothing and the unit ran as root with the filesystem
+# writable while the comment above claimed otherwise (Security's A8 on step 6).
+ProtectSystem=strict
+
+# Phase one's output (runs/<beat-id>/intent.json and the beat log) and the sink phase two writes.
+#
+# /run/docker.sock is the third, and it is named rather than hidden: this unit starts the
+# container, so it must reach the daemon's socket, and a process that can talk to that socket can
+# run `docker run -v /:/host` and undo every other line in this file. That is why the unit is
+# root-owned and the `heron` account the model's container runs as has neither sudo nor docker
+# group -- the ability to launch the beat lives with the timer, not with the workspace.
+ReadWritePaths=/srv/heron/runs /srv/heron/state /run/docker.sock
 
 NoNewPrivileges=yes
 ProtectHome=yes
