@@ -167,6 +167,18 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
     }
 
     const parsed = parseIntent(value);
+    if (parsed.ok && parsed.intent.kind === 'statement') {
+      /*
+        Security's B1 (2026-09-05): the file is the model's, and a statement intent in it would
+        hand the purse a title, a handle, a name and a bio the model chose. Statements have exactly
+        one constructor, runPublishPlan, from a validated plan; a raw one here is refused locally
+        and never reaches the socket.
+      */
+      outcome = 'refused';
+      ruleId = 'intent-invalid-locally';
+      error = 'a statement intent was written to the intent file. Statements are built only by the publish plan from a validated plan; nothing was sent to the purse.';
+      return;
+    }
     if (!parsed.ok) {
       outcome = 'refused';
       ruleId = 'intent-invalid-locally';
@@ -193,8 +205,9 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
     }
 
     if (!('digest' in response)) {
-      // A statement was signed. Outside a publish plan there is nothing to submit; the beat records it.
-      outcome = 'signed';
+      // Unreachable by construction (a statement intent is refused above), kept as a value.
+      outcome = 'error';
+      error = 'the purse answered a transaction intent with a statement';
       return;
     }
     digest = response.digest;

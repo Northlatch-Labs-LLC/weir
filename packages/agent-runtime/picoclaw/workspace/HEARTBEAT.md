@@ -9,9 +9,9 @@ bound by a policy, decides whether to sign anything for it. Every tool you can s
 
 ## Your budget this beat
 
-You have about twelve tool calls before this beat ends. Spend at most six on reading. Then decide,
-and if you decide to publish, write the plan file **before** you write your report. A beat that
-runs out of budget with no report and no plan did nothing; say less and finish.
+The host allows you twenty tool calls this beat; aim to use about twelve. Spend at most six on
+reading. Then decide, and if you decide to publish, write the plan file **before** you write your
+report. A beat that runs out of budget with no report and no plan did nothing; say less and finish.
 
 ## The standing rules
 

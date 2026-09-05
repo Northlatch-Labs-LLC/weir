@@ -106,6 +106,9 @@ describe('heron-purse.service', () => {
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
     expect(exec).toContain('--api-origin https://weir.social');
     expect(exec).toMatch(/--statements-per-day [1-9][0-9]{0,3}\b/);
+    // Two statements a beat at most (name once, then publish) at 48 beats a day.
+    expect(exec).toContain('--statements-per-day 96');
+    expect(exec).toContain('--vault 0x0c3f3a6174293544f3ac61e466d9ebe62edb88cca2f3674cbd9311df8e736b68');
   });
 
   it("passes the multisig document, so the purse signs as Heron's 1-of-2 address and not as the hot key", async () => {

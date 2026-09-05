@@ -64,12 +64,13 @@ export interface ServerArgs {
    * key's own address, which is what a single-key test deployment is and what Heron is not.
    */
   readonly multisig?: string | undefined;
-  /** Both or neither: the origin statements are issued for, and how many a day. */
+  /** All three or none: the origin statements are issued for, how many a day, and Heron's own vault. */
   readonly apiOrigin?: string | undefined;
   readonly statementsPerDay?: number | undefined;
+  readonly vault?: string | undefined;
 }
 
-const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day'] as const;
+const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day', '--vault'] as const;
 
 /**
  * Parse argv.
@@ -108,8 +109,13 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
   const multisig = values.get('--multisig');
   const apiOrigin = values.get('--api-origin');
   const perDayText = values.get('--statements-per-day');
-  if ((apiOrigin === undefined) !== (perDayText === undefined)) {
-    return refuse('request-malformed', '--api-origin and --statements-per-day are given together or not at all; one without the other is a purse that half-signs statements.');
+  const vault = values.get('--vault');
+  const given = [apiOrigin, perDayText, vault].filter((v) => v !== undefined).length;
+  if (given !== 0 && given !== 3) {
+    return refuse('request-malformed', '--api-origin, --statements-per-day and --vault are given together or not at all; a subset is a purse that half-signs statements.');
+  }
+  if (vault !== undefined && !/^0x[0-9a-f]{64}$/.test(vault)) {
+    return refuse('request-malformed', '--vault is the full lower-case id of Heron\'s own creator vault.');
   }
   let statementsPerDay: number | undefined;
   if (perDayText !== undefined) {
@@ -130,6 +136,7 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
     ...(multisig === undefined ? {} : { multisig }),
     ...(apiOrigin === undefined ? {} : { apiOrigin }),
     ...(statementsPerDay === undefined ? {} : { statementsPerDay }),
+    ...(vault === undefined ? {} : { vault }),
   });
 }
 
@@ -237,9 +244,9 @@ export async function startPurse(args: {
     ...(args.recorded === undefined
       ? {}
       : { simulation: args.recorded.simulation, gas: args.recorded.gas }),
-    ...(args.server.apiOrigin === undefined || args.server.statementsPerDay === undefined
+    ...(args.server.apiOrigin === undefined || args.server.statementsPerDay === undefined || args.server.vault === undefined
       ? {}
-      : { statements: { origin: args.server.apiOrigin, perDay: args.server.statementsPerDay, auditPath: args.server.audit } }),
+      : { statements: { origin: args.server.apiOrigin, perDay: args.server.statementsPerDay, auditPath: args.server.audit, vaultId: args.server.vault } }),
   });
 
   await mkdir(dirname(args.server.socket), { recursive: true });
@@ -282,7 +289,7 @@ export async function startPurse(args: {
   log(
     `heron-purse: listening on ${args.server.socket} for ${purse.address} · policy ${policy.value.policyHash} ` +
       `· file ${policy.value.fileSha256} · audit head ${purse.auditHead()} · ${signerLine}` +
-      (args.server.apiOrigin === undefined ? ' · statements off' : ` · statements for ${args.server.apiOrigin}, ${String(args.server.statementsPerDay)} a day`),
+      (args.server.apiOrigin === undefined ? ' · statements off' : ` · statements for ${args.server.apiOrigin}, ${String(args.server.statementsPerDay)} a day, vault ${args.server.vault ?? ''}`),
   );
   notifyReady(args.env['NOTIFY_SOCKET']);
 

@@ -64,6 +64,43 @@ parser, and it carries its own refusal id, `request-too-large`, kept apart from 
 so a reader of `audit.jsonl` can tell "somebody sent nonsense" from "somebody streamed at the socket
 until it stopped listening". Its audit line reads `intentKind: unread`.
 
+## The statement — the one thing the purse signs that is not a transaction
+
+weir.social takes a creator's writes over HTTP, each proven by a signature over a statement the
+SDK builds (`statementFor`): naming a vault to a handle, publishing a post. Heron's address is the
+purse's, so those signatures come from here, as a `statement` intent (`src/statement.ts`):
+
+- **Off unless started with all three of** `--api-origin`, `--statements-per-day` and `--vault`.
+  A subset refuses at start. Without them every statement is refused `statement-disabled`.
+- **Two actions and nothing else:** `name-vault` (Heron's own vault, exactly the one `--vault`
+  names and also in the policy's allowed objects, for a coin in the policy's allowed type
+  arguments) and `publish` (a handle, one-line title, `public` or `paid`, the content digest, and
+  for a paid post the key and a price at or under the policy's daily SUI ceiling). Every field is
+  bounded to what the web's routes accept, and a test pins the limits to the routes' own files.
+- **The text signed is the SDK's,** built here from the typed action, the purse's address, the
+  intent's timestamp (within a minute of the purse's clock) and the one configured origin. Nothing
+  handed in is ever signed as bytes.
+- **A rolling-day count,** seeded once from the audit chain on disk after the chain verifies, then
+  kept in memory: `statement-ceiling` at the limit. A broken chain refuses every statement.
+- **Recorded** in the same chain as every transaction, `intentKind: statement`, with the intent's
+  hash; the answer is `{ ok, statement, statementSha256, signature, address, timestampMs }`.
+
+Statements have exactly one constructor: `src/publish.ts`, from a validated publish plan. A raw
+`statement` intent in the beat's intent file is refused locally by phase two and never reaches the
+socket, so the model, which owns that file, chooses words and a price and nothing that is signed.
+
+## The publish plan — what an adopted Heron writes
+
+`runs/<beat-id>/intent.json` may hold `{ "kind": "publish-plan", title, preview, text, access,
+priceMist? }`. Phase two reads the creator setup from the API, names the vault once, prices the
+content key on chain first for a paid post (the route refuses a paid post whose key has no price),
+then asks for a `publish` statement and sends the post with an idempotency key. The price band a
+plan may name is 0.01 to 0.1 SUI, bounded in the plan's schema before anything reaches the chain.
+Every outcome lands in `state/latest.json`, with `postId`, `handle` and whether the vault was named.
+
+Refusal ids the purse adds for this path, each named in `src/outcome.ts`: `statement-disabled`,
+`statement-origin`, `statement-clock`, `statement-object`, `statement-price`, `statement-ceiling`.
+
 ## The intent — the v2 content arm only
 
 | kind | what it is | what it builds |

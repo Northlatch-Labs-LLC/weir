@@ -79,7 +79,30 @@ describe('the plan', () => {
       expect(parsePublishPlan(bad).ok).toBe(false);
     }
     expect(parsePublishPlan(plan()).ok).toBe(true);
-    expect(parsePublishPlan(plan({ access: 'paid', priceMist: '1000000' })).ok).toBe(true);
+    // The price band, both edges: 0.01 SUI and 0.1 SUI in, one MIST outside either out.
+    expect(parsePublishPlan(plan({ access: 'paid', priceMist: '10000000' })).ok).toBe(true);
+    expect(parsePublishPlan(plan({ access: 'paid', priceMist: '100000000' })).ok).toBe(true);
+    expect(parsePublishPlan(plan({ access: 'paid', priceMist: '9999999' })).ok).toBe(false);
+    expect(parsePublishPlan(plan({ access: 'paid', priceMist: '100000001' })).ok).toBe(false);
+    expect(parsePublishPlan(plan({ access: 'paid', priceMist: '99999999999999999999' })).ok).toBe(false);
+  });
+
+  it('refuses a raw statement intent in the intent file: statements are built only from a plan', async () => {
+    const dir = await temporaryDirectory('heron-plan-');
+    const runs = join(dir, 'runs');
+    const state = join(dir, 'state');
+    await mkdir(join(runs, 'B0'), { recursive: true });
+    await writeFile(join(runs, 'B0', 'intent.json'), JSON.stringify({
+      kind: 'statement',
+      action: { kind: 'name-vault', vaultId: VAULT, name: 'evil', bio: 'evil', coinType: SUI },
+      timestampMs: 1_788_000_000_000,
+      origin: ORIGIN,
+    }), 'utf8');
+    const { ports: p, seen } = ports({ named: true });
+    const result = await runPhaseTwo({ runsDir: runs, stateDir: state, beatId: 'B0', ask: { ask: p.ask } });
+    expect(result.state).toMatchObject({ outcome: 'refused', ruleId: 'intent-invalid-locally' });
+    expect(result.state.error).toContain('built only by the publish plan');
+    expect(seen.asked).toEqual([]);
   });
 });
 
@@ -105,7 +128,7 @@ describe('a public post on an unnamed vault', () => {
 describe('a paid post on a named vault', () => {
   it('prices the content key on chain first, submits, then publishes with the key and price bound', async () => {
     const { ports: p, seen } = ports({ named: true });
-    const parsed = parsePublishPlan(plan({ access: 'paid', priceMist: '2000000' }));
+    const parsed = parsePublishPlan(plan({ access: 'paid', priceMist: '20000000' }));
     if (!parsed.ok) throw new Error(parsed.reason);
     const result = await runPublishPlan({ plan: parsed.plan, address: ADDRESS, origin: ORIGIN, beatId: 'B2', ports: p, profile: { name: 'Heron', bio: 'bio' } });
     expect(result).toMatchObject({ outcome: 'published', postId: 'post-1', named: false, priceDigest: 'OnChainDigest' });
@@ -113,16 +136,43 @@ describe('a paid post on a named vault', () => {
     expect(kinds).toEqual(['post', 'publish']);
     const price = seen.asked[0] as { vault: { objectId: string; initialSharedVersion: string }; cap: { objectId: string; version: string }; contentKey: string; bodyDigestSha256: string; priceMist: string };
     const digest = contentDigest('A short preview.', 'The whole text.');
-    expect(price).toMatchObject({ vault: { objectId: VAULT, initialSharedVersion: '3' }, cap: { objectId: CAP, version: '7' }, contentKey: digest, bodyDigestSha256: digest, priceMist: '2000000' });
+    expect(price).toMatchObject({ vault: { objectId: VAULT, initialSharedVersion: '3' }, cap: { objectId: CAP, version: '7' }, contentKey: digest, bodyDigestSha256: digest, priceMist: '20000000' });
     expect(seen.submitted).toBe(1);
     const publishAsked = seen.asked[1] as { action: { contentKey: string; price: string; access: string } };
-    expect(publishAsked.action).toMatchObject({ access: 'paid', contentKey: digest, price: '2000000' });
+    expect(publishAsked.action).toMatchObject({ access: 'paid', contentKey: digest, price: '20000000' });
     const post = seen.requests.at(-1)!;
-    expect(post.body).toMatchObject({ access: 'paid', contentKey: digest, price: '2000000' });
+    expect(post.body).toMatchObject({ access: 'paid', contentKey: digest, price: '20000000' });
   });
 });
 
 describe('what stops it', () => {
+  it('a purse that signs as another address than the beat was started for is an error, and nothing is posted', async () => {
+    const { ports: p, seen } = ports({ named: true });
+    // The setup answers for any owner; the purse stub still signs as ADDRESS, which is not this beat's.
+    const request = p.http.request;
+    const anyOwner: PublishPorts['http'] = { request: async (input) => request(input.url.includes('/api/creator?owner=') ? { ...input, url: `${ORIGIN}/api/creator?owner=${ADDRESS}` } : input) };
+    const parsed = parsePublishPlan(plan());
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const result = await runPublishPlan({ plan: parsed.plan, address: `0x${'f'.repeat(64)}`, origin: ORIGIN, beatId: 'B8', ports: { ...p, http: anyOwner }, profile: { name: 'Heron', bio: 'bio' } });
+    expect(result.outcome).toBe('error');
+    if (result.outcome !== 'error') throw new Error('unreachable');
+    expect(result.error).toContain('signs as');
+    expect(seen.requests.filter((r) => r.url.endsWith('/api/posts'))).toEqual([]);
+  });
+
+  it('publishes under the slug the profile route filed the vault under, not the registry handle', async () => {
+    const { ports: p, seen } = ports();
+    // The stub's profile route answers { handle: 'heron' }; make it answer a suffixed slug.
+    const request = p.http.request;
+    const filed: PublishPorts['http'] = { request: async (input) => (input.url.endsWith('/api/creator/profile') ? { status: 200, json: { handle: 'heron-a1b2' } } : request(input)) };
+    const parsed = parsePublishPlan(plan());
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const result = await runPublishPlan({ plan: parsed.plan, address: ADDRESS, origin: ORIGIN, beatId: 'B9', ports: { ...p, http: filed }, profile: { name: 'Heron', bio: 'bio' } });
+    expect(result).toMatchObject({ outcome: 'published', handle: 'heron-a1b2' });
+    const publishAsked = seen.asked[1] as { action: { handle: string } };
+    expect(publishAsked.action.handle).toBe('heron-a1b2');
+  });
+
   it('a purse refusal is the outcome, with its rule, and nothing is sent to the API after it', async () => {
     const { ports: p, seen } = ports({ refuse: 'statement' });
     const parsed = parsePublishPlan(plan());

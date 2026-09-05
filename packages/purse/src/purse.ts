@@ -53,7 +53,7 @@ import { intentHash, parseIntent, type Intent } from './intent.js';
 import { SpendLedger, outflowsOf } from './ledger-file.js';
 import { ruleIdIn, type Refusal } from './outcome.js';
 import { requestSchema, type PurseResponse } from './protocol.js';
-import { judgeStatement, statementSha256, statementText, type StatementBounds } from './statement.js';
+import { StatementCounter, judgeStatement, statementSha256, statementText, type StatementBounds } from './statement.js';
 
 export interface PurseOptions {
   readonly signer: Signer;
@@ -104,6 +104,7 @@ export function createPurse(options: PurseOptions): Purse {
   const gas = options.gas ?? nodeGas;
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   const address = options.signer.address;
+  const statementCounter = options.statements === undefined ? undefined : new StatementCounter(options.statements.auditPath);
 
   const signer = policySigner({
     inner: options.signer,
@@ -180,11 +181,13 @@ export function createPurse(options: PurseOptions): Purse {
         signature, under intentKind "statement", with the intent's hash; the text is not stored,
         because the intent that produced it is reproducible from the hash and the request.
       */
+      const nowMs = (options.now ?? (() => Date.now()))();
       const refusal = await judgeStatement({
         intent,
         bounds: options.statements,
+        counter: statementCounter,
         policy: options.policy,
-        nowMs: (options.now ?? (() => Date.now()))(),
+        nowMs,
       });
       if (refusal !== null) return refused(refusal, about);
       const text = statementText(intent, address);
@@ -192,7 +195,8 @@ export function createPurse(options: PurseOptions): Purse {
       if (!signed.ok) {
         return refused({ ruleId: 'gate-refused', reason: `the statement could not be signed: ${signed.failure.detail}` }, about);
       }
-      await record({ ...about, refusal: null, txDigest: '' });
+      const line = await record({ ...about, refusal: null, txDigest: '' });
+      statementCounter?.record(line.ts);
       return {
         ok: true,
         statement: text,

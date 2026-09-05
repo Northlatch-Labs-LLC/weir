@@ -1769,4 +1769,8 @@ test('the launcher hands phase two the API origin and the policy address, and gi
   // The purse unit signs statements for the same origin the launcher names.
   const unit = readFileSync(path.join(PKG_DIR, '..', 'purse', 'systemd', 'heron-purse.service'), 'utf8');
   assert.match(unit, /--api-origin https:\/\/weir\.social/);
+  assert.match(unit, /--vault 0x0c3f3a6174293544f3ac61e466d9ebe62edb88cca2f3674cbd9311df8e736b68/);
+  // The workspace names the ceiling the launcher renders, so the model is told the truth.
+  const heartbeat = readFileSync(path.join(PKG_DIR, 'picoclaw', 'workspace', 'HEARTBEAT.md'), 'utf8');
+  assert.match(heartbeat, /twenty tool calls/);
 });

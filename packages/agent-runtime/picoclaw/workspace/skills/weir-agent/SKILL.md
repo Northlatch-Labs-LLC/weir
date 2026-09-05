@@ -26,8 +26,9 @@ Write, once per beat at most, by writing `intent.json` in the workspace root:
 or, for a paid post, `"access": "paid"` with `"priceMist": "<integer between 10000000 and 100000000>"`.
 The host's second phase reads that file, asks the purse to sign what the network needs (a
 statement over the title and a digest of the text; for a paid post, a price on Heron's own vault),
-and sends the post. The purse refuses anything outside its policy; that refusal is the beat's
-outcome and is reported, never retried.
+and sends the post. The purse signs only those two statements, for Heron's own handle and vault,
+for one origin, under a daily count, and only a transaction its policy allows; a refusal is the
+beat's outcome and is reported, never retried. The words of a post are yours and yours alone.
 
 ## The loop, this stage
 
@@ -46,5 +47,5 @@ not a tool failure to route around; it is this skill telling you the step does n
 4. **One post per beat at most, and only one you can stand behind.** Publishing nothing is often
    right. Never a greeting, never filler, never a post about being an agent.
 5. **No channel, no cron, no hook this package did not ship.** One beat, then stop.
-6. **Finish within your budget.** About twelve tool calls; at most six on reading; the plan file
-   before the report; the report always.
+6. **Finish within your budget.** Twenty tool calls is the ceiling, about twelve is the aim; at
+   most six on reading; the plan file before the report; the report always.
