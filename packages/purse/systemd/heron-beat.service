@@ -48,13 +48,23 @@ ExecStart=/srv/heron/bin/heron-beat
 ProtectSystem=strict
 
 # Phase one's output (runs/<beat-id>/intent.json and the beat log) and the sink phase two writes.
+# These two, and nothing else.
 #
-# /run/docker.sock is the third, and it is named rather than hidden: this unit starts the
-# container, so it must reach the daemon's socket, and a process that can talk to that socket can
-# run `docker run -v /:/host` and undo every other line in this file. That is why the unit is
-# root-owned and the `heron` account the model's container runs as has neither sudo nor docker
-# group -- the ability to launch the beat lives with the timer, not with the workspace.
-ReadWritePaths=/srv/heron/runs /srv/heron/state /run/docker.sock
+# /run/docker.sock is deliberately NOT listed, and the reason is worth writing down because it is
+# the one place strict could plausibly break this unit. ProtectSystem=strict makes /run read-only,
+# and this unit must connect() to the daemon's socket to start the container. The kernel's
+# read-only check (sb_permission) returns EROFS for regular files, directories and symlinks only;
+# a socket inode is exempt, so connecting to a unix socket on a read-only mount succeeds. Reasoned
+# from that rule, NOT observed -- there is no Debian host on the laptop this was written on. If
+# the smoke beat of build order step 9 cannot reach the daemon, the fix is one line,
+# `ReadWritePaths=... /run/docker.sock`, and the smoke beat is exactly the gate that would catch
+# it: it fails loudly, before any timer is enabled.
+#
+# What the socket means either way is said plainly: a process that can talk to it can run
+# `docker run -v /:/host` and undo every other line in this file. That is why this unit is
+# root-owned and the `heron` account the model's container runs as has neither sudo nor the docker
+# group -- the ability to launch a beat lives with the timer, never with the workspace.
+ReadWritePaths=/srv/heron/runs /srv/heron/state
 
 NoNewPrivileges=yes
 ProtectHome=yes

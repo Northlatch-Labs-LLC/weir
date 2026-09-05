@@ -1310,9 +1310,13 @@ test('A8: heron-beat.service sets ProtectSystem=strict, so ReadWritePaths carves
   const paths = rw[1].split(/\s+/);
   assert.deepEqual(
     paths.sort(),
-    ['/run/docker.sock', '/srv/heron/runs', '/srv/heron/state'],
-    'exactly the three it needs: its two sinks and the daemon socket it must start the container through',
+    ['/srv/heron/runs', '/srv/heron/state'],
+    'exactly the two sinks the unit writes, and nothing more',
   );
+  // The one path strict could plausibly break -- the docker socket -- is named in the unit with
+  // the reason it is not listed and the gate that would catch it being wrong.
+  assert.match(svc, /\/run\/docker\.sock is deliberately NOT listed/);
+  assert.match(svc, /smoke beat/, 'the fallback must name the gate that catches it');
   assert.match(svc, /^NoNewPrivileges=yes$/m);
   assert.match(svc, /^ProtectHome=yes$/m);
 });
