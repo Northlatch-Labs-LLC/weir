@@ -96,8 +96,11 @@ test('the tarball entry set equals git ls-tree, exactly (set equality, not a den
     assert.doesNotMatch(name, /(^|\/)\.git\//, `.git/ internals leaked into the archive: ${name}`);
   }
 
-  // tar -tvf never shows an 'x' (PAX extended attribute) entry type for a clean git archive.
-  assert.doesNotMatch(entries, /^-\S*x/m, 'no extended-attribute entries expected in the listing');
+  // Extended-attribute/AppleDouble metadata rides along in a tar built by macOS bsdtar as a
+  // synthetic "PaxHeaders" entry immediately before the file it decorates — that is the concrete,
+  // checkable signal (a raw permission string like "-rwxr-xr-x" is not: it always contains an
+  // 'x' for the executable bit, which is not evidence of anything).
+  assert.doesNotMatch(entries, /PaxHeader/, 'no synthesized extended-attribute entries expected');
 });
 
 test('SOURCE_COMMIT inside the tarball names the shipped commit', () => {
