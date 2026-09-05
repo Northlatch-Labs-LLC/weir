@@ -18,6 +18,25 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { testDb, useTestDatabase } from './helpers/database';
+import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '../lib/agent-manifest';
+
+/**
+ * Undo the HTML entity escaping `renderToStaticMarkup` applies, so a clause can be compared as the
+ * sentence it is.
+ *
+ * The clauses carry typographic apostrophes and em dashes. Without this the assertions would be
+ * testing the escaper rather than testing whether the rule was published.
+ * @param html - rendered markup.
+ * @returns the same markup with the five escapes React emits turned back into characters.
+ */
+function decode(html: string): string {
+  return html
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#x27;', "'");
+}
 
 useTestDatabase();
 
@@ -98,5 +117,55 @@ describe('the disclosure register at /disclosure', () => {
     await declare(AGENT);
     // 1788566400000 is 2026-09-05T00:00:00Z — a record two readers must read identically.
     expect(await render()).toContain('2026-09-05');
+  });
+});
+
+/*
+  The other half of a disclosure posture.
+
+  A register answers "who declared". It does not answer "what were they held to", and the rules
+  that answer that were readable only as JSON inside the signed manifest — a machine could read
+  them, a person could not. They are on the page now, and these checks read the expected text OUT
+  of the manifest rather than repeating it, so an edit to the terms that skips this page turns them
+  red instead of publishing two versions of one obligation.
+
+  Mutations predicted: drop the <dl> from the page → every clause check red; render
+  `AGENT_DISCLOSURE.enforced` without `notEnforced` → "publishes the limit beside the list" red;
+  copy the clauses into the page as literals → the identity pin in agent-manifest.test.ts red
+  (checked there, where the manifest is built, rather than here).
+*/
+describe('the rules are on the page, and are the manifest’s own', () => {
+  it('publishes every clause an agent is held to', async () => {
+    const html = await render();
+    for (const clause of [
+      AGENT_DISCLOSURE.requirement,
+      AGENT_DISCLOSURE.userAgent,
+      AGENT_DISCLOSURE.principal,
+      AGENT_DISCLOSURE.impersonation,
+      AGENT_DISCLOSURE.backoff,
+      AGENT_DISCLOSURE.basis,
+    ]) {
+      /*
+        Compared after entity-decoding, because the clauses contain typographic apostrophes and em
+        dashes that `renderToStaticMarkup` escapes. Comparing the raw markup would pass or fail on
+        the escaping rather than on whether the sentence is published.
+      */
+      expect(decode(html)).toContain(clause);
+    }
+  });
+
+  it('publishes the limit beside the list of what is checked', async () => {
+    const html = decode(await render());
+    for (const item of AGENT_DISCLOSURE.enforced) expect(html).toContain(item);
+    /*
+      The load-bearing one. A page carrying only the enforced list reads as a promise that anything
+      absent from it is enforced elsewhere, which is the reading the manifest's own `notEnforced`
+      sentence exists to refuse.
+    */
+    expect(html).toContain(AGENT_DISCLOSURE.notEnforced);
+  });
+
+  it('sends a reader to the signed document the clauses come from', async () => {
+    expect(await render()).toContain(AGENT_MANIFEST_PATH);
   });
 });

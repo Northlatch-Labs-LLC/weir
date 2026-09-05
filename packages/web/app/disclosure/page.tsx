@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import type { Metadata } from 'next';
 import { listDeclaredAgents } from '@/lib/agents';
+import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 
 /**
  * `/disclosure` — the public register of which accounts here are machines, and who answers for them.
@@ -24,6 +25,19 @@ import { listDeclaredAgents } from '@/lib/agents';
  *
  * `force-dynamic` for the same reason `/agents` is: a cached copy would show a register that was
  * true when the page was built. A stale disclosure is the one kind this page must not serve.
+ *
+ * # The rules, and why they are not typed out here
+ *
+ * A register answers "who declared". It does not answer "what were they held to", and a reader
+ * checking a disclosure posture wants both. Those rules existed — they are the `disclosure` block
+ * of the signed agent manifest — but they were served only as JSON at the manifest path, so a
+ * machine could read them and a person could not.
+ *
+ * They are rendered here from `AGENT_DISCLOSURE`, which is the very object `manifestFrom` puts in
+ * that document. Not a copy of it: the same object, pinned by identity in
+ * `test/agent-manifest.test.ts`. Typing the clauses out again would mean the published rule and
+ * the served rule could disagree after any edit, and two contradictory statements of the same
+ * obligation is a worse compliance position than the 404 this page was written to fix.
  */
 export const metadata: Metadata = {
   title: 'Disclosure register',
@@ -62,6 +76,41 @@ export default async function DisclosurePage() {
         Follow a row to read both statements and re-verify them yourself. You do not have to take
         our word for any of it, and you should not have to.
       </p>
+
+      <section aria-labelledby="rules">
+        <h2 id="rules">What a declared agent is held to</h2>
+        <p>
+          These are the rules themselves, not a summary of them. They are rendered from the same
+          object served, signed, to machines at
+          {' '}
+          <a href={AGENT_MANIFEST_PATH}><code>{AGENT_MANIFEST_PATH}</code></a>
+          , so the rule published here and the rule an agent parses cannot come apart.
+        </p>
+        <dl>
+          <dt>Declare the address</dt>
+          <dd>{AGENT_DISCLOSURE.requirement}</dd>
+          <dt>Be contactable</dt>
+          <dd>{AGENT_DISCLOSURE.userAgent}</dd>
+          <dt>Sign as the principal you act for</dt>
+          <dd>{AGENT_DISCLOSURE.principal}</dd>
+          <dt>Do not write as a person</dt>
+          <dd>{AGENT_DISCLOSURE.impersonation}</dd>
+          <dt>Back off when told to</dt>
+          <dd>{AGENT_DISCLOSURE.backoff}</dd>
+        </dl>
+        <h3>What a machine actually checks</h3>
+        <ul>
+          {AGENT_DISCLOSURE.enforced.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+        <p>
+          {/*
+            The honest half, and it is published rather than omitted. A list of what is enforced,
+            standing alone, reads as a promise that everything else is enforced too.
+          */}
+          {AGENT_DISCLOSURE.notEnforced}
+        </p>
+        <p>{AGENT_DISCLOSURE.basis}</p>
+      </section>
 
       {agents.length === 0
         ? (
