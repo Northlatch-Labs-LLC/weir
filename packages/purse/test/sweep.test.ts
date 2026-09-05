@@ -44,6 +44,8 @@ describe('the bytes', () => {
     expect(data.sender).toBe(sender);
     expect(data.gasData.payment).toEqual([]);
     expect(data.expiration?.$kind).toBe('ValidDuring');
+    expect(data.commands.map((c) => c.$kind)).toEqual(['MoveCall', 'TransferObjects']);
+    expect(data.inputs[0]?.$kind).toBe('FundsWithdrawal');
     const read = inspectSweep(built.value, { sender, recipient: TREASURY, amountMist: AMOUNT });
     expect(read.ok).toBe(true);
     if (!read.ok) throw new Error('unreachable');
@@ -77,6 +79,23 @@ describe('the inspection between the two halves', () => {
     expect(wrongAmount.ok).toBe(false);
     if (wrongAmount.ok) throw new Error('unreachable');
     expect(wrongAmount.refused.reason).toContain(`move ${String(AMOUNT)} MIST`);
+  });
+
+  it('refuses the old shape, a split from the gas coin, which the node refuses in balance-paid mode', async () => {
+    const doc = docFor(throwawayKeypair(), throwawayKeypair());
+    const sender = multisigPublicKeyOf(doc).toSuiAddress();
+    const tx = new Transaction();
+    tx.setSender(sender);
+    tx.setGasPayment([]);
+    tx.setGasBudget(5_000_000n);
+    tx.setGasPrice(1000n);
+    tx.setExpiration(EXPIRATION);
+    const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(AMOUNT)]);
+    tx.transferObjects([coin!], tx.pure.address(TREASURY));
+    const read = inspectSweep(await tx.build(), { sender, recipient: TREASURY, amountMist: AMOUNT });
+    expect(read.ok).toBe(false);
+    if (read.ok) throw new Error('unreachable');
+    expect(read.refused.reason).toContain('redeem_funds');
   });
 
   it('refuses bytes that are not a two-command sweep, and bytes that are not a transaction', async () => {

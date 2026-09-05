@@ -22,19 +22,23 @@
  * the multisig public key before it is returned. No function here prints, logs or returns a
  * secret, and every refusal is a value that names the rule.
  *
- * # Gas from the address balance
+ * # Gas from the address balance, and the coin from a withdrawal
  *
  * Heron holds a balance and no coin object, so the gas payment is empty and the transaction
  * carries a `ValidDuring` expiration, the shape @mysten/sui's executor uses for that mode and the
- * shape `birth-vault.ts` proved on mainnet (2026-09-05). `tx.gas` is then the address balance
- * itself, and splitting the amount from it is the transfer.
+ * shape `birth-vault.ts` proved on mainnet (2026-09-05). In that mode the gas coin is NOT the
+ * whole balance: the node funds it with the gas budget alone, so `SplitCoins(GasCoin, amount)`
+ * fails at execution with `InsufficientCoinBalance` while the simulation lets it pass. The first
+ * drill (2026-09-05, digest 6pAFozwF…) failed exactly there. The coin therefore comes from a
+ * `FundsWithdrawal` input against the sender's balance, redeemed by `0x2::coin::redeem_funds`,
+ * and that coin is what is transferred.
  */
 
 import { bcs } from '@mysten/sui/bcs';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { MultiSigPublicKey } from '@mysten/sui/multisig';
-import { Transaction } from '@mysten/sui/transactions';
+import { Inputs, Transaction } from '@mysten/sui/transactions';
 import { publicKeyFromSuiBytes } from '@mysten/sui/verify';
 import { fromBase64 } from '@mysten/sui/utils';
 import { allow, refuse, type Outcome } from './outcome.js';
@@ -67,6 +71,8 @@ export interface SweepBuild extends SweepShape {
 }
 
 const ADDRESS = /^0x[0-9a-f]{64}$/;
+const SUI_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
+const SUI_PACKAGE = '0x0000000000000000000000000000000000000000000000000000000000000002';
 
 /** Heron's multisig public key from the document. Pure; throws only on a document `loadMultisigDoc` would have refused. */
 export function multisigPublicKeyOf(doc: MultisigDoc): MultiSigPublicKey {
@@ -90,8 +96,15 @@ export async function buildSweep(build: SweepBuild): Promise<Outcome<Uint8Array>
   tx.setGasBudget(build.gasBudget);
   tx.setGasPrice(build.gasPrice);
   tx.setExpiration(build.expiration);
-  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(build.amountMist)]);
-  tx.transferObjects([coin!], tx.pure.address(build.recipient));
+  const withdrawal = tx.object(
+    Inputs.FundsWithdrawal({
+      reservation: { $kind: 'MaxAmountU64', MaxAmountU64: String(build.amountMist) },
+      typeArg: { $kind: 'Balance', Balance: SUI_TYPE },
+      withdrawFrom: { $kind: 'Sender', Sender: true },
+    }),
+  );
+  const coin = tx.moveCall({ target: `${SUI_PACKAGE}::coin::redeem_funds`, typeArguments: [SUI_TYPE], arguments: [withdrawal] });
+  tx.transferObjects([coin], tx.pure.address(build.recipient));
   try {
     return allow(await tx.build());
   } catch (error) {
@@ -102,8 +115,8 @@ export async function buildSweep(build: SweepBuild): Promise<Outcome<Uint8Array>
 
 /**
  * Read bytes back and refuse anything that is not exactly the sweep the caller expects: one
- * SplitCoins of `amountMist` from the gas coin, one TransferObjects of that coin to `recipient`,
- * sent by `sender`, with an empty gas payment. The bytes file sits between the two halves of the
+ * withdrawal of `amountMist` SUI from the sender's balance redeemed as a coin, one
+ * TransferObjects of that coin to `recipient`, sent by `sender`, with an empty gas payment. The bytes file sits between the two halves of the
  * drill; this is the check that it still says what `prepare` wrote.
  */
 export function inspectSweep(bytes: Uint8Array, expected: SweepShape): Outcome<{ readonly expiration: ValidDuring; readonly gasBudget: bigint }> {
@@ -126,31 +139,48 @@ export function inspectSweep(bytes: Uint8Array, expected: SweepShape): Outcome<{
   if (data.commands.length !== 2) {
     return refuse('request-malformed', `the bytes carry ${String(data.commands.length)} commands; a sweep is exactly two. Refused unsigned.`);
   }
-  const [split, transfer] = data.commands;
-  if (split?.$kind !== 'SplitCoins' || split.SplitCoins.coin.$kind !== 'GasCoin' || split.SplitCoins.amounts.length !== 1) {
-    return refuse('request-malformed', 'the first command is not one SplitCoins from the gas coin. Refused unsigned.');
+  const [redeem, transfer] = data.commands;
+  if (
+    redeem?.$kind !== 'MoveCall' ||
+    redeem.MoveCall.package !== SUI_PACKAGE ||
+    redeem.MoveCall.module !== 'coin' ||
+    redeem.MoveCall.function !== 'redeem_funds' ||
+    redeem.MoveCall.typeArguments.length !== 1 ||
+    redeem.MoveCall.typeArguments[0] !== SUI_TYPE ||
+    redeem.MoveCall.arguments.length !== 1
+  ) {
+    return refuse('request-malformed', 'the first command is not 0x2::coin::redeem_funds<SUI> over one withdrawal. Refused unsigned.');
   }
   if (transfer?.$kind !== 'TransferObjects' || transfer.TransferObjects.objects.length !== 1) {
     return refuse('request-malformed', 'the second command is not one TransferObjects. Refused unsigned.');
   }
-  const amountInput = split.SplitCoins.amounts[0];
-  const recipientInput = transfer.TransferObjects.address;
   const object = transfer.TransferObjects.objects[0];
-  if (object?.$kind !== 'NestedResult' || object.NestedResult[0] !== 0 || object.NestedResult[1] !== 0) {
-    return refuse('request-malformed', 'the transferred object is not the coin the split produced. Refused unsigned.');
+  if (object?.$kind !== 'Result' || object.Result !== 0) {
+    return refuse('request-malformed', 'the transferred object is not the coin the withdrawal redeemed. Refused unsigned.');
   }
-  const pureOf = (input: { $kind: string; Input?: number } | undefined): Uint8Array | null => {
-    if (input?.$kind !== 'Input' || input.Input === undefined) return null;
-    const value = data.inputs[input.Input];
-    if (value?.$kind !== 'Pure') return null;
-    return fromBase64(value.Pure.bytes);
-  };
-  const amountBytes = pureOf(amountInput);
-  const recipientBytes = pureOf(recipientInput);
-  if (amountBytes === null || recipientBytes === null) {
-    return refuse('request-malformed', 'the amount or the recipient is not a pure input. Refused unsigned.');
+  const withdrawalArg = redeem.MoveCall.arguments[0];
+  const withdrawalInput = withdrawalArg?.$kind === 'Input' ? data.inputs[withdrawalArg.Input] : undefined;
+  if (withdrawalInput?.$kind !== 'FundsWithdrawal') {
+    return refuse('request-malformed', 'the redeemed argument is not a withdrawal from the sender. Refused unsigned.');
   }
-  const amount = BigInt(bcs.u64().parse(amountBytes));
+  const withdrawal = withdrawalInput.FundsWithdrawal;
+  if (
+    withdrawal.reservation.$kind !== 'MaxAmountU64' ||
+    withdrawal.typeArg.$kind !== 'Balance' ||
+    withdrawal.typeArg.Balance !== SUI_TYPE ||
+    withdrawal.withdrawFrom.$kind !== 'Sender'
+  ) {
+    return refuse('request-malformed', 'the withdrawal is not a bounded SUI withdrawal from the sender. Refused unsigned.');
+  }
+  const amount = BigInt(withdrawal.reservation.MaxAmountU64);
+  const recipientInput = transfer.TransferObjects.address;
+  const recipientBytes =
+    recipientInput?.$kind === 'Input' && data.inputs[recipientInput.Input]?.$kind === 'Pure'
+      ? fromBase64((data.inputs[recipientInput.Input] as { Pure: { bytes: string } }).Pure.bytes)
+      : null;
+  if (recipientBytes === null) {
+    return refuse('request-malformed', 'the recipient is not a pure input. Refused unsigned.');
+  }
   const recipient = bcs.Address.parse(recipientBytes);
   if (amount !== expected.amountMist) {
     return refuse('request-malformed', `the bytes move ${String(amount)} MIST, not the ${String(expected.amountMist)} named. Refused unsigned.`);
