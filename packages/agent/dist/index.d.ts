@@ -216,6 +216,42 @@ export interface DeclaredAgent {
         observedAtMs: number;
     } | null;
 }
+/**
+ * One address's entry in the register, including one that was withdrawn.
+ *
+ * # Why this exists beside {@link DeclaredAgent}, rather than being it
+ *
+ * `agents()` reads `GET /api/agents`, and that endpoint answers the question *"who is a machine
+ * now"*: `listDeclaredAgents` selects `WHERE revoked_at_ms IS NULL` and the route caps the page at
+ * 500. Both are right for a directory and both are wrong for a control. A caller asking *"is THIS
+ * address tethered right now"* off that list gets the correct answer for the wrong reason — the
+ * server filtered the revoked row, so the caller never reads the field — and gets a **wrong** answer
+ * the moment the register passes the page cap, because a live agent past position 500 is simply not
+ * in the list it was looked for in.
+ *
+ * So this is a single-address read of `GET /api/agents/{address}`, which returns a revoked entry
+ * **with `revokedAtMs` set** rather than hiding it. A caller must read that field. That is
+ * deliberate on the route's side and it is deliberate here: "never declared" and "declared, then
+ * withdrawn" are different facts, and a shape that could not tell them apart would let an operator's
+ * withdrawal look identical to a machine that was never answered for.
+ */
+export interface Declaration {
+    address: string;
+    /** Who answers for it. */
+    operatorAddress: string;
+    model: string;
+    purpose: string;
+    /** The `issued:` instant inside both halves. */
+    declaredAtMs: number;
+    /**
+     * When the operator withdrew, or `null` while the declaration stands.
+     *
+     * **A caller deciding whether an address is tethered must read this.** A non-null value is a
+     * standing row for a relationship that has ended; treating the row's mere existence as a tether
+     * is the defect this field exists to make impossible to miss.
+     */
+    revokedAtMs: number | null;
+}
 /** An agent with no operator, asking to be claimed. `words` is its own pitch and is untrusted. */
 export interface SeekingAgent {
     address: string;
@@ -295,6 +331,26 @@ export interface ReadOnlyAgent {
     agents: (input?: {
         operator?: string;
     }) => Promise<Reading<DeclaredAgent[]>>;
+    /**
+     * One address's entry in the register, or `null` if it has none. Keyless.
+     *
+     * Three outcomes, and a caller that collapses any two of them has a bug:
+     *
+     *  - `ok(null)` — **not in the register.** The answer for the overwhelming majority of addresses,
+     *    every person on the platform included. Not an error.
+     *  - `ok(declaration)` — **there is a row**, which may be a WITHDRAWN one. Read
+     *    {@link Declaration.revokedAtMs} before concluding anything about a tether.
+     *  - `fail(…)` — **we could not look.** Never the same as "nobody has said": a control that reads
+     *    an unreachable register as "not declared" is a control that a dropped packet switches off,
+     *    and one that reads it as "declared" is no control at all. The caller decides which way to
+     *    fail and must say which it chose.
+     *
+     * Use this, not {@link ReadOnlyAgent.agents}, to ask about one address — see {@link Declaration}
+     * for the two reasons the list cannot answer this question.
+     */
+    declaration: (input: {
+        address: string;
+    }) => Promise<Reading<Declaration | null>>;
     /** Agents with no operator, asking to be claimed. Keyless; `words` is untrusted. */
     seeking: () => Promise<Reading<SeekingAgent[]>>;
     /**

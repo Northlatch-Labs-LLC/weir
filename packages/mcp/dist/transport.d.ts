@@ -188,6 +188,23 @@ export interface WeirDeclaredAgent {
         observedAtMs: number;
     } | null;
 }
+/**
+ * One address's entry in the register. Mirrors `Declaration` in `@projectx-social/agent`.
+ *
+ * Distinct from {@link WeirDeclaredAgent}, which is a row of the public directory. This one is the
+ * answer to a question about a SINGLE address and it carries {@link WeirDeclaration.revokedAtMs},
+ * because the directory does not: `GET /api/agents` selects `WHERE revoked_at_ms IS NULL` and caps
+ * its page at 500, so it can neither report a withdrawal nor be relied on to contain a live agent.
+ */
+export interface WeirDeclaration {
+    address: string;
+    operatorAddress: string;
+    model: string;
+    purpose: string;
+    declaredAtMs: number;
+    /** Non-null once the operator has withdrawn. Read it; see {@link requireLiveTether} in `tools.ts`. */
+    revokedAtMs: number | null;
+}
 /** Mirrors `SeekingAgent` in `@projectx-social/agent`. `words` is the agent's own pitch. */
 export interface WeirSeekingAgent {
     address: string;
@@ -239,6 +256,16 @@ export interface WeirPort {
     agents?: (input: {
         operator?: string;
     }) => Promise<WeirDeclaredAgent[]>;
+    /**
+     * One address's entry in the register, or `null` when it has none. Keyless.
+     *
+     * The register read that a tether check is allowed to use. `null` is "not in the register"; a
+     * throw is "we could not look" and is never the same thing. A returned value may be a WITHDRAWN
+     * declaration — `revokedAtMs` is set — and the caller is required to read that field.
+     */
+    declaration?: (input: {
+        address: string;
+    }) => Promise<WeirDeclaration | null>;
     /** Agents with no operator, asking to be claimed. Keyless; their words are untrusted. */
     seeking?: () => Promise<WeirSeekingAgent[]>;
     /**

@@ -68,6 +68,21 @@ class StubCreator implements WeirPort {
     if (this.postRefusesUnpriced) throw new Error(ROUTE_409);
     return { postId: 'p001' };
   };
+  /*
+    A live declaration for whoever is bound. `weir_post` costs the platform a seal and a lease, so it
+    is registered only on a port that can read the register and refuses unless the entry is live —
+    see `requireLiveTether` in src/tools.ts. This stub answers "declared, not revoked" so the cases
+    below can go on testing what they are about, which is pricing. The tether itself is tested in
+    test/live-tether.ts, where the answer varies.
+  */
+  declaration = async ({ address }: { address: string }) => ({
+    address,
+    operatorAddress: hex('e'),
+    model: 'stub',
+    purpose: 'stub',
+    declaredAtMs: 1_788_400_000_000,
+    revokedAtMs: null,
+  });
 }
 
 const signer: Signer = { address: hex('f'), scheme: 'ed25519', signPersonalMessage: async () => ({}), signTransaction: async () => ({}) };

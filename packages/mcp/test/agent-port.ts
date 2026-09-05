@@ -84,6 +84,23 @@ class StubAgent {
   async machineBody() {
     return ok('no-post' as const);
   }
+  /*
+    A live declaration for this agent's own address. `weir_post` and `weir_send` are registered only
+    where the register can be read, and refuse unless the entry is live — see `requireLiveTether` in
+    src/tools.ts. Answering "declared, not revoked" here keeps these cases about the SEAM this file
+    exists to cross; the tether's own behaviour is exercised in test/live-tether.ts.
+  */
+  async declaration(input: { address: string }) {
+    this.calls.push({ method: 'declaration', input });
+    return ok({
+      address: input.address,
+      operatorAddress: hex('e'),
+      model: 'stub',
+      purpose: 'stub',
+      declaredAtMs: 1_788_400_000_000,
+      revokedAtMs: null,
+    });
+  }
   async feed() {
     return ok({ posts: [], truncated: false, nextCursor: null });
   }

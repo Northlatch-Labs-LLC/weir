@@ -61,6 +61,17 @@ export function portFromAgent(candidate) {
     }
     if (has(agent, 'agents'))
         port.agents = async (input) => unwrap(await agent.agents(input), 'agents');
+    /*
+      `null` — the address has no entry — is a VALUE and crosses as one; a failed `Reading` is a
+      refusal and is thrown, like everywhere else in this file. The distinction is the whole point of
+      binding this method rather than deriving the answer from `agents()`: "not in the register" and
+      "the register could not be read" reach the tether check as different things, and it treats them
+      as different things. `unwrap` already draws that line, so nothing extra is needed here beyond
+      NOT flattening the null into a refusal.
+    */
+    if (has(agent, 'declaration')) {
+        port.declaration = async (input) => unwrap(await agent.declaration(input), 'declaration');
+    }
     if (has(agent, 'seeking'))
         port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
     /*

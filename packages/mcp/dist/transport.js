@@ -229,9 +229,22 @@ export function capabilitiesOf(binding) {
         out.add('buy');
     if (armed && has('subscribe'))
         out.add('subscribe');
-    if (armed && has('post'))
+    /*
+      `post` and `send` additionally require `declaration`, and that is the same rule as everywhere
+      else in this function rather than a new kind of gate: **a tool is registered if and only if it
+      can succeed.**
+  
+      Both refuse a caller whose address is not a live entry in the register (`requireLiveTether` in
+      `tools.ts`), so on a binding that cannot READ the register neither of them can ever succeed —
+      the check fails closed, by design, and the tool would answer every call with `register_unread`.
+      That is precisely the "registered tool that always refuses" this package refuses to ship: it
+      costs the model context on every turn and invites a retry loop.
+  
+      So the capability is absent instead, and an operator sees the difference in one `tools/list`.
+    */
+    if (armed && has('post') && has('declaration'))
         out.add('post');
-    if (armed && has('send'))
+    if (armed && has('send') && has('declaration'))
         out.add('send');
     // Pricing spends nothing and is gated like a spend anyway: what it changes is what every future
     // buyer pays, and only a policy can say whether this agent may change that.
