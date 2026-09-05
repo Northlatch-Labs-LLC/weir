@@ -238,6 +238,164 @@ bypassed entirely.
 
 ---
 
+## `bin/birth-key.ts` — where a key comes from
+
+Every machine key this estate holds is made by this one tool. Not by `sui client new-address`,
+which writes `~/.sui/sui_config/sui.keystore` — a file that was overwritten twice on the build
+laptop on 2026-09-02 by processes nobody invited. Not by hand at a prompt, where the value passes
+through a screen, a scrollback and a clipboard on its way to a file.
+
+### What it does
+
+Generates one Ed25519 keypair with `Ed25519Keypair.generate()` and writes three files into a pile
+directory it has checked first:
+
+| File | Mode | Contents |
+|---|---|---|
+| `<name>.key` | 0600 | the bech32 `suiprivkey1…` secret, the form `localKeypairSignerFromSecret` loads |
+| `<name>.pub` | 0644 | the public key as **flag-prefixed** base64 — `toSuiPublicKey()`, not `toBase64()` |
+| `<name>.address` | 0644 | the Sui address |
+
+The `.pub` encoding is load-bearing. `publicKeyFromSuiBytes`, which `src/multisig.ts` calls on
+every member, **rejects** the raw 32-byte base64 with "Unsupported signature scheme undefined". A
+pile written in the other form derives no multisig address at all, and the operator would find
+that out at the moment of deriving Heron's address rather than now.
+
+Before it writes anything it sets the process umask to 077 and reads it back; refuses a pile that
+does not exist, is not mode 0700, sits at or under the Sui home, has a `.sui` path segment, or
+lives inside a git working tree; and refuses any name for which a file already exists. Before and
+after every run it fingerprints `~/.sui/sui_config/sui.keystore` — by `shasum` in a child process,
+so the bytes never enter the tool's heap — and refuses to finish if the hash, size, mode or the
+file count beside it moved. If there is no Sui home it says so and carries on.
+
+`--encrypt` seals the `.key` to `<name>.key.enc` with
+`openssl enc -aes-256-cbc -pbkdf2`, the passphrase read from a macOS keychain item and handed to
+`openssl` on **file descriptor 3**, then shreds the plaintext. It decrypts the ciphertext back and
+compares it to the plaintext *before* shredding: a pile holding one unopenable file where a key
+used to be is worse than a pile holding a plaintext key. `--decrypt-to-stdout` is the counterpart
+for the deploy step; the child's stdout is inherited, so the secret goes from `openssl` to the
+pipe without passing through this program, and the mode refuses to run at all when stdout is a
+terminal.
+
+### What it never does
+
+- Never prints a secret, in any mode but `--decrypt-to-stdout`, which will not write to a terminal.
+- Never puts a secret in an argv or an environment variable. Every child process goes through one
+  `run()` helper that rebuilds the environment from three variables and refuses to spawn at all if
+  the bech32 secret prefix appears in either. `ps` shows arguments to every user on the machine.
+- Never overwrites a file. Files are opened `wx`, so the kernel refuses rather than the tool
+  checking and then racing itself.
+- Never creates the pile. A pile made in passing is a pile nobody wrote a recovery row for.
+- Never reads, writes or repairs anything under `~/.sui`. It hashes one file there and compares.
+- Never imports from this workspace. `@mysten/sui` and node builtins only, so that an unbuilt or
+  stale sibling package cannot stop a key birth halfway.
+
+The honest bounds, said plainly. The shred overwrites with random bytes then zeroes and unlinks;
+on APFS that does not guarantee the original blocks are unrecoverable, because the filesystem is
+copy-on-write and the SSD remaps underneath it. What it guarantees is that the plaintext is not
+sitting in the pile under a name. The keychain passphrase raises theft from "read a file" to "run
+a command as this user"; it is not a hardware key. Neither of those is the word "secured".
+
+### The four keys of the Heron v2 build
+
+The pile and its passphrase come first. The pile is the existing machine-key pile, not a new
+folder beside it:
+
+```sh
+mkdir -p ~/.config/protocolx/heron && chmod 700 ~/.config/protocolx/heron
+
+openssl rand -base64 32 | pbcopy          # the value is never displayed
+security add-generic-password -s northlatch-heron-pile -a heron -w
+                                          # paste at both prompts
+pbcopy < /dev/null                        # clear the clipboard
+```
+
+Each key below is told to the Master in one line **before it exists**, and he writes its row into
+his recovery map himself. The desk never opens that file.
+
+**1. `heron-hot` — Heron's signing key.** Made by the tool, on the laptop.
+
+> Heron's signing key. It is one of the two keys on Heron's address, and at a threshold of one
+> either key alone can move his coins. It lives on Heron's machine, and one encrypted copy stays
+> on this laptop. It cannot be changed later: a Sui address is made from its keys once, and that
+> is how Sui works.
+
+```sh
+pnpm exec tsx packages/signer/bin/birth-key.ts heron-hot \
+  --pile ~/.config/protocolx/heron \
+  --encrypt --keychain-item northlatch-heron-pile
+```
+
+**2. `mastercontroller` — the key that will hold `MasterCap`.** Made by the tool, on the laptop,
+and it never goes to a host.
+
+> The company's key that mints Heron's record and can retire him. It holds no coin, and it stays
+> on this laptop.
+
+```sh
+pnpm exec tsx packages/signer/bin/birth-key.ts mastercontroller \
+  --pile ~/.config/protocolx/heron \
+  --encrypt --keychain-item northlatch-heron-pile
+```
+
+**3. `ledger` — the key that will hold `LedgerCap`.** Made by the tool on the laptop, sealed to
+the host at deploy, and it runs under its own service and its own policy document.
+
+> A key whose only job is to close Heron's epoch on chain. It cannot spend.
+
+```sh
+pnpm exec tsx packages/signer/bin/birth-key.ts ledger \
+  --pile ~/.config/protocolx/heron \
+  --encrypt --keychain-item northlatch-heron-pile
+```
+
+**4. `brake` — the Master's key.** Made by **his own hand**, with the same tool, into a folder the
+desk does not read. A brake the desk has seen is not a brake.
+
+> Your key. The second of the two on Heron's address. You make it, you keep it, and the desk only
+> ever sees its public half. On its own, at any moment, it can sweep Heron's coins back to the
+> treasury. That is what makes it the brake.
+
+```sh
+mkdir -p ~/.config/protocolx/master && chmod 700 ~/.config/protocolx/master
+pnpm exec tsx packages/signer/bin/birth-key.ts brake --pile ~/.config/protocolx/master
+```
+
+He then moves the contents of `~/.config/protocolx/master/brake.key` into his password manager and
+empties that folder. The staging folder is a step, not a home; the password manager is the home.
+He hands the desk one line: the contents of `brake.pub`.
+
+### Deriving Heron's address, and using the sealed key
+
+The address is 1-of-2 over the hot key and the brake key, weight 1 each — his ruling, replacing
+the seats' 2-of-3. It is fixed at birth and there is no setter anywhere:
+
+```sh
+pnpm exec tsx packages/signer/bin/birth-key.ts derive-multisig --threshold 1 \
+  --pub "$(cat ~/.config/protocolx/heron/heron-hot.pub)" \
+  --pub "<the brake public key he handed over>"
+```
+
+`test/birth-key.test.ts` derives over the same two public keys at thresholds 1 and 2 and asserts
+the addresses **differ**, which is the CISO's "unverified until built" item on whether a Sui
+multisig address commits its threshold as well as its members. It also asserts that this address
+is the one `multiSigSigner()` in `src/multisig.ts` reports, so the printed value and the signed-for
+value are the same by test and not by assertion in a comment.
+
+At deploy the sealed key is piped, never staged:
+
+```sh
+pnpm exec tsx packages/signer/bin/birth-key.ts heron-hot \
+  --pile ~/.config/protocolx/heron \
+  --decrypt-to-stdout --keychain-item northlatch-heron-pile \
+  | ssh <host> 'systemd-creds encrypt --name=heron-hot - /etc/heron/creds/heron-hot.cred'
+```
+
+No plaintext file is written at either end. If that pipe is ever replaced by a file, this whole
+section is void.
+
+---
+
 ## Interface style
 
 Every interface member in this package and in `@projectx-social/policy` is written as a **property
