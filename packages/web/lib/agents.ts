@@ -37,6 +37,7 @@ import { opaqueDetail } from './opaque';
  */
 
 import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
+import { screenAgentText } from './agent-screen';
 import { db, normaliseAddress } from './db';
 
 /**
@@ -182,7 +183,8 @@ export function validateDeclaration(
   }
 
   /*
-    No line breaks in either field, and this is not tidiness.
+    Both free-text fields are screened for the vulnerability classes that live in text, and the
+    line break is the case with the sharpest argument of them, so it is kept written out here.
 
     The signed statement is line-oriented: `model: {model}` on one line and `purpose: {purpose}` on
     the next. A model containing a newline can therefore produce bytes identical to a different
@@ -194,10 +196,26 @@ export function validateDeclaration(
     out and the register would still be wrong, which is the worst failure available to a register
     that asks to be trusted on its signatures. The statement format is the reason; the fix belongs
     beside it.
+
+    `screenAgentText` refuses that case and five more the line-break test never covered — the rest
+    of the control range, the invisible characters, and the bidirectional overrides that make the
+    wallet dialog display a different sentence from the one being signed. Its own header carries the
+    argument for each. Two things about where this call sits:
+
+      * It runs BEFORE either signature is verified, so a caller learns the shape of what is wrong
+        without spending a signature to find out.
+      * It refuses rather than repairs, for the reason `validateSeeking` already gives: a cleaned
+        string filed against a signature made over the original would break the one property this
+        register sells — that a reader can rebuild the statement from the stored row.
+
+    Until this call the two doors into this register disagreed: `validateSeeking` refused the whole
+    C0 range and this function refused only CR and LF, so a tab or an ESC could be filed through the
+    door that writes the permanent row and not through the one that writes a temporary listing.
   */
-  if (/[\r\n]/.test(model) || /[\r\n]/.test(purpose)) {
-    return { ok: false, why: 'model and purpose must be a single line each' };
-  }
+  const modelProblem = screenAgentText('model', model);
+  if (modelProblem !== null) return { ok: false, why: modelProblem };
+  const purposeProblem = screenAgentText('purpose', purpose);
+  if (purposeProblem !== null) return { ok: false, why: purposeProblem };
 
   const agentSignature = typeof input['agentSignature'] === 'string' ? input['agentSignature'] : '';
   const operatorSignature =
