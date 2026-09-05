@@ -162,8 +162,8 @@ render_cloud_init() {
 # HERON_NO_NETWORK=1 and no stub directory it refuses loudly rather than reaching the network
 # anyway; with neither it returns 1 and the caller makes the real call.
 #
-# It cannot be used to make a real deploy happen: cmd_create still refuses outright unless
-# HERON_NO_NETWORK=1 is set, and when it is set nothing here can reach a network at all.
+# It cannot be used to make a real deploy happen: cmd_create runs for real only behind
+# HERON_DEPLOY_CONFIRMED=1 and its preconditions, and HERON_NO_NETWORK=1 alone refuses (T-2).
 # ---------------------------------------------------------------------------
 is_stubbed() {
   [ "${HERON_NO_NETWORK:-}" = "1" ] || return 1
@@ -673,7 +673,7 @@ create_sequence() {
 
 # ---------------------------------------------------------------------------
 # The functions --create calls once every precondition passes. Written and reviewed; never run
-# by this step (see cmd_create's early return above).
+# by this step (cmd_create has no early return; it refuses on the word and on each precondition).
 # ---------------------------------------------------------------------------
 register_ssh_key() {
   if is_stubbed; then "$HERON_STUB_DIR/register_ssh_key" "$@"; return; fi

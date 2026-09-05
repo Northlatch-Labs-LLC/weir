@@ -53,7 +53,20 @@ def api_base() -> str:
         return base
     # The only other thing this may be pointed at is a loopback stand-in, which is what the test
     # server is. Anything else would mean handing the account token to a host somebody else names.
-    if base.startswith("http://127.0.0.1:") or base.startswith("http://localhost:"):
+    # Parsed, not prefix-matched: "http://127.0.0.1:@evil.example.com/" starts with the loopback
+    # prefix and resolves to evil.example.com (Security's T-1). The scheme must be http, the host
+    # loopback, no userinfo, no path.
+    from urllib.parse import urlsplit
+    parts = urlsplit(base)
+    if (
+        parts.scheme == "http"
+        and parts.hostname in {"127.0.0.1", "localhost", "::1"}
+        and parts.username is None
+        and parts.password is None
+        and parts.path in ("", "/")
+        and not parts.query
+        and not parts.fragment
+    ):
         return base
     print(
         f"do_api.py: refused - HERON_DO_API_BASE is {base!r}; it may only be {DEFAULT_API_BASE} or a "
