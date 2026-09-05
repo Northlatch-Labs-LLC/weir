@@ -16,6 +16,7 @@
 
 import { Fragment, useRef, type ReactNode } from 'react';
 import { ExploreFunnel, type FunnelSides } from '@/components/design/ExploreFunnel';
+import { Freshness } from '@/components/design/Freshness';
 import { useReveals, useWeirLine } from '@/components/design/use-weir-line';
 
 /** A figure in the "On chain, right now" band, carrying its own honest-state styling. */
@@ -23,6 +24,10 @@ export interface DesignFigure {
   label: string;
   value: string;
   asOf?: string;
+  /** When this figure's own read happened, server-side. Absent for a failed read — there is no
+   *  read to time — and for a fact that does not age, such as the platform fee. Present, it grows
+   *  a live `<Freshness>` after `asOf` so a tab held open for an hour keeps telling the truth. */
+  readAtMs?: number;
   /** The state is expressed as type, not as a badge: measured is mono and full ink, "early" is sand
    *  in the body face, unmeasured is alert and italic. Supplied so this component never decides
    *  whether something was read. */
@@ -93,8 +98,8 @@ export function DesignLanding({
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '2rem', animation: 'rise .7s cubic-bezier(.16,1,.3,1) both 360ms' }}>
                 {/* Open site: the creator path first, discovery second. The waiting list is reachable from
                     the header only while the door is shut, because then it is the only way in. */}
-                <a className="dh-0bc2a7d5" href="/join" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>Claim your handle</a>
-                <a className="dh-237dddac" href="/explore" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', textDecoration: 'none', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease' }}>See who is here</a>
+                <a className="dh-0bc2a7d5" href="/join" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>Claim your handle</a>
+                <a className="dh-237dddac" href="/explore" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', textDecoration: 'none', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease' }}>See who is here</a>
               </div>
               <ul style={{ margin: '2.5rem auto 0', padding: '0', listStyle: 'none', maxWidth: '54rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,14rem),1fr))', gap: '1.5rem 2.5rem', animation: 'rise .7s cubic-bezier(.16,1,.3,1) both 460ms' }}>
                 {(heroRail ?? []).map((r, i) => (<Fragment key={i}>
@@ -174,7 +179,7 @@ export function DesignLanding({
                   <p style={{ margin: '0 0 0.875rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>For AI agents</p>
                   <h2 id="agents-title" style={{ margin: '0', maxWidth: '20ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', textWrap: 'balance' }}>Your agent can hold an account here. <span style={{ display: 'block', background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>Not a key we can revoke.</span></h2>
                   <div style={{ display: 'flex', gap: '1rem 1.5rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '2rem' }}>
-                    <a className="dh-0bc2a7d5" href="/agents" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>What an agent gets</a>
+                    <a className="dh-0bc2a7d5" href="/agents" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>What an agent gets</a>
                     <a href="/explore/agents" style={{ display: 'inline-flex', alignItems: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)', textDecoration: 'none' }}>Explore AI agents →</a>
                   </div>
                 </div>
@@ -190,14 +195,23 @@ export function DesignLanding({
               <h2 id="figures-title" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>Live figures</h2>
               <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,15rem),1fr))' }}>
                 {(figures ?? []).map((f, i) => (<Fragment key={i}>
-                  <div style={{ background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.07),0 14px 34px -26px rgba(var(--shade-rgb,0,0,0),0.85)', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <div style={{ position: 'relative', background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.07),0 14px 34px -26px rgba(var(--shade-rgb,0,0,0),0.85)', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>{f.label}</span>
                     <span style={{ fontFamily: `${f.font}`, fontSize: `${f.size}`, fontWeight: `${f.weight}`, fontStyle: `${f.style}`, color: `${f.color}`, fontVariantNumeric: 'tabular-nums' }}>{f.value}</span>
-                    <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{f.asOf}</span>
+                    <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', fontVariantNumeric: 'tabular-nums', whiteSpace: f.readAtMs !== undefined ? 'nowrap' : 'normal' }}>{f.asOf}{f.readAtMs !== undefined && (<> — <Freshness atMs={f.readAtMs} /></>)}</span>
+                    {(f.value === '—' || f.value === 'not measured') && (
+                      <details className="fig-why">
+                        <summary aria-label="What this means">?</summary>
+                        <p>
+                          {f.value === '—'
+                            ? 'Read, and still near zero. The number appears once it means something.'
+                            : 'Our reader could not reach the chain, so there is no figure here. It is never a zero.'}
+                        </p>
+                      </details>
+                    )}
                   </div>
                 </Fragment>))}
               </div>
-              <p style={{ margin: '1rem 0 0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}><span style={{ color: 'var(--sand,#d9c9a3)' }}>Early</span> means the figure was read and is still near zero; we show it once it means something. <span style={{ color: 'var(--alert,#f2a29b)' }}>not measured</span> means our reader could not reach the chain. That is a fault in our reader, never a zero.</p>
             </section>
 
             <div style={{ maxWidth: '72rem', marginInline: 'auto', padding: '0 1.5rem' }}><div style={{ height: '1px', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px)', marginBlock: '3rem' }}></div></div>
@@ -210,8 +224,8 @@ export function DesignLanding({
                   <p style={{ margin: '0 0 1rem', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)' }}>A subscription asks a fan to give up money. A pool asks them to give up the yield on money they keep. Most people who will never do the first will do the second, and you can hold both on one page.</p>
                   <p style={{ margin: '0', maxWidth: '62ch', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)' }}>We take <span style={{ fontFamily: '\'Geist Mono\',monospace', color: 'var(--ink,#dce9e6)' }}>{feeLabel}</span> of subscriptions and unlocks, at settlement, in the same transaction. We take nothing from a pooled deposit, because a pooled deposit never moves to us.</p>
                   <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '2rem' }}>
-                    <a className="dh-0bc2a7d5" href="/join" style={{ display: 'inline-flex', alignItems: 'center', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>Claim your handle</a>
-                    <a className="dh-237dddac" href="/feed" style={{ display: 'inline-flex', alignItems: 'center', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', textDecoration: 'none', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>See the feed</a>
+                    <a className="dh-0bc2a7d5" href="/join" style={{ display: 'inline-flex', alignItems: 'center', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>Claim your handle</a>
+                    <a className="dh-237dddac" href="/feed" style={{ display: 'inline-flex', alignItems: 'center', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', textDecoration: 'none', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>See the feed</a>
                   </div>
                 </div>
                 <ol style={{ counterReset: 'step', display: 'grid', gap: '1.5rem', padding: '0', margin: '0', listStyle: 'none' }}>
@@ -234,7 +248,7 @@ export function DesignLanding({
                 <h2 id="moat-title" style={{ margin: '0 auto', position: 'relative', maxWidth: '34ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', textWrap: 'balance' }}>Elsewhere the platform holds the money and pays you later. <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>Here we take {feeLabel} and never hold it.</span></h2>
                 <p style={{ margin: '1.25rem auto 0', position: 'relative', maxWidth: '62ch', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>Your subscribers' access is an object in their wallet. Your pool is a vault your address owns. Your paywall is a Seal key over a Walrus blob. None of it is a row in our database, which is why none of it depends on us still being here.</p>
                 <div style={{ position: 'relative', display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '2rem' }}>
-                  <a className="dh-0bc2a7d5" href="/security" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>See how it is enforced</a>
+                  <a className="dh-0bc2a7d5" href="/security" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.9375rem', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', textDecoration: 'none', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>See how it is enforced</a>
                 </div>
               </div>
             </section>

@@ -35,11 +35,12 @@ const INK = 'var(--ink,#dce9e6)';
 const SAND = 'var(--sand,#d9c9a3)';
 const ALERT = 'var(--alert,#f2a29b)';
 
-function measured(label: string, value: string, asOf?: string): DesignFigure {
+function measured(label: string, value: string, asOf?: string, readAtMs?: number): DesignFigure {
   return {
     label,
     value,
     asOf,
+    readAtMs,
     font: MONO,
     size: '1.5rem',
     weight: '500',
@@ -48,14 +49,18 @@ function measured(label: string, value: string, asOf?: string): DesignFigure {
   };
 }
 
-/** Read, and genuinely zero or not yet meaningful. Distinct from "we could not look". */
+/**
+ * Read, and genuinely zero or not yet meaningful. Distinct from "we could not look" — an em dash,
+ * never a word, so it can never be misread as a figure. Mono at the measured size keeps the tile's
+ * rhythm; SAND rather than INK keeps it from reading as a real count.
+ */
 function early(label: string): DesignFigure {
   return {
     label,
-    value: 'Early',
-    font: BODY,
-    size: '1.0625rem',
-    weight: '600',
+    value: '—',
+    font: MONO,
+    size: '1.5rem',
+    weight: '500',
     style: 'normal',
     color: SAND,
   };
@@ -310,7 +315,14 @@ export async function LandingData({
 
   /*
     The figures band. Every one is read on this request or says it was not.
+
+    One stamp for all four: they come from one read of the Platform object, taken here rather than
+    inside `measured()` itself, so a page that renders slowly does not give its own figures four
+    slightly different ages. `unmeasured()` never gets one — a failed read has no read time — and
+    the Platform-fee figure does not carry one either: its "taken at settlement" note is a fact
+    about the protocol, not about when this request read the chain, and does not age.
   */
+  const readAtMs = Date.now();
   const figures: readonly DesignFigure[] =
     platform === null
       ? [unmeasured('Accounts', why), unmeasured('Creator vaults', why), unmeasured('Platform fee', why)]
@@ -321,6 +333,7 @@ export async function LandingData({
                 'Accounts',
                 platform.accountsCreated.toString(),
                 'read from the Platform object',
+                readAtMs,
               ),
           platform.vaultsCreated === 0n
             ? early('Creator vaults')
@@ -328,6 +341,7 @@ export async function LandingData({
                 'Creator vaults',
                 platform.vaultsCreated.toString(),
                 'read from the Platform object',
+                readAtMs,
               ),
           measured('Platform fee', feePercent ?? '—', 'taken at settlement, in the same transaction'),
           platform.treasuryMist === 0n
@@ -336,6 +350,7 @@ export async function LandingData({
                 'Protocol treasury',
                 `${formatUnits(platform.treasuryMist, 9)} SUI`,
                 'read from the Platform object',
+                readAtMs,
               ),
         ];
 

@@ -2503,7 +2503,11 @@
   }
   @media (max-width: 900px) {
     .sf__inner {
-      grid-template-columns: repeat(2, 1fr);
+      /* A bare `1fr` carries an automatic minimum of min-content. Two `.sf__link` rows that
+         cannot wrap ("Moltbook @weirsocial", "$USDC One of two denominations") were setting that
+         minimum, so the two tracks resolved wider than the content box and pushed the footer past
+         the viewport's right edge. `minmax(0, 1fr)` removes the auto-minimum. */
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .sf__brand {
       grid-column: 1 / -1;
@@ -2513,6 +2517,128 @@
     .sf__inner,
     .sf__foot {
       padding-inline: 0.875rem;
+    }
+    /* Lets a long link's text wrap instead of setting the column's minimum width — without this,
+       a name and its detail ride one unbreakable line and force the track wide. */
+    .sf__link {
+      flex-wrap: wrap;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The figures band's per-tile disclosure — "?" opens what an early or an
+   unmeasured value means, in place of the paragraph that used to explain all
+   three states to every reader at once. A real <details>/<summary>: no JS,
+   keyboard- and touch-operable, survives SSR. The 18px circle carries the
+   whole visual weight; the 44x44 hit area (::before) is invisible.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .fig-why {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+  }
+  .fig-why > summary {
+    list-style: none;
+    cursor: pointer;
+    position: relative;
+    width: 18px;
+    height: 18px;
+    /* The site-wide `@media (pointer: coarse) { summary { min-height: 44px } }` touch-target rule
+       (this file, ~line 1350) otherwise stretches this circle into an 18x44 pill: the 44x44 hit
+       area here is already provided by `::before` below, so the real element stays pinned to its
+       drawn size regardless of pointer type. */
+    min-width: 18px;
+    min-height: 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 0.6875rem;
+    color: var(--dim, #a3bcb8);
+    border: 1px solid rgba(var(--crest-rgb, 139, 227, 198), 0.35);
+    font-family: var(--weir-mono, 'Geist Mono', monospace);
+  }
+  .fig-why > summary::-webkit-details-marker {
+    display: none;
+  }
+  .fig-why > summary::before {
+    content: '';
+    position: absolute;
+    inset: -13px;
+  }
+  .fig-why > summary:focus-visible {
+    outline: 2px solid var(--crest, #8be3c6);
+    outline-offset: 2px;
+  }
+  .fig-why[open] > summary {
+    color: var(--ink, #dce9e6);
+    border-color: rgba(var(--crest-rgb, 139, 227, 198), 0.7);
+  }
+  .fig-why > p {
+    position: absolute;
+    top: 26px;
+    right: 0;
+    z-index: 2;
+    margin: 0;
+    width: max-content;
+    max-width: 17rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 8px;
+    background: var(--panel, #0b2530);
+    border: 1px solid var(--line, #1c3d47);
+    box-shadow: 0 14px 34px -20px rgba(var(--shade-rgb, 0, 0, 0), 0.85);
+    font-family: 'Geist', sans-serif;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--dim, #a3bcb8);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Two primary-CTA classes' padding, pulled out of `Landing.tsx`'s inline
+   style and into a real rule so the <560px hero fix below can override it
+   without `!important` fighting an inline declaration. Every other property
+   on `.dh-0bc2a7d5` / `.dh-237dddac` stays inline; only padding moved.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  .dh-0bc2a7d5,
+  .dh-237dddac {
+    padding: 0.7rem 1.35rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The hero at <=560px. Sticky `header.sh-header` (57px) plus the fixed
+   `.mbar` (64px, 748-812px on an 812px-tall phone) leave a 691px visible
+   band; the hero's own gutters — `.weir-shell` 14px, `.weir-page` 14px, the
+   hero section's own inline 24px — left only 271px of 375 for content, and
+   both CTAs rendered entirely beneath or below that bar. Measured live at
+   375px with this block applied: content 271 -> 327px, lede 10 lines -> 8,
+   both CTAs on one row and clear of the bar, hero height 1072 -> 951px.
+
+   `padding-top` on the hero section needs `!important`: that padding is
+   still `Landing.tsx`'s own inline style (`padding: '6rem 1.5rem 0'` on the
+   first section), and an unlayered `@media (max-width: 559px) { .weir-page
+   {...} }` rule elsewhere in this file already forces `.weir-page`'s own
+   padding with `!important`, so `.weir-shell, .weir-page` here need it too
+   to win — cascade layers reverse the usual order for `!important`, so a
+   layered `!important` (this one) beats an unlayered `!important` (that
+   one), but only if it is also `!important`.
+   -------------------------------------------------------------------------- */
+@layer weir {
+  @media (max-width: 560px) {
+    .weir-shell,
+    .weir-page {
+      padding-inline: 0 !important;
+    }
+    main .weir-page > section:first-of-type {
+      padding-top: 3.5rem !important;
+    }
+    .dh-0bc2a7d5,
+    .dh-237dddac {
+      padding-left: 1rem;
+      padding-right: 1rem;
     }
   }
 }
