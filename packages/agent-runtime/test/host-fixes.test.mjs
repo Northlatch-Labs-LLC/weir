@@ -1464,6 +1464,12 @@ test('--seal reads a born key as <name>.key when the bare name is absent, and re
   assert.match(missing.stderr, /nothing at .*heron-ledger \(or .*heron-ledger\.key\)/);
 });
 
+test('the alert names its user agent; Cloudflare in front of Resend refused the default one with error 1010', () => {
+  const alert = readFileSync(path.join(DO_DIR, 'bin', 'heron-alert'), 'utf8');
+  const send = alert.slice(alert.indexOf('urllib.request.Request('), alert.indexOf('urlopen(request'));
+  assert.match(send, /"User-Agent": "heron-alert\//, 'the Resend request must carry a named User-Agent');
+});
+
 test('N9: the README names the Resend sender as a gate before the first alert, not a footnote', () => {
   const readme = readFileSync(path.join(DO_DIR, 'README.md'), 'utf8');
   assert.match(readme, /verified/i);

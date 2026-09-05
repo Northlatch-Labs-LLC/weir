@@ -208,7 +208,14 @@ def send(subject: str, text: str, key: str) -> str:
     request = urllib.request.Request(
         RESEND_ENDPOINT,
         data=body,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        # A named user agent. Resend sits behind Cloudflare, and the first real mail gate on the host
+        # (2026-09-05) was refused 403 "error code: 1010" -- Cloudflare's block on the default
+        # Python-urllib signature -- before the request reached Resend at all.
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "User-Agent": "heron-alert/2 (Heron host; +https://weir.social)",
+        },
         method="POST",
     )
     try:
