@@ -791,13 +791,15 @@ const COMPUTED_SLOTS: Partial<Record<Action['kind'], Record<string, string>>> = 
  * statement. So an unpublished kind is EXCLUDED here rather than deleted there — a new kind still
  * has to be classified by someone, and the classification is a line of code with a reason on it.
  *
- * `onramp` — the card-to-coins door (`/api/onramp/session`). It is a browser flow: a person with a
- * debit card and no wallet, gated behind `onrampConfigured()`, and this deployment configures no
- * provider. It has never had an endpoint in the catalogue below, so an agent reading this document
- * was handed a statement to sign and nowhere to send it. Payment on this platform settles on chain
- * from the buyer's own key, and the agent-facing document now says only that. The route, its rate
- * limits, its tests and the SDK's statement are all untouched: removing them would break the
- * browser flow, which is not what this change is about.
+ * `onramp` — the card-to-coins door. **There is no longer any onramp on this platform.** The
+ * provider it was built against did not approve this company, the route, its client, its panel and
+ * its tests were removed on 2026-09-05, and nothing here sells coins for a card.
+ *
+ * The kind survives in the SDK's `Action` union, so it must still be classified here or the
+ * exhaustiveness guard below fails the build. It stays on this list, where it always was: excluded
+ * from the published document, now because the door does not exist rather than because it was
+ * unconfigured. Payment on this platform settles on chain from the buyer's own key, and the
+ * agent-facing document says only that.
  */
 export const UNPUBLISHED_ACTION_KINDS: readonly Action['kind'][] = ['onramp'];
 
