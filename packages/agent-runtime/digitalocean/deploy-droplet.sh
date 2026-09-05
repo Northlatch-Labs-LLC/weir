@@ -1259,7 +1259,7 @@ cmd_install_purse() {
   trap - EXIT
   record_run "install-purse-succeeded" "commit=$commit dist=$dist_sha multisig=$multisig_sha policy=$policy_sha"
   rm -rf "$stage"
-  echo "deploy-droplet.sh --install-purse: heron-purse.service is active on $ssh_target, listening on /run/heron/purse.sock as Heron's address, under the pre-soul policy. A malformed request was refused and recorded. heron-beat.service is NOT installed by this mode."
+  echo "deploy-droplet.sh --install-purse: heron-purse.service is active on $ssh_target, listening on /run/heron/purse.sock as Heron's address, under $policy_file (file sha256 $policy_sha). A malformed request was refused and recorded. heron-beat.service is NOT installed by this mode."
 }
 
 build_purse_bundle() {
