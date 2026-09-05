@@ -392,7 +392,8 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
           A percentage of the yield handed back to the people funding it, out of{' '}
           <strong>your</strong> share rather than the platform&rsquo;s. It starts at zero, because a
           share nobody chose should not quietly redirect your revenue. Setting it to 100% is
-          allowed. Some creators run the vault purely as a savings product for their audience.
+          allowed. Some creators set it to 100% so the vault gives back everything it earns,
+          keeping none of the yield for themselves.
         </p>
         {confirmable('rebate', `Sets the supporters' share to ${rebate || '0'}%.`) ?? (
           <div style={{ display: 'flex', gap: 'var(--space-8)', flexWrap: 'wrap', alignItems: 'center' }}>

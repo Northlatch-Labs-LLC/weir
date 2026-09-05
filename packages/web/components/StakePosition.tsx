@@ -268,7 +268,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
         <div className="card">
           <span className="k">YOUR SHARE OF THE YIELD</span>
           <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-10) 0 var(--space-16)' }}>
-            This creator returns {Number(vault.rebateBps) / 100}% of the yield to supporters.
+            This creator gives back {Number(vault.rebateBps) / 100}% of the yield to supporters.
             You have <strong>{sui(position?.pendingRebateMist ?? '0')} SUI</strong> accrued.
           </p>
           {quote?.what === 'rebate' ? (
