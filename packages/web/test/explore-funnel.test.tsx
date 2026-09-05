@@ -66,7 +66,8 @@ describe('who is an agent', () => {
     expect(side.items.map((i) => i.handle)).toEqual(['@kaela']);
     expect(side.items[0]?.agent).toBe(true);
     expect(side.items[0]?.href).toBe('/c/kaela');
-    expect(side.note).toBe('1 declared agent, read from the register just now.');
+    expect(side.note).toBe('1 declared agent, read from the register');
+    expect(side.readAtMs).toBeGreaterThan(0);
     expect(JSON.stringify(side)).not.toContain('bot_9000');
     expect(JSON.stringify(side)).not.toContain('former');
   });
@@ -92,16 +93,17 @@ describe('who is an agent', () => {
     const side = agentsSide({ ok: false, why: 'connect ECONNREFUSED' });
     expect(side.state).toBe('unmeasured');
     expect(side.items).toEqual([]);
-    expect(side.note).toContain('could not be read just now');
+    expect(side.note).toContain('could not be read; attempted');
     expect(side.note).toContain('a failed read, not an empty register');
     expect(side.note).toContain('connect ECONNREFUSED');
+    expect(side.readAtMs).toBeGreaterThan(0);
   });
 
   it('shows at most the funnel size, and counts everybody', () => {
     const many = Array.from({ length: FUNNEL_ITEMS + 3 }, (_, i) => account(`0x${(i + 1).toString(16).padStart(64, '0')}`));
     const side = agentsSide({ ok: true, value: { agents: many, profiles: [] } });
     expect(side.items).toHaveLength(FUNNEL_ITEMS);
-    expect(side.note).toBe(`${FUNNEL_ITEMS + 3} declared agents, read from the register just now.`);
+    expect(side.note).toBe(`${FUNNEL_ITEMS + 3} declared agents, read from the register`);
   });
 });
 
@@ -111,7 +113,7 @@ describe('who is a creator', () => {
     expect(side.state).toBe('listed');
     expect(side.items).toHaveLength(FUNNEL_ITEMS);
     expect(side.items[0]?.href).toBe('/c/c0');
-    expect(side.note).toBe(`${FUNNEL_ITEMS + 1} creators, read from the store just now.`);
+    expect(side.note).toBe(`${FUNNEL_ITEMS + 1} creators, read from the store`);
   });
 
   it('has its own empty and unmeasured sentences', () => {
@@ -188,7 +190,9 @@ describe('the rendered funnel', () => {
     expect(agents.dataset['funnelState']).toBe('empty');
     expect(container.querySelector('ul')).toBeNull();
     expect(agents.textContent).toContain('No declared agents yet.');
-    expect(creators.textContent).toContain('could not be read just now');
+    expect(creators.textContent).toContain('could not be read; attempted');
+    // The freshness widget renders live next to every note, including a failed read's.
+    expect(creators.textContent).toContain('just now');
     // Both doors stay open in every state — the directory can say the same thing at length.
     expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/explore', '/explore/agents']);
   });

@@ -22,6 +22,7 @@
  */
 
 import { Fragment } from 'react';
+import { Freshness } from '@/components/design/Freshness';
 
 export interface FunnelItem {
   href: string;
@@ -47,6 +48,10 @@ export interface FunnelSide {
   state: 'listed' | 'empty' | 'unmeasured';
   /** The count line, the empty-state reason, or the failure — whichever `state` says it is. */
   note: string;
+  /** When this side's own read happened, server-side. Set on every branch, including a failed
+   *  read: an attempt still has a time, even when it found nothing. Grows a live `<Freshness>`
+   *  next to `note`, so a tab held open for an hour keeps telling the truth. */
+  readAtMs: number;
 }
 
 export type FunnelSides = readonly [FunnelSide, FunnelSide];
@@ -95,7 +100,7 @@ function Side({ side }: { side: FunnelSide }) {
           </Fragment>))}
         </ul>
       )}
-      <p style={{ margin: 0, fontSize: '0.875rem', textWrap: 'pretty', ...noteStyle }}>{side.note}</p>
+      <p style={{ margin: 0, fontSize: '0.875rem', textWrap: 'pretty', ...noteStyle }}>{side.note} <Freshness atMs={side.readAtMs} />.</p>
       <a className="dh-237dddac" href={side.href} style={{ alignSelf: 'flex-start', marginTop: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: 600, fontSize: '0.9375rem', lineHeight: 1, border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', textDecoration: 'none', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease' }}>{side.cta} →</a>
     </section>
   );

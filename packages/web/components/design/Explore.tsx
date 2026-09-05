@@ -3,7 +3,7 @@
 
 
 import { PageHead } from '@/components/design/PageHead';
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 /** One creator card. The two figures carry their own honest-state typography. */
 export interface DesignCreator {
@@ -32,7 +32,9 @@ export function DesignExplore({
   signedIn: boolean;
   myHandle: string | null;
   creators: readonly DesignCreator[];
-  creatorCount: string;
+  /** The count line, live-ticking when it names when the store was read. A plain string when
+   *  there is nothing to time — "No creators yet." — or when a caller has none to give. */
+  creatorCount: ReactNode;
 }) {
   return (
     <>

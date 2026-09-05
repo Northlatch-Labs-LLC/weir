@@ -57,12 +57,15 @@ function plural(n: number, word: string): string {
 }
 
 export function creatorsSide(reading: StoreReading<readonly Profile[]>): FunnelSide {
+  // One stamp for whichever branch below returns: an attempt has a time even when it finds
+  // nothing, or finds nothing because it failed.
+  const readAtMs = Date.now();
   if (!reading.ok) {
-    return { ...CREATORS, items: [], state: 'unmeasured', note: `The creator store could not be read just now. ${reading.why}` };
+    return { ...CREATORS, items: [], state: 'unmeasured', readAtMs, note: `The creator store could not be read; attempted. ${reading.why}` };
   }
   const profiles = reading.value;
   if (profiles.length === 0) {
-    return { ...CREATORS, items: [], state: 'empty', note: 'No creators yet. The first page opened here will appear in this list.' };
+    return { ...CREATORS, items: [], state: 'empty', readAtMs, note: 'No creators yet. The first page opened here will appear in this list.' };
   }
   const items: FunnelItem[] = profiles.slice(0, FUNNEL_ITEMS).map((p) => ({
     href: `/c/${encodeURIComponent(p.handle)}`,
@@ -70,7 +73,7 @@ export function creatorsSide(reading: StoreReading<readonly Profile[]>): FunnelS
     handle: `@${p.handle}`,
     meta: p.vaultId === null ? 'no vault yet' : 'vault open',
   }));
-  return { ...CREATORS, items, state: 'listed', note: `${plural(profiles.length, 'creator')}, read from the store just now.` };
+  return { ...CREATORS, items, state: 'listed', readAtMs, note: `${plural(profiles.length, 'creator')}, read from the store` };
 }
 
 /**
@@ -83,12 +86,15 @@ export function creatorsSide(reading: StoreReading<readonly Profile[]>): FunnelS
 export function agentsSide(
   reading: StoreReading<{ agents: readonly AgentAccount[]; profiles: readonly Profile[] }>,
 ): FunnelSide {
+  // One stamp for whichever branch below returns — see `creatorsSide`.
+  const readAtMs = Date.now();
   if (!reading.ok) {
     return {
       ...AGENTS,
       items: [],
       state: 'unmeasured',
-      note: `The agent register could not be read just now, so nothing is listed. That is a failed read, not an empty register. ${reading.why}`,
+      readAtMs,
+      note: `The agent register could not be read; attempted, so nothing is listed. That is a failed read, not an empty register. ${reading.why}`,
     };
   }
   const live = reading.value.agents.filter((a) => a.revokedAtMs === null);
@@ -97,6 +103,7 @@ export function agentsSide(
       ...AGENTS,
       items: [],
       state: 'empty',
+      readAtMs,
       note: 'No declared agents yet. An account is listed here only after it and its operator have both signed a declaration. Nothing is guessed from a handle, a bio or how an account posts.',
     };
   }
@@ -113,7 +120,7 @@ export function agentsSide(
           agent: true,
         };
   });
-  return { ...AGENTS, items, state: 'listed', note: `${plural(live.length, 'declared agent')}, read from the register just now.` };
+  return { ...AGENTS, items, state: 'listed', readAtMs, note: `${plural(live.length, 'declared agent')}, read from the register` };
 }
 
 /**

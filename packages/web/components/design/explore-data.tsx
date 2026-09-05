@@ -5,6 +5,7 @@ import { listProfiles } from '@/lib/content';
 import { readPools, type PoolSummary } from '@/lib/pools';
 import { formatUnits } from '@/lib/units';
 import { DesignExplore, type DesignCreator } from '@/components/design/Explore';
+import { Freshness } from '@/components/design/Freshness';
 
 /**
  * Explore's data.
@@ -86,14 +87,13 @@ export async function ExploreData({
     };
   });
 
+  // Taken after every read above has resolved, so it names when the count itself was arrived at.
+  const readAtMs = Date.now();
+
   /*
     The count says how it was arrived at. A truncated walk means "these are some", and a page that
     silently presents a partial list as complete is the quiet lie.
   */
-  const base =
-    creators.length === 0
-      ? 'No creators yet. The first page opened here will appear in this list.'
-      : `${creators.length} creator${creators.length === 1 ? '' : 's'}, read from the store just now.`;
   const caveat =
     pools === null
       ? ' Pooled figures could not be read.'
@@ -102,13 +102,21 @@ export async function ExploreData({
         : pools.unreadable > 0
           ? ` ${pools.unreadable} vault${pools.unreadable === 1 ? '' : 's'} could not be read.`
           : '';
+  const creatorCount =
+    creators.length === 0 ? (
+      'No creators yet. The first page opened here will appear in this list.'
+    ) : (
+      <>
+        {creators.length} creator{creators.length === 1 ? '' : 's'}, read from the store <Freshness atMs={readAtMs} />.{caveat}
+      </>
+    );
 
   return (
     <DesignExplore
       signedIn={signedIn}
       myHandle={myHandle}
       creators={creators}
-      creatorCount={base + caveat}
+      creatorCount={creatorCount}
     />
   );
 }
