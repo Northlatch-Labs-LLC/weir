@@ -130,6 +130,73 @@ It is a parse-only pass (`allowJs` on, `checkJs` off): the two `.mjs` files are 
 without JSDoc types, and a strict check raises about sixty untyped-parameter and unknown-error
 findings. A typed pass is on the list; the 29 `node:test` cases are the check that runs today.
 
+## The image
+
+Heron v2, build order step 3 (`work/rnd/agent/2026-09-05-executive-heron-v2-decided.md` §3),
+against the CTO's spec (`2026-09-05-engineering-heron-v2-runtime-and-host.md` §2, §5). Docker
+stayed down on this laptop for this step; nothing below was built or run — every claim is verified
+by `node --test test/image.test.mjs` reading the Dockerfile and its provenance file as text, and
+by the host that does have Docker when it builds this image.
+
+- **One base, pinned by digest, for both stages.** `node:22-trixie-slim` — trixie to match the
+  Debian 13 host, so one CVE feed covers both. Docker being down means
+  `docker buildx imagetools inspect` cannot run here; the digest was instead read from the
+  registry's own HTTP API (an anonymous pull token for `repository:library/node:pull`, then a
+  `GET` on the manifest list with the manifest-list `Accept` header, taking the
+  `Docker-Content-Digest` response header) on 2026-09-05:
+  `sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284`. Recorded, with the
+  read date and method, in `picoclaw.provenance.json`. A base bump and its digest must land in the
+  same commit; the test asserts the Dockerfile's `FROM` lines and the provenance file never drift
+  apart.
+- **PicoClaw, pinned by literal checksum per arch**, unchanged in shape from v1: `ARG
+  PICOCLAW_SHA256_AMD64` / `_ARM64` as literal values, never a checksums file fetched from the
+  release it verifies. Re-read from
+  `https://github.com/sipeed/picoclaw/releases/download/v0.3.1/picoclaw_0.3.1_checksums.txt` on
+  2026-09-05 and confirmed byte-for-byte equal to the values already in use; also recorded in
+  `picoclaw.provenance.json`, and asserted equal to the Dockerfile's literals by the same test.
+- **User `heron`, uid 10001, gid 10001, fixed** — never a dynamically allocated system uid. v1
+  collided at uid 999 with DigitalOcean's own `do-agent`; 10001 sits above the whole range Debian's
+  own tooling allocates from (reasoned from Debian Policy §9.2.2, not verified on a Debian host
+  from this laptop). The build therefore also asserts it empirically: it refuses if uid or gid
+  10001 already exist before `heron` is created, and refuses again if the id does not resolve to
+  `heron:heron` afterward — so a future base-image bump that happens to pre-allocate 10001 fails
+  loudly instead of colliding silently the way v1 did.
+- **Two stages.** `fetch` (the same pinned base, with `curl`/`ca-certificates` installed) verifies
+  the PicoClaw tarball against the literal checksum and extracts the binary; `runtime` (the same
+  pinned base again, plain) copies in only the verified binary, the CA bundle, `bin/` and
+  `picoclaw/` — no `curl`, and no `apt-get` is ever invoked in the runtime stage. Honestly stated,
+  not claimed away: `node:22-trixie-slim` is a Debian slim image, so `dpkg`/`apt` are present on
+  disk in the runtime stage the same as in the fetch stage; this Dockerfile does not and cannot
+  strip what the base image ships, it only refrains from invoking it. No `EXPOSE`, no
+  `HEALTHCHECK` — this container never listens and nothing runs between beats; liveness is the
+  state sink, not a probe. `WORKDIR /app`, owned by `heron:heron`; `USER 10001:10001`; entrypoint
+  `bin/beat.sh`.
+- **The run-flag set** the v2 host's launcher reads verbatim from `run-flags.txt`: `--rm
+  --pull=never --network bridge --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop=ALL
+  --security-opt no-new-privileges --pids-limit 128 --memory 384m --memory-swap 384m --cpus 0.9
+  --user 10001:10001`, plus four bind mounts and nothing else: a writable `runs/` and `state/`
+  (the heartbeat sink), a read-only `image.env`, and a writable `intents/` for the two-phase beat
+  to hand an intent to the signer that will exist after build order step 5. **No key file, no key
+  environment variable, no signer socket are mounted at this step** — the signer
+  (`heron-purse.service`) does not exist yet, and a mount to nothing is not a control. The memory
+  cap is load-bearing, not tidy: the target droplet has 512 MB and no swap and must also run the
+  Docker daemon; unbounded, one beat takes the host down and the timer never fires again.
+- **What is verified, and how.** `test/image.test.mjs` (`node:test`, no dependencies, no Docker,
+  no network) parses `Dockerfile`, `picoclaw.provenance.json` and `run-flags.txt` as text and
+  asserts: every `FROM` line is pinned by `@sha256:` and matches the provenance digest; both
+  PicoClaw checksum literals match the provenance file; a `USER 10001:10001` line exists and no
+  `USER root` line exists anywhere; no `EXPOSE` and no `HEALTHCHECK`; the uid-10001
+  empty-before/`heron`-after assertion lines are present and actually exit non-zero; no
+  `curl | sh`/`curl | bash` shape anywhere; the runtime stage never invokes `apt-get`; and
+  `run-flags.txt` carries every required flag and mounts no key or socket. Each assertion was
+  proven to fire by mutating a scratch copy of the Dockerfile and the run-flags file (wrong
+  digest, a trailing `USER root`, the v1-style bare `useradd` with no uid guard, a dropped
+  `--memory` flag) and watching the corresponding test, and only that test, fail.
+- **Undone.** The image itself — building it, running a container from it, and everything that
+  needs a live Docker daemon or a real host: the fetch stage's download and extraction, the
+  uid-10001 assertion actually executing inside a build, the run-flags actually being passed to
+  `docker run`. That is the host's job, on the machine build order step 6 prepares.
+
 ## The $4 home on DigitalOcean
 
 Chosen on the Master's word (2026-09-04): the smallest droplet, `s-1vcpu-512mb-10gb` at $4.00 a

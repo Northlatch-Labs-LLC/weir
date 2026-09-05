@@ -1,0 +1,41 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The run-flag set for the heron image, read by the v2 host's launcher (built at build order
+# step 6/9). One flag (or flag plus its value) per line; blank lines and lines starting with `#`
+# are ignored. test/image.test.mjs asserts every REQUIRED flag below is present verbatim in this
+# file, so the launcher and the test cannot drift from each other.
+#
+# Source: CTO spec 2026-09-05-engineering-heron-v2-runtime-and-host.md §2.6 §2.8, narrowed for
+# this step: the purse signer and its socket do not exist yet (build order step 5), so no socket
+# is listed here — a mount to a path nothing serves is not a security control, it is a lie. The
+# flag set below is added to, not weakened, once the signer exists.
+
+--rm
+--pull=never
+--network bridge
+--read-only
+--tmpfs /tmp:rw,noexec,nosuid,size=64m
+--cap-drop=ALL
+--security-opt no-new-privileges
+--pids-limit 128
+--memory 384m
+--memory-swap 384m
+--cpus 0.9
+--user 10001:10001
+
+# Mounts. Only these four; nothing else is bind-mounted into the container.
+#   host path (owner:mode)              container path        mode
+#   /srv/heron/runs        (heron:2770) -> /app/runs           rw   (beat logs; the container's only writable data mount besides state)
+#   /srv/heron/state       (heron:2770) -> /app/state          rw   (state/latest.json, state/beats.jsonl — the heartbeat sink, spec §3.10)
+#   /srv/heron/image.env   (root:0600)  -> /app/image.env      ro   (the pinned config the container reads, never writes)
+#   /srv/heron/intents     (heron:2770) -> /app/intents        rw   (the two-phase beat writes an intent here for the signer to read outside the container; nothing here signs)
+--mount type=bind,source=/srv/heron/runs,target=/app/runs,readonly=false
+--mount type=bind,source=/srv/heron/state,target=/app/state,readonly=false
+--mount type=bind,source=/srv/heron/image.env,target=/app/image.env,readonly=true
+--mount type=bind,source=/srv/heron/intents,target=/app/intents,readonly=false
+
+# What is never mounted, on purpose, at this step and at every step after it:
+#   - no key file of any kind (the hot key, the brake key's public half, the model key)
+#   - no key material as an environment variable (a key in ps/argv/env is not "secured")
+#   - no signer socket (heron-purse.service does not exist yet — build order step 5; when it
+#     does, its socket is the ONLY additional mount this file gains, per spec §2.8)
