@@ -87,6 +87,28 @@ describe('the doors that are shut', () => {
     expect(loaded.refused.reason).toContain('0640');
   });
 
+  it('accepts 0440 under $CREDENTIALS_DIRECTORY, the mode systemd 257 places a credential at, and refuses the same file as a --key-file', async () => {
+    const dir = await temporaryDirectory();
+    const written = await writeThrowawayKey(dir, CREDENTIAL_NAME, 0o440);
+    const viaCredentials = await loadHotKey({ credentialsDirectory: dir, argv: [], env: {} });
+    expect(viaCredentials.ok).toBe(true);
+    if (!viaCredentials.ok) throw new Error(viaCredentials.refused.reason);
+    expect(viaCredentials.value.signer.address).toBe(written.address);
+    const asKeyFile = await loadHotKey({ keyFile: written.path, argv: [], env: {} });
+    expect(asKeyFile.ok).toBe(false);
+    if (asKeyFile.ok) throw new Error('unreachable');
+    expect(asKeyFile.refused.reason).toContain('0440');
+  });
+
+  it('refuses a credential the group can write or others can read, even under $CREDENTIALS_DIRECTORY', async () => {
+    for (const mode of [0o460, 0o444, 0o404]) {
+      const dir = await temporaryDirectory();
+      await writeThrowawayKey(dir, CREDENTIAL_NAME, mode);
+      const loaded = await loadHotKey({ credentialsDirectory: dir, argv: [], env: {} });
+      expect(loaded.ok).toBe(false);
+    }
+  });
+
   it('refuses a symlink rather than following it', async () => {
     const dir = await temporaryDirectory();
     const written = await writeThrowawayKey(dir);

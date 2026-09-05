@@ -164,13 +164,33 @@ export async function loadHotKey(source: KeySource): Promise<Outcome<LoadedKey>>
     return refuse('request-malformed', `${path} is not a regular file.`);
   }
 
+  /*
+    The mode rule has two shapes, because systemd's credential is not a file this process owns.
+
+    Measured on the host (Debian 13, systemd 257.13, 2026-09-05, with `systemd-run -p
+    LoadCredentialEncrypted=... -p User=purse`): the credential directory is 0550 root:root and the
+    file inside it is 0440 root:root, and the unit's user reads both through an ACL systemd adds
+    for that user alone. So a group-read bit on the credential means "root's group", which root
+    can read anyway, and refusing it (as the first start on the host did) keeps the purse from
+    ever starting under the one door the deploy uses. Under $CREDENTIALS_DIRECTORY the rule is
+    therefore: no write bit for the group, nothing at all for others. Under --key-file the file is
+    this process's own and the rule stays strict: nothing for the group, nothing for others.
+  */
   const mode = info.mode & 0o777;
-  if ((mode & 0o077) !== 0) {
+  const viaCredentials =
+    source.credentialsDirectory !== undefined &&
+    source.credentialsDirectory !== '' &&
+    path.startsWith(`${source.credentialsDirectory}/`);
+  const forbidden = viaCredentials ? 0o027 : 0o077;
+  if ((mode & forbidden) !== 0) {
     return refuse(
       'request-malformed',
-      `${path} is mode ${mode.toString(8).padStart(4, '0')}. A key file readable by its group or ` +
-        `by others is a key this process cannot claim to hold alone. Expected 0400 (the systemd ` +
-        `credential) or 0600.`,
+      `${path} is mode ${mode.toString(8).padStart(4, '0')}. A key file ` +
+        (viaCredentials
+          ? `writable by its group or readable by others is not a credential systemd placed ` +
+            `for this unit alone. Expected 0400 or 0440 under $CREDENTIALS_DIRECTORY.`
+          : `readable by its group or by others is a key this process cannot claim to hold ` +
+            `alone. Expected 0600 for a --key-file.`),
     );
   }
 
