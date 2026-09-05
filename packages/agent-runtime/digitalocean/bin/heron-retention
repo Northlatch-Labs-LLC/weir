@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Built-by: @projectx.sui /|\\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+"""Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 Bounds /srv/heron/runs. Heron v1's logrotate config rotated nothing (CTO spec
 2026-09-05-engineering-heron-v2-runtime-and-host.md section 1, cause 8b): each beat writes a NEW

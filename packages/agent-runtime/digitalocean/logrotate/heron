@@ -1,4 +1,4 @@
-# Built-by: @projectx.sui /|\ - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+# Built-by: @projectx.sui - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
 # Installed to /etc/logrotate.d/heron by deploy-droplet.sh's install_host_units.
 #
@@ -6,8 +6,11 @@
 # the logrotate package was installed and given no config at all (Security's note N7 on step 6).
 #
 # What this file bounds, and what it does NOT. It bounds the two append-only JSONL sinks the host
-# writes forever: state/beats.jsonl (one line per beat, 48 a day) and state/alerts.jsonl (one line
-# per notice decision). It does NOT touch /srv/heron/runs: those are a new timestamped file or
+# writes forever: /srv/heron/state/beats.jsonl (one line per beat, 48 a day) and
+# /var/lib/heron/watchdog/alerts.jsonl (one line per notice decision). The alerts file moved out of
+# state/ because state/ is bind-mounted read-write into the model's container and the watchdog's
+# record must not be (Security's N-1 and N-2 on the second read); this file follows it rather than
+# rotating a path nothing writes. It does NOT touch /srv/heron/runs: those are a new timestamped file or
 # directory per beat, which is exactly the shape `rotate N` cannot bound -- that is heron-retention's
 # job, and v1's whole defect 8b was pointing logrotate at a per-beat glob and believing it.
 #
@@ -19,7 +22,7 @@
 # 10 GB disk. The archive of record for state is the laptop's own pull (CTO spec 3.10 and 3.12,
 # which says this in the same words); a droplet is not an archive.
 
-/srv/heron/state/beats.jsonl /srv/heron/state/alerts.jsonl {
+/srv/heron/state/beats.jsonl /var/lib/heron/watchdog/alerts.jsonl {
     weekly
     rotate 12
     compress
@@ -29,6 +32,10 @@
     # The writers hold these open across a whole beat; copytruncate keeps the open file descriptor
     # valid instead of leaving a writer appending to an unlinked inode nobody can read.
     copytruncate
-    # 2770 root:heron, matching state/ itself, so the group that writes them can still read them.
-    create 0660 root heron
+    # No `create` line, and its absence is the point: logrotate's own manual says create has no
+    # effect when copytruncate is used, because the original file stays in place and the rotated
+    # copy inherits its mode. The line that used to sit here (`create 0660 root heron`) was inert,
+    # and a directive that does nothing is a claim about a mode nobody has read off a host. Each
+    # file keeps the owner and mode it is written with: beats.jsonl in 2770 root:heron state/,
+    # alerts.jsonl in 0700 root:root /var/lib/heron/watchdog.
 }

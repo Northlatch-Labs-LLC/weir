@@ -6,10 +6,19 @@
 # (2026-09-05-engineering-heron-v2-runtime-and-host.md sections 3-4) and the CISO's, amended by
 # the executive to one host, one signer service (heron-purse), a 1-of-2 multisig.
 #
-# NOT RUN. This step creates nothing in any cloud, touches no key, and makes no gcloud/API write.
-# Every mode below is written to be correct and is verified by --plan's own output and by
-# test/host.test.mjs; --create/--seal/--smoke/--status are not exercised against a real host from
-# this laptop, and this comment says so rather than claiming otherwise.
+# WHAT HAS AND HAS NOT BEEN RUN, in the only words that are true of it.
+#
+# --plan and every fixture in test/host.test.mjs and test/host-fixes.test.mjs have been run on this
+# laptop, repeatedly, including the whole create sequence and its rollback against a stub directory.
+# --create, --seal, --smoke and --status have never been run against a real DigitalOcean account or
+# a real host from this laptop, and no line below claims otherwise.
+#
+# --create no longer refuses unconditionally. Until Security's second read of this step it carried
+# an unconditional `return 1` before its first API call, which meant the sequence below had never
+# executed and carried a destroy path nothing had ever taken. That refusal is lifted: the gate is
+# HERON_DEPLOY_CONFIRMED=1 -- the Master's word -- plus every precondition in CREATE_PRECONDITIONS,
+# and nothing else. HERON_NO_NETWORK=1 remains what it always was: the test seam, under which every
+# network call in this file goes to a stub directory or refuses outright.
 #
 # Modes:
 #   --plan                 prints every resource, path and credential row this WOULD create.
@@ -27,9 +36,14 @@
 #                           ^[a-z][a-z0-9-]{0,31}$ before it reads anything at all, and refuses
 #                           without HERON_DEPLOY_CONFIRMED=1 -- the same word --create needs.
 #                           --dry-run prints the exact pipeline and needs neither.
-#   --smoke                runs one real beat as the real user; only on a clean exit and a fresh
-#                           state/latest.json does it enable the timers.
-#   --status               reads back the droplet, firewall, timers and newest state file.
+#   --smoke                build order step 9's gate, in five parts and in this order: the on-host
+#                           assertions (lib/smoke-assert.sh), the effective inbound ruleset for the
+#                           tag read from the ACCOUNT, a forced real email through
+#                           heron-alert@smoke, one real beat, and only then the timers. The mail
+#                           gate is hard: no sealed mail-key, or no message id in the journal, and
+#                           not one timer is enabled.
+#   --status               reads back the timers, the newest state file, and the effective inbound
+#                           ruleset for tag heron-v2 from the account.
 #   --render-cloud-init    internal: prints the rendered user_data to stdout and exits. Used by
 #                           --plan's ASCII/YAML preview and by test/host.test.mjs, so the
 #                           substitution logic exists in exactly one place.
@@ -38,22 +52,27 @@
 #   HERON_DEPLOY_CONFIRMED=1   required for --create. The Master's word, nothing else.
 #   DO_TOKEN_FILE              path to the DigitalOcean token file (row 11, scoped, 90-day expiry).
 #                               Never printed, even when set.
-#   SSH_PUBLIC_KEY_FILE        path to the desk's SSH public key (row 1). Same key opens both the
-#                               `ops` and `heron-ops` accounts cloud-init creates.
+#   SSH_PUBLIC_KEY_FILE        path to the desk's SSH public key (row 1). It opens the one account
+#                               cloud-init creates, `ops`.
 #   HERON_DESK_IP              the one address the firewall admits on 22.
 #   HERON_SSH_KEY_NAME         name to register the key under on the DigitalOcean account
 #                               (default heron-ssh); told to the Master before it is registered.
-#   HERON_HOST                 ops@<droplet ip>, for --seal/--smoke/--status.
+#   HERON_HOST                 ops@<droplet ip>, for --seal/--smoke/--status. Validated before it
+#                               reaches ssh, and passed after `--`: a value beginning with `-` is
+#                               read by ssh as an option, and -oProxyCommand= is command execution
+#                               on THIS laptop (Security's N-7).
 #   HERON_PILE                 the desk's pile directory (default ~/.config/protocolx/heron).
 #   REGION, SIZE, NAME         override the droplet's region/size/name.
 #   HERON_NO_NETWORK=1         every function in this file that would touch the network refuses
 #                               unless HERON_STUB_DIR names a directory holding a stand-in for it.
-#                               This is how test/host-fixes.test.mjs runs the create sequence --
-#                               including the destroy-on-failure path -- with no droplet, and it
-#                               is the ONLY way the sequence below the preconditions runs at all:
-#                               without this variable --create still refuses before its first API
-#                               call, exactly as it did before this fix (see cmd_create).
+#                               This is how the tests run the create sequence -- including the
+#                               destroy-on-failure path and --smoke's mail gate -- with no droplet.
+#                               It is a TEST SEAM and nothing else: it cannot make a real deploy
+#                               happen, and its absence no longer stops one.
 #   HERON_STUB_DIR             the stand-in directory. Test-only; unset in every real run.
+#   HERON_DO_API_BASE          lib/do_api.py only, and it accepts the real API or a loopback
+#                               address and refuses anything else. The account token is sent with
+#                               every call that file makes.
 #   HERON_RUN_RECORD_DIR       where the run record is appended (default digitalocean/runs/).
 set -euo pipefail
 
@@ -64,13 +83,45 @@ CLOUD_INIT="$HERE/cloud-init.yaml"
 LIB_DIR="$HERE/lib"
 POST_BOOT_ASSERT="$LIB_DIR/post-boot-assert.sh"
 FIREWALL_MATCH="$LIB_DIR/firewall_match.py"
+DO_API="$LIB_DIR/do_api.py"
+SMOKE_ASSERT="$LIB_DIR/smoke-assert.sh"
 TARBALL_SCRIPT="$PKG_DIR/scripts/make-source-tarball.sh"
 
 REGION="${REGION:-fra1}"
 SIZE="${SIZE:-s-1vcpu-512mb-10gb}"
 NAME="${NAME:-heron-first}"
 IMAGE_SLUG="debian-13-x64"
+# The one tag in this file. The firewall targets it and the droplet is created carrying it, so the
+# droplet is inside the firewall from its first second (Security's A1).
+FIREWALL_TAG="heron-v2"
 HERON_SSH_KEY_NAME="${HERON_SSH_KEY_NAME:-heron-ssh}"
+
+# ---------------------------------------------------------------------------
+# THE PRECONDITIONS, AS DATA. One row per check: <function>|<the sentence --plan prints>.
+#
+# --plan's numbered list and cmd_create's own loop are both generated from this array, so the
+# document the Master reads before he says the word and the code that runs cannot say different
+# things. That drift is Security's N-5 on the second read: --plan told him the image slug was
+# asserted against the account's own GET /v2/images?type=distribution, and cmd_create called seven
+# checks, none of them that one. The check exists now (check_image_slug), it is in this array, and
+# test/host.test.mjs parses the array out of this file and the numbered list out of --plan's own
+# output and refuses if they differ by one row.
+#
+# The first seven touch nothing outside this laptop. The last two are read-only GETs, and they run
+# last so that a run which is going to be refused for a local reason is refused before it speaks to
+# the account at all.
+# ---------------------------------------------------------------------------
+CREATE_PRECONDITIONS=(
+  "check_confirmed|refuses unless HERON_DEPLOY_CONFIRMED=1 -- the Master's word, checked before anything else is even read"
+  "check_ascii_rendered|refuses unless the RENDERED cloud-init passes scripts/check-ascii.py (never the template)"
+  "check_git_clean|refuses unless \`git status --porcelain\` is empty; there must be a committed sha to name as what shipped"
+  "check_tarball_set_equality|refuses unless the source tarball's entry set equals \`git ls-tree\` for packages/agent-runtime, exactly"
+  "check_ssh_key_file|refuses unless SSH_PUBLIC_KEY_FILE exists"
+  "check_do_token_file|refuses unless DO_TOKEN_FILE exists and is mode 0600"
+  "check_desk_ip|refuses unless HERON_DESK_IP is set; the firewall has nothing to admit 22 from without it"
+  "check_image_slug|refuses unless the image slug is listed in this account's own GET /v2/images?type=distribution (read-only)"
+  "check_no_existing_firewall|refuses if any firewall on this account already targets tag heron-v2 (read-only)"
+)
 
 usage() {
   cat >&2 <<'EOF'
@@ -155,6 +206,7 @@ record_run() {
 # ---------------------------------------------------------------------------
 HERON_DROPLET_ID=""
 HERON_FIREWALL_ID=""
+HERON_FIREWALL_ID_FILE=""
 HERON_DEPLOY_SUCCEEDED=0
 
 rollback_on_failure() {
@@ -162,6 +214,17 @@ rollback_on_failure() {
   trap - EXIT
   if [ "$HERON_DEPLOY_SUCCEEDED" = "1" ]; then
     return 0
+  fi
+  # THE FIREWALL EXISTS BEFORE ITS ID IS ASSIGNED. `HERON_FIREWALL_ID="$(create_firewall)"` only
+  # assigns when create_firewall EXITS 0, and its readback refusal exits 1 -- so a firewall the
+  # deploy had already created was invisible to this trap, and stayed on the account with nothing
+  # written down. Being tag-targeted, it also applied to the next droplet born with that tag
+  # (Security's N-4 on the second read). do_api.py writes the id into this file the moment the POST
+  # returns and deletes the firewall itself before exiting; this reads the same file, so a delete
+  # that failed there is retried here rather than lost.
+  if [ -z "$HERON_FIREWALL_ID" ] && [ -n "$HERON_FIREWALL_ID_FILE" ] && [ -s "$HERON_FIREWALL_ID_FILE" ]; then
+    HERON_FIREWALL_ID="$(tr -d "\n" < "$HERON_FIREWALL_ID_FILE")"
+    echo "deploy-droplet.sh: a firewall was created but never returned its id; recovered $HERON_FIREWALL_ID from the id file" >&2
   fi
   if [ -z "$HERON_DROPLET_ID" ] && [ -z "$HERON_FIREWALL_ID" ]; then
     return "$status"
@@ -183,6 +246,15 @@ rollback_on_failure() {
 # ---------------------------------------------------------------------------
 # --plan
 # ---------------------------------------------------------------------------
+# The numbered precondition list --plan prints, straight out of the array cmd_create loops over.
+precondition_list() {
+  local index=0 entry
+  for entry in "${CREATE_PRECONDITIONS[@]}"; do
+    index=$((index + 1))
+    printf '  %2d. %s\n' "$index" "${entry#*|}"
+  done
+}
+
 cmd_plan() {
   local desk_ip="${HERON_DESK_IP:-<unset - required for --create>}"
   local do_token_display="<unset - a file path, never printed even when set>"
@@ -217,8 +289,11 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
   image slug:  $IMAGE_SLUG
                pinned explicitly (v1's script said debian-12-x64 while its own notes said
                Debian 13); asserted after boot by reading /etc/debian_version over SSH, and by
-               --create's own precondition that this slug is listed in the account's own
-               GET /v2/images?type=distribution before the create call is made.
+               check_image_slug, which reads this account's own
+               GET /v2/images?type=distribution and refuses if the slug is not listed. That is a
+               real precondition now: it was this line's claim and nothing else until Security's
+               second read (N-5), which is why the preconditions below are printed from the same
+               array cmd_create loops over.
   monitoring:  false (do-agent is never installed; cloud-init purges it defensively if present)
   ssh key:     $HERON_SSH_KEY_NAME
                registered on the DigitalOcean account under this exact name if not already
@@ -236,11 +311,22 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
   inbound:   tcp/22 from $desk_ip only
   outbound:  tcp/443 (fullnode, Resend, apt) and tcp/53 + udp/53 (DNS)
   no other rule, inbound or outbound
-  readback:  the API's own echo is compared on protocol, ports and the sorted address list, in
-             both directions, as multisets -- so a rule the deploy never asked for is a mismatch
-             as loudly as a missing one. It is NOT compared as raw objects: DigitalOcean echoes
-             all four source/destination keys while the request sends one, which made a correct
-             firewall compare unequal every time. lib/firewall_match.py, tested directly.
+  readback:  the API's own echo is compared on protocol, ports, the sorted address list AND the
+             three other ways a source or a destination can be widened -- droplet_ids, tags and
+             load_balancer_uids, every one of which must be EMPTY in every rule. Both directions,
+             as multisets, so a rule the deploy never asked for is a mismatch as loudly as a
+             missing one. It is NOT compared as raw objects: DigitalOcean echoes all four
+             source/destination keys while the request sends one, which made a correct firewall
+             compare unequal every time. The three lists used to be dropped, which meant an echo
+             of tcp/22 whose sources carried tags:["heron-v2"] -- a whole tag admitted to port 22
+             -- read as a clean match (Security's N-3). lib/firewall_match.py, tested directly.
+  on failure: if the readback does not match, lib/do_api.py DELETES the firewall it just created,
+             inside the same call, before it exits non-zero -- and the id is written to a file the
+             moment the POST returns, so the rollback trap covers it even then. Before this, that
+             id never reached the caller and a firewall the deploy made stayed on the account with
+             nothing written down, applying to the next droplet born with the tag (N-4).
+  before it:  --create refuses at precondition time if any firewall on this account already
+             targets this tag.
 
 == The rendered cloud-init, checked here rather than described ==
   rendered bytes: $rendered_bytes
@@ -256,8 +342,13 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
   /srv/heron/bin                      0755 root:root   (heron-beat, placed at build order step 5)
   /srv/heron/runs                     2770 root:heron  (beat logs AND runs/<beat-id>/intent.json)
   /srv/heron/runs/archive             2770 root:heron  (heron-retention's destination)
-  /srv/heron/state                    2770 root:heron  (latest.json, beats.jsonl, alerts.jsonl,
-                                                        and the watchdog's degraded marker)
+  /srv/heron/state                    2770 root:heron  (latest.json and beats.jsonl. NOT the
+                                                        watchdog's record any more: this directory
+                                                        is bind-mounted read-write into the model's
+                                                        container as uid 10001, the group that owns
+                                                        it, and the container could forge the
+                                                        marker that silences the dead man watching
+                                                        it -- Security's N-1 and N-2)
   /srv/heron/keys                     0700 purse:purse (the hot key's home. Created here, at an
                                                         asserted mode, rather than by hand at
                                                         deploy time by whoever noticed first)
@@ -268,9 +359,20 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
                                                         a rule nobody can read is not a rule)
   /var/lib/heron                      0700 purse:purse (the hash-chained audit log's home)
   /var/lib/heron/audit                0700 purse:purse
+  /var/lib/heron/watchdog             0700 root:root   (the dead man's own memory: alerts.jsonl and
+                                                        the degraded marker. Root's alone, outside
+                                                        every mount the container is given)
   /srv/heron/image.env                0600 root:root   (empty placeholder; --create writes the
                                                         pinned digest, commit and tarball sha256
                                                         after the host build)
+  /srv/heron/chain.json               0600 purse:purse (empty placeholder; heron-purse.service
+                                                        names it as --chain and reads it AS purse
+                                                        at start. It was created by nothing, and at
+                                                        root:root under a 0751 parent the signer
+                                                        cannot open it, refuses to start, and the
+                                                        beat unit that Requires= it never runs --
+                                                        Security's N-6. Build order step 8 writes
+                                                        the deployment into it)
   /etc/heron                          0700 root:root
   /etc/heron/creds                    0700 root:root   (the ONE sealed-credential directory on
                                                         this host. Every unit, --seal, the README
@@ -280,11 +382,13 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
                                                         asserted out of apt-config dump in runcmd)
   /etc/systemd/journald.conf.d/00-heron.conf 0644 root:root (SystemMaxUse=200M; logrotate cannot
                                                         rotate the journal, journald bounds itself)
-  /etc/logrotate.d/heron              0644 root:root   (installed by --create with the units:
-                                                        state/beats.jsonl and state/alerts.jsonl
-                                                        only -- runs/ is heron-retention's, because
-                                                        a per-beat file is the shape rotate N
-                                                        cannot bound. That was v1's defect 8b)
+  /etc/logrotate.d/heron              0644 root:root   (installed by --create with the units. It
+                                                        bounds /srv/heron/state/beats.jsonl and
+                                                        /var/lib/heron/watchdog/alerts.jsonl and
+                                                        nothing else -- runs/ is heron-retention's,
+                                                        because a per-beat file is the shape
+                                                        rotate N cannot bound. That was v1's
+                                                        defect 8b)
 
 == Accounts (created by cloud-init only after it asserts both ids are free, and re-asserted after) ==
   heron   gid 10001 / uid 10001  nologin, no home   the uid the container runs as; owns nothing
@@ -315,44 +419,52 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
   step only builds the --seal mechanism they will use, unchanged, once those keys exist. Nothing
   in this step generates, reads or touches any of them.
 
-== What --create does, in this order, each step a refusal naming the rule if it fails ==
-  1. refuses unless HERON_DEPLOY_CONFIRMED=1 -- checked before anything else is even read
-  2. refuses unless the RENDERED cloud-init passes scripts/check-ascii.py (never the template)
-  3. refuses unless \`git status --porcelain\` is empty
-  4. refuses unless the source tarball's entry set equals \`git ls-tree\` for packages/agent-runtime, exactly
-  5. refuses unless SSH_PUBLIC_KEY_FILE and DO_TOKEN_FILE (mode 0600) both exist
-  6. creates the FIREWALL first, targeted at tag heron-v2, and reads it back through
-     lib/firewall_match.py -- refusing on any difference in protocol, ports or addresses, in
-     either direction
-  7. from that moment a rollback trap is armed and stays armed until the deploy declares success:
-     ANY failure or interrupt below destroys the droplet and deletes the firewall, after writing
-     the ids to digitalocean/runs/deploy-runs.jsonl first. Before this, one single step carried a
-     destroy path; every other way to fail left a running, billed host on the account with no
-     record it existed.
-  8. registers the SSH key if needed, then creates the droplet with monitoring:false, the rendered
-     user_data and the heron-v2 tag -- so it is born inside the firewall
-  9. waits for an active public IP, then for SSH
- 10. pipes lib/post-boot-assert.sh over that session: cloud-init status --wait --long is
-     "status: done" with an empty error list, cloud-init schema --system passes, uid/gid 10001 is
-     heron and 10002 is purse, /etc/debian_version starts with 13, 00-heron.conf sorts first in
-     sshd_config.d, and the three hardening keywords read "no" out of sshd -T's own merged output.
-     Every privileged line there runs under sudo: without it every one of them failed and the
-     deploy destroyed each droplet it made, seconds after boot, having asserted nothing.
-     The same file asserts every path above at its owner and mode, and that no credential-shaped
-     file exists anywhere under /srv/heron.
- 11. copies the source tarball, verifies its sha256 ON THE HOST before docker build reads it,
-     builds the image there, writes /srv/heron/image.env with the image id, the source commit and
-     that sha256
- 12. installs digitalocean/systemd/*.{service,timer} to /etc/systemd/system,
-     digitalocean/bin/heron-{watchdog,alert,retention} to /usr/local/sbin (0755 root:root) and
-     logrotate/heron to /etc/logrotate.d, then \`systemctl daemon-reload\` -- enables NO timer.
-     --smoke is the only thing that ever does that.
+== What --create does ==
+  Preconditions first, each one a refusal that names the rule it enforces, in this order. This
+  list and the loop cmd_create actually runs are generated from ONE array in this file
+  (CREATE_PRECONDITIONS), and a test parses both and refuses if they differ by a row -- because
+  this list once named a check the script did not have (Security's N-5).
+$(precondition_list)
+  Then, and only then:
+   A. creates the FIREWALL first, targeted at tag $FIREWALL_TAG, and reads it back through
+      lib/firewall_match.py -- refusing on any difference in protocol, ports, addresses or the
+      three widening lists, in either direction, and deleting the firewall it just made before it
+      exits.
+   B. from the line before that call a rollback trap is armed, and it stays armed until the deploy
+      declares success: ANY failure or interrupt below destroys the droplet and deletes the
+      firewall, after writing the ids to digitalocean/runs/deploy-runs.jsonl first.
+   C. registers the SSH key if needed, then creates the droplet with monitoring:false, the rendered
+      user_data and the $FIREWALL_TAG tag -- so it is born inside the firewall.
+   D. waits for an active public IP, then for SSH.
+   E. pipes lib/post-boot-assert.sh over that session. It asserts: cloud-init status --wait --long
+      is "status: done" with an empty error list; cloud-init schema --system passes; uid/gid 10001
+      is heron and 10002 is purse, and purse is not in the heron group; /etc/debian_version starts
+      with 13; /usr/bin/node is executable, and its version is printed; /etc/nsswitch.conf pins
+      "hosts: files dns"; 00-heron.conf sorts first in sshd_config.d and the three hardening
+      keywords read "no" out of sshd -T's own merged output; every DIRECTORY in the table above at
+      its owner and mode; the modes of the three files /srv/heron/image.env, /srv/heron/chain.json
+      and /etc/ssh/sshd_config.d/00-heron.conf; and that no credential-shaped file exists anywhere
+      under /srv/heron. It asserts no other file's mode, and this sentence says so rather than
+      claiming "every path above" -- which is what it used to say while asserting thirteen
+      directories and not one file (Security's N-5).
+   F. copies the source tarball, verifies its sha256 ON THE HOST before docker build reads it,
+      builds the image there, writes /srv/heron/image.env with the image id, the source commit and
+      that sha256.
+   G. installs digitalocean/systemd/*.{service,timer} to /etc/systemd/system,
+      digitalocean/bin/heron-{watchdog,alert,retention} to /usr/local/sbin (0755 root:root) and
+      logrotate/heron to /etc/logrotate.d, then \`systemctl daemon-reload\` -- and enables NO timer.
+      --smoke is the only thing that ever does that.
 
-== What --create does NOT do in this build ==
-  It refuses at step 6 unless HERON_NO_NETWORK=1 is set, and under that variable every network
-  call in this file goes to a stub directory or refuses outright. The Master's word gates the
-  real run; the executive's ruling on Security's step-6 gate stands: --create against the
-  account may run once B1-B6 have landed and a second read-only pass has confirmed them.
+== What --create does NOT do ==
+  It does not enable a timer, seal a credential, generate or read a key, or place any key material:
+  build order steps 7, 8 and 9 do those, in that order, and --seal is the only path a credential
+  ever takes onto this host.
+
+  It no longer refuses unconditionally. Until Security's second read of this step, --create stopped
+  before its first API call unless HERON_NO_NETWORK=1 was set, which made the sequence above
+  unreachable in any real run. The gate is now the Master's word (HERON_DEPLOY_CONFIRMED=1) and the
+  preconditions above, and nothing else. HERON_NO_NETWORK=1 is still the test seam and still cannot
+  make a real deploy happen: under it every network call goes to a stub directory or refuses.
 PLAN
   return "$ascii_status"
 }
@@ -445,35 +557,76 @@ check_desk_ip() {
   fi
 }
 
+# The first of the two read-only account reads. --plan has always told the Master this check
+# existed; it did not (Security's N-5). It does now, and it is the same sentence in both places
+# because both come from CREATE_PRECONDITIONS.
+check_image_slug() {
+  if is_stubbed; then "$HERON_STUB_DIR/check_image_slug" "$@"; return; fi
+  if ! python3 "$DO_API" image-slug "$DO_TOKEN_FILE" "$IMAGE_SLUG"; then
+    echo "deploy-droplet.sh: refused - the image slug $IMAGE_SLUG is not listed in this account's own GET /v2/images?type=distribution (see do_api.py's message above). Nothing was created." >&2
+    return 1
+  fi
+}
+
+# The second. A firewall already targeting heron-v2 is either a leftover this deploy's own rollback
+# could not delete, or a rule set nobody wrote down -- and either way it applies to the droplet this
+# run is about to create, alongside the new one (Security's N-4).
+check_no_existing_firewall() {
+  if is_stubbed; then "$HERON_STUB_DIR/check_no_existing_firewall" "$@"; return; fi
+  if ! python3 "$DO_API" firewall-none "$DO_TOKEN_FILE" "$FIREWALL_TAG"; then
+    echo "deploy-droplet.sh: refused - a firewall on this account already targets tag $FIREWALL_TAG (see do_api.py's list above). Nothing was created." >&2
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# The one place an SSH target is checked, and every mode that has one uses it.
+#
+# --seal validated the credential name and then handed $HERON_HOST to ssh unvalidated: a value
+# beginning with `-` is read by ssh as an OPTION, and `-oProxyCommand=...` is command execution on
+# THIS laptop (Security's N-7 -- A2's own class, one machine to the left). Desk-set, so low, but the
+# fix is one function and every caller passes the target after `--` as well, so ssh cannot read it
+# as an option even if this were somehow reached.
+# ---------------------------------------------------------------------------
+validate_ssh_target() {
+  local target="$1" what="${2:-HERON_HOST}"
+  case "$target" in
+    -*)
+      echo "deploy-droplet.sh: refused - $what is '$target', which begins with '-'. ssh reads a leading hyphen as an option, and -oProxyCommand= runs a command on this laptop." >&2
+      return 1
+      ;;
+  esac
+  if ! [[ "$target" =~ ^([a-z][a-z0-9_-]{0,31}@)?[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]; then
+    echo "deploy-droplet.sh: refused - $what is '$target'. It must be [user@]host: lower-case letters, digits, dots and hyphens only, no leading or trailing hyphen or dot, and no other character at all." >&2
+    return 1
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # --create. Preconditions first, in the order --plan documents; network only after every one
 # passes. HERON_DEPLOY_CONFIRMED is checked before anything else is even read, so a caller with
 # no other environment set gets exactly one, unambiguous refusal.
 # ---------------------------------------------------------------------------
 cmd_create() {
-  check_confirmed
-  check_ascii_rendered
-  check_git_clean
-  check_tarball_set_equality
-  check_ssh_key_file
-  check_do_token_file
-  check_desk_ip
+  # One loop over CREATE_PRECONDITIONS, which is the same array --plan numbers. Under `set -e` a
+  # check that returns non-zero stops the run here, having printed the rule it enforces; nothing
+  # below has happened and nothing exists to roll back.
+  local entry check
+  for entry in "${CREATE_PRECONDITIONS[@]}"; do
+    check="${entry%%|*}"
+    "$check"
+  done
 
-  echo "deploy-droplet.sh --create: every local precondition passed." >&2
+  echo "deploy-droplet.sh --create: all ${#CREATE_PRECONDITIONS[@]} preconditions passed, in the order --plan prints them." >&2
 
-  # THE GATE, unchanged in effect. Before this fix these three lines were an unconditional
-  # `return 1` and the whole sequence below was unreachable code -- which is exactly why the
-  # sequence had never been run and carried a destroy path nothing had ever taken. The gate is now
-  # the same refusal with one exception that cannot reach a network: HERON_NO_NETWORK=1, under
-  # which every call below goes to a stub directory or refuses (see is_stubbed). A real create
-  # against the Master's account still stops here, and the executive's ruling on step 6 stands:
-  # it may run only once B1-B6 have landed and a second read-only gate has confirmed them.
-  if [ "${HERON_NO_NETWORK:-}" != "1" ]; then
-    echo "deploy-droplet.sh --create: refused - the API calls, the SSH session and the host build below are written but are not exercised against a real account from this laptop in this step. Docker stays down here; nothing in any cloud is created by this run." >&2
-    echo "deploy-droplet.sh --create: the sequence that would run, in order: create_firewall (tagged, FIRST), register_ssh_key, create_droplet (carrying that tag), wait_for_droplet_ip, wait_for_ssh, assert_post_boot, build_image_on_host, install_host_units." >&2
-    return 1
-  fi
-
+  # THE GATE, and it is now one thing: HERON_DEPLOY_CONFIRMED=1, checked first in the array above.
+  #
+  # What used to stand here was an unconditional refusal unless HERON_NO_NETWORK=1 was set, which
+  # made the whole sequence below unreachable in any real run -- and Security's second read said
+  # plainly that lifting it is itself a code change and belongs in the same branch as N-1 to N-5.
+  # It is that branch. HERON_NO_NETWORK remains the test seam and nothing else: with it set, every
+  # call below goes to a stub directory or refuses outright (see is_stubbed), so it still cannot
+  # make a real deploy happen -- it just no longer has to be present for one.
   create_sequence
 }
 
@@ -489,10 +642,15 @@ create_sequence() {
   # carrying the tag from the moment the droplet exists, so the window closes entirely: the
   # droplet is born inside it.
   record_run "create-begin" "firewall first, then droplet"
-  HERON_FIREWALL_ID="$(create_firewall)"
 
-  # Armed here, at the first billable thing, and not one line later.
+  # ARMED BEFORE THE FIRST BILLABLE CALL, not after it. The id file is what makes that possible: a
+  # firewall whose readback fails never returns an id to assign, so arming the trap on the line
+  # after the assignment left exactly one billable thing outside the window it claims to cover.
+  HERON_FIREWALL_ID_FILE="$(mktemp)"
+  export HERON_FIREWALL_ID_FILE
   trap rollback_on_failure EXIT
+
+  HERON_FIREWALL_ID="$(create_firewall)"
   record_run "firewall-created"
 
   key_id="$(register_ssh_key)"
@@ -509,6 +667,7 @@ create_sequence() {
   HERON_DEPLOY_SUCCEEDED=1
   record_run "create-succeeded" "$droplet_ip"
   trap - EXIT
+  rm -f "$HERON_FIREWALL_ID_FILE"
   echo "deploy-droplet.sh --create: droplet $HERON_DROPLET_ID at $droplet_ip is up, cloud-init succeeded, the image is built, firewall $HERON_FIREWALL_ID reads back clean. No timer is enabled. Next: --seal mail-key, then build order step 5's units, then --smoke."
 }
 
@@ -568,57 +727,13 @@ PY
 
 create_firewall() {
   if is_stubbed; then "$HERON_STUB_DIR/create_firewall" "$@"; return; fi
-  python3 - "$DO_TOKEN_FILE" "$HERON_DESK_IP" "$NAME" "$FIREWALL_MATCH" <<'PY'
-import importlib.util, json, sys, urllib.request
-tok = open(sys.argv[1]).read().strip()
-desk_ip, name, matcher_path = sys.argv[2], sys.argv[3], sys.argv[4]
-headers = {"Authorization": "Bearer " + tok, "Content-Type": "application/json"}
-
-TAG = "heron-v2"
-
-inbound = [{"protocol": "tcp", "ports": "22", "sources": {"addresses": [desk_ip]}}]
-outbound = [
-    {"protocol": "tcp", "ports": "443", "destinations": {"addresses": ["0.0.0.0/0", "::/0"]}},
-    {"protocol": "tcp", "ports": "53", "destinations": {"addresses": ["0.0.0.0/0", "::/0"]}},
-    {"protocol": "udp", "ports": "53", "destinations": {"addresses": ["0.0.0.0/0", "::/0"]}},
-]
-# Targeted by TAG, not by droplet id: this is created BEFORE the droplet exists, and the droplet is
-# created carrying the tag, so it is covered from its first second (Security's A1).
-body = {
-    "name": f"{name}-fw", "tags": [TAG],
-    "inbound_rules": inbound, "outbound_rules": outbound,
-}
-req = urllib.request.Request(
-    "https://api.digitalocean.com/v2/firewalls", data=json.dumps(body).encode(),
-    headers=headers, method="POST",
-)
-with urllib.request.urlopen(req, timeout=30) as r:
-    fw = json.load(r)["firewall"]
-
-# Read it back. v1's script claimed a firewall it never created; this refuses if the API's own echo
-# does not match what was asked, rather than trusting the 201 alone.
-req = urllib.request.Request(f"https://api.digitalocean.com/v2/firewalls/{fw['id']}", headers=headers)
-with urllib.request.urlopen(req, timeout=30) as r:
-    readback = json.load(r)["firewall"]
-
-# The comparison is the shared module, not `!=` on the raw objects: DigitalOcean echoes every rule
-# with all four source/destination keys while the request sends one, so the raw comparison refused
-# a correct firewall every time (Security's B5). One implementation, used here and tested directly
-# by test/host-fixes.test.mjs against a DigitalOcean-shaped echo.
-spec = importlib.util.spec_from_file_location("firewall_match", matcher_path)
-firewall_match = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(firewall_match)
-
-problems = firewall_match.differences({"inbound_rules": inbound, "outbound_rules": outbound}, readback)
-if TAG not in (readback.get("tags") or []):
-    problems.append(f"the firewall is not attached to tag {TAG}; the droplet would be born outside it")
-if problems:
-    print("FIREWALL READBACK MISMATCH", file=sys.stderr)
-    for problem in problems:
-        print(f"  {problem}", file=sys.stderr)
-    sys.exit(1)
-print(fw["id"])
-PY
+  # The whole call -- POST, id recorded, readback through lib/firewall_match.py, and DELETE of the
+  # firewall it just made if that readback does not match -- is lib/do_api.py, because as a heredoc
+  # here the one path that mattered most could not be run anywhere. It is run end to end against a
+  # local HTTP server that answers like DigitalOcean in test/host.test.mjs.
+  python3 "$DO_API" firewall-create \
+    "$DO_TOKEN_FILE" "$HERON_DESK_IP" "$NAME" "$FIREWALL_TAG" "$FIREWALL_MATCH" \
+    --id-file "$HERON_FIREWALL_ID_FILE"
 }
 
 delete_firewall() {
@@ -662,7 +777,8 @@ wait_for_ssh() {
   if is_stubbed; then "$HERON_STUB_DIR/wait_for_ssh" "$@"; return; fi
   local ip="$1"
   local tries=0
-  until ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "ops@$ip" true 2>/dev/null; do
+  validate_ssh_target "ops@$ip" "the droplet address the API returned"
+  until ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -- "ops@$ip" true 2>/dev/null; do
     tries=$((tries + 1))
     if [ "$tries" -gt 60 ]; then
       echo "deploy-droplet.sh: refused - SSH never became reachable at $ip" >&2
@@ -684,7 +800,8 @@ assert_post_boot() {
   # hardening keywords it claimed to assert (Security's B4). lib/post-boot-assert.sh carries sudo
   # on every privileged line and is exercised against a fixture on this laptop by
   # test/host-fixes.test.mjs.
-  ssh "ops@$ip" bash -s < "$POST_BOOT_ASSERT"
+  validate_ssh_target "ops@$ip" "the droplet address the API returned"
+  ssh -- "ops@$ip" bash -s < "$POST_BOOT_ASSERT"
 }
 
 destroy_droplet() {
@@ -717,9 +834,10 @@ build_image_on_host() {
   sha256="$(shasum -a 256 "$tgz" | cut -d' ' -f1)"
   echo "deploy-droplet.sh: tarball sha256 $sha256 (commit $(cat "$PKG_DIR/agent-runtime-src.sha"))" >&2
 
-  scp "$tgz" "ops@$ip:/tmp/agent-runtime-src.tgz"
+  validate_ssh_target "ops@$ip" "the droplet address the API returned"
+  scp -- "$tgz" "ops@$ip:/tmp/agent-runtime-src.tgz"
   # shellcheck disable=SC2087
-  ssh "ops@$ip" sudo bash -s <<REMOTE
+  ssh -- "ops@$ip" sudo bash -s <<REMOTE
 set -euo pipefail
 ACTUAL="\$(sha256sum /tmp/agent-runtime-src.tgz | cut -d' ' -f1)"
 if [ "\$ACTUAL" != "$sha256" ]; then
@@ -745,14 +863,15 @@ REMOTE
 install_host_units() {
   if is_stubbed; then "$HERON_STUB_DIR/install_host_units" "$@"; return; fi
   local ip="$1"
-  scp "$HERE/logrotate/heron" "ops@$ip:/tmp/heron.logrotate"
-  scp "$HERE"/systemd/heron-watchdog.service "$HERE"/systemd/heron-watchdog.timer \
+  validate_ssh_target "ops@$ip" "the droplet address the API returned"
+  scp -- "$HERE/logrotate/heron" "ops@$ip:/tmp/heron.logrotate"
+  scp -- "$HERE"/systemd/heron-watchdog.service "$HERE"/systemd/heron-watchdog.timer \
       "$HERE"/systemd/heron-alert@.service "$HERE"/systemd/heron-alive.timer \
       "$HERE"/systemd/heron-retention.service "$HERE"/systemd/heron-retention.timer \
       "ops@$ip:/tmp/"
-  scp "$HERE"/bin/heron-watchdog "$HERE"/bin/heron-alert "$HERE"/bin/heron-retention "ops@$ip:/tmp/"
+  scp -- "$HERE"/bin/heron-watchdog "$HERE"/bin/heron-alert "$HERE"/bin/heron-retention "ops@$ip:/tmp/"
   # shellcheck disable=SC2087
-  ssh "ops@$ip" sudo bash -s <<'REMOTE'
+  ssh -- "ops@$ip" sudo bash -s <<'REMOTE'
 set -euo pipefail
 mv /tmp/heron-watchdog.service /tmp/heron-watchdog.timer /tmp/heron-alert@.service \
    /tmp/heron-alive.timer /tmp/heron-retention.service /tmp/heron-retention.timer \
@@ -804,8 +923,14 @@ cmd_seal() {
 
   local pile_path="${HERON_PILE:-$HOME/.config/protocolx/heron}/$name"
   local ssh_target="${HERON_HOST:-<unset - set HERON_HOST to ops@<the droplet IP>>}"
+  # THE TARGET IS VALIDATED HERE, wherever it came from, before it is printed as a command or
+  # handed to ssh (Security's N-7). --dry-run with HERON_HOST unset prints the placeholder above
+  # and never reaches this.
+  if [ -n "${HERON_HOST:-}" ]; then
+    validate_ssh_target "$HERON_HOST" "HERON_HOST"
+  fi
   local remote_cmd="sudo systemd-creds encrypt --with-key=host --name=$name - /etc/heron/creds/$name.cred"
-  local pipeline="cat $pile_path | ssh $ssh_target \"$remote_cmd\""
+  local pipeline="cat $pile_path | ssh -- $ssh_target \"$remote_cmd\""
 
   if [ "$dry_run" = "true" ]; then
     echo "deploy-droplet.sh --seal $name --dry-run: would run exactly:"
@@ -841,7 +966,7 @@ cmd_seal() {
   # never an environment variable, and never a file on the host -- systemd-creds reads `-` and
   # writes only the encrypted blob, which is sealed to this host's own key and worthless off it.
   echo "deploy-droplet.sh --seal $name: piping from the pile straight into systemd-creds on $ssh_target" >&2
-  cat "$pile_path" | ssh "$ssh_target" "$remote_cmd"
+  cat "$pile_path" | ssh -- "$ssh_target" "$remote_cmd"
 
   # The ledger row, printed as it happens. No value, ever.
   echo "deploy-droplet.sh --seal $name: sealed."
@@ -849,53 +974,132 @@ cmd_seal() {
 }
 
 # ---------------------------------------------------------------------------
-# --smoke. Not exercised here; written for the host build order step 9 gate: smoke beat exit 0
-# with a state file newer than the start, only then the firewall's own timers are turned on.
+# --smoke. Build order step 9's gate, and every part of it is a refusal that stops the next part.
+#
+# The order is the whole point, and it is Security's requirement on the second read: THE MAIL DRILL
+# RUNS BEFORE ANY TIMER IS ENABLED, not after. A host whose dead man cannot reach the Master is a
+# host that must not be left running unattended, and "we will test the alert once it is live" is
+# how that gets discovered by the silence.
+#
+# 1. lib/smoke-assert.sh over the session: chain.json readable by uid 10002, the docker socket
+#    reachable from inside ProtectSystem=strict, no ~/.docker under ProtectHome.
+# 2. the effective inbound ruleset for tag heron-v2, read from the ACCOUNT rather than from the one
+#    firewall's own echo -- a second firewall on the tag admits what nobody wrote down.
+# 3. THE MAIL GATE: heron-alert@smoke.service, a real send, and a message id in the journal. No
+#    sealed /etc/heron/creds/mail-key.cred, or no id, and this refuses here with no timer enabled.
+# 4. one real beat, and a fresh, parsable state/latest.json.
+# 5. only then, the timers.
 # ---------------------------------------------------------------------------
 cmd_smoke() {
-  local ip="${HERON_HOST:-}"
-  if [ -z "$ip" ]; then
+  local ssh_target="${HERON_HOST:-}"
+  if [ -z "$ssh_target" ]; then
     echo "deploy-droplet.sh --smoke: refused - HERON_HOST is unset (ops@<droplet ip>)" >&2
     return 1
   fi
-  echo "deploy-droplet.sh --smoke: refused - not exercised against a real host from this laptop in this step." >&2
-  return 1
-  # shellcheck disable=SC2317
-  local start
-  # shellcheck disable=SC2317
+  validate_ssh_target "$ssh_target" "HERON_HOST"
+  check_do_token_file
+
+  echo "deploy-droplet.sh --smoke: 1/5 the on-host assertions (lib/smoke-assert.sh)" >&2
+  smoke_assert_host "$ssh_target"
+
+  echo "deploy-droplet.sh --smoke: 2/5 the effective inbound ruleset for tag $FIREWALL_TAG, read from the account" >&2
+  smoke_firewall_effective
+
+  echo "deploy-droplet.sh --smoke: 3/5 the mail gate - a real email through heron-alert@smoke, BEFORE any timer" >&2
+  smoke_mail_gate "$ssh_target"
+
+  echo "deploy-droplet.sh --smoke: 4/5 one real beat, and a fresh state/latest.json" >&2
+  smoke_beat "$ssh_target"
+
+  echo "deploy-droplet.sh --smoke: 5/5 enabling the timers" >&2
+  smoke_enable_timers "$ssh_target"
+  echo "deploy-droplet.sh --smoke: timers enabled. The mail gate passed before this line, not after it."
+}
+
+smoke_assert_host() {
+  if is_stubbed; then "$HERON_STUB_DIR/smoke_assert_host" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" bash -s < "$SMOKE_ASSERT"
+}
+
+smoke_firewall_effective() {
+  if is_stubbed; then "$HERON_STUB_DIR/smoke_firewall_effective" "$@"; return; fi
+  python3 "$DO_API" firewall-effective "$DO_TOKEN_FILE" "$FIREWALL_TAG"
+}
+
+smoke_mail_gate() {
+  if is_stubbed; then "$HERON_STUB_DIR/smoke_mail_gate" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" sudo bash -s <<'REMOTE'
+set -euo pipefail
+if [ ! -f /etc/heron/creds/mail-key.cred ]; then
+  echo "smoke: refused - /etc/heron/creds/mail-key.cred is not sealed on this host. Seal it with --seal mail-key first. NO TIMER IS ENABLED: a host whose dead man cannot reach the desk is not a host to leave running." >&2
+  exit 1
+fi
+systemctl start heron-alert@smoke.service || true
+RESULT="$(systemctl show -p Result --value heron-alert@smoke.service)"
+if [ "$RESULT" != "success" ]; then
+  echo "smoke: refused - heron-alert@smoke.service finished '$RESULT', not 'success'. NO TIMER IS ENABLED." >&2
+  journalctl -u heron-alert@smoke.service -n 50 --no-pager >&2 || true
+  exit 1
+fi
+if ! journalctl -u heron-alert@smoke.service -n 50 --no-pager | grep -q "heron-alert: sent instance=smoke id="; then
+  echo "smoke: refused - heron-alert@smoke.service exited clean but printed no Resend message id. The send did not happen. NO TIMER IS ENABLED." >&2
+  journalctl -u heron-alert@smoke.service -n 50 --no-pager >&2 || true
+  exit 1
+fi
+echo "smoke: heron-alert@smoke.service sent a real message and printed its Resend id"
+REMOTE
+}
+
+smoke_beat() {
+  if is_stubbed; then "$HERON_STUB_DIR/smoke_beat" "$@"; return; fi
+  local ssh_target="$1" start
   start="$(date -u +%s)"
-  # shellcheck disable=SC2317
-  ssh "$ip" sudo systemctl start heron-beat.service
-  # shellcheck disable=SC2317
-  ssh "$ip" bash -c "
+  ssh -- "$ssh_target" sudo systemctl start heron-beat.service
+  # shellcheck disable=SC2029
+  ssh -- "$ssh_target" bash -c "
     set -euo pipefail
     MTIME=\$(stat -c %Y /srv/heron/state/latest.json)
-    [ \"\$MTIME\" -ge $start ] || { echo 'state/latest.json is not newer than the smoke beat start'; exit 1; }
+    [ \"\$MTIME\" -ge $start ] || { echo 'smoke: refused - state/latest.json is not newer than the smoke beat start' >&2; exit 1; }
     python3 -c 'import json,sys; json.load(open(\"/srv/heron/state/latest.json\"))'
-    echo 'smoke beat produced a fresh, parsable state/latest.json'
+    echo 'smoke: the beat produced a fresh, parsable state/latest.json'
   "
-  # shellcheck disable=SC2317
-  ssh "$ip" sudo systemctl enable --now heron-beat.timer heron-watchdog.timer heron-alive.timer heron-retention.timer
-  # shellcheck disable=SC2317
-  echo "deploy-droplet.sh --smoke: timers enabled."
+}
+
+smoke_enable_timers() {
+  if is_stubbed; then "$HERON_STUB_DIR/smoke_enable_timers" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" sudo systemctl enable --now heron-beat.timer heron-watchdog.timer heron-alive.timer heron-retention.timer
 }
 
 # ---------------------------------------------------------------------------
-# --status. Read-only; not exercised here for the same reason as --smoke.
+# --status. Read-only: what is on the host, and what the ACCOUNT says applies to it.
 # ---------------------------------------------------------------------------
 cmd_status() {
-  local ip="${HERON_HOST:-}"
-  if [ -z "$ip" ]; then
+  local ssh_target="${HERON_HOST:-}"
+  if [ -z "$ssh_target" ]; then
     echo "deploy-droplet.sh --status: refused - HERON_HOST is unset (ops@<droplet ip>)" >&2
     return 1
   fi
-  echo "deploy-droplet.sh --status: refused - not exercised against a real host from this laptop in this step." >&2
-  return 1
-  # shellcheck disable=SC2317
-  ssh "$ip" bash -c "
+  validate_ssh_target "$ssh_target" "HERON_HOST"
+  status_host "$ssh_target"
+  if [ -n "${DO_TOKEN_FILE:-}" ]; then
+    smoke_firewall_effective
+  else
+    echo "deploy-droplet.sh --status: DO_TOKEN_FILE is unset, so the account's own view of the firewall was NOT read. Set it to see the effective inbound ruleset for tag $FIREWALL_TAG." >&2
+  fi
+}
+
+status_host() {
+  if is_stubbed; then "$HERON_STUB_DIR/status_host" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" bash -c "
     systemctl list-timers 'heron-*' --no-pager
     echo '--- state/latest.json ---'
     cat /srv/heron/state/latest.json 2>/dev/null || echo '(none yet)'
+    echo '--- the watchdog record ---'
+    sudo tail -n 5 /var/lib/heron/watchdog/alerts.jsonl 2>/dev/null || echo '(no notice has ever been recorded)'
   "
 }
 

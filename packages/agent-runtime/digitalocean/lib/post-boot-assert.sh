@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Built-by: @projectx.sui /|\ - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+# Built-by: @projectx.sui - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
 # The post-boot assertions, run on the droplet over the deploy's SSH session:
 #
@@ -34,6 +34,8 @@ SSHD_CONFIG_D="${HERON_SSHD_CONFIG_D:-/etc/ssh/sshd_config.d}"
 SRV_ROOT="${HERON_SRV_ROOT:-/srv/heron}"
 ETC_ROOT="${HERON_ETC_ROOT:-/etc/heron}"
 VAR_ROOT="${HERON_VAR_ROOT:-/var/lib/heron}"
+NSSWITCH_FILE="${HERON_NSSWITCH_FILE:-/etc/nsswitch.conf}"
+NODE_BIN="${HERON_NODE_BIN:-/usr/bin/node}"
 ASSERT_OWNERS="${HERON_ASSERT_OWNERS:-1}"
 ASSERT_ACCOUNTS="${HERON_ASSERT_ACCOUNTS:-1}"
 
@@ -100,17 +102,35 @@ for KEYWORD in passwordauthentication permitrootlogin kbdinteractiveauthenticati
   echo "post-boot: sshd -T: $LINE"
 done
 
-# --- 5. the layout, at the owner and mode cloud-init claims ------------------------------------
+# --- 5. node, because the signer's ExecStart is an absolute path to it -------------------------
+# cloud-init adds Debian's `nodejs` package because heron-purse.service starts /usr/bin/node and
+# heron-beat.service Requires= the signer. That the package ships THAT path was reasoned from
+# Debian's packaging and not verified from this laptop -- so step 6 proves it here instead of step
+# 5 discovering it (Security's requirement on the second read).
+[ -x "$NODE_BIN" ] || fail "$NODE_BIN is not present or not executable; heron-purse.service's ExecStart names it and heron-beat.service Requires= the signer"
+echo "post-boot: $NODE_BIN $("$NODE_BIN" --version)"
+
+# --- 6. the resolver path, pinned rather than inherited ----------------------------------------
+# heron-alert@.service's RestrictAddressFamilies list is written against this line. `files dns` is
+# glibc's own resolver out of /etc/resolv.conf, not nss-resolve's varlink socket. Asserted here so
+# which path the dead man's last hop takes is a fact.
+grep -qE '^hosts:[[:space:]]+files dns$' "$NSSWITCH_FILE" \
+  || fail "$NSSWITCH_FILE does not pin 'hosts: files dns' ($($SUDO grep -E '^hosts:' "$NSSWITCH_FILE" 2>/dev/null || echo 'no hosts line at all'))"
+echo "post-boot: $NSSWITCH_FILE pins hosts: files dns"
+
+# --- 7. the layout, at the owner and mode cloud-init claims ------------------------------------
 # Every path the units name. A directory made by hand at deploy time is a mode nobody asserts, and
 # the one that would have been made by hand is the hot key's home.
-$SUDO python3 - "$SRV_ROOT" "$ETC_ROOT" "$VAR_ROOT" "$ASSERT_OWNERS" <<'PY'
+$SUDO python3 - "$SRV_ROOT" "$ETC_ROOT" "$VAR_ROOT" "$ASSERT_OWNERS" "$SSHD_CONFIG_D" <<'PY'
 import os
 import pwd
 import grp
 import stat
 import sys
 
-srv, etc, var, assert_owners = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+srv, etc, var = sys.argv[1], sys.argv[2], sys.argv[3]
+assert_owners = sys.argv[4] == "1"
+sshd_conf_d = sys.argv[5]
 
 EXPECTED = [
     (srv,                       0o751, "root",  "root"),
@@ -126,6 +146,20 @@ EXPECTED = [
     (f"{var}/audit",            0o700, "purse", "purse"),
     (etc,                       0o700, "root",  "root"),
     (f"{etc}/creds",            0o700, "root",  "root"),
+    # The dead man's own memory: root's alone, and outside every mount the container is given.
+    (f"{var}/watchdog",         0o700, "root",  "root"),
+]
+
+# Files, not only directories. --plan's step 10 used to claim "the same file asserts every path
+# above", and the file asserted thirteen directories and no file mode at all (Security's N-5 on the
+# second read). These three are every file cloud-init places at a mode something depends on:
+# image.env is what the container reads, chain.json is what the signer reads AS purse -- at
+# root:root it cannot open it and the beat never runs (N-6) -- and 00-heron.conf is the sshd
+# hardening whose ordering the check above already asserts.
+EXPECTED_FILES = [
+    (f"{srv}/image.env",             0o600, "root",  "root"),
+    (f"{srv}/chain.json",            0o600, "purse", "purse"),
+    (f"{sshd_conf_d}/00-heron.conf", 0o644, "root",  "root"),
 ]
 
 problems = []
@@ -147,6 +181,24 @@ for path, mode, owner, group in EXPECTED:
         if (actual_owner, actual_group) != (owner, group):
             problems.append(f"{path}: {actual_owner}:{actual_group}, expected {owner}:{group}")
 
+for path, mode, owner, group in EXPECTED_FILES:
+    try:
+        info = os.stat(path)
+    except OSError as exc:
+        problems.append(f"{path}: {exc.strerror}")
+        continue
+    if not stat.S_ISREG(info.st_mode):
+        problems.append(f"{path}: not a regular file")
+        continue
+    actual_mode = stat.S_IMODE(info.st_mode)
+    if actual_mode != mode:
+        problems.append(f"{path}: mode {actual_mode:04o}, expected {mode:04o}")
+    if assert_owners:
+        actual_owner = pwd.getpwuid(info.st_uid).pw_name
+        actual_group = grp.getgrgid(info.st_gid).gr_name
+        if (actual_owner, actual_group) != (owner, group):
+            problems.append(f"{path}: {actual_owner}:{actual_group}, expected {owner}:{group}")
+
 # No plaintext credential anywhere under /srv/heron, ever. The sealed blobs live in /etc/heron/creds
 # and systemd-creds decrypts them into a per-unit tmpfs; a readable file here is the v1 corner.
 for root, _dirs, files in os.walk(srv):
@@ -158,7 +210,11 @@ if problems:
     for problem in problems:
         print(f"post-boot: refused - {problem}", file=sys.stderr)
     sys.exit(1)
-print(f"post-boot: every path under {srv}, {etc} and {var} is at the owner and mode cloud-init claims")
+print(
+    f"post-boot: every directory under {srv}, {etc} and {var}, and the modes of "
+    + ", ".join(path for path, _m, _o, _g in EXPECTED_FILES)
+    + ", are what cloud-init claims"
+)
 PY
 
 echo "post-boot assertions passed"

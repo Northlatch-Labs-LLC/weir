@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Built-by: @projectx.sui /|\\ - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+"""Built-by: @projectx.sui - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 Compares the firewall rules deploy-droplet.sh ASKED for against the ones DigitalOcean echoes back.
 
@@ -19,10 +19,18 @@ firewall that is exactly right, and the deploy refuses a correct firewall every 
 on step 6). It failed closed, which was the right direction -- but paired with no destroy-on-failure
 trap it stranded a running, billed droplet.
 
-What is compared, and it is the whole comparison: protocol (case-folded), ports (normalised), and
-the SORTED address list. What is deliberately ignored: droplet_ids, tags and load_balancer_uids in
-the echo, because the request does not send them and the attachment is asserted separately by the
-create body's own droplet_ids.
+What is compared, and it is the whole comparison: protocol (case-folded), ports (normalised), the
+SORTED address list, AND the three other ways a source or a destination can be widened --
+droplet_ids, tags and load_balancer_uids. Those three must be EMPTY in every rule on both sides.
+
+That last sentence is the fix for Security's N-3 on the second read. This module used to drop the
+three lists and say so in this docstring, justifying it by a droplet-id list the
+create body no longer sends: the firewall is targeted by TAG now, so nothing else
+asserted them. The consequence was measured, not reasoned -- an echo of tcp/22 whose `sources`
+carried `tags: ["heron-v2"]`, which admits every droplet in the tag to port 22, returned
+`differences == []` and read as a clean match. An empty list is the only shape either side may
+carry: this deploy asks for addresses and nothing else, so anything else in the echo is a rule
+somebody or something else widened.
 
 Both directions are compared as sorted multisets, so an EXTRA rule in the readback is a mismatch
 just as loudly as a missing one -- a firewall that admits more than it was asked to admit is the
@@ -40,6 +48,10 @@ import sys
 
 SIDE_KEY = {"inbound": "sources", "outbound": "destinations"}
 
+# The three lists that widen a source or a destination beyond the addresses that were asked for.
+# Each one must be empty in every rule, on both sides of the comparison.
+WIDENING_KEYS = ("droplet_ids", "tags", "load_balancer_uids")
+
 
 def normalise_ports(value: object) -> str:
     """DigitalOcean writes a whole-range port as "0" in a request and "all" in an echo."""
@@ -47,15 +59,34 @@ def normalise_ports(value: object) -> str:
     return "all" if text in ("0", "all", "") else text
 
 
+def widening(rule: dict, direction: str) -> tuple:
+    """The non-empty widening lists this rule carries, as a sorted, comparable tuple."""
+    side = rule.get(SIDE_KEY[direction]) or {}
+    out = []
+    for key in WIDENING_KEYS:
+        values = tuple(sorted(str(v) for v in (side.get(key) or [])))
+        if values:
+            out.append((key, values))
+    return tuple(out)
+
+
 def normalise_rule(rule: dict, direction: str) -> tuple:
     side = rule.get(SIDE_KEY[direction]) or {}
     addresses = tuple(sorted(str(a) for a in (side.get("addresses") or [])))
-    return (str(rule.get("protocol", "")).strip().lower(), normalise_ports(rule.get("ports", "")), addresses)
+    return (
+        str(rule.get("protocol", "")).strip().lower(),
+        normalise_ports(rule.get("ports", "")),
+        addresses,
+        widening(rule, direction),
+    )
 
 
 def describe(rule: tuple) -> str:
-    protocol, ports, addresses = rule
-    return f"{protocol}/{ports} from|to [{', '.join(addresses)}]"
+    protocol, ports, addresses, extra = rule
+    text = f"{protocol}/{ports} from|to [{', '.join(addresses)}]"
+    for key, values in extra:
+        text += f" {key}=[{', '.join(values)}]"
+    return text
 
 
 def differences(requested: dict, readback: dict) -> list[str]:
@@ -63,6 +94,21 @@ def differences(requested: dict, readback: dict) -> list[str]:
     out: list[str] = []
     for direction in ("inbound", "outbound"):
         key = f"{direction}_rules"
+        side = SIDE_KEY[direction]
+
+        # Named before the multiset comparison, because "the firewall has tcp/22 tags=[heron-v2]
+        # and it was never asked for" is true but does not say what is actually wrong: a whole tag
+        # is admitted on 22. This says it.
+        for label, rules in (("asked for", requested.get(key) or []), ("the firewall has", readback.get(key) or [])):
+            for rule in rules:
+                for widened, values in widening(rule, direction):
+                    out.append(
+                        f"{direction}: {label} a rule ({str(rule.get('protocol', '')).lower()}/"
+                        f"{normalise_ports(rule.get('ports', ''))}) whose {side} carry "
+                        f"{widened}=[{', '.join(values)}]; this deploy asks for addresses and "
+                        f"nothing else, so every other {side} list must be empty"
+                    )
+
         asked = sorted(normalise_rule(r, direction) for r in (requested.get(key) or []))
         got = sorted(normalise_rule(r, direction) for r in (readback.get(key) or []))
         if asked == got:
@@ -98,7 +144,10 @@ def main(argv: list[str]) -> int:
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print("firewall readback matches what was asked: protocol, ports and addresses, both directions")
+    print(
+        "firewall readback matches what was asked: protocol, ports and addresses, both directions, "
+        "with droplet_ids, tags and load_balancer_uids empty in every rule"
+    )
     return 0
 
 

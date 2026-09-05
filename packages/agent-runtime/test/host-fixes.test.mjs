@@ -357,6 +357,19 @@ exit 0
   make(path.join(etc, 'creds'), 0o700);
   make(varlib, 0o700);
   make(path.join(varlib, 'audit'), 0o700);
+  // The dead man's own memory, 0700 root:root on the host (Security's N-1 on the second read).
+  make(path.join(varlib, 'watchdog'), 0o700);
+
+  // The two files whose MODE the post-boot check now asserts, because --plan's step 10 claimed it
+  // asserted "every path above" while asserting thirteen directories and no file at all (N-5).
+  writeFileSync(path.join(srv, 'image.env'), '', 'utf8');
+  chmodSync(path.join(srv, 'image.env'), 0o600);
+  writeFileSync(path.join(srv, 'chain.json'), '', 'utf8');
+  chmodSync(path.join(srv, 'chain.json'), 0o600);
+
+  // The resolver path heron-alert@.service's RestrictAddressFamilies list is written against.
+  const nsswitch = path.join(dir, 'nsswitch.conf');
+  writeFileSync(nsswitch, 'passwd:         files\nhosts:          files dns\n', 'utf8');
 
   const env = {
     ...process.env,
@@ -367,6 +380,10 @@ exit 0
     HERON_SRV_ROOT: srv,
     HERON_ETC_ROOT: etc,
     HERON_VAR_ROOT: varlib,
+    HERON_NSSWITCH_FILE: nsswitch,
+    // /usr/bin/node is what heron-purse.service's ExecStart names; this laptop's node stands in
+    // for it so the assertion runs here too.
+    HERON_NODE_BIN: process.execPath,
     // Owners cannot be asserted on this laptop: there is no purse account and nothing runs as
     // root. Modes, accounts, sshd and cloud-init all can be, and are.
     HERON_ASSERT_OWNERS: '0',
@@ -578,8 +595,12 @@ test('B5: a changed source address is a MISMATCH', () => {
 
 test('B5: the deploy uses this module rather than comparing raw objects', () => {
   const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const api = readFileSync(path.join(LIB_DIR, 'do_api.py'), 'utf8');
   assert.doesNotMatch(script, /readback\["inbound_rules"\] != inbound/, 'the raw-object comparison must be gone');
-  assert.match(script, /firewall_match\.differences\(/, 'create_firewall must use the shared comparison');
+  // The create call moved out of a heredoc in the deploy script and into lib/do_api.py, so the
+  // "created, readback failed, now delete it" path could be run at all (Security's N-4).
+  assert.match(script, /\$DO_API" firewall-create/, 'create_firewall must call the module');
+  assert.match(api, /matcher\.differences\(/, 'firewall-create must use the shared comparison');
 });
 
 // ---------------------------------------------------------------------------
@@ -603,6 +624,10 @@ function createStubs({ failAt } = {}) {
     chmodSync(file, 0o755);
   };
 
+  // The two read-only account reads --create makes before anything is created. They are network
+  // calls, so under HERON_NO_NETWORK=1 they go through the same seam as everything else.
+  stub('check_image_slug', 'echo "image slug listed"');
+  stub('check_no_existing_firewall', 'echo "no firewall targets heron-v2"');
   stub('create_firewall', 'echo "fw-1234"');
   stub('register_ssh_key', 'echo "key-99"');
   stub('create_droplet', 'echo "drop-5678"');
@@ -732,10 +757,11 @@ test('A1: the firewall is created BEFORE the droplet, so the host is never brief
 
 test('A1: the firewall targets the tag the droplet is created with', () => {
   const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
-  assert.match(script, /"name": f"\{name\}-fw", "tags": \[TAG\]/, 'the firewall must target a tag, not a droplet id');
-  assert.match(script, /TAG = "heron-v2"/);
+  const api = readFileSync(path.join(LIB_DIR, 'do_api.py'), 'utf8');
+  assert.match(script, /^FIREWALL_TAG="heron-v2"$/m, 'one tag, named once in the deploy script');
+  assert.match(api, /"name": f"\{name\}-fw", "tags": \[tag\]/, 'the firewall must target a tag, not a droplet id');
   assert.match(script, /"tags": \["heron", "heron-v2"\]/, 'the droplet must carry that tag at creation');
-  assert.match(script, /TAG not in \(readback\.get\("tags"\)/, 'the readback must assert the tag is attached');
+  assert.match(api, /tag not in \(readback\.get\("tags"\)/, 'the readback must assert the tag is attached');
 });
 
 test('A1: --plan and the README both say the firewall comes first', () => {
@@ -743,15 +769,20 @@ test('A1: --plan and the README both say the firewall comes first', () => {
   assert.match(readFileSync(path.join(DO_DIR, 'README.md'), 'utf8'), /firewall (is created )?first/i);
 });
 
-test('B6/A1: --create still refuses outright without the stub seam -- no network path was opened', () => {
+test('B6/A1: without the Master\'s word --create refuses before any network path is opened', () => {
+  // The unconditional HERON_NO_NETWORK refusal is lifted (Security's second read said lifting it
+  // is itself a code change and belongs in this branch). What stops a real create is the word and
+  // the preconditions -- so this asserts the FIRST of them, with the seam removed, and that not
+  // one step of the sequence ran.
   const fixture = createStubs();
   try {
     const env = { ...fixture.env };
     delete env.HERON_NO_NETWORK;
     delete env.HERON_STUB_DIR;
+    delete env.HERON_DEPLOY_CONFIRMED;
     const result = spawnSync('bash', [DEPLOY_SCRIPT, '--create'], { encoding: 'utf8', env });
-    assert.notEqual(result.status, 0, '--create must still refuse to touch a real account');
-    assert.match(result.stderr, /not exercised against a real account from this laptop/);
+    assert.notEqual(result.status, 0, '--create must refuse without the word');
+    assert.match(result.stderr, /HERON_DEPLOY_CONFIRMED is not 1/);
     assert.equal(callOrder(fixture).length, 0, 'no step of the sequence may run');
   } finally {
     rmSync(fixture.dir, { recursive: true, force: true });
@@ -935,11 +966,17 @@ test('A3: --seal --dry-run still opens nothing at all', () => {
 function watchdogFixture() {
   const dir = tmp('watchdog');
   const stateFile = path.join(dir, 'latest.json');
+  // Two directories now, not one. `state` stands in for /srv/heron/state, which the container can
+  // write; `watchdog` stands in for /var/lib/heron/watchdog, 0700 root:root, which it cannot
+  // (Security's N-1 on the second read). The marker and the record live in the second.
+  const watchdogDir = path.join(dir, 'watchdog');
+  mkdirSync(watchdogDir);
   return {
     dir,
+    watchdogDir,
     stateFile,
-    alerts: path.join(dir, 'alerts.jsonl'),
-    marker: path.join(dir, 'degraded'),
+    alerts: path.join(watchdogDir, 'alerts.jsonl'),
+    marker: path.join(watchdogDir, 'degraded'),
     fresh: () => {
       writeFileSync(stateFile, '{"exit":0}', 'utf8');
       const now = new Date();
@@ -953,11 +990,14 @@ function watchdogFixture() {
     run: (extraEnv = {}) =>
       spawnSync(WATCHDOG, [], {
         encoding: 'utf8',
-        env: { ...process.env, HERON_STATE_FILE: stateFile, HERON_STATE_DIR: dir, ...extraEnv },
+        env: { ...process.env, HERON_STATE_FILE: stateFile, HERON_WATCHDOG_DIR: watchdogDir, ...extraEnv },
       }),
     alertLines: () =>
-      existsSync(path.join(dir, 'alerts.jsonl'))
-        ? readFileSync(path.join(dir, 'alerts.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+      existsSync(path.join(watchdogDir, 'alerts.jsonl'))
+        ? readFileSync(path.join(watchdogDir, 'alerts.jsonl'), 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((l) => JSON.parse(l))
         : [],
   };
 }
@@ -1079,7 +1119,12 @@ test('A4: the alert names WHICH thing happened, so a recovery does not arrive wo
 test('A4: the watchdog unit can actually write what the watchdog writes', () => {
   const svc = readFileSync(path.join(DO_DIR, 'systemd', 'heron-watchdog.service'), 'utf8');
   assert.match(svc, /ProtectSystem=strict/);
-  assert.match(svc, /ReadWritePaths=\/srv\/heron\/state/, 'under strict with no ReadWritePaths it could write neither');
+  assert.match(
+    svc,
+    /^ReadWritePaths=\/var\/lib\/heron\/watchdog$/m,
+    'under strict with no ReadWritePaths it could write neither -- and it must not be given the container-writable state directory',
+  );
+  assert.doesNotMatch(svc, /^ReadWritePaths=\/srv\/heron\/state$/m, 'Security N-1: that directory is the container\'s');
 });
 
 // ---------------------------------------------------------------------------
@@ -1096,7 +1141,7 @@ test('A5: heron-alert@.service carries the hardening set', () => {
     'PrivateDevices=true',
     'CapabilityBoundingSet=',
     'AmbientCapabilities=',
-    'RestrictAddressFamilies=AF_INET AF_INET6',
+    'RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6',
     'SystemCallFilter=@system-service',
     'SystemCallArchitectures=native',
     'RestrictNamespaces=true',
@@ -1378,7 +1423,7 @@ test('N7: a logrotate config exists, bounds the JSONL sinks only, and is install
   const header = /^([^#\n].*)\{\s*$/m.exec(config);
   assert.ok(header, 'no logrotate stanza');
   const globbed = header[1].trim().split(/\s+/);
-  assert.deepEqual(globbed.sort(), ['/srv/heron/state/alerts.jsonl', '/srv/heron/state/beats.jsonl']);
+  assert.deepEqual(globbed.sort(), ['/srv/heron/state/beats.jsonl', '/var/lib/heron/watchdog/alerts.jsonl']);
   assert.ok(
     !globbed.some((g) => g.startsWith('/srv/heron/runs')),
     'a per-beat glob is exactly what rotate N cannot bound',
@@ -1405,11 +1450,17 @@ test('N9: the README names the Resend sender as a gate before the first alert, n
 });
 
 test('the deploy script and every library it added parse cleanly', () => {
-  for (const file of [DEPLOY_SCRIPT, POST_BOOT, WATCHDOG]) {
+  for (const file of [DEPLOY_SCRIPT, POST_BOOT, WATCHDOG, path.join(LIB_DIR, 'smoke-assert.sh')]) {
     const result = spawnSync('bash', ['-n', file], { encoding: 'utf8' });
     assert.equal(result.status, 0, `${path.basename(file)}: ${result.stderr}`);
   }
-  for (const file of [FIREWALL_MATCH, path.join(LIB_DIR, 'record-run.py'), RETENTION, path.join(DO_DIR, 'bin', 'heron-alert')]) {
+  for (const file of [
+    FIREWALL_MATCH,
+    path.join(LIB_DIR, 'do_api.py'),
+    path.join(LIB_DIR, 'record-run.py'),
+    RETENTION,
+    path.join(DO_DIR, 'bin', 'heron-alert'),
+  ]) {
     const result = spawnSync('python3', ['-c', 'import ast,sys; ast.parse(open(sys.argv[1]).read())', file], {
       encoding: 'utf8',
     });

@@ -41,6 +41,14 @@
 --mount type=bind,source=/srv/heron/image.env,target=/app/image.env,readonly=true
 
 # What is never mounted, on purpose, at this step and at every step after it:
+#   - NOTHING under /var/lib/heron, and /var/lib/heron/watchdog least of all. That directory is
+#     0700 root:root and holds the dead man's own memory: heron-watchdog's alerts.jsonl and its
+#     `degraded` marker. They used to live in /srv/heron/state, which the line above mounts
+#     read-write into this container as uid 10001 -- the heron group that owns it -- so the model
+#     could write a marker with a far-future `last_notified` and permanently silence the watchdog
+#     watching it, and could create alerts.jsonl first and choose the text of the Master's email
+#     (Security's N-1 and N-2 on the second read of step 6). The subject of a notice does not get
+#     to write the notice.
 #   - no key file of any kind (the hot key, the brake key's public half, the model key)
 #   - no key material as an environment variable (a key in ps/argv/env is not "secured")
 #   - no signer socket, ever: decision 3 and Security's spec §2 say the container never gets a
