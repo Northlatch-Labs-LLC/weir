@@ -52,6 +52,10 @@ CLOUD_INIT_STATUS="$($SUDO "$CLOUD_INIT_BIN" status --wait --long 2>&1)" || {
   fail "cloud-init status --wait --long exited non-zero"
 }
 echo "$CLOUD_INIT_STATUS"
+# `--wait` prints its progress dots on the SAME line as the first status field, so the line reads
+# '....status: done' (seen on the third real run, 2026-09-05, which was destroyed by this very
+# check while cloud-init had in fact finished clean). Strip leading dots before matching.
+CLOUD_INIT_STATUS="$(sed 's/^\.*//' <<<"$CLOUD_INIT_STATUS")"
 grep -q '^status: done$' <<<"$CLOUD_INIT_STATUS" || fail "cloud-init did not finish with 'status: done'"
 
 # "status: done" alone is not enough: cloud-init reports done with a non-empty error list. Both
