@@ -22,18 +22,14 @@
 # systemd-creds encrypt --with-key=host -- never as a plaintext file, never inline here.
 package_update: true
 package_upgrade: true
-packages:
-  - docker.io
-  - ca-certificates
-  - logrotate
-  - unattended-upgrades
-  - python3
-  # heron-purse.service (build order step 5) starts /usr/bin/node. Debian's own nodejs package is
-  # what provides that path; without it the signer unit cannot start at all and the beat unit,
-  # which Requires= it, never runs. Reasoned from Debian's packaging, not verified on a Debian
-  # host from this laptop: trixie's nodejs ships /usr/bin/node and the purse runs a COMPILED
-  # dist/server.js, so the version's type-stripping support does not matter here.
-  - nodejs
+# DigitalOcean injects vendor data that installs its own agent at first boot; on the second real
+# run (2026-09-05) that installer and ours fought over the apt lock and both failed. No platform
+# installer runs on this host at all.
+vendor_data:
+  enabled: false
+# The packages are installed by the first runcmd entry below, with a lock wait and retries,
+# instead of the packages: module, so a transient apt failure is retried and named rather than
+# fatal and silent (the second real run failed here with exit 100 and no stderr).
 disable_root: true
 ssh_pwauth: false
 # One door, one key. v1's second shell account (heron-ops) carried the SAME public key as `ops`
@@ -96,6 +92,16 @@ write_files:
     content: |
       Unattended-Upgrade::Automatic-Reboot "false";
 runcmd:
+  - - sh
+    - -c
+    - |
+      set -e
+      for i in 1 2 3 4 5; do
+        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do sleep 3; done
+        if DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confold -y -q install docker.io ca-certificates logrotate unattended-upgrades python3 nodejs; then echo "heron: packages installed on attempt $i"; exit 0; fi
+        echo "heron: apt install attempt $i failed; updating and retrying" >&2; sleep 10; apt-get -q update || true
+      done
+      echo "heron: package install failed after 5 attempts" >&2; exit 1
   # sshd is not restarted by cloud-init's own module when only write_files touched its config
   # directory; restart explicitly so 00-heron.conf takes effect in this boot, not the next one.
   - [ systemctl, restart, ssh ]
