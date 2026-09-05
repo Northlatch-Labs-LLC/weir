@@ -1698,3 +1698,28 @@ test('the launcher: runs the image by its pinned id, refuses a tag mismatch, kee
   // The docker flags the launcher reads are the file the image test pins.
   assert.match(launcher, /RUN_FLAGS="\$SRV\/run-flags\.txt"/);
 });
+
+test('the smoke beat and the status read their bodies from stdin as root; no multi-line `bash -c` string crosses ssh', () => {
+  const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const smokeBeat = script.slice(script.indexOf('smoke_beat() {'), script.indexOf('smoke_enable_timers() {'));
+  assert.match(smokeBeat, /sudo bash -s -- "\$start" <<'REMOTE'/);
+  assert.doesNotMatch(smokeBeat, /bash -c "/);
+  assert.match(smokeBeat, /tail -n 1 \/srv\/heron\/state\/beats\.jsonl/);
+  const status = script.slice(script.indexOf('status_host() {'), script.indexOf('main() {'));
+  assert.match(status, /sudo bash -s <<'REMOTE'/);
+  assert.doesNotMatch(status, /bash -c "/);
+});
+
+test('--rebuild-image builds through the same on-host build as --create, records begin then succeeded, and refuses without the word', () => {
+  const fixture = beatStubs();
+  const stubsDir = fixture.env.HERON_STUB_DIR;
+  writeFileSync(path.join(stubsDir, 'build_image_on_host'), `#!/usr/bin/env bash\nprintf '%s\\n' "build_image_on_host:$1" >> "$HERON_TEST_ORDER"\necho "image built"\n`, 'utf8');
+  chmodSync(path.join(stubsDir, 'build_image_on_host'), 0o755);
+  const result = spawnSync('bash', [DEPLOY_SCRIPT, '--rebuild-image'], { encoding: 'utf8', env: fixture.env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(installOrder(fixture), ['build_image_on_host:203.0.113.9']);
+  assert.deepEqual(installEvents(fixture), ['rebuild-image-begin', 'rebuild-image-succeeded']);
+  const noWord = spawnSync('bash', [DEPLOY_SCRIPT, '--rebuild-image'], { encoding: 'utf8', env: { ...fixture.env, HERON_DEPLOY_CONFIRMED: '' } });
+  assert.notEqual(noWord.status, 0);
+  assert.match(noWord.stderr, /HERON_DEPLOY_CONFIRMED is not 1/);
+});

@@ -56,6 +56,10 @@
 #                           run-flags.txt, the PicoClaw config template and the two beat units, and
 #                           re-hashes them on the host before install. Starts NOTHING and enables
 #                           no timer: that is --smoke's fourth and fifth gate.
+#   --rebuild-image        rebuilds the image on the host from the committed tree (HERON_HOST,
+#                           HERON_DEPLOY_CONFIRMED=1): the same tarball, the same on-host sha256
+#                           check and the same build --create runs, and /srv/heron/image.env is
+#                           rewritten with the new id, which the launcher pins the next beat to.
 #   --status               reads back the timers, the newest state file, and the effective inbound
 #                           ruleset for tag heron-v2 from the account.
 #   --render-cloud-init    internal: prints the rendered user_data to stdout and exits. Used by
@@ -154,6 +158,7 @@ usage: deploy-droplet.sh --plan
        deploy-droplet.sh --smoke
        deploy-droplet.sh --install-purse   (HERON_HOST and HERON_DEPLOY_CONFIRMED=1 required)
        deploy-droplet.sh --install-beat    (HERON_HOST and HERON_DEPLOY_CONFIRMED=1 required)
+       deploy-droplet.sh --rebuild-image   (HERON_HOST and HERON_DEPLOY_CONFIRMED=1 required)
        deploy-droplet.sh --status
 EOF
 }
@@ -1093,14 +1098,20 @@ smoke_beat() {
   local ssh_target="$1" start
   start="$(date -u +%s)"
   ssh -- "$ssh_target" sudo systemctl start heron-beat.service
-  # shellcheck disable=SC2029
-  ssh -- "$ssh_target" bash -c "
-    set -euo pipefail
-    MTIME=\$(stat -c %Y /srv/heron/state/latest.json)
-    [ \"\$MTIME\" -ge $start ] || { echo 'smoke: refused - state/latest.json is not newer than the smoke beat start' >&2; exit 1; }
-    python3 -c 'import json,sys; json.load(open(\"/srv/heron/state/latest.json\"))'
-    echo 'smoke: the beat produced a fresh, parsable state/latest.json'
-  "
+  # The body goes over stdin to a root shell, with the start time as an argument: `ssh bash -c
+  # "<multi-line>"` is word-split by the remote shell (the first real smoke, 2026-09-05, printed
+  # "bash: -c: option requires an argument"), and state/ is 2770 root:heron, which ops cannot stat.
+  ssh -- "$ssh_target" sudo bash -s -- "$start" <<'REMOTE'
+set -euo pipefail
+START="$1"
+MTIME="$(stat -c %Y /srv/heron/state/latest.json)"
+[ "$MTIME" -ge "$START" ] || { echo "smoke: refused - state/latest.json is not newer than the smoke beat start" >&2; exit 1; }
+python3 -c 'import json,sys; json.load(open("/srv/heron/state/latest.json"))'
+echo "smoke: the beat produced a fresh, parsable state/latest.json:"
+cat /srv/heron/state/latest.json
+echo "smoke: the last line of state/beats.jsonl:"
+tail -n 1 /srv/heron/state/beats.jsonl
+REMOTE
 }
 
 smoke_enable_timers() {
@@ -1478,6 +1489,28 @@ REMOTE
 }
 
 # ---------------------------------------------------------------------------
+# --rebuild-image. The image on the host is built once by --create and then frozen by its id in
+# image.env; a change to the runtime package (the first real beat, 2026-09-05, ran an image whose
+# beat.sh predated the workspace seeding) needs the same build again, from the committed tree,
+# through the same tarball and sha256 check. Nothing else on the host is touched.
+# ---------------------------------------------------------------------------
+cmd_rebuild_image() {
+  local ssh_target="${HERON_HOST:-}"
+  if [ -z "$ssh_target" ]; then
+    echo "deploy-droplet.sh --rebuild-image: refused - HERON_HOST is unset (ops@<droplet ip>)" >&2
+    return 1
+  fi
+  validate_ssh_target "$ssh_target" "HERON_HOST"
+  check_confirmed
+  check_git_clean
+  local ip="${ssh_target#*@}"
+  record_run "rebuild-image-begin" "commit=$(git -C "$PKG_DIR" rev-parse HEAD)"
+  build_image_on_host "$ip"
+  record_run "rebuild-image-succeeded" "commit=$(git -C "$PKG_DIR" rev-parse HEAD)"
+  echo "deploy-droplet.sh --rebuild-image: the image on $ssh_target is rebuilt from the committed tree and image.env carries its new id. No beat ran, no timer changed."
+}
+
+# ---------------------------------------------------------------------------
 # --status. Read-only: what is on the host, and what the ACCOUNT says applies to it.
 # ---------------------------------------------------------------------------
 cmd_status() {
@@ -1498,13 +1531,17 @@ cmd_status() {
 status_host() {
   if is_stubbed; then "$HERON_STUB_DIR/status_host" "$@"; return; fi
   local ssh_target="$1"
-  ssh -- "$ssh_target" bash -c "
-    systemctl list-timers 'heron-*' --no-pager
-    echo '--- state/latest.json ---'
-    cat /srv/heron/state/latest.json 2>/dev/null || echo '(none yet)'
-    echo '--- the watchdog record ---'
-    sudo tail -n 5 /var/lib/heron/watchdog/alerts.jsonl 2>/dev/null || echo '(no notice has ever been recorded)'
-  "
+  ssh -- "$ssh_target" sudo bash -s <<'REMOTE'
+systemctl list-timers 'heron-*' --no-pager
+echo '--- heron-purse.service, heron-beat.service ---'
+systemctl is-active heron-purse.service heron-beat.service 2>/dev/null | paste -sd' ' -
+echo '--- state/latest.json ---'
+cat /srv/heron/state/latest.json 2>/dev/null || echo '(none yet)'
+echo '--- state/beats.jsonl, last 3 ---'
+tail -n 3 /srv/heron/state/beats.jsonl 2>/dev/null || echo '(no beat recorded yet)'
+echo '--- the watchdog record ---'
+tail -n 5 /var/lib/heron/watchdog/alerts.jsonl 2>/dev/null || echo '(no notice has ever been recorded)'
+REMOTE
 }
 
 # ---------------------------------------------------------------------------
@@ -1518,6 +1555,7 @@ main() {
     --install-purse) cmd_install_purse ;;
     --render-purse-unit) shift; render_purse_unit "$@" ;;
     --install-beat) cmd_install_beat ;;
+    --rebuild-image) cmd_rebuild_image ;;
     --render-heron-beat) shift; render_heron_beat "$@" ;;
     --render-cloud-init) render_cloud_init ;;
     *) usage; exit 2 ;;
