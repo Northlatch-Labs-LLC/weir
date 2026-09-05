@@ -382,7 +382,9 @@ check_ascii_rendered() {
 
 check_git_clean() {
   local status
-  status="$(git -C "$PKG_DIR" status --porcelain)"
+  # Scoped to this package, like make-source-tarball.sh: the workspace gate rebuilds tracked
+  # source maps in other packages before the tests run, and those are not what ships.
+  status="$(git -C "$PKG_DIR" status --porcelain -- .)"
   if [ -n "$status" ]; then
     echo "deploy-droplet.sh: refused - git status --porcelain is not empty; there is no committed sha to name as what shipped" >&2
     echo "$status" >&2
