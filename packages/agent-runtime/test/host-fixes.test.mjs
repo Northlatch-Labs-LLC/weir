@@ -1433,7 +1433,7 @@ test('N7: a logrotate config exists, bounds the JSONL sinks only, and is install
   assert.match(beatsStanza, /^\s*su root heron$/m, 'the beats stanza must carry su root heron for the 2770 root:heron parent');
   const alertsStanza = config.slice(config.indexOf('/var/lib/heron/watchdog/alerts.jsonl {'));
   assert.doesNotMatch(alertsStanza, /^\s*su /m, 'the alerts parent is 0700 root:root and takes no su line');
-  assert.equal((config.match(/copytruncate/g) || []).length, 2, 'both stanzas must copytruncate');
+  assert.equal((config.match(/^\s*copytruncate$/gm) || []).length, 2, 'both stanzas must carry the copytruncate directive');
   assert.match(config, /copytruncate/);
 
   const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
