@@ -69,13 +69,16 @@ with `Authorization: Bearer <key>` and a JSON body of `from`/`to`/`subject`/`htm
 for `brevo`/`sendgrid`/`postmark` across `packages/web` returns nothing. `bin/heron-alert` is
 written against Resend, matching the sender that already exists in this codebase.
 
-**`heron@weir.social` must be a verified Resend sending domain before the first alert.** It is not
-one today — the same open item `packages/web`'s own sender already names. Until it is, every call
-this script makes to Resend is refused by Resend, which means the dead man is wired end to end and
+**The sender must be a verified Resend sending domain before the first alert.** The alert is sent
+from `Heron <heron@projectxprotocol.dev>`: `projectxprotocol.dev` is the one sending domain verified
+on record (`packages/web/docs/waitlist-email.md`), and the notice goes to the desk's own mailbox on
+that domain. `weir.social` is not verified, which is the product's own open item; the alert does not
+wait on it and does not send brand mail. Until a sending key is sealed on the host as `mail-key`,
+every call this script makes to Resend is refused, which means the dead man is wired end to end and
 silent: the watchdog decides correctly, `OnFailure=` starts the unit, the unit decrypts the
-credential, and the message does not arrive. Nothing on this laptop can detect that, and no test
-here claims to. It is a gate on build order step 10, whose own condition is that a forced failure
-produces a real email in the desk's mailbox — not a footnote.
+credential, and the message does not arrive. `--smoke` refuses to enable any timer until a real
+send returns a Resend message id, and step 10's drill is the gate that a forced failure produces a
+real email in the desk's mailbox — not a footnote.
 
 ## The deploy script's five modes
 
@@ -134,8 +137,9 @@ exercised against those stubs, and have not been run against a real host from th
 
 ## Open, named rather than hidden
 
-- **The Resend sending domain.** See above: it is unverified, so the alert path is wired and
-  untested end to end. Step 10's drill is the gate.
+- **The Resend sending key.** See above: the sender is the verified company domain, and the alert
+  path stays untested end to end until a sending key is sealed as `mail-key` and `--smoke` sees a
+  message id. Step 10's drill is the gate.
 - **`RestrictAddressFamilies` on the alert unit** now reads `AF_UNIX AF_NETLINK AF_INET AF_INET6`,
   on Security's requirement: `nss-resolve`'s varlink socket needs `AF_UNIX` and glibc's
   `AI_ADDRCONFIG` probe opens an `AF_NETLINK` socket, and neither family opens a network path —

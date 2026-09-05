@@ -71,9 +71,11 @@ ALERTS_FILE = os.environ.get("HERON_ALERTS_FILE", "/var/lib/heron/watchdog/alert
 CONTAINER_WRITABLE_ROOT = "/srv/heron"
 # What a quoted value may be: one line of printable ASCII, bounded. Everything else is dropped.
 SAFE_MAX = 200
-# Not yet a verified sending domain in Resend as of this step (packages/web's own sender notes the
-# same open item for weir.social/hello@); this address is the one the alert will use once it is.
-FROM_ADDRESS = "Heron <heron@weir.social>"
+# Sent from the company domain, not the product's: projectxprotocol.dev is the one Resend sending
+# domain verified on record (packages/web/docs/waitlist-email.md), weir.social is not, and this is
+# an operations notice to the desk's own mailbox on that same domain, not brand mail to a member.
+# The product's brand address (heron@weir.social) stays with the product's own open item.
+FROM_ADDRESS = "Heron <heron@projectxprotocol.dev>"
 CREDENTIAL_NAME = "mail-key"
 
 
