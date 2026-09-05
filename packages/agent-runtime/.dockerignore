@@ -10,4 +10,7 @@ picoclaw/config.json
 .security.yml
 test/
 cloudrun/
+scripts/
+agent-runtime-src.tgz
+agent-runtime-src.sha
 .git/

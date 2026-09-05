@@ -7,3 +7,8 @@ picoclaw/workspace/cron/
 picoclaw/workspace/.artifacts/
 picoclaw/config.json
 .security.yml
+
+# Built by scripts/make-source-tarball.sh — a reproducible derivative of the committed tree,
+# never itself the source of truth.
+agent-runtime-src.tgz
+agent-runtime-src.sha
