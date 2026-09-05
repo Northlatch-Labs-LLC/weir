@@ -4,7 +4,7 @@
 /**
  * A supporter's position in a vault: what they put in, what it has earned, and getting it back.
  *
- * # The withdraw button is what makes the no-loss guarantee real
+ * # The withdraw button is what makes the deposit-stays-yours guarantee real
  *
  * The contract's promise is that principal stays the depositor's and is redeemable in full at any
  * time; the creator earns only the yield it generates. That property is only as good as this
