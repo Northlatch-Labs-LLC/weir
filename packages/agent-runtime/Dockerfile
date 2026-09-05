@@ -5,8 +5,8 @@
 # §2.1). Stage "fetch" downloads and verifies the PicoClaw v0.3.1 Linux binary against a literal
 # checksum ARG (never a checksums file fetched from the same release it is meant to verify — v1's
 # Security finding A10, carried forward); the runtime stage carries only the verified picoclaw
-# binary, the CA bundle, bin/ and picoclaw/. No curl, no package manager invocation, in the
-# runtime stage. Honest disclosure (nothing here claims a stripped image): node:22-trixie-slim is
+# binary, the CA bundle, bin/ and picoclaw/. No curl and no package manager invocation in either
+# stage: the download is node's own fetch (docker/fetch-picoclaw.mjs). Honest disclosure (nothing here claims a stripped image): node:22-trixie-slim is
 # a Debian slim image, so dpkg and apt are present on disk in the runtime stage the same as they
 # are in the fetch stage — this Dockerfile never runs apt in the runtime stage, but does not and
 # cannot remove what the base image ships.
@@ -49,9 +49,18 @@ ARG TARGETARCH
 ARG PICOCLAW_SHA256_AMD64=86f0fe84aa55279352edbe13adfca484a03bcf189e2030b25e34628089069c3f
 ARG PICOCLAW_SHA256_ARM64=e78ab0de05d000698ff8b32458e71cb3134e52e9eaf540e3323a72e9914de060
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
+# No apt in either stage. The pinned base ships node, tar and sha256sum but neither curl nor a CA
+# bundle (its registry layers were listed on 2026-09-05), and the host's cloud firewall permits
+# outbound tcp/443 only, so apt over port 80 cannot reach a mirror (the fifth and sixth real
+# deploys timed out there). The download is done by node's own fetch, which verifies TLS with the
+# Mozilla roots bundled into node; the CA bundle for PicoClaw at runtime is written from those
+# same roots, so the image trusts exactly one root set, node's, in both stages.
+COPY docker/fetch-picoclaw.mjs /tmp/fetch-picoclaw.mjs
+RUN set -eux; \
+    mkdir -p /etc/ssl/certs; \
+    node -e "process.stdout.write(require('node:tls').rootCertificates.join('\\n') + '\\n')" > /etc/ssl/certs/ca-certificates.crt; \
+    chmod 0644 /etc/ssl/certs/ca-certificates.crt; \
+    test "$(grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt)" -gt 100
 
 # Map Docker's TARGETARCH to PicoClaw's release asset naming (goreleaser: amd64 -> x86_64), and to
 # the literal checksum ARG for that arch. No checksums file is fetched at build time — the whole
@@ -64,17 +73,13 @@ RUN set -eux; \
     esac; \
     ASSET="picoclaw_Linux_${PICOCLAW_ARCH}.tar.gz"; \
     BASE_URL="https://github.com/sipeed/picoclaw/releases/download/v${PICOCLAW_VERSION}"; \
-    curl -fsSL -o "/tmp/${ASSET}" "${BASE_URL}/${ASSET}"; \
     if [ -z "$EXPECTED" ]; then \
         echo "FATAL: no literal checksum ARG set for ${TARGETARCH:-amd64} — refusing to trust an unverifiable download" >&2; \
         exit 1; \
     fi; \
+    node /tmp/fetch-picoclaw.mjs "${BASE_URL}/${ASSET}" "$EXPECTED" "/tmp/${ASSET}"; \
     ACTUAL="$(sha256sum "/tmp/${ASSET}" | awk '{print $1}')"; \
-    if [ "$EXPECTED" != "$ACTUAL" ]; then \
-        echo "FATAL: checksum mismatch for ${ASSET}: expected ${EXPECTED} (literal ARG), got ${ACTUAL}" >&2; \
-        exit 1; \
-    fi; \
-    echo "checksum verified against literal ARG: ${ASSET} sha256=${ACTUAL}"; \
+    [ "$EXPECTED" = "$ACTUAL" ] || { echo "FATAL: sha256sum disagrees with the node verifier: ${ACTUAL}" >&2; exit 1; }; \
     tar -xzf "/tmp/${ASSET}" -C /tmp; \
     install -m 0755 /tmp/picoclaw /usr/local/bin/picoclaw; \
     rm -rf /tmp/*
@@ -107,8 +112,8 @@ RUN set -eux; \
     echo "uid/gid 10001 confirmed to be heron:heron after creation"
 
 COPY --from=fetch /usr/local/bin/picoclaw /usr/local/bin/picoclaw
-# The CA bundle the fetch stage installed, so PicoClaw can verify mcp.weir.social over TLS;
-# no package manager runs in this stage — only a COPY from the stage that already ran it.
+# The CA bundle the fetch stage wrote from node's bundled Mozilla roots, so PicoClaw can verify
+# mcp.weir.social over TLS; no package manager runs in either stage.
 COPY --from=fetch /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app

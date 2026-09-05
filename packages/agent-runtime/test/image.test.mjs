@@ -8,6 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -142,15 +143,33 @@ test('no curl-pipe-shell shape anywhere in the build', () => {
   assert.deepEqual(pipedToShell, [], `found a curl-piped-to-shell line: ${pipedToShell.join('; ')}`);
 });
 
-test('the fetch stage installs curl/ca-certificates; the runtime stage never invokes apt', () => {
+test('no stage invokes apt, and the fetch stage downloads with the checked-in node verifier', () => {
+  // The host's cloud firewall permits outbound tcp/443 only; an apt line would need port 80 and
+  // fail the build on the host (the fifth and sixth real deploys, 2026-09-05).
+  const lines = instructionLines(dockerfile);
+  const aptLines = lines.filter((l) => /apt-get\s+(install|update)/.test(l));
+  assert.deepEqual(aptLines, [], `apt-get invoked in the Dockerfile: ${aptLines.join('; ')}`);
+  const curlLines = lines.filter((l) => /\bcurl\b/.test(l));
+  assert.deepEqual(curlLines, [], `curl invoked in the Dockerfile: ${curlLines.join('; ')}`);
+  assert.match(dockerfile, /COPY docker\/fetch-picoclaw\.mjs /, 'the fetch stage must COPY the node verifier');
+  assert.match(dockerfile, /node \/tmp\/fetch-picoclaw\.mjs "\$\{BASE_URL\}\/\$\{ASSET\}" "\$EXPECTED"/, 'the download must pass the literal ARG to the verifier');
+  const verifier = readFileSync(path.join(PACKAGE_ROOT, 'docker', 'fetch-picoclaw.mjs'), 'utf8');
+  assert.match(verifier, /createHash\('sha256'\)/, 'the verifier must hash with sha256');
+  assert.match(verifier, /startsWith\('https:\/\/'\)/, 'the verifier must refuse non-https urls');
+  assert.match(verifier, /actual !== expected/, 'the verifier must compare against the expected digest');
   const stageBoundary = dockerfile.indexOf('AS runtime');
   assert.ok(stageBoundary !== -1, 'no "AS runtime" stage found');
-  const runtimeStageText = dockerfile.slice(stageBoundary);
-  assert.doesNotMatch(
-    runtimeStageText,
-    /apt-get\s+(install|update)/,
-    'the runtime stage invokes apt-get — it must only COPY artifacts made in earlier stages',
-  );
+  assert.match(dockerfile.slice(stageBoundary), /COPY --from=fetch \/etc\/ssl\/certs\/ca-certificates\.crt/, 'the runtime stage must copy the CA bundle the fetch stage wrote');
+});
+
+test('the node verifier refuses a checksum mismatch and a non-https url (run for real)', () => {
+  const verifier = path.join(PACKAGE_ROOT, 'docker', 'fetch-picoclaw.mjs');
+  const bad = spawnSync(process.execPath, [verifier, 'http://example.invalid/x.tgz', 'a'.repeat(64), '/dev/null'], { encoding: 'utf8' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /refusing a non-https url/);
+  const short = spawnSync(process.execPath, [verifier, 'https://example.invalid/x.tgz', 'abc', '/dev/null'], { encoding: 'utf8' });
+  assert.equal(short.status, 1);
+  assert.match(short.stderr, /usage/);
 });
 
 test('run-flags.txt carries every required flag, verbatim', () => {
