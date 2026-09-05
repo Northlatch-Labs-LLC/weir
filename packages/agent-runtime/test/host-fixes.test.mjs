@@ -1482,7 +1482,7 @@ test('N9: the README names the Resend sender as a gate before the first alert, n
 });
 
 test('the deploy script and every library it added parse cleanly', () => {
-  for (const file of [DEPLOY_SCRIPT, POST_BOOT, WATCHDOG, path.join(LIB_DIR, 'smoke-assert.sh')]) {
+  for (const file of [DEPLOY_SCRIPT, POST_BOOT, WATCHDOG, path.join(LIB_DIR, 'smoke-assert.sh'), path.join(DO_DIR, 'bin', 'heron-beat')]) {
     const result = spawnSync('bash', ['-n', file], { encoding: 'utf8' });
     assert.equal(result.status, 0, `${path.basename(file)}: ${result.stderr}`);
   }
@@ -1620,4 +1620,81 @@ test('--install-purse: node 22 is pinned by version and a literal sha256, downlo
   assert.match(ship, /install -m 0644 -o root -g root "\$S\/heron-multisig\.json"/);
   assert.match(ship, /install -m 0600 -o purse -g purse "\$S\/chain\.json" \/srv\/heron\/chain\.json/);
   assert.ok(ship.indexOf('check "$S/server.js"') < ship.indexOf('install -m 0640'), 'hashes are checked before anything is installed');
+});
+
+// ---------------------------------------------------------------------------
+// --install-beat: the launcher, phase two, the flags, the units. Started by --smoke, never here.
+// ---------------------------------------------------------------------------
+
+function beatStubs({ failAt } = {}) {
+  const dir = tmp('install-beat');
+  const stubs = path.join(dir, 'stubs');
+  mkdirSync(stubs);
+  const orderFile = path.join(dir, 'order');
+  writeFileSync(orderFile, '', 'utf8');
+  const stub = (name, body) => {
+    const file = path.join(stubs, name);
+    writeFileSync(file, `#!/usr/bin/env bash\nprintf '%s\\n' "${name}" >> "$HERON_TEST_ORDER"\n${body}\n`, 'utf8');
+    chmodSync(file, 0o755);
+  };
+  stub('build_phase2_bundle', 'printf "bundle\\n" > "$1"');
+  stub('ship_beat_files', failAt === 'ship_beat_files' ? 'echo "host: refused" >&2; exit 1' : 'echo "shipped $3 $4"');
+  return {
+    orderFile,
+    records: path.join(dir, 'records'),
+    env: {
+      ...process.env,
+      HERON_DEPLOY_CONFIRMED: '1',
+      HERON_NO_NETWORK: '1',
+      HERON_STUB_DIR: stubs,
+      HERON_TEST_ORDER: orderFile,
+      HERON_RUN_RECORD_DIR: path.join(dir, 'records'),
+      HERON_HOST: 'ops@203.0.113.9',
+    },
+  };
+}
+
+test('--install-beat runs the bundle then the ship, records begin then succeeded, and starts nothing', () => {
+  const fixture = beatStubs();
+  const result = spawnSync('bash', [DEPLOY_SCRIPT, '--install-beat'], { encoding: 'utf8', env: fixture.env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(installOrder(fixture), ['build_phase2_bundle', 'ship_beat_files']);
+  assert.deepEqual(installEvents(fixture), ['install-beat-begin', 'install-beat-succeeded']);
+  assert.match(result.stdout, /NOT started/);
+  assert.doesNotMatch(readFileSync(DEPLOY_SCRIPT, 'utf8').slice(readFileSync(DEPLOY_SCRIPT, 'utf8').indexOf('ship_beat_files() {'), readFileSync(DEPLOY_SCRIPT, 'utf8').indexOf('# --status. Read-only')), /systemctl (enable|start)/, 'the install must not start the beat or enable a timer; that is the smoke\'s');
+});
+
+test('--install-beat: a failing ship records install-beat-failed with the step, and refuses without the word', () => {
+  const failing = beatStubs({ failAt: 'ship_beat_files' });
+  const result = spawnSync('bash', [DEPLOY_SCRIPT, '--install-beat'], { encoding: 'utf8', env: failing.env });
+  assert.notEqual(result.status, 0);
+  assert.deepEqual(installEvents(failing), ['install-beat-begin', 'install-beat-failed']);
+  assert.match(result.stderr, /at step 'ship_beat_files'/);
+  const noWord = spawnSync('bash', [DEPLOY_SCRIPT, '--install-beat'], { encoding: 'utf8', env: { ...beatStubs().env, HERON_DEPLOY_CONFIRMED: '' } });
+  assert.notEqual(noWord.status, 0);
+  assert.match(noWord.stderr, /HERON_DEPLOY_CONFIRMED is not 1/);
+});
+
+test('--install-beat: the rendered launcher carries the phase-two pin and no substitution, and refuses a pin that is not a sha256', () => {
+  const rendered = spawnSync('bash', [DEPLOY_SCRIPT, '--render-heron-beat', SHA_A], { encoding: 'utf8' });
+  assert.equal(rendered.status, 0, rendered.stderr);
+  assert.match(rendered.stdout, new RegExp(`PHASE2_SHA256="${SHA_A}"`));
+  const directives = rendered.stdout.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.doesNotMatch(directives, /<[A-Z_0-9]+>/);
+  const bad = spawnSync('bash', [DEPLOY_SCRIPT, '--render-heron-beat', 'nope'], { encoding: 'utf8' });
+  assert.notEqual(bad.status, 0);
+});
+
+test('the launcher: runs the image by its pinned id, refuses a tag mismatch, keeps the credential on tmpfs, and appends beats.jsonl', () => {
+  const launcher = readFileSync(path.join(DO_DIR, 'bin', 'heron-beat'), 'utf8');
+  assert.match(launcher, /docker image inspect --format '\{\{\.Id\}\}' heron:local/);
+  assert.match(launcher, /"\$ACTUAL_ID" = "\$IMAGE_ID" \|\| refuse/);
+  assert.match(launcher, /findmnt -n -o FSTYPE --target "\$CFG_ROOT"\)" = "tmpfs" \]/);
+  assert.match(launcher, /install -m 0400 -o "\$CONTAINER_UID" -g "\$CONTAINER_GID" "\$CREDENTIALS_DIRECTORY\/openrouter"/);
+  assert.match(launcher, /rm -rf "\$CFG"\n\n# --- phase two/, 'the credential copy must go before phase two runs');
+  assert.match(launcher, />> "\$STATE\/beats\.jsonl"/);
+  assert.match(launcher, /--mount "type=bind,source=\$CFG,target=\/app\/config,readonly=true"/);
+  assert.doesNotMatch(launcher, /-e OPENROUTER|-e .*API_KEY/, 'no key ever crosses as an environment variable');
+  // The docker flags the launcher reads are the file the image test pins.
+  assert.match(launcher, /RUN_FLAGS="\$SRV\/run-flags\.txt"/);
 });

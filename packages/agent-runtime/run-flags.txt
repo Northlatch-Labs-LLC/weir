@@ -54,3 +54,20 @@
 #   - no signer socket, ever: decision 3 and Security's spec §2 say the container never gets a
 #     key and never gets the signer's socket; the beat is two phases and the container only
 #     writes an intent file. This line is fixed, not a placeholder (Security's A6).
+
+# What the host launcher (digitalocean/bin/heron-beat) ADDS per beat, beyond this fixed set, and
+# says here so the two cannot be read apart:
+#   --mount type=bind,source=/run/heron-beat/cfg,target=/app/config,readonly=true
+#       the beat's rendered config.json, its .security.yml, and the model credential as
+#       openrouter.token, all 0400 owned by uid 10001, in the unit's own RuntimeDirectory on the
+#       host's tmpfs; created for this beat, removed by systemd when the unit stops. This is the
+#       one way the decrypted model credential reaches PicoClaw (heron-beat.service's
+#       LoadCredentialEncrypted=, decrypted for the life of one beat, never under /srv/heron).
+#       bin/beat.sh then spawns PicoClaw under `env -i` with the allow-list only, so no stdio
+#       child of the model inherits a variable naming it.
+#   -e PICOCLAW_CONFIG=/app/config/config.json
+#   -e WEIR_AGENT_WORKSPACE=/app/runs/<beat-id>   the model's workspace IS the beat directory, so
+#                                                  an intent lands at runs/<beat-id>/intent.json
+#   -e WEIR_AGENT_RUNS_DIR=/app/runs/<beat-id>     the container's own log beside it
+#   --name heron-beat-<beat-id>
+# The image is run by its pinned id from /srv/heron/image.env, never by tag.

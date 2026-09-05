@@ -73,6 +73,22 @@ if [ ! -f "$HEARTBEAT_FILE" ]; then
   exit "$EXIT_REFUSED"
 fi
 
+# THE WORKSPACE, seeded per beat. On the host the launcher names a fresh, writable directory as
+# this beat's workspace (WEIR_AGENT_WORKSPACE: the beat's own runs/<beat-id>, bind-mounted), so
+# an intent the model writes lands at runs/<beat-id>/intent.json, the one path phase two reads
+# (packages/purse/src/beat.ts INTENT_FILE). The image's workspace files (SOUL.md, AGENT.md,
+# IDENTITY.md, HEARTBEAT.md, skills/) are copied into it once; a workspace that already carries
+# SOUL.md is left exactly as it is. Seeded BEFORE the rule check, so rule 6 sees the shipped
+# skills where the config says the workspace is.
+WORKSPACE_SEED="${WEIR_AGENT_WORKSPACE_SEED:-$PACKAGE_ROOT/picoclaw/workspace}"
+if [ -n "${WEIR_AGENT_WORKSPACE:-}" ]; then
+  mkdir -p "$WEIR_AGENT_WORKSPACE"
+  if [ ! -f "$WEIR_AGENT_WORKSPACE/SOUL.md" ]; then
+    cp -R "$WORKSPACE_SEED/." "$WEIR_AGENT_WORKSPACE/"
+    echo "beat.sh: workspace seeded from $WORKSPACE_SEED into $WEIR_AGENT_WORKSPACE" >&2
+  fi
+fi
+
 # The exact argv picoclaw is about to run, built once so the rule check inspects the real command
 # line rather than its own (Security finding A6) — a checker that reads its own argv instead of
 # the checked program's proves nothing.

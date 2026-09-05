@@ -107,6 +107,13 @@ describe('heron-purse.service', () => {
     expect(exec).toContain('--multisig /srv/heron/policy/heron-multisig.json');
   });
 
+  it('the beat unit carries a RuntimeDirectory on tmpfs for the per-beat config, beside its two ReadWritePaths', async () => {
+    const beat = await unit('heron-beat.service');
+    expect(onlyValue(beat, 'Service', 'RuntimeDirectory')).toBe('heron-beat');
+    expect(onlyValue(beat, 'Service', 'RuntimeDirectoryMode')).toBe('0750');
+    expect(onlyValue(beat, 'Service', 'ReadWritePaths')).toBe('/srv/heron/runs /srv/heron/state');
+  });
+
   it('is Type=notify, so After=heron-purse.service means the socket exists', async () => {
     const purse = await unit('heron-purse.service');
     expect(onlyValue(purse, 'Service', 'Type')).toBe('notify');

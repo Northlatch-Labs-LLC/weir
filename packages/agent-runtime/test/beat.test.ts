@@ -253,3 +253,22 @@ test('beat.sh: a config that violates a rule stops the beat before picoclaw runs
   );
   rmSync(h.root, { recursive: true, force: true });
 });
+
+test('workspace: WEIR_AGENT_WORKSPACE is seeded from the image workspace once, and never overwritten', () => {
+  const h = makeHarness();
+  const ws = path.join(h.root, 'beat-workspace');
+  const first = runBeat(h, { WEIR_AGENT_WORKSPACE: ws });
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stderr, /workspace seeded from/);
+  for (const name of ['SOUL.md', 'AGENT.md', 'IDENTITY.md', 'HEARTBEAT.md', path.join('skills', 'weir-agent', 'SKILL.md')]) {
+    assert.ok(readFileSync(path.join(ws, name), 'utf8').length > 0, `${name} was not seeded`);
+  }
+  // A marker the model wrote survives the next beat's seeding: SOUL.md is present, so nothing is copied.
+  writeFileSync(path.join(ws, 'SOUL.md'), 'edited by the workspace owner\n');
+  rmSync(path.join(h.runsDir, '.lock'), { recursive: true, force: true });
+  for (const f of readdirSync(h.runsDir)) if (f.endsWith('.log')) rmSync(path.join(h.runsDir, f));
+  const second = runBeat(h, { WEIR_AGENT_WORKSPACE: ws });
+  assert.equal(second.status, 0, second.stderr);
+  assert.doesNotMatch(second.stderr, /workspace seeded from/);
+  assert.equal(readFileSync(path.join(ws, 'SOUL.md'), 'utf8'), 'edited by the workspace owner\n');
+});

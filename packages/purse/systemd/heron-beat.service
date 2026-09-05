@@ -65,6 +65,11 @@ ProtectSystem=strict
 # root-owned and the `heron` account the model's container runs as has neither sudo nor the docker
 # group -- the ability to launch a beat lives with the timer, never with the workspace.
 ReadWritePaths=/srv/heron/runs /srv/heron/state
+# /run/heron-beat: where the launcher renders this beat's config and places the model credential's
+# copy for the container to read, on the host's tmpfs so the docker daemon can bind-mount it.
+# Created for the unit, removed by systemd when it stops.
+RuntimeDirectory=heron-beat
+RuntimeDirectoryMode=0750
 
 NoNewPrivileges=yes
 ProtectHome=yes

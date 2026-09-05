@@ -50,6 +50,12 @@
 #                           installs the files with their modes, starts and enables the unit, and
 #                           probes the socket with a malformed request that must come back as a
 #                           recorded refusal. The policy shipped is heron-content-pre-soul.json.
+#   --install-beat         build order step 9's beat on the host (HERON_HOST, HERON_DEPLOY_CONFIRMED=1):
+#                           bundles packages/purse/bin/beat-phase2.ts with the pinned esbuild, renders
+#                           bin/heron-beat with the bundle's sha256, ships the launcher, the bundle,
+#                           run-flags.txt, the PicoClaw config template and the two beat units, and
+#                           re-hashes them on the host before install. Starts NOTHING and enables
+#                           no timer: that is --smoke's fourth and fifth gate.
 #   --status               reads back the timers, the newest state file, and the effective inbound
 #                           ruleset for tag heron-v2 from the account.
 #   --render-cloud-init    internal: prints the rendered user_data to stdout and exits. Used by
@@ -147,6 +153,7 @@ usage: deploy-droplet.sh --plan
        deploy-droplet.sh --seal <name> [--dry-run]
        deploy-droplet.sh --smoke
        deploy-droplet.sh --install-purse   (HERON_HOST and HERON_DEPLOY_CONFIRMED=1 required)
+       deploy-droplet.sh --install-beat    (HERON_HOST and HERON_DEPLOY_CONFIRMED=1 required)
        deploy-droplet.sh --status
 EOF
 }
@@ -1343,6 +1350,134 @@ REMOTE
 }
 
 # ---------------------------------------------------------------------------
+# --install-beat. Build order step 9's beat on the host: the launcher, phase two, the flags, the
+# template, the two units. Nothing is started and no timer is enabled here; --smoke runs one real
+# beat and only then enables the timers, in that order, because that order is the whole point.
+# ---------------------------------------------------------------------------
+render_heron_beat() {
+  # $1 phase-two bundle sha256. Prints the launcher.
+  local sha="$1"
+  if ! [[ "$sha" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "deploy-droplet.sh: refused - '$sha' is not a sha256; the launcher is not rendered" >&2
+    return 1
+  fi
+  sed -e "s/<PHASE2_SHA256>/$sha/g" "$HERE/bin/heron-beat"
+}
+
+cmd_install_beat() {
+  local ssh_target="${HERON_HOST:-}"
+  if [ -z "$ssh_target" ]; then
+    echo "deploy-droplet.sh --install-beat: refused - HERON_HOST is unset (ops@<droplet ip>)" >&2
+    return 1
+  fi
+  validate_ssh_target "$ssh_target" "HERON_HOST"
+  check_confirmed
+
+  if [ -n "$(git -C "$PURSE_DIR" status --porcelain -- .)" ] || [ -n "$(git -C "$PKG_DIR" status --porcelain -- .)" ]; then
+    echo "deploy-droplet.sh --install-beat: refused - packages/purse or packages/agent-runtime has uncommitted changes; there is no committed sha to name as what shipped" >&2
+    return 1
+  fi
+  local commit
+  commit="$(git -C "$PKG_DIR" rev-parse HEAD)"
+
+  for f in "$HERE/bin/heron-beat" "$PKG_DIR/run-flags.txt" "$PKG_DIR/picoclaw/config.template.json" \
+           "$PURSE_DIR/systemd/heron-beat.service" "$PURSE_DIR/systemd/heron-beat.timer" "$PURSE_DIR/bin/beat-phase2.ts"; do
+    if [ ! -f "$f" ]; then
+      echo "deploy-droplet.sh --install-beat: refused - $f is missing" >&2
+      return 1
+    fi
+  done
+
+  HERON_INSTALL_STEP=""
+  trap install_beat_on_exit EXIT
+  record_run "install-beat-begin" "commit=$commit"
+
+  local stage
+  stage="$(mktemp -d "${TMPDIR:-/tmp}/heron-beat-stage.XXXXXX")"
+
+  HERON_INSTALL_STEP="build_phase2_bundle"
+  build_phase2_bundle "$stage/beat-phase2.js"
+  local phase2_sha
+  phase2_sha="$(file_sha256 "$stage/beat-phase2.js")"
+
+  HERON_INSTALL_STEP="render_heron_beat"
+  render_heron_beat "$phase2_sha" > "$stage/heron-beat"
+  if grep -v '^[[:space:]]*#' "$stage/heron-beat" | grep -q '<[A-Z_0-9]*>'; then
+    echo "deploy-droplet.sh --install-beat: refused - the rendered launcher still carries a substitution" >&2
+    return 1
+  fi
+  bash -n "$stage/heron-beat"
+  cp "$PKG_DIR/run-flags.txt" "$stage/run-flags.txt"
+  cp "$PKG_DIR/picoclaw/config.template.json" "$stage/config.template.json"
+  cp "$PURSE_DIR/systemd/heron-beat.service" "$stage/heron-beat.service"
+  cp "$PURSE_DIR/systemd/heron-beat.timer" "$stage/heron-beat.timer"
+  local launcher_sha
+  launcher_sha="$(file_sha256 "$stage/heron-beat")"
+
+  echo "deploy-droplet.sh --install-beat: shipping from commit $commit"
+  echo "  beat-phase2.js       sha256 $phase2_sha  -> /srv/heron/purse/dist/beat-phase2.js 0644 root:root (pinned in the launcher)"
+  echo "  heron-beat           sha256 $launcher_sha  -> /srv/heron/bin/heron-beat 0755 root:root"
+  echo "  run-flags.txt                                              -> /srv/heron/run-flags.txt 0644 root:root"
+  echo "  config.template.json                                       -> /srv/heron/picoclaw/config.template.json 0644 root:root"
+  echo "  heron-beat.service, heron-beat.timer                       -> /etc/systemd/system/ 0644 root:root (not enabled, not started)"
+
+  HERON_INSTALL_STEP="ship_beat_files"
+  ship_beat_files "$ssh_target" "$stage" "$phase2_sha" "$launcher_sha"
+
+  HERON_INSTALL_SUCCEEDED=1
+  trap - EXIT
+  record_run "install-beat-succeeded" "commit=$commit phase2=$phase2_sha launcher=$launcher_sha"
+  rm -rf "$stage"
+  echo "deploy-droplet.sh --install-beat: the beat is installed on $ssh_target and NOT started. Next: --smoke, whose fourth gate runs one real beat and whose fifth enables the timers."
+}
+
+install_beat_on_exit() {
+  local status=$?
+  trap - EXIT
+  if [ "$HERON_INSTALL_SUCCEEDED" = "1" ]; then return 0; fi
+  echo "deploy-droplet.sh --install-beat: did not reach success (exit $status) at step '${HERON_INSTALL_STEP:-preconditions}'. The host is left as it was at that step; nothing is rolled back." >&2
+  record_run "install-beat-failed" "step=${HERON_INSTALL_STEP:-preconditions}"
+  exit "$status"
+}
+
+build_phase2_bundle() {
+  if is_stubbed; then "$HERON_STUB_DIR/build_phase2_bundle" "$@"; return; fi
+  local out="$1"
+  (cd "$PURSE_DIR" && pnpm exec esbuild bin/beat-phase2.ts --bundle --platform=node --format=esm --target=node22 \
+      --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" \
+      --log-level=warning --outfile="$out")
+  [ -s "$out" ] || { echo "deploy-droplet.sh: the bundle at $out is empty or missing" >&2; return 1; }
+}
+
+ship_beat_files() {
+  if is_stubbed; then "$HERON_STUB_DIR/ship_beat_files" "$@"; return; fi
+  local ssh_target="$1" stage="$2" phase2_sha="$3" launcher_sha="$4"
+  ssh -- "$ssh_target" 'rm -rf /tmp/heron-beat-stage && mkdir -m 0700 /tmp/heron-beat-stage'
+  scp -q -- "$stage/beat-phase2.js" "$stage/heron-beat" "$stage/run-flags.txt" "$stage/config.template.json" \
+      "$stage/heron-beat.service" "$stage/heron-beat.timer" "$ssh_target:/tmp/heron-beat-stage/"
+  ssh -- "$ssh_target" sudo bash -s -- "$phase2_sha" "$launcher_sha" <<'REMOTE'
+set -euo pipefail
+S=/tmp/heron-beat-stage
+check() { local actual; actual="$(sha256sum "$1" | cut -d' ' -f1)"; [ "$actual" = "$2" ] || { echo "host: refused - $1 hashes $actual, not $2 as shipped" >&2; exit 1; }; }
+check "$S/beat-phase2.js" "$1"
+check "$S/heron-beat" "$2"
+echo "host: the shipped bundle and launcher hash as the laptop said"
+install -d -m 0755 -o root -g root /srv/heron/picoclaw
+install -m 0644 -o root -g root "$S/beat-phase2.js" /srv/heron/purse/dist/beat-phase2.js
+install -m 0755 -o root -g root "$S/heron-beat" /srv/heron/bin/heron-beat
+install -m 0644 -o root -g root "$S/run-flags.txt" /srv/heron/run-flags.txt
+install -m 0644 -o root -g root "$S/config.template.json" /srv/heron/picoclaw/config.template.json
+install -m 0644 -o root -g root "$S/heron-beat.service" /etc/systemd/system/heron-beat.service
+install -m 0644 -o root -g root "$S/heron-beat.timer" /etc/systemd/system/heron-beat.timer
+rm -rf "$S"
+systemctl daemon-reload
+bash -n /srv/heron/bin/heron-beat
+systemd-analyze verify /etc/systemd/system/heron-beat.service 2>&1 | grep -v "^$" | head -5 || true
+echo "host: beat files installed with their modes; heron-beat.service loaded, not started, no timer enabled"
+REMOTE
+}
+
+# ---------------------------------------------------------------------------
 # --status. Read-only: what is on the host, and what the ACCOUNT says applies to it.
 # ---------------------------------------------------------------------------
 cmd_status() {
@@ -1382,6 +1517,8 @@ main() {
     --status) cmd_status ;;
     --install-purse) cmd_install_purse ;;
     --render-purse-unit) shift; render_purse_unit "$@" ;;
+    --install-beat) cmd_install_beat ;;
+    --render-heron-beat) shift; render_heron_beat "$@" ;;
     --render-cloud-init) render_cloud_init ;;
     *) usage; exit 2 ;;
   esac
