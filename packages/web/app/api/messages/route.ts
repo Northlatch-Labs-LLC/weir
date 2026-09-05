@@ -10,6 +10,7 @@ import {
   type MessageEncryption,
 } from '@/lib/content';
 import { verifyAction } from '@/lib/identity';
+import { refuseWithdrawnDeclaration } from '@/lib/agent-standing';
 import { idempotently } from '@/lib/idempotent-route';
 import { ciphertextDigest } from '@/lib/e2e';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
@@ -158,6 +159,20 @@ async function sendOnce(request: Request) {
     action: { kind: 'send', to, text: trimmed, preview, paid: paidStatement },
   });
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
+
+  /*
+    A withdrawn declaration does not send. `lib/agent-standing.ts` holds the rule and the reasons.
+
+    After the proof, because `from` is a body field until the signature makes it a fact; before the
+    paid branch, which reads the vault off chain, and before `addMessage` writes the row.
+
+    The encrypted path in `sendEncrypted` carries the same two lines against its own proof, rather
+    than one check up here before the branch at the top of this function. That would be earlier than
+    the encrypted path's signature and would therefore be the exact ordering this rule forbids —
+    one call site fewer bought by keying the control on an unproven address.
+  */
+  const withdrawn = await refuseWithdrawnDeclaration(from);
+  if (withdrawn !== null) return withdrawn;
 
   let access: { kind: 'open' } | { kind: 'paid'; price: string; contentKey: string; vaultId: string } = {
     kind: 'open',
@@ -313,6 +328,11 @@ async function sendEncrypted(input: {
     action: { kind: 'send-encrypted', to, ciphertextSha256: ciphertextDigest(ciphertext) },
   });
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
+
+  // The same rule as the unencrypted path, against this path's own proof and before `addMessage`.
+  // An encrypted body is still a message published under a declaration somebody has withdrawn.
+  const withdrawn = await refuseWithdrawnDeclaration(from);
+  if (withdrawn !== null) return withdrawn;
 
   const message = {
     id: newId('m'),
