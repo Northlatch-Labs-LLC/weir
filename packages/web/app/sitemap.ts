@@ -24,6 +24,15 @@ const NOT_PAGES = new Set([
   '/sitemap.xml',
   '/signin',
   '/waitlist',
+  /*
+    `/unsubscribe` is reachable behind the gate and must never be listed.
+
+    It is not a destination: without a token minted for one address it does nothing, and with one it
+    is that person's link and nobody else's. A sitemap entry would invite crawlers to fetch a URL
+    whose whole purpose is to be fetched once, by one reader, holding one signature. The route sets
+    `x-robots-tag: noindex` as well, for a crawler that finds it some other way.
+  */
+  '/unsubscribe',
 ]);
 
 export function openPages(): string[] {

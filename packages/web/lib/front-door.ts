@@ -106,6 +106,14 @@ export const ALWAYS_OPEN = [
   '/agents',
   '/.well-known/',
   /*
+    `/unsubscribe` is the one entry whose reader arrived from outside the web entirely: a link out
+    of a message we sent, promised to take them off the list in one click. Behind the gate it would
+    307 to the very list they are leaving. The response assumes nothing about who is reading, a
+    request without a signature this deployment minted is refused, the sitemap keeps the path out
+    and the route sets `x-robots-tag`, so opening it does not publish it.
+  */
+  '/unsubscribe',
+  /*
     `robots.txt` and `sitemap.xml` are read by crawlers, and a crawler behind the gate reads a 307
     to `/waitlist` — which it records as "this site has no robots.txt", and then does whatever its
     defaults say. The two files exist to say otherwise, so they are open.
