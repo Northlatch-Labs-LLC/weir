@@ -15,7 +15,7 @@
 //   beat got EACCES, printed a phantom running beat and exited 75 for ever. The two cases are
 //   fixtured separately and must exit with different codes.
 //
-// Run: node --test test/*.test.ts
+// Run: node --test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -128,11 +128,13 @@ test('hole B (CTO §2.8a): a credential in the parent environment does not reach
   assert.equal(result.status, 0, `beat.sh exited ${String(result.status)}: ${result.stderr}`);
   const childEnv = readOnlyLog(h);
 
-  // The parent really did hold them — otherwise this test proves nothing.
-  assert.ok(SENTINEL_MODEL_KEY.length > 0);
-  assert.doesNotMatch(childEnv, /SENTINEL-DECRYPTED-MODEL-CREDENTIAL/);
-  assert.doesNotMatch(childEnv, /HERON-SENTINEL-9f2b41/);
-  assert.doesNotMatch(childEnv, /OPENROUTER_API_KEY/);
+  // Asserted as booleans, never with assert.doesNotMatch: a failure there prints the whole input,
+  // which is the child's entire environment, into the test log. Seen for real while proving this
+  // fixture fires on the v1 shape — the failure output carried a live session token off this
+  // laptop's own environment. A test that proves a leak must not be one.
+  assert.ok(!childEnv.includes(SENTINEL_MODEL_KEY), 'the decrypted model credential reached the child');
+  assert.ok(!childEnv.includes(SENTINEL_PLAIN), 'the plain sentinel reached the child');
+  assert.ok(!childEnv.includes('OPENROUTER_API_KEY'), 'the credential variable name reached the child');
 
   rmSync(h.root, { recursive: true, force: true });
 });
@@ -159,7 +161,8 @@ test('hole B: PICOCLAW_CONFIG the child sees is this beat\'s config, not an inhe
   const h = makeHarness();
   const result = runBeat(h, { PICOCLAW_CONFIG: h.configPath });
   assert.equal(result.status, 0, `beat.sh exited ${String(result.status)}: ${result.stderr}`);
-  assert.match(readOnlyLog(h), new RegExp(`^PICOCLAW_CONFIG=${h.configPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+  const lines = readOnlyLog(h).split('\n');
+  assert.ok(lines.includes(`PICOCLAW_CONFIG=${h.configPath}`), "the child's PICOCLAW_CONFIG is not this beat's config");
   rmSync(h.root, { recursive: true, force: true });
 });
 

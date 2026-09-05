@@ -13,7 +13,7 @@
 // model api_base allow-list (finding B5); rule 10 is the .security.yml key-path allow-list
 // (finding A4).
 //
-// Run: node --test test/*.test.ts  (no build step; node strips the types)
+// Run: node --test  (no build step; node strips the types)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -616,6 +616,70 @@ test('loader: a config that is valid JSON but not an object is refused', () => {
   writeFileSync(file, '["evolution"]');
   assert.throws(() => loadConfig(file), /is not a JSON object/);
   rmSync(root, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The count in the README, asserted against the checker's own source
+//
+// "A record that is not asserted rots" — the CTO on the README's stale run record (§1, defect 8c).
+// The same applies to the count of refusals: it is read out of bin/check-rules.ts here and
+// compared with what the README's rule list claims, so neither can move without the other.
+// ---------------------------------------------------------------------------------------------
+
+/** How many times each rule number appears as a refusal in the checker's source. */
+function refusalsPerRuleFromSource(): Map<number, number> {
+  const source = readFileSync(path.join(import.meta.dirname, '..', 'bin', 'check-rules.ts'), 'utf8');
+  const counts = new Map<number, number>();
+  for (const match of source.matchAll(/throw new RuleViolation\(\s*(\d+)/g)) {
+    const rule = Number(match[1]);
+    counts.set(rule, (counts.get(rule) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** What the README's "What it refuses" list claims for each rule. */
+function refusalsPerRuleFromReadme(): Map<number, number> {
+  const readme = readFileSync(path.join(import.meta.dirname, '..', 'README.md'), 'utf8');
+  const start = readme.indexOf('## What it refuses');
+  assert.ok(start !== -1, 'the README has no "What it refuses" section');
+  const end = readme.indexOf('\n## ', start + 1);
+  const section = readme.slice(start, end === -1 ? undefined : end);
+
+  const claims = new Map<number, number>();
+  const itemStarts = [...section.matchAll(/^(\d{1,2})\. /gm)];
+  for (const [index, item] of itemStarts.entries()) {
+    const from = item.index;
+    const next = itemStarts[index + 1];
+    const text = section.slice(from, next === undefined ? undefined : next.index);
+    const claim = /—\s+(\d+)\s+refusals?\./.exec(text);
+    assert.ok(claim !== null, `README rule ${item[1] as string} states no refusal count`);
+    claims.set(Number(item[1]), Number(claim[1]));
+  }
+  return claims;
+}
+
+test('the README states, for every rule, the number of refusals the checker actually has', () => {
+  const source = refusalsPerRuleFromSource();
+  const readme = refusalsPerRuleFromReadme();
+  assert.deepEqual([...readme.keys()].sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  for (const rule of readme.keys()) {
+    assert.equal(readme.get(rule), source.get(rule), `README rule ${rule} claims the wrong count`);
+  }
+});
+
+test('the README states the right total, and it is the forty this package ships', () => {
+  const total = [...refusalsPerRuleFromSource().values()].reduce((a, b) => a + b, 0);
+  assert.equal(total, 40);
+  const readme = readFileSync(path.join(import.meta.dirname, '..', 'README.md'), 'utf8');
+  assert.ok(readme.includes(`**${total} separate refusals**`), `the README does not state ${total} refusals`);
+});
+
+test('every rule number that appears in the checker also appears in the README list', () => {
+  const source = refusalsPerRuleFromSource();
+  const readme = refusalsPerRuleFromReadme();
+  for (const rule of source.keys()) {
+    assert.ok(readme.has(rule), `rule ${rule} has refusals in the checker but no line in the README`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
