@@ -1,0 +1,21 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Heron v1's logrotate config bounded nothing (CTO spec section 1, cause 8b): each beat writes a
+# NEW timestamped file, so `rotate 4` rotated each file once and the files themselves accumulated
+# forever on a 10 GB disk. This unit runs bin/heron-retention, which keeps the newest 200 files
+# and a 512 MB ceiling under /srv/heron/runs by moving older files into
+# /srv/heron/runs/archive/ and gzip-compressing them -- never deleting. See that script for the
+# honest limit: a full disk is itself an alert condition this cannot fully prevent, only delay.
+[Unit]
+Description=Bound /srv/heron/runs by archiving, never deleting
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/heron-retention
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/heron/runs

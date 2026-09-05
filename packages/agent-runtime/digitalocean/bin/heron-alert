@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Built-by: @projectx.sui /|\\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+
+Sends one Heron notice through the company's transactional email provider.
+
+# Which provider, fact-checked rather than assumed
+
+The task that named this step pointed at "Brevo appears in the estate" as a hint. Reading the
+actual estate before writing this: work/reports/2026-09-04-*-keys-and-secrets-ledger*.md says
+plainly "Brevo unused"; weir/packages/web (branch feat/waitlist-email-sender,
+lib/email-sender.ts) already sends live company mail through Resend's HTTP API
+(https://api.resend.com/emails, POST, `Authorization: Bearer <key>`, JSON body with
+from/to/subject/html/text), and a grep for brevo/sendgrid/postmark across packages/web returns
+nothing. This script is written against Resend, matching the one sender that already exists in
+this codebase, not the provider merely named in passing.
+
+# The key
+
+Read ONLY from `$CREDENTIALS_DIRECTORY/mail-key`, which is where systemd's own
+`LoadCredentialEncrypted=mail-key:/etc/heron/creds/mail-key.cred` (see
+digitalocean/systemd/heron-alert@.service) decrypts the sealed blob into a per-unit tmpfs, 0400,
+gone when the unit stops. This process never reads an environment variable for the key, never
+takes it as an argv, and never logs it. `CREDENTIALS_DIRECTORY` itself is systemd's own variable
+naming WHERE the credential lives, not the credential -- reading it is not "reading a key from the
+environment"; reading MAIL_KEY, RESEND_API_KEY or any such variable would be, and this script
+never does.
+
+# --dry-run
+
+Renders and prints the exact message this would send and returns before anything reaches
+`credential_path()` or `read_key()` -- so a dry run needs no credential, no sealed blob and no
+network, and can be run by anyone auditing the shape of the alert without the pile being open at
+all.
+
+Usage: heron-alert <instance> [--dry-run]
+  instance   free text naming what raised the notice: "watchdog", "alive", or (build order
+             step 5, from heron-beat.service's OnFailure=) the failed unit's own name.
+"""
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+RESEND_ENDPOINT = "https://api.resend.com/emails"
+TO_ADDRESS = "kaela@projectxprotocol.dev"
+# Not yet a verified sending domain in Resend as of this step (packages/web's own sender notes the
+# same open item for weir.social/hello@); this address is the one the alert will use once it is.
+FROM_ADDRESS = "Heron <heron@weir.social>"
+CREDENTIAL_NAME = "mail-key"
+
+
+def build_message(instance: str) -> tuple[str, str]:
+    if instance == "alive":
+        subject = "Heron is alive"
+        text = (
+            "Heron's daily alive notice.\n\n"
+            "This message alone proves nothing about the last beat's content -- only that this "
+            "host can still reach Resend and that the timer that sends it is still running. Read "
+            "state/latest.json over SSH, or wait for the laptop's own pull, for the beat itself.\n"
+        )
+    else:
+        subject = f"Heron alert: {instance}"
+        text = (
+            f"Heron's watchdog raised '{instance}'.\n\n"
+            "Most likely cause: state/latest.json was missing or older than the 90-minute "
+            "ceiling at the time of this check, or the named unit failed on its own. Read the "
+            "host over SSH: /srv/heron/state/latest.json and "
+            f"`journalctl -u {instance}` (or -u heron-beat.service if the instance is "
+            "\"watchdog\").\n"
+        )
+    return subject, text
+
+
+def credential_path() -> str:
+    creds_dir = os.environ.get("CREDENTIALS_DIRECTORY")
+    if not creds_dir:
+        print(
+            "heron-alert: refused - CREDENTIALS_DIRECTORY is not set; this must run under "
+            f"systemd with LoadCredentialEncrypted={CREDENTIAL_NAME}:/etc/heron/creds/"
+            f"{CREDENTIAL_NAME}.cred (see digitalocean/systemd/heron-alert@.service)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return os.path.join(creds_dir, CREDENTIAL_NAME)
+
+
+def read_key() -> str:
+    path = credential_path()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError as exc:
+        print(f"heron-alert: refused - could not read the credential at {path}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def send(subject: str, text: str, key: str) -> str:
+    body = json.dumps(
+        {
+            "from": FROM_ADDRESS,
+            "to": [TO_ADDRESS],
+            "subject": subject,
+            "text": text,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        RESEND_ENDPOINT,
+        data=body,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        print(f"heron-alert: Resend refused: {exc.code} {detail}", file=sys.stderr)
+        raise
+    message_id = payload.get("id", "")
+    if not message_id:
+        raise RuntimeError(f"{RESEND_ENDPOINT} answered without an id; a message may have been created")
+    return message_id
+
+
+def main(argv: list[str]) -> int:
+    dry_run = "--dry-run" in argv
+    positional = [arg for arg in argv[1:] if arg != "--dry-run"]
+    if len(positional) != 1:
+        print("heron-alert: usage: heron-alert <instance> [--dry-run]", file=sys.stderr)
+        return 2
+
+    instance = positional[0]
+    subject, text = build_message(instance)
+
+    if dry_run:
+        # This branch touches no credential, no CREDENTIALS_DIRECTORY, no network. It is the
+        # entire reason a dry run is safe to run with no pile open at all.
+        print(f"heron-alert --dry-run: to={TO_ADDRESS} from={FROM_ADDRESS} instance={instance}")
+        print(f"subject: {subject}")
+        print(text)
+        return 0
+
+    key = read_key()
+    message_id = send(subject, text, key)
+    print(f"heron-alert: sent instance={instance} id={message_id}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
