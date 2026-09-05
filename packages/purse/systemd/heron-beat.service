@@ -1,0 +1,51 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# One beat, in two phases. Root-owned, oneshot, holds no key.
+#
+# Phase one runs the container, which reads and writes exactly one file: runs/<beat-id>/intent.json.
+# Phase two is packages/purse/bin/beat-phase2.ts: it validates that intent, asks the purse over the
+# socket, submits what comes back, and writes state/latest.json on every path — signed, refused, no
+# intent, or a thrown error.
+#
+# The unit is root-owned and the `heron` user is not in the docker group and has no sudo: `docker run
+# -v /:/host` makes any other restriction cosmetic, so the ability to run the container is kept with
+# the timer rather than given to the account the model's workspace belongs to.
+
+[Unit]
+Description=Heron — one beat
+Documentation=file:///srv/heron/purse/README.md
+After=network-online.target docker.service heron-purse.service
+Wants=network-online.target
+Requires=docker.service heron-purse.service
+# Step 10. Referenced here and built there; the unit does not exist yet and systemd treats a missing
+# OnFailure target as a failure to start the alert, not a failure of this unit.
+OnFailure=heron-alert@%n.service
+
+[Service]
+Type=oneshot
+# Written out rather than left to the oneshot default. A beat that hangs against an unreachable
+# fullnode must end, and it must end before the next timer tick 30 minutes later — otherwise the
+# lock in beat.sh refuses the next beat and the dead man fires on a host that is merely stuck.
+TimeoutStartSec=600
+User=root
+Group=root
+
+# The model credential, decrypted for the life of this beat only and mounted into the container from
+# $CREDENTIALS_DIRECTORY. Never written to /srv/heron in the clear.
+LoadCredentialEncrypted=openrouter:/srv/heron/creds/openrouter.cred
+
+ExecStart=/srv/heron/bin/heron-beat
+
+# Phase one's output and the sink phase two writes. The only writable paths.
+ReadWritePaths=/srv/heron/runs /srv/heron/state
+
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+UMask=0027
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
