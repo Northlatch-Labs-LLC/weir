@@ -47,7 +47,7 @@ On SUI gas counts inside this figure — the rule says so in its own refusal tex
 gas budget, not a purchase budget. That is deliberate: Heron sells and does not buy at v2, and
 `weir_buy`, `weir_subscribe` and `creator::unlock` are refused outright.
 
-**`periodMs` 604800000 (seven days).** The policy window is *rolling*, `[now - periodMs, now]`, not
+**`periodMs` 86400000 (seven days).** The policy window is *rolling*, `[now - periodMs, now]`, not
 a calendar epoch, so it has no boundary to wait for. Seven days is the soul package's `EPOCH_MS` as
 built. **Open:** the two soul trees disagree — one carries `EPOCH_MS = 604_800_000`, the other
 deletes it and uses the chain epoch instead. If the published soul settles on chain epochs, this
@@ -74,3 +74,6 @@ because `soul::settle_epoch` is not generic.
 The document is read once, at start, and its sha256 must equal `--policy-sha256` in the unit file,
 which is under root. Someone who can write the file can make the purse refuse to start — loud, and
 refusing everything. Widening needs the unit changed too. There is no reload call and no watcher.
+
+
+**Epoch length, ruled 2026-09-05 by the executive:** the soul as built at `northlatch/contracts/soul` settles on the chain's own epoch (`ctx.epoch()`, 24 hours); `EPOCH_MS` was deleted from it. Both documents therefore carry `periodMs` 86400000, one Sui epoch, and the seven-day figure is gone.
