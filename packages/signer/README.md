@@ -349,21 +349,24 @@ pnpm exec tsx packages/signer/bin/birth-key.ts ledger \
   --encrypt --keychain-item northlatch-heron-pile
 ```
 
-**4. `brake` — the Master's key.** Made by **his own hand**, with the same tool, into a folder the
-desk does not read. A brake the desk has seen is not a brake.
+**4. `brake` — the Master's key.** Made by **his own hand**, with the same tool, **on his own
+machine, never on the desk's laptop and never on Heron's host** (decision 2; Security's B1). A
+brake the desk has seen, or whose plaintext ever sat on the desk's disk, is not a brake.
 
-> Your key. The second of the two on Heron's address. You make it, you keep it, and the desk only
-> ever sees its public half. On its own, at any moment, it can sweep Heron's coins back to the
-> treasury. That is what makes it the brake.
+> Your key. The second of the two on Heron's address. You make it on a machine of yours, you keep
+> it in your password manager, and the desk only ever sees its public half. On its own, at any
+> moment, it can sweep Heron's coins back to the treasury. That is what makes it the brake.
+
+On his own machine, with Node 22 and this repository checked out, in a folder only he reads:
 
 ```sh
-mkdir -p ~/.config/protocolx/master && chmod 700 ~/.config/protocolx/master
-pnpm exec tsx packages/signer/bin/birth-key.ts brake --pile ~/.config/protocolx/master
+mkdir -p ~/brake && chmod 700 ~/brake
+pnpm exec tsx packages/signer/bin/birth-key.ts brake --pile ~/brake
 ```
 
-He then moves the contents of `~/.config/protocolx/master/brake.key` into his password manager and
-empties that folder. The staging folder is a step, not a home; the password manager is the home.
-He hands the desk one line: the contents of `brake.pub`.
+He moves the contents of `~/brake/brake.key` into his password manager, then empties the folder
+by his own hand; the password manager is the home. He hands the desk one line, the contents of
+`brake.pub`, and the desk keeps only that. The desk's laptop never runs this step.
 
 ### Deriving Heron's address, and using the sealed key
 

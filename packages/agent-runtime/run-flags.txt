@@ -37,5 +37,6 @@
 # What is never mounted, on purpose, at this step and at every step after it:
 #   - no key file of any kind (the hot key, the brake key's public half, the model key)
 #   - no key material as an environment variable (a key in ps/argv/env is not "secured")
-#   - no signer socket (heron-purse.service does not exist yet — build order step 5; when it
-#     does, its socket is the ONLY additional mount this file gains, per spec §2.8)
+#   - no signer socket, ever: decision 3 and Security's spec §2 say the container never gets a
+#     key and never gets the signer's socket; the beat is two phases and the container only
+#     writes an intent file. This line is fixed, not a placeholder (Security's A6).
