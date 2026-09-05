@@ -4,7 +4,7 @@
 /**
  * # What was wrong with the row of buttons
  *
- * The header listed a button per installed wallet. `raffle.protocolx.io` and `protocolx.io` use
+ * The header listed a button per installed wallet. `protocolx.io` use
  * dapp-kit's `<ConnectButton />` — as did `suins.protocolx.io` before it was retired: a single
  * control that opens a window listing the wallets. Somebody moving between the properties met a
  * different idea of connecting

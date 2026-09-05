@@ -258,7 +258,7 @@ export function DesignLanding({
               {/*
                 Centred under its centred label.
               */}
-              <p style={{ margin: '0 auto', maxWidth: '62ch', textAlign: 'center', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)' }}>Weir runs on the same deployed package as its sibling surfaces: <a href="https://protocolx.io">the staking vault</a> and <a href="/names">.sui names</a>. <a href="https://projectxprotocol.dev">One protocol, documented here</a>.</p>
+              <p style={{ margin: '0 auto', maxWidth: '62ch', textAlign: 'center', textWrap: 'pretty', color: 'var(--dim,#a3bcb8)' }}>Weir runs on the same deployed package as its sibling surfaces: <a href="https://protocolx.io">the draw that runs in public</a> and <a href="/names">.sui names</a>. <a href="https://projectxprotocol.dev">One protocol, documented here</a>.</p>
             </section>
           </div>
     </>
