@@ -1452,7 +1452,9 @@ test('--seal reads a born key as <name>.key when the bare name is absent, and re
   const shown = spawnSync('bash', [DEPLOY_SCRIPT, '--seal', 'heron-hot', '--dry-run'], { encoding: 'utf8', env });
   assert.equal(shown.status, 0, shown.stderr);
   assert.match(shown.stdout + shown.stderr, /heron-hot\.key/, 'the dry run must name the .key file it would read');
-  const missing = spawnSync('bash', [DEPLOY_SCRIPT, '--seal', 'heron-ledger', '--dry-run'], { encoding: 'utf8', env });
+  // Not a dry run: --dry-run opens nothing by design, so the existence refusal is only reachable on
+  // the real path, which refuses before it contacts the host.
+  const missing = spawnSync('bash', [DEPLOY_SCRIPT, '--seal', 'heron-ledger'], { encoding: 'utf8', env });
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /nothing at .*heron-ledger \(or .*heron-ledger\.key\)/);
 });
