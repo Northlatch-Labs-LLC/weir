@@ -258,10 +258,87 @@ by the host that does have Docker when it builds this image.
 ## The $4 home on DigitalOcean
 
 Chosen on the Master's word (2026-09-04): the smallest droplet, `s-1vcpu-512mb-10gb` at $4.00 a
-month, running this image from DigitalOcean's free container registry on one cron line every 30
-minutes. The recipe is in `digitalocean/` (README, cloud-init, a create script that refuses
-without `DEPLOY_CONFIRMED=1`). Nothing there has been run; the Cloud Run files in `cloudrun/`
-stay as the Google alternative.
+month. The recipe is in `digitalocean/`; the Cloud Run files in `cloudrun/` stay as the Google
+alternative. **Nothing there has been run, and nothing in this step creates anything in any
+cloud** — every claim below is verified by `node --test test/host.test.mjs` and by
+`digitalocean/deploy-droplet.sh --plan`'s own output, never by a live droplet.
+
+Build order step 6 (`work/rnd/agent/2026-09-05-executive-heron-v2-decided.md` §3), against the
+CTO's spec (`2026-09-05-engineering-heron-v2-runtime-and-host.md` §3-4) and the CISO's, amended by
+the executive to **one host**, a 1-of-2 multisig, one signer service (`heron-purse`; the
+`LedgerCap` service also runs here) — the earlier two-host purse design in the CISO's spec is
+superseded by that ruling.
+
+- **`digitalocean/cloud-init.yaml`**, re-cut for Debian 13, ASCII-only (the same
+  `scripts/check-ascii.py` guard from build order step 2 runs on the RENDERED file, never the
+  template — the exact discipline v1 skipped). Sets `disable_root: true`, `ssh_pwauth: false`;
+  creates `ops` (sudo, NOPASSWD) and `heron-ops` (no sudo), both keyed with the desk's SSH public
+  key substituted at render; writes `/etc/ssh/sshd_config.d/00-heron.conf` (`PasswordAuthentication
+  no`, `PermitRootLogin no`, `KbdInteractiveAuthentication no`) named `00-` specifically so it
+  sorts *before* cloud-init's own `50-cloud-init.conf` and wins on sshd's first-value-wins
+  semantics — v1's `99-heron.conf` sorted after and lost every keyword; installs `docker.io` from
+  Debian's own repository plus `ca-certificates logrotate unattended-upgrades python3`, with
+  `Unattended-Upgrade::Automatic-Reboot "false"` (an unannounced reboot mid-beat is a false
+  dead-man alert); lays out `/srv/heron` and `/etc/heron/creds` with the gid-10001 `heron` system
+  group created first and asserted free both before and after (the same empirical discipline as
+  the image's uid check); purges `do-agent` defensively; enables **no timer** — `--smoke` is the
+  only thing that ever does that.
+- **`digitalocean/systemd/`** — the host-side units this step owns: `heron-watchdog.service`/
+  `.timer` (every 15 minutes; refuses if `state/latest.json` is missing or older than 90 minutes,
+  and its `OnFailure=heron-alert@watchdog.service` is what turns that refusal into mail);
+  `heron-alert@.service` (a parameterized oneshot, `LoadCredentialEncrypted=mail-key:/etc/heron/
+  creds/mail-key.cred` — the key is never an environment variable, never a file this unit names
+  directly); `heron-alive.timer` (daily, 09:00 UTC, `Unit=heron-alert@alive.service`); and
+  `heron-retention.service`/`.timer` (daily; keeps the newest 200 files and 512 MB under
+  `/srv/heron/runs`, moving the rest into `runs/archive/` gzip-compressed — **never deleting**,
+  closing v1's cause 8b, where `rotate 4` on a per-beat glob bounded nothing). `heron-beat.
+  service`/`.timer`, `heron-purse.service` and `heron-ledger.service` are build order step 5's,
+  on another branch, and are only referenced here by name.
+- **`digitalocean/bin/`** — the three scripts the units above run: `heron-watchdog` (bash; the
+  90-minute rule, `HERON_STATE_FILE`/`HERON_WATCHDOG_MAX_AGE_SECONDS` overridable for tests);
+  `heron-alert` (python3; sends through **Resend**'s HTTP API — fact-checked against the estate
+  rather than assumed: the task's own hint named Brevo, but `work/reports/2026-09-04-*-ledger*.md`
+  says "Brevo unused" and `packages/web/lib/email-sender.ts` on `feat/waitlist-email-sender`
+  already posts live company mail to `https://api.resend.com/emails`, so this script matches the
+  sender that already exists rather than the provider merely named in passing; `--dry-run` renders
+  and prints the message without touching `CREDENTIALS_DIRECTORY` or any key-shaped environment
+  variable at all); `heron-retention` (python3; the archive-and-compress sweep, with an advisory,
+  non-failing warning if the filesystem is over 90% full — the honest limit that a full disk is
+  itself an alert condition this cannot prevent, only delay).
+- **`digitalocean/deploy-droplet.sh`**, rewritten with five modes. **`--plan`** prints, with no
+  side effect and no API call, every resource it would create (droplet name/region/size/slug,
+  firewall rules, the SSH key name to register), every host path with its owner and mode, and one
+  ledger row per credential it would seal — this is what the Master reads before anything exists.
+  **`--create`** (only with `HERON_DEPLOY_CONFIRMED=1`, checked before any other input is even
+  read) runs every precondition from `--plan`'s own list, each a named refusal, then creates the
+  firewall and droplet, reads the firewall back and refuses on any mismatch, waits for SSH, asserts
+  `cloud-init status --wait --long` / `cloud-init schema --system` / uid 10001 over that session
+  and **destroys the droplet on any failure**, then builds the image on the host from the source
+  tarball and installs (but never enables) the units above. **`--seal <name>`** pipes one
+  credential from the desk's pile straight into `systemd-creds encrypt --with-key=host` over the
+  live SSH session — never a plaintext file on either end; `--dry-run` prints the exact pipeline
+  without touching the pile at all. **`--smoke`** and **`--status`** are written for build order
+  steps 9 and later. None of `--create`/`--seal`/`--smoke`/`--status` is exercised against a real
+  host from this laptop in this step — Docker stays down here, and this file says so rather than
+  claiming otherwise.
+- **What is verified, and how.** `test/host.test.mjs` (`node:test`, no dependencies, no Docker, no
+  network): the rendered cloud-init is ASCII (`check-ascii.py`) and YAML-shaped (PyYAML if
+  present — it remains absent on this laptop, the same finding the CTO spec already made; a
+  minimal structural check stands in rather than installing a package as a side effect of running
+  tests) and carries every required key; `--plan` runs with `HERON_NO_NETWORK=1` and exits 0,
+  printing every section above; `--create` refuses without `HERON_DEPLOY_CONFIRMED=1`, checked
+  first; every unit file's required directive is present; the watchdog script fires past 90
+  minutes and passes at 89, on a fresh file, and on an absent one; the alert script's `--dry-run`
+  prints the message and is proven, with a poisoned `MAIL_KEY`/`RESEND_API_KEY` in the
+  environment, never to leak them; and the retention script bounds a 400-file fixture to 200,
+  archiving the rest rather than deleting them.
+- **Open, by design.** The `intents/` directory name (plural) matches the mount source already
+  fixed in `run-flags.txt` from build order step 3; the build order's own step-6 text says
+  `intent/`, singular — the committed run-flags.txt governs, since it is the path the container
+  actually mounts. The DigitalOcean image slug `debian-13-x64` is pinned explicitly but not
+  verified live against the account's own image list from this laptop (no network call in this
+  step); `--create`'s own precondition does that read before ever calling create. `--seal`,
+  `--smoke` and `--status`'s SSH-driven bodies are written and reviewed, not run.
 
 ## Where this stands against the council
 

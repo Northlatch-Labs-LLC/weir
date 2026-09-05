@@ -1,0 +1,24 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The host-side half of the dead man (CTO spec 2026-09-05-engineering-heron-v2-runtime-and-host.md
+# section 3.11): fires OnFailure into heron-alert@watchdog.service, which is the only thing that
+# actually sends mail. This unit's own job is narrow -- decide stale-or-not and exit accordingly --
+# so the decision has one failing fixture (test/host.test.mjs) independent of whether mail can be
+# sent at all.
+#
+# The laptop-side half (a pull over SSH that the Desk raises staleness from) is not this file; it
+# is named here only so the two are not mistaken for each other. A host-only watchdog cannot
+# report its own host's death -- if this droplet is gone entirely, nothing here can run at all.
+[Unit]
+Description=Assert Heron has completed a beat within the dead-man window
+OnFailure=heron-alert@watchdog.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/heron-watchdog
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

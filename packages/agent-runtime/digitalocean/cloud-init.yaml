@@ -1,90 +1,136 @@
 #cloud-config
-# ASCII ONLY. cloud-init on DigitalOcean refused the first version of this file for one
-# non-ASCII character in a comment ("unacceptable character #x0080") and applied NOTHING, which
-# left a bare machine with root open. A check in deploy-droplet.sh refuses a non-ASCII file.
-# Heron's home: one droplet, one root-owned timer, one container. Security's corrections of
-# 2026-09-04 are built in: SSH keys only, no root login, no password auth; Docker from Debian's
-# signed repository (never a script piped to root); the `agent` user is NOT in the docker group
-# and has no sudo; the beat runs from a root-owned systemd timer; the image reference lives in
-# /srv/agent/image.env, placed over SSH, and MUST be pinned by a sha256 digest or image id (the
-# unit refuses otherwise). The image is built ON the droplet from the package's own source, because
-# Docker stays down on the laptop by the Master's word; no registry is used.
-# Secrets (/srv/agent/config.json 0600, /srv/agent/.security.yml 0600, /srv/agent/openrouter.token
-# 0600) are placed over SSH by the desk from the company's pile; nothing secret is in this file.
+# ASCII ONLY. Heron v1 was scrapped in part because one U+0080 byte in a comment made PyYAML
+# refuse the whole document ("unacceptable character #x0080"), cloud-init applied NOTHING, and the
+# droplet booted bare with root reachable. scripts/check-ascii.py refuses the RENDERED copy of this
+# file (after the SSH key placeholder below is substituted) before deploy-droplet.sh ever calls
+# the API. Do not
+# paste a smart quote, an em dash or any other non-ASCII character into this file, ever.
+#
+# Build order step 6 (work/rnd/agent/2026-09-05-executive-heron-v2-decided.md section 3), against
+# the CTO's spec (2026-09-05-engineering-heron-v2-runtime-and-host.md sections 3, 5) and the CISO's
+# spec, amended by the executive to one host for a 1-of-2 multisig (one signer service,
+# heron-purse; the LedgerCap service also runs here). This file sets up the OS only: users, SSH
+# hardening, packages, the /srv/heron and /etc/heron/creds layout, and the heron system group/user
+# that both the host's own units and the container's fixed uid 10001 read and write through. No
+# timer is enabled here -- deploy-droplet.sh --smoke proves one real beat works before any timer
+# is turned on, and heron-beat.service/.timer/heron-purse.service (build order step 5) and the
+# actual key material (step 8) are placed later, over the same SSH session, never in this file.
+#
+# No key of any kind is ever written by this file. The mail-key credential the alert units read is
+# sealed onto this host afterward, by deploy-droplet.sh --seal, straight into
+# systemd-creds encrypt --with-key=host -- never as a plaintext file, never inline here.
 package_update: true
 package_upgrade: true
-packages: [docker.io, ca-certificates, logrotate, unattended-upgrades]
-ssh_pwauth: false
+packages:
+  - docker.io
+  - ca-certificates
+  - logrotate
+  - unattended-upgrades
+  - python3
 disable_root: true
+ssh_pwauth: false
 users:
-  - name: agent
-    shell: /bin/bash
-    lock_passwd: true
-    ssh_authorized_keys:
-      - "SSH_PUBLIC_KEY"
   - name: ops
     shell: /bin/bash
     lock_passwd: true
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys:
       - "SSH_PUBLIC_KEY"
+  - name: heron-ops
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "SSH_PUBLIC_KEY"
 write_files:
-  - path: /etc/ssh/sshd_config.d/99-heron.conf
+  # Sorts BEFORE cloud-init's own 50-cloud-init.conf (Debian's sshd_config includes
+  # sshd_config.d/*.conf in glob order and sshd keeps the FIRST value it reads for a keyword) --
+  # v1 named this file 99-heron.conf, which sorts AFTER 50-cloud-init.conf and lost every keyword.
+  # Asserted, not assumed: deploy-droplet.sh's post-boot check runs
+  # `sshd -T | grep -E '^(passwordauthentication|permitrootlogin|kbdinteractiveauthentication) no$'`
+  # over SSH and destroys the droplet if any of the three does not read "no".
+  - path: /etc/ssh/sshd_config.d/00-heron.conf
     permissions: "0644"
+    owner: root:root
     content: |
       PasswordAuthentication no
       PermitRootLogin no
       KbdInteractiveAuthentication no
-      PubkeyAuthentication yes
-  - path: /usr/local/sbin/heron-beat
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      # One beat of Heron. Refuses unless the image reference is pinned by digest. Runs as root
-      # (the timer's owner); the container itself runs as its own non-root user with no port.
-      set -euo pipefail
-      . /srv/agent/image.env
-      case "$IMAGE" in *@sha256:*|sha256:*) ;; *) echo "heron-beat: refused - IMAGE is not pinned by a sha256 digest or image id" >&2; exit 1;; esac
-      mkdir -p /srv/agent/runs /srv/agent/state
-      exec /usr/bin/docker run --rm --pull=never \
-        -v /srv/agent/config.json:/app/picoclaw/config.json:ro \
-        -v /srv/agent/.security.yml:/app/picoclaw/.security.yml:ro \
-        -v /srv/agent/openrouter.token:/app/picoclaw/openrouter.token:ro \
-        -v /srv/agent/runs:/app/runs \
-        -e PICOCLAW_CONFIG=/app/picoclaw/config.json \
-        "$IMAGE"
-  - path: /etc/systemd/system/heron-beat.service
+  # Automatic-Reboot left at its Debian default (unset, which unattended-upgrades treats as false)
+  # would already be safe; this file makes the choice explicit and load-bearing rather than
+  # incidental, because an unannounced reboot mid-beat is a false dead-man alert (CTO spec 3.13).
+  # Reboots stay the desk's call, read from the pending list over SSH.
+  - path: /etc/apt/apt.conf.d/51-heron-no-automatic-reboot
     permissions: "0644"
+    owner: root:root
     content: |
-      [Unit]
-      Description=One beat of Heron (PicoClaw one-shot in its container)
-      After=docker.service network-online.target
-      Requires=docker.service
-      [Service]
-      Type=oneshot
-      ExecStart=/usr/local/sbin/heron-beat
-      StandardOutput=append:/srv/agent/beat.log
-      StandardError=append:/srv/agent/beat.log
-  - path: /etc/systemd/system/heron-beat.timer
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=Heron beats every 30 minutes
-      [Timer]
-      OnBootSec=3min
-      OnUnitActiveSec=30min
-      RandomizedDelaySec=60
-      Persistent=true
-      [Install]
-      WantedBy=timers.target
-  - path: /etc/logrotate.d/heron
-    permissions: "0644"
-    content: |
-      /srv/agent/beat.log /srv/agent/runs/*.log { size 5M rotate 4 compress missingok notifempty }
+      Unattended-Upgrade::Automatic-Reboot "false";
 runcmd:
-  - install -d -m 0750 /srv/agent /srv/agent/runs /srv/agent/state
-  - systemctl restart ssh
-  - systemctl enable --now docker
-  - systemctl daemon-reload
-  # The timer is enabled by the desk over SSH after the secrets and image.env are placed,
-  # so the first beat never runs against a half-placed home.
+  # sshd is not restarted by cloud-init's own module when only write_files touched its config
+  # directory; restart explicitly so 00-heron.conf takes effect in this boot, not the next one.
+  - [ systemctl, restart, ssh ]
+
+  # DigitalOcean's own monitoring agent (do-agent) is what v1 collided with at uid 999: the
+  # droplet is created with monitoring:false (deploy-droplet.sh), which should mean do-agent is
+  # never installed at all, but this purges it defensively in case a base image ever ships it
+  # pre-installed or a future create call regresses the flag. "|| true" because the normal case is
+  # that neither command finds anything to remove.
+  - "apt-get purge -y do-agent || true"
+  - "deluser --remove-home do-agent || true"
+
+  # Empirical assertion before the fact, not reasoning alone: Debian Policy 9.2.2 puts system
+  # accounts at 100-999 and dynamic login accounts starting at 1000 (adduser.conf FIRST_UID), so
+  # 10001 should be free on a clean Debian 13 image -- but v1's uid 999 collision was exactly this
+  # kind of assumption going unchecked. If either id is already taken, cloud-init fails this boot
+  # loudly (runcmd errors mark cloud-init's own run as failed, which deploy-droplet.sh's
+  # `cloud-init status --wait --long` check catches) rather than silently reusing someone else's id.
+  - |
+    if getent passwd 10001 >/dev/null 2>&1; then
+      echo "heron cloud-init: refused - uid 10001 already exists before the heron group/user is created" >&2
+      exit 1
+    fi
+    if getent group 10001 >/dev/null 2>&1; then
+      echo "heron cloud-init: refused - gid 10001 already exists before the heron group/user is created" >&2
+      exit 1
+    fi
+  # The group is created FIRST, as its own step, matching the container's own uid/gid 10001:10001
+  # (Dockerfile, build order step 3) -- so a beat's writes under runs/, state/ and intents/ land
+  # group-owned by the same id the container runs as, on a host account that owns nothing else.
+  - [ groupadd, --gid, "10001", heron ]
+  - [ useradd, --uid, "10001", --gid, "10001", --system, --no-create-home, --home-dir, /nonexistent, --shell, /usr/sbin/nologin, heron ]
+  - |
+    RESOLVED_USER="$(getent passwd 10001 | cut -d: -f1)"
+    RESOLVED_GROUP="$(getent group 10001 | cut -d: -f1)"
+    if [ "$RESOLVED_USER" != "heron" ] || [ "$RESOLVED_GROUP" != "heron" ]; then
+      echo "heron cloud-init: refused - uid/gid 10001 resolved to '$RESOLVED_USER:$RESOLVED_GROUP', not heron:heron" >&2
+      exit 1
+    fi
+    echo "heron cloud-init: uid/gid 10001 confirmed to be heron:heron"
+
+  # The layout (CTO spec 3.7, and this step's own instructions). No key file is placed by any of
+  # this -- every directory below is created empty; deploy-droplet.sh --seal is the only thing
+  # that ever writes into creds/, and it pipes straight into systemd-creds encrypt over the live
+  # SSH session, never through a plaintext intermediate on this disk.
+  - [ install, -d, -m, "0750", -o, root, -g, root, /srv/heron ]
+  - [ install, -d, -m, "0755", -o, root, -g, root, /srv/heron/bin ]
+  - [ install, -d, -m, "0700", -o, root, -g, root, /srv/heron/creds ]
+  - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/runs ]
+  - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/state ]
+  # Named "intents" (plural) to match the mount source already fixed in run-flags.txt (build
+  # order step 3): "--mount type=bind,source=/srv/heron/intents,target=/app/intents". The build
+  # order's own step-6 text says "intent/", singular; the committed run-flags.txt governs here
+  # because it is the path the container actually mounts, and a host directory the container's
+  # bind mount cannot find is a beat that fails at every run, not a naming preference.
+  - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/intents ]
+  - [ install, -m, "0600", -o, root, -g, root, /dev/null, /srv/heron/image.env ]
+  - [ install, -d, -m, "0700", -o, root, -g, root, /etc/heron ]
+  - [ install, -d, -m, "0700", -o, root, -g, root, /etc/heron/creds ]
+
+  - [ systemctl, enable, --now, docker ]
+  - [ systemctl, daemon-reload ]
+
+  # No timer is enabled here, on purpose. heron-beat.timer, heron-watchdog.timer,
+  # heron-alive.timer and heron-retention.timer are all installed by deploy-droplet.sh over SSH
+  # after this boot (systemd units are not shipped inside cloud-init so they can be versioned,
+  # tested and updated without re-provisioning the host) and enabled only by --smoke, once one
+  # real beat has proven the host works end to end. v1 enabled its timer against a home nobody
+  # had proved; this build refuses to repeat that.

@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Built-by: @projectx.sui /|\\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+
+Bounds /srv/heron/runs. Heron v1's logrotate config rotated nothing (CTO spec
+2026-09-05-engineering-heron-v2-runtime-and-host.md section 1, cause 8b): each beat writes a NEW
+timestamped file, `rotate 4` rotates each file once, and the files themselves accumulate forever
+on a 10 GB disk at 48 beats a day.
+
+This keeps the newest N files (default 200) and a byte ceiling (default 512 MiB) under the runs
+directory by moving the OLDEST files first into runs/archive/ and gzip-compressing them there --
+never deleting. The estate's law is never delete, archive; this is the one exception named
+anywhere in this build to even logrotate's own default (which would otherwise eventually compress
+in place and, with `rotate N`, eventually remove) -- there is no `rotate` here, no removal, ever.
+
+The archive directory is not itself bounded by this script, on purpose: the archive is meant to
+grow until an operator reads it, and a script that also capped the archive would be quietly
+deleting under a different name. The honest limit, stated rather than solved: a droplet with a
+full disk is itself an alert condition this script cannot prevent, only delay by moving bytes
+into a smaller (compressed) form -- see the disk-usage warning below, which is advisory only and
+never fails the run.
+
+HERON_RUNS_DIR, HERON_RETENTION_KEEP and HERON_RETENTION_CEILING_BYTES are overridable so
+test/host.test.mjs can run this exact binary against a fixture directory.
+
+Usage: heron-retention
+"""
+import gzip
+import os
+import shutil
+import sys
+
+RUNS_DIR = os.environ.get("HERON_RUNS_DIR", "/srv/heron/runs")
+ARCHIVE_DIR_NAME = "archive"
+KEEP = int(os.environ.get("HERON_RETENTION_KEEP", "200"))
+CEILING_BYTES = int(os.environ.get("HERON_RETENTION_CEILING_BYTES", str(512 * 1024 * 1024)))
+
+
+def archive_dir() -> str:
+    return os.path.join(RUNS_DIR, ARCHIVE_DIR_NAME)
+
+
+def live_entries() -> list[tuple[float, int, str]]:
+    """(mtime, size, path) for plain files directly under RUNS_DIR, excluding archive/ itself."""
+    entries = []
+    for name in os.listdir(RUNS_DIR):
+        if name == ARCHIVE_DIR_NAME:
+            continue
+        path = os.path.join(RUNS_DIR, name)
+        if not os.path.isfile(path):
+            continue
+        stat = os.stat(path)
+        entries.append((stat.st_mtime, stat.st_size, path))
+    entries.sort(key=lambda entry: entry[0])  # oldest first
+    return entries
+
+
+def archive_one(path: str) -> None:
+    """Moves one file into archive/, gzip-compressing it unless it already is one."""
+    name = os.path.basename(path)
+    if name.endswith(".gz"):
+        shutil.move(path, os.path.join(archive_dir(), name))
+        return
+    dest = os.path.join(archive_dir(), name + ".gz")
+    with open(path, "rb") as source, gzip.open(dest, "wb") as sink:
+        shutil.copyfileobj(source, sink)
+    os.remove(path)
+
+
+def warn_if_disk_nearly_full() -> None:
+    """Advisory only. Never fails the run -- see the module docstring's honest limit."""
+    try:
+        usage = shutil.disk_usage(RUNS_DIR)
+    except OSError:
+        return
+    if usage.total > 0 and (usage.used / usage.total) > 0.90:
+        print(
+            f"heron-retention: WARNING - the filesystem under {RUNS_DIR} is over 90% full "
+            "(archiving moves bytes into a smaller form; it does not create space that isn't "
+            "there, and a full disk is itself an alert condition, not something this script "
+            "can fix)",
+            file=sys.stderr,
+        )
+
+
+def main() -> int:
+    os.makedirs(archive_dir(), mode=0o2770, exist_ok=True)
+
+    entries = live_entries()
+    count = len(entries)
+    total_bytes = sum(size for _, size, _ in entries)
+    archived = 0
+
+    for _mtime, size, path in entries:
+        if count <= KEEP and total_bytes <= CEILING_BYTES:
+            break
+        archive_one(path)
+        archived += 1
+        count -= 1
+        total_bytes -= size
+
+    warn_if_disk_nearly_full()
+
+    print(
+        f"heron-retention: kept {count} file(s) ({total_bytes} bytes) under {RUNS_DIR}, "
+        f"archived {archived} into {archive_dir()}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
