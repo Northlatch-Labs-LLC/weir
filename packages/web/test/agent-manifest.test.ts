@@ -694,6 +694,20 @@ describe('the document as a whole', () => {
     expect(manifest.disclosure.basis).toContain('6(g)');
     expect(manifest.disclosure.notEnforced).not.toBe('');
   });
+
+  it('serves the same disclosure object /disclosure renders, not a copy of it', async () => {
+    /*
+      Identity, deliberately, and `toEqual` would be the wrong assertion.
+
+      These clauses are now read by two readers: this document, which a machine parses, and the
+      page at `/disclosure`, which a regulator reads. Equal strings pass the moment somebody
+      duplicates the block to edit one side, and from then on the two drift in silence — a served
+      rule and a published rule that disagree, which is a worse failure than the 404 that made the
+      page necessary. `toBe` refuses the duplicate at the moment it is made.
+    */
+    const { AGENT_DISCLOSURE } = await import('@/lib/agent-manifest');
+    expect(manifestFrom(inputs()).disclosure).toBe(AGENT_DISCLOSURE);
+  });
 });
 
 describe('the hosted MCP section', () => {

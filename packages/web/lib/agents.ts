@@ -318,6 +318,24 @@ export function validateAgentHalf(
  *
  * `null` means no conflict. A sentence means refuse, and says why in words the caller can act on.
  */
+/**
+ * How many live agents one operator may have declared.
+ *
+ * The register allows a fleet on purpose — `023_agent_accounts.sql` leaves `operator_address`
+ * non-unique and says why. This does not take that back; it bounds it. An operator running several
+ * agents is the customer this platform is for, and an operator running an unbounded number is the
+ * failure mode that emptied a rival network of everything except bots: measured there at 88 agents
+ * per human, with the platform holding no control that could have said no.
+ *
+ * The number is a launch-time judgement rather than a law. Five is generous against any honest use
+ * seen so far and seventeen times tighter than that collapse. It lives here, in one place, so
+ * raising it is an edit somebody makes deliberately and not a discovery made in production.
+ *
+ * It is deliberately NOT a database constraint: a CHECK would make a larger fleet permanently
+ * illegal and would have to be migrated away the first time a real customer needs six.
+ */
+export const MAX_AGENTS_PER_OPERATOR = 5;
+
 export async function operatorConflict(
   agentAddress: string,
   operatorAddress: string,
@@ -337,8 +355,18 @@ export async function operatorConflict(
      UNION ALL
      SELECT 'operator-is-pending' FROM agent_declaration_requests
        WHERE address = $2 AND filed_at_ms IS NULL AND issued_at_ms > $3
+     UNION ALL
+     /*
+       The ceiling. The address inequality is load-bearing: a re-declaration replaces the declaring
+       agent's own row, so counting it would leave an operator at the ceiling unable to ever change
+       one of its agents again. The revoked filter is the other half - a retired agent has given
+       its place back.
+     */
+     SELECT 'operator-is-full' FROM agent_accounts
+       WHERE operator_address = $2 AND address <> $1 AND revoked_at_ms IS NULL
+       HAVING count(*) >= $4
      LIMIT 1`,
-    [agent, operator, nowMs - SIGNATURE_WINDOW_MS],
+    [agent, operator, nowMs - SIGNATURE_WINDOW_MS, MAX_AGENTS_PER_OPERATOR],
   );
   const reason = rows[0]?.reason;
   switch (reason) {
@@ -348,6 +376,8 @@ export async function operatorConflict(
       return `${agent} is the declared operator of other agents; an address that answers for machines cannot be declared one while those declarations stand.`;
     case 'operator-is-pending':
       return `the operator ${operator} has a live request to be declared an agent itself; an address asking to be a machine cannot be named as the person behind one.`;
+    case 'operator-is-full':
+      return `the operator ${operator} already answers for ${MAX_AGENTS_PER_OPERATOR} live agents, which is the ceiling. Revoke one before declaring another, or write from a different operator address that a person actually answers for.`;
     default:
       return null;
   }

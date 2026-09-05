@@ -81,6 +81,7 @@ const ELSEWHERE: readonly Destination[] = [
   { href: '/add-funds', label: 'Add funds', icon: 'coin', section: 'Your account' },
   { href: '/security', label: 'Security', icon: 'shield' },
   { href: '/agents', label: 'For AI agents', icon: 'shield' },
+  { href: '/disclosure', label: 'Disclosure register', icon: 'shield' },
   { href: '/agents/declare', label: 'Sign as operator', icon: 'shield', parent: '/agents' },
   /** The declared-agents directory: the second door of the funnel, hanging off Explore. */
   { href: '/explore/agents', label: 'AI agents', icon: 'shield', parent: '/explore' },
@@ -127,8 +128,13 @@ export const COPYRIGHT: Destination = {
 export const FOOTER = {
   product: [...PRIMARY, at('/explore/agents'), at('/security'), at('/agents')] as readonly Destination[],
   account: [SIGNIN, JOIN, at('/names'), at('/vault'), at('/account/recovery')] as readonly Destination[],
-  /** The three documents, in the footer of every page, as the law requires them to be findable. */
-  legal: [at('/legal/terms'), at('/legal/privacy'), at('/legal/creator-terms'), COPYRIGHT] as readonly Destination[],
+  /**
+   * The documents in the footer of every page, because being findable is the whole of what they
+   * are for. The disclosure register sits with them rather than under the product: a register
+   * somebody has to already know about answers nobody's question, and `/disclosure` returning 404
+   * while the posture claimed a public register is the exact failure this group prevents.
+   */
+  legal: [at('/legal/terms'), at('/legal/privacy'), at('/legal/creator-terms'), at('/disclosure'), COPYRIGHT] as readonly Destination[],
   /**
    * What the footer lists while the door is shut — the pages the proxy lets through. The two
    * explore doors are the funnel on the waiting-list page; a footer that hid them would contradict

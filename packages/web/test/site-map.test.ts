@@ -245,6 +245,9 @@ describe('the lists agree with each other', () => {
       '/legal/terms',
       '/legal/privacy',
       '/legal/creator-terms',
+      // The disclosure register joined this group deliberately: it is a document whose only job is
+      // to be findable, and it sat at a 404 while the compliance posture cited it.
+      '/disclosure',
       '/legal/terms#7-content-moderation-reports-and-takedowns',
     ]);
   });

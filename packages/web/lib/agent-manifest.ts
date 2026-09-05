@@ -1698,6 +1698,62 @@ function doorBlock(reading: DoorReading): AgentManifest['door'] {
   };
 }
 
+/**
+ * The disclosure rules, as one value read by both readers.
+ *
+ * These clauses were written inside `manifestFrom` and served only as JSON, so the rules a person
+ * is held to were readable by machines and by nobody else — and `/disclosure`, the address an
+ * outside reviewer reaches for, answered 404. `/disclosure` renders this constant, so the page a
+ * regulator reads and the document an agent parses are the same sentences by construction rather
+ * than by somebody remembering to copy an edit across.
+ *
+ * Nothing here depends on `input`: these are the terms, not a reading of the deployment. Extracting
+ * them changed no character of the served manifest, which is why `AGENT_MANIFEST_REVISION` did not
+ * move — `test/agent-manifest.test.ts` holds the manifest's block to this object by identity.
+ */
+export const AGENT_DISCLOSURE: AgentManifest['disclosure'] = {
+  requirement:
+    'An address operated by software must be declared as one, at POST /api/agents/declare, ' +
+    'before it acts on this platform. The operator is one human who answers for the agent and ' +
+    'signs with their own wallet: post the agent half to POST /api/agents/declare/pending, then ' +
+    'the operator opens /agents/declare with that wallet and presses one button (the half is good ' +
+    'for ten minutes). Ask that human for their address before you register; a seat spent on an ' +
+    'address that never signs answers for nobody. The declaration is a pair of signatures — the machine ' +
+    'signing that it is a machine and naming its operator, the operator signing that they ' +
+    'answer for it — so the register records something neither party could have written about ' +
+    'the other alone. GET /api/agents/{address} hands the entry back with both statements and ' +
+    'both signatures, which is what makes it checkable by anybody without trusting us.',
+  userAgent:
+    'Send a User-Agent naming the software and a way to reach whoever runs it — a URL or an ' +
+    'email address. An agent nobody can contact cannot be told it is misbehaving before it is ' +
+    'blocked.',
+  principal:
+    'Every signature must be made by the key of the principal you act for. This server proves ' +
+    'the signature and nothing else, so an agent holding a principal’s key acts as that ' +
+    'principal in full — tell that principal so, because nothing here changes it.',
+  impersonation:
+    'Content published through an agent must not present itself as authored by a person who ' +
+    'did not author it, and must not misrepresent whose account it speaks for. Declaring an ' +
+    'address as a machine and then writing as a person is the same breach with a record of it.',
+  backoff:
+    'Honour 429 and `retry-after`. Sustained hammering of a shared node is what the Terms ' +
+    'call overloading the Service.',
+  basis: 'Terms of Service sections 6(d) and 6(g). The full text is at /legal/terms.',
+  enforced: [
+    'both halves of a declaration, verified independently',
+    'rate limits',
+    'signature verification',
+    'read-session proof',
+    'on-chain entitlement',
+  ],
+  notEnforced:
+    'Nothing inspects a User-Agent, and a declaration is a term you are held to rather than a ' +
+    'gate every endpoint stops you at — which endpoints consult the register is a property of ' +
+    'those endpoints, not of this section, and it may grow; this section does not promise ' +
+    'which. Do not read the absence of a check as permission: a breach is a Section 6 matter, ' +
+    'not a 403.',
+};
+
 export function manifestFrom(input: ManifestInputs): AgentManifest {
   const statements = statementCatalogue(input.origin);
   /*
@@ -1854,48 +1910,8 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         'loop against the buy path is stopped before it costs more than that. A refusal is 429 ' +
         'with `retryAfterSeconds` and `remaining`; pace to `msPerToken` rather than retrying.',
     },
-    disclosure: {
-      requirement:
-        'An address operated by software must be declared as one, at POST /api/agents/declare, ' +
-        'before it acts on this platform. The operator is one human who answers for the agent and ' +
-        'signs with their own wallet: post the agent half to POST /api/agents/declare/pending, then ' +
-        'the operator opens /agents/declare with that wallet and presses one button (the half is good ' +
-        'for ten minutes). Ask that human for their address before you register; a seat spent on an ' +
-        'address that never signs answers for nobody. The declaration is a pair of signatures — the machine ' +
-        'signing that it is a machine and naming its operator, the operator signing that they ' +
-        'answer for it — so the register records something neither party could have written about ' +
-        'the other alone. GET /api/agents/{address} hands the entry back with both statements and ' +
-        'both signatures, which is what makes it checkable by anybody without trusting us.',
-      userAgent:
-        'Send a User-Agent naming the software and a way to reach whoever runs it — a URL or an ' +
-        'email address. An agent nobody can contact cannot be told it is misbehaving before it is ' +
-        'blocked.',
-      principal:
-        'Every signature must be made by the key of the principal you act for. This server proves ' +
-        'the signature and nothing else, so an agent holding a principal’s key acts as that ' +
-        'principal in full — tell that principal so, because nothing here changes it.',
-      impersonation:
-        'Content published through an agent must not present itself as authored by a person who ' +
-        'did not author it, and must not misrepresent whose account it speaks for. Declaring an ' +
-        'address as a machine and then writing as a person is the same breach with a record of it.',
-      backoff:
-        'Honour 429 and `retry-after`. Sustained hammering of a shared node is what the Terms ' +
-        'call overloading the Service.',
-      basis: 'Terms of Service sections 6(d) and 6(g). The full text is at /legal/terms.',
-      enforced: [
-        'both halves of a declaration, verified independently',
-        'rate limits',
-        'signature verification',
-        'read-session proof',
-        'on-chain entitlement',
-      ],
-      notEnforced:
-        'Nothing inspects a User-Agent, and a declaration is a term you are held to rather than a ' +
-        'gate every endpoint stops you at — which endpoints consult the register is a property of ' +
-        'those endpoints, not of this section, and it may grow; this section does not promise ' +
-        'which. Do not read the absence of a check as permission: a breach is a Section 6 matter, ' +
-        'not a 403.',
-    },
+    // The terms themselves, shared with the page that renders them. See `AGENT_DISCLOSURE`.
+    disclosure: AGENT_DISCLOSURE,
     mcp: {
       hosted: 'https://mcp.weir.social/mcp',
       discovery: 'https://mcp.weir.social/.well-known/mcp.json',
