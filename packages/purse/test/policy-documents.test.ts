@@ -411,3 +411,26 @@ describe('policy/heron-chain.mainnet.json, the chain document the purse reads on
     expect(loaded.value.registryId).toBe('0x1a3fb4ac25458d7524be064a2b7e1586ccd9ed09c0d5b351621e3b101e1203a0');
   });
 });
+
+describe('policy/heron-content.mainnet.json, the rendered content policy the purse runs under once the vault exists', () => {
+  it('equals the render of the template with the committed values, pre-soul, and loads through the pinned loader', async () => {
+    const { renderPolicy } = await import('../bin/render-policy.js');
+    const template = await readFile(join(POLICY_DIR, 'heron-content.json'), 'utf8');
+    const values = JSON.parse(await readFile(join(POLICY_DIR, 'heron-values.json'), 'utf8')) as Record<string, string>;
+    const rendered = renderPolicy(template, values, true);
+    expect(rendered.ok).toBe(true);
+    if (!rendered.ok) throw new Error(rendered.reason);
+    const committed = await readFile(join(POLICY_DIR, 'heron-content.mainnet.json'), 'utf8');
+    expect(committed).toBe(rendered.text);
+    const loaded = await loadPinnedPolicy({ path: join(POLICY_DIR, 'heron-content.mainnet.json'), expectedSha256: createHash('sha256').update(committed, 'utf8').digest('hex') });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.refused.reason);
+    expect(loaded.value.doc.agentAddress).toBe('0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70');
+    expect(loaded.value.doc.allowedObjects).toEqual([
+      '0x0c3f3a6174293544f3ac61e466d9ebe62edb88cca2f3674cbd9311df8e736b68',
+      '0xea9ba87eb3a50e9113bc08aba8a4fb227d28371335ebcab43a235c316357d0d0',
+      '0x0000000000000000000000000000000000000000000000000000000000000006',
+    ]);
+    expect(loaded.value.doc.allowedTargets).toEqual(['0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5::creator::set_content_price']);
+  });
+});

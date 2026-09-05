@@ -1742,3 +1742,20 @@ test("the mail gate reads the message id from the alert unit's own invocation an
   assert.match(gate, /for i in \$\(seq 1 20\)/);
   assert.doesNotMatch(gate, /journalctl -u heron-alert@smoke\.service -n 50 --no-pager \| grep/);
 });
+
+test('--install-purse ships the policy HERON_POLICY_FILE names from the committed set, refuses one that is not there, and restarts the purse under it', () => {
+  const fixture = installStubs();
+  const chosen = spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...fixture.env, HERON_POLICY_FILE: 'heron-content.mainnet.json' } });
+  assert.equal(chosen.status, 0, chosen.stderr);
+  assert.match(chosen.stdout, /from heron-content\.mainnet\.json/);
+  const missing = spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...installStubs().env, HERON_POLICY_FILE: 'nope.json' } });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /is not a committed document/);
+  const traversal = spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...installStubs().env, HERON_POLICY_FILE: '../heron-multisig.json' } });
+  assert.notEqual(traversal.status, 0);
+  const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const start = script.slice(script.indexOf('start_purse() {'), script.indexOf('probe_purse() {'));
+  assert.match(start, /systemctl restart heron-purse\.service/);
+  assert.doesNotMatch(start, /enable --now/);
+  assert.match(start, /\*"file \$POLICY_HASH_EXPECTED"\*\)/, 'the start must check the purse listens under the shipped file hash');
+});

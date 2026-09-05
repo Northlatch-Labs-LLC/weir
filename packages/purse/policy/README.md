@@ -18,6 +18,14 @@ intent is refused by the `object-input` rule until the vault exists and this doc
 the rendered `heron-content.json` (a redeploy, not a reload). The purse is live, hardened and
 answering, and it signs nothing; `test/policy-documents.test.ts` loads it and proves the refusal.
 
+`heron-content.mainnet.json` is the render of `heron-content.json` with `heron-values.json`
+(`bin/render-policy.ts --pre-soul`): the vault, the cap and the clock as objects, Heron, the
+operator and the treasury as recipients, `set_content_price` as the one target; the two soul rows
+left out until the soul is published. `test/policy-documents.test.ts` re-renders and compares, so
+the committed document cannot drift from its template and values. Heron's SocialAccount is
+`0xf5960dca0b3dc8f1113f4ec371e25ef62e5ecb033c7313c6caf8afc936d69cf5` (handle `heron`,
+tx `Evi5wTwp…`).
+
 `heron-multisig.json` holds no substitution: two public keys and two integers, real, committed.
 The hot member is the key born 2026-09-05 (`0x51704a…10b0`); the brake is the Master's, read from
 the chain (`0x4668e5…6c9a`). Together at threshold 1 they derive Heron's address
@@ -41,10 +49,10 @@ starting with something plausible.
 |---|---|---|
 | `<HERON_ADDRESS>` | the 1-of-2 multisig address Heron signs from | **yes:** `0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70` (derived from `heron-multisig.json`) |
 | `<LEDGER_ADDRESS>` | the `LedgerCap` service's own address | **yes:** `0x9af1e7ec1344d487245b1a223c59c8c1c771dbf670db5ad5bfbc9abc17b4b666` (`heron-ledger`, born 2026-09-05) |
-| `<OPERATOR_ADDRESS>` | the operator, one of the three recipients | no address named yet |
-| `<TREASURY_ADDRESS>` | the treasury, one of the three recipients | no address named yet |
-| `<HERON_VAULT_ID>` | Heron's `CreatorVault<SUI>` | created at first post |
-| `<HERON_CREATOR_CAP_ID>` | Heron's `CreatorCap` | created with the vault |
+| `<OPERATOR_ADDRESS>` | the operator, one of the three recipients | **yes:** Kaela's wallet `0x45d107…c30c` (desk decision, 2026-09-05) |
+| `<TREASURY_ADDRESS>` | the treasury, one of the three recipients | **yes:** the `PlatformCap` holder `0x00e734…1605`, read from mainnet (desk decision, 2026-09-05) |
+| `<HERON_VAULT_ID>` | Heron's `CreatorVault<SUI>` | **yes:** `0x0c3f3a6174293544f3ac61e466d9ebe62edb88cca2f3674cbd9311df8e736b68`, opened 2026-09-05 by `bin/birth-vault.ts` as the multisig (tx `2aksk5Dd…`) |
+| `<HERON_CREATOR_CAP_ID>` | Heron's `CreatorCap` | **yes:** `0xea9ba87eb3a50e9113bc08aba8a4fb227d28371335ebcab43a235c316357d0d0`, with the vault |
 | `<HERON_SOUL_ID>` | Heron's `EmployeeSoul` | the soul package is unpublished |
 | `<SOUL_REGISTRY_ID>` | the shared `SoulRegistry` | unpublished |
 | `<LEDGER_CAP_ID>` | the `LedgerCap` object | unpublished |

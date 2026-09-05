@@ -1214,7 +1214,14 @@ cmd_install_purse() {
 
   HERON_INSTALL_STEP="build_purse_bundle"
   build_purse_bundle "$stage/server.js"
-  cp "$PURSE_DIR/policy/heron-content-pre-soul.json" "$stage/heron-policy.json"
+  # The policy shipped: the pre-soul document by default; HERON_POLICY_FILE names another committed
+  # document under packages/purse/policy (heron-content.mainnet.json once the vault exists).
+  local policy_file="${HERON_POLICY_FILE:-heron-content-pre-soul.json}"
+  if ! [[ "$policy_file" =~ ^[a-z][a-z0-9.-]*\.json$ ]] || [ ! -f "$PURSE_DIR/policy/$policy_file" ]; then
+    echo "deploy-droplet.sh --install-purse: refused - HERON_POLICY_FILE '$policy_file' is not a committed document under packages/purse/policy" >&2
+    return 1
+  fi
+  cp "$PURSE_DIR/policy/$policy_file" "$stage/heron-policy.json"
   cp "$PURSE_DIR/policy/heron-multisig.json" "$stage/heron-multisig.json"
   cp "$PURSE_DIR/policy/heron-chain.mainnet.json" "$stage/chain.json"
 
@@ -1234,7 +1241,7 @@ cmd_install_purse() {
   echo "deploy-droplet.sh --install-purse: shipping from commit $commit"
   echo "  server.js           sha256 $dist_sha  -> /srv/heron/purse/dist/server.js   0640 purse:purse (pinned in the unit)"
   echo "  heron-multisig.json sha256 $multisig_sha  -> /srv/heron/policy/heron-multisig.json 0644 root:root (pinned in the unit)"
-  echo "  heron-policy.json   sha256 $policy_sha  -> /srv/heron/policy/heron-policy.json   0644 root:root (--policy-sha256)"
+  echo "  heron-policy.json   sha256 $policy_sha  -> /srv/heron/policy/heron-policy.json   0644 root:root (--policy-sha256; from $policy_file)"
   echo "  chain.json          mainnet, v5 package                     -> /srv/heron/chain.json 0600 purse:purse"
   echo "  heron-purse.service rendered, no substitution left           -> /etc/systemd/system/heron-purse.service 0644 root:root"
   echo "  node                v$NODE22_VERSION, sha256 $NODE22_SHA256 -> /opt/node22"
@@ -1244,7 +1251,7 @@ cmd_install_purse() {
   HERON_INSTALL_STEP="ship_purse_files"
   ship_purse_files "$ssh_target" "$stage" "$dist_sha" "$multisig_sha" "$policy_sha"
   HERON_INSTALL_STEP="start_purse"
-  start_purse "$ssh_target"
+  start_purse "$ssh_target" "$policy_sha"
   HERON_INSTALL_STEP="probe_purse"
   probe_purse "$ssh_target"
 
@@ -1328,11 +1335,15 @@ REMOTE
 
 start_purse() {
   if is_stubbed; then "$HERON_STUB_DIR/start_purse" "$@"; return; fi
-  local ssh_target="$1"
-  ssh -- "$ssh_target" sudo bash -s <<'REMOTE'
+  local ssh_target="$1" policy_hash="${2:-}"
+  ssh -- "$ssh_target" sudo bash -s -- "$policy_hash" <<'REMOTE'
 set -euo pipefail
+POLICY_HASH_EXPECTED="${1:-}"
 systemctl daemon-reload
-systemctl enable --now heron-purse.service >/dev/null 2>&1 || true
+# restart, not enable --now: a purse already running keeps its old policy and pins until it is
+# restarted, and a policy change is exactly a redeploy (packages/purse/README.md).
+systemctl enable heron-purse.service >/dev/null 2>&1 || true
+systemctl restart heron-purse.service >/dev/null 2>&1 || true
 for i in $(seq 1 30); do
   if [ "$(systemctl is-active heron-purse.service)" = "active" ]; then break; fi
   sleep 1
@@ -1345,6 +1356,12 @@ fi
 SOCK="$(stat -c '%a %U %G' /run/heron/purse.sock)"
 [ "$SOCK" = "660 purse purse" ] || { echo "host: refused - /run/heron/purse.sock is '$SOCK', not '660 purse purse'" >&2; exit 1; }
 LINE="$(journalctl -u heron-purse.service -n 30 --no-pager -o cat | grep 'heron-purse: listening on /run/heron/purse.sock for 0x' | tail -1 || true)"
+# The listening line carries two hashes: `policy <canonical json>` and `file <bytes on disk>`. The
+# deploy knows the bytes it shipped, so it is the file hash it checks.
+case "$LINE" in
+  *"file $POLICY_HASH_EXPECTED"*) ;;
+  *) [ -z "$POLICY_HASH_EXPECTED" ] || { echo "host: refused - the purse is listening under a policy file other than the one just shipped" >&2; echo "host: $LINE" >&2; exit 1; } ;;
+esac
 [ -n "$LINE" ] || { echo "host: refused - the purse is active but never printed its listening line" >&2; journalctl -u heron-purse.service -n 40 --no-pager >&2; exit 1; }
 echo "host: $LINE"
 echo "host: heron-purse.service active, enabled at boot, socket 660 purse:purse"
