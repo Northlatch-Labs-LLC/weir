@@ -7,6 +7,10 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-05 · PURSE SIGNS AS THE 1-OF-2 MULTISIG (bf1e5a3)
+
+Supersedes the finding in the entry below that the purse could not act as Heron's address. `packages/purse` now takes `--multisig policy/heron-multisig.json` (Heron's two real members, committed); the hot key is wrapped as the one available member, the sender is `0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70`, and the returned signature is the multisig envelope verified against the multisig public key. The pinned policy's `agentAddress` must equal the derived address or the purse refuses to start. Verified: tsc clean, vitest 120/120 in 11 files, a mutation check (wrap discarded: 3 server tests fail). Security's read-only review is in progress; its findings land in the next entry. Still undone: the purse's units and compiled server are not installed on the host; the policy's other substitutions wait on step 11.
+
 ## 2026-09-05 · HERON V2 HOST IS UP: droplet 597969278 (159.89.103.153) built from commit ee7ccd5+, three credentials sealed, no timer enabled
 
 Supersedes nothing; extends the 2026-09-05 v2 entries. What ran and what was seen, on Weir main up to 442a20b:
