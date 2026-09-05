@@ -1,0 +1,104 @@
+# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The only process on this host that holds Heron's hot key.
+#
+# It is reached over one unix socket, answers one call, and returns a signature or a refusal. The
+# container that runs the model cannot reach this unit's credential directory, its state directory
+# or its audit log; it is given the socket and nothing else.
+#
+# The <PLACEHOLDER> values are filled by digitalocean/deploy.sh, which prints every one of them
+# under --plan before it creates anything. They are not defaults: a unit with a wrong policy hash
+# refuses to start, which is the intended behaviour of a half-finished deploy.
+
+[Unit]
+Description=Heron purse — hot-key signer behind the policy
+Documentation=file:///srv/heron/purse/README.md
+After=network-online.target
+Wants=network-online.target
+# The socket must exist before the first beat. See heron-beat.service's After=.
+Before=heron-beat.service
+
+[Service]
+Type=notify
+# systemd-notify is a CHILD of the node process, not the main process, because node cannot open an
+# AF_UNIX SOCK_DGRAM socket and so cannot send the readiness datagram itself. NotifyAccess=all is
+# what lets a child notify; this unit's cgroup holds the purse and its children and nothing else.
+NotifyAccess=all
+
+User=purse
+Group=purse
+
+# The hot key. systemd decrypts the blob — which is sealed to this host and worthless off it — into
+# a per-unit tmpfs at 0400 owned by purse, and unmounts it when the unit stops. Nothing plaintext is
+# ever written to /srv/heron.
+LoadCredentialEncrypted=heron-hot:/etc/heron/creds/heron-hot.cred
+
+# --jitless is not a performance choice and must not be removed.
+#
+# MemoryDenyWriteExecute below refuses any mapping that is both writable and executable, and refuses
+# mprotect adding PROT_EXEC. V8's optimising compiler needs exactly that to emit machine code, so a
+# plain `node` under this directive dies at start. --jitless runs the interpreter only, which needs
+# no W->X transition. The purse signs one transaction every thirty minutes; there is nothing here
+# for a JIT to earn back. If this flag is ever dropped, MemoryDenyWriteExecute must be dropped in
+# the same commit and the CISO told, because silently keeping one without the other means one of
+# them is not doing what the unit says it does.
+ExecStart=/usr/bin/node --jitless /srv/heron/purse/dist/server.js \
+  --socket /run/heron/purse.sock \
+  --policy /srv/heron/policy/heron-policy.json \
+  --policy-sha256 <POLICY_SHA256> \
+  --chain /srv/heron/chain.json \
+  --audit /var/lib/heron/audit/audit.jsonl \
+  --spend /var/lib/heron/audit/spend.jsonl
+
+# /run/heron, owned by purse, mode 0750 — the socket itself is chmod 0660 by the purse so the beat's
+# group can speak to it.
+RuntimeDirectory=heron
+RuntimeDirectoryMode=0750
+# /var/lib/heron, where the audit chain lives. 0700: the chain is the purse's, and the desk pulls it
+# over SSH as root.
+StateDirectory=heron
+StateDirectoryMode=0700
+
+Restart=on-failure
+RestartSec=5s
+
+# The hardening set, CISO §2.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+MemoryDenyWriteExecute=yes
+# AF_UNIX for the socket; AF_INET and AF_INET6 for the outbound 443 the simulation needs against a
+# fullnode. Nothing else — no AF_NETLINK, no AF_PACKET.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# The rest of the set, not named in §2 but implied by it: a signer has no business creating user
+# namespaces, changing its own realtime priority, loading kernel modules or writing to /sys.
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=pid
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+# 512 MB host, no swap, and the Docker daemon lives here too.
+MemoryMax=192M
+TasksMax=64
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
