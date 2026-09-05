@@ -99,6 +99,19 @@ def load_matcher(path: str):
     return module
 
 
+def ensure_tag(token: str, tag: str) -> None:
+    """Create the tag if it does not exist. 201 on create; a 422 saying it already exists is fine."""
+    try:
+        call(token, "POST", "/v2/tags", {"name": tag})
+        print(f"do_api.py: tag {tag} created", file=sys.stderr)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")
+        if e.code == 422 and "exist" in detail.lower():
+            print(f"do_api.py: tag {tag} already exists", file=sys.stderr)
+            return
+        raise
+
+
 def firewalls(token: str) -> list[dict]:
     return call(token, "GET", "/v2/firewalls").get("firewalls") or []
 
@@ -154,6 +167,10 @@ def cmd_firewall_create(argv: list[str]) -> int:
     ]
     # Targeted by TAG, not by droplet id: this is created BEFORE the droplet exists, and the droplet
     # is created carrying the tag, so it is covered from its first second (Security's A1).
+    # DigitalOcean refuses a firewall that targets a tag which does not yet exist
+    # ("422 tag heron-v2 does not exist", seen on the first real run, 2026-09-05). Tags are
+    # free, idempotent to create, and carry no rule of their own; make it first.
+    ensure_tag(token, tag)
     body = {"name": f"{name}-fw", "tags": [tag], "inbound_rules": inbound, "outbound_rules": outbound}
 
     created = call(token, "POST", "/v2/firewalls", body)["firewall"]
