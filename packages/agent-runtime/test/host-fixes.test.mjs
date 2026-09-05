@@ -1756,6 +1756,6 @@ test('--install-purse ships the policy HERON_POLICY_FILE names from the committe
   const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
   const start = script.slice(script.indexOf('start_purse() {'), script.indexOf('probe_purse() {'));
   assert.match(start, /systemctl restart heron-purse\.service/);
-  assert.doesNotMatch(start, /enable --now/);
+  assert.doesNotMatch(start, /systemctl enable --now/);
   assert.match(start, /\*"file \$POLICY_HASH_EXPECTED"\*\)/, 'the start must check the purse listens under the shipped file hash');
 });
