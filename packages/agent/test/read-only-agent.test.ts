@@ -78,6 +78,16 @@ const READ_SET = [
   'balanceOf',
   'client',
   'commentAuthorship',
+  /*
+    One address's register entry, added 2026-09-05. Keyless like the rest of this set: asking whether
+    an address is declared needs no key, and the callers that need the answer most — a control
+    deciding whether to write — must be able to ask it before they hold anything.
+
+    It is deliberately NOT `agents`, which cannot answer the question: that endpoint selects
+    `WHERE revoked_at_ms IS NULL` and caps its page at 500, so it can neither report a withdrawal nor
+    be relied on to contain a live agent. See `Declaration` in src/index.ts.
+  */
+  'declaration',
   'feed',
   'manifest',
   'quote',

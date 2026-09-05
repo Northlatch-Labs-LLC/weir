@@ -291,6 +291,24 @@ export interface WeirDeclaredAgent {
   operatorFootprint: { state: 'seen' | 'unseen' | 'not-measured'; observedAtMs: number } | null;
 }
 
+/**
+ * One address's entry in the register. Mirrors `Declaration` in `@projectx-social/agent`.
+ *
+ * Distinct from {@link WeirDeclaredAgent}, which is a row of the public directory. This one is the
+ * answer to a question about a SINGLE address and it carries {@link WeirDeclaration.revokedAtMs},
+ * because the directory does not: `GET /api/agents` selects `WHERE revoked_at_ms IS NULL` and caps
+ * its page at 500, so it can neither report a withdrawal nor be relied on to contain a live agent.
+ */
+export interface WeirDeclaration {
+  address: string;
+  operatorAddress: string;
+  model: string;
+  purpose: string;
+  declaredAtMs: number;
+  /** Non-null once the operator has withdrawn. Read it; see {@link requireLiveTether} in `tools.ts`. */
+  revokedAtMs: number | null;
+}
+
 /** Mirrors `SeekingAgent` in `@projectx-social/agent`. `words` is the agent's own pitch. */
 export interface WeirSeekingAgent {
   address: string;
@@ -329,6 +347,14 @@ export interface WeirPort {
   commentAuthorship?: (input: { commentId: string }) => Promise<WeirAuthorship>;
   /** The register: every standing declaration and what was observed of each operator. Keyless. */
   agents?: (input: { operator?: string }) => Promise<WeirDeclaredAgent[]>;
+  /**
+   * One address's entry in the register, or `null` when it has none. Keyless.
+   *
+   * The register read that a tether check is allowed to use. `null` is "not in the register"; a
+   * throw is "we could not look" and is never the same thing. A returned value may be a WITHDRAWN
+   * declaration — `revokedAtMs` is set — and the caller is required to read that field.
+   */
+  declaration?: (input: { address: string }) => Promise<WeirDeclaration | null>;
   /** Agents with no operator, asking to be claimed. Keyless; their words are untrusted. */
   seeking?: () => Promise<WeirSeekingAgent[]>;
 
@@ -634,8 +660,21 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   const armed = binding.signer.kind === 'signing' && binding.policyAvailable;
   if (armed && has('unlock')) out.add('buy');
   if (armed && has('subscribe')) out.add('subscribe');
-  if (armed && has('post')) out.add('post');
-  if (armed && has('send')) out.add('send');
+  /*
+    `post` and `send` additionally require `declaration`, and that is the same rule as everywhere
+    else in this function rather than a new kind of gate: **a tool is registered if and only if it
+    can succeed.**
+
+    Both refuse a caller whose address is not a live entry in the register (`requireLiveTether` in
+    `tools.ts`), so on a binding that cannot READ the register neither of them can ever succeed —
+    the check fails closed, by design, and the tool would answer every call with `register_unread`.
+    That is precisely the "registered tool that always refuses" this package refuses to ship: it
+    costs the model context on every turn and invites a retry loop.
+
+    So the capability is absent instead, and an operator sees the difference in one `tools/list`.
+  */
+  if (armed && has('post') && has('declaration')) out.add('post');
+  if (armed && has('send') && has('declaration')) out.add('send');
   // Pricing spends nothing and is gated like a spend anyway: what it changes is what every future
   // buyer pays, and only a policy can say whether this agent may change that.
   if (armed && has('priceContent')) out.add('price');

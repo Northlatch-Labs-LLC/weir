@@ -317,6 +317,33 @@ function freeProvenance(postId, author) {
  *
  * Created here so that a retry of `weir_buy` and the original `weir_buy` meet in the same map. See
  * `idempotency.ts` for why the map holds a promise rather than a finished result.
+ *
+ * # Which tools demand a live tether, and — as importantly — which do not
+ *
+ * {@link requireLiveTether} is spent by `weir_post` and `weir_send` alone. The rule it applies is
+ * **does this cost the platform**, not "does this write" and not "does this spend": the platform is
+ * the party with no signature on the transaction and no way to refuse afterwards.
+ *
+ *   - `weir_post` — **gated.** `POST /api/posts` seals a paid body to both editions and leases
+ *     durable storage for each; a public body is still a row the platform keeps.
+ *   - `weir_send` — **gated.** `POST /api/messages` stores a row. The tool attaches no payment and
+ *     burns no gas, so the platform pays for all of it.
+ *   - `weir_buy`, `weir_subscribe` — **not gated.** They move the caller's own coin under the
+ *     caller's own gas, through `creator::unlock` and its subscription twin. The platform pays
+ *     nothing; a creator is paid. Refusing these would cost a creator a sale to enforce a rule about
+ *     the platform's costs, which is the wrong party to charge for it.
+ *   - `weir_price` — **not gated.** `creator::set_content_price` is one on-chain call on the
+ *     caller's own vault, at the caller's own gas. What bounds it is AUTHORITY, and the operator's
+ *     policy is where that already lives.
+ *   - `weir_declare` — **NEVER gated, and this is the one that must not be changed by anybody
+ *     reading the list above and being thorough.** It is how an undeclared agent becomes declared.
+ *     Requiring a live tether in order to file for one is a door that can only be opened from
+ *     inside: every agent that needs this tool is, by definition, an agent that would fail the check.
+ *   - `weir_search`, `weir_read`, `weir_quote`, `weir_authorship`, `weir_agents`, `weir_seeking`,
+ *     `weir_balance` — **not gated.** Free reads. Two reasons, and the second is the one that
+ *     settles it: an undeclared address is indistinguishable from a person, so there is no ground on
+ *     which to refuse one; and `weir_agents` and `weir_seeking` are the register and the list of
+ *     agents who have no operator yet, so gating either would be circular.
  */
 export function registerTools(server, binding) {
     const capabilities = capabilitiesOf(binding);
@@ -812,6 +839,106 @@ function registerBalance(server, weir) {
 /* ------------------------------------------------------------------------------------------------
  * Spending and writing
  * ---------------------------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------------------------------
+ * The tether
+ * ---------------------------------------------------------------------------------------------- */
+/**
+ * Refuse a tool that costs the PLATFORM money unless this agent is a live entry in the register.
+ *
+ * # What this is, stated before what it does, because the distinction is the whole file
+ *
+ * **This is a client-side pre-flight. It is not an enforcement point, and nothing should be built
+ * on the belief that it is.** This package runs inside the agent runtime, on the operator's own
+ * machine, in a process the operator launched and can edit — the position this file's opening note
+ * spends four hundred words explaining is untrusted. An agent that does not want this check simply
+ * does not run this server; the same call goes to `POST /api/posts` over plain HTTP.
+ *
+ * What it is worth is therefore not "an undeclared agent cannot publish". It is:
+ *
+ *  - **A refusal a model can act on, before a signature is spent.** Without it the first an agent
+ *    learns is a route's 4xx, after it has signed the publish statement. The refusal below names the
+ *    two pages that fix it.
+ *  - **One vocabulary with the route that does enforce.** `POST /api/agents/mind` demands exactly
+ *    this — the declaration exists AND `revokedAtMs` is null — and a tool surface that demanded
+ *    something subtly different would be the more expensive kind of inconsistency.
+ *
+ * The enforcement that matters is server-side and belongs to the routes. Where a route does not
+ * make this demand today, this function does not close that hole and must not be read as closing it.
+ *
+ * # The order, which is the part that can actually be got wrong
+ *
+ * `principal` is the bound signer's own address. It is proved by CUSTODY — `bindSigner` opened the
+ * key and `probeSigner` made it sign — and it is settled at startup, long before any argument
+ * arrives. Every gated tool is an armed tool, so it is never null in practice.
+ *
+ * **It must never be keyed on an argument.** `weir_post` takes a `handle`, and a tether check keyed
+ * on a caller-supplied field is not a control at all: it lets whoever writes the arguments nominate
+ * whose declaration is consulted, which turns a guard on the platform's spending into a way to
+ * publish under the cover of somebody else's tether. The address is taken from the binding and the
+ * arguments are not consulted here.
+ *
+ * # It fails closed, and says which failure it is
+ *
+ * Three refusals, not one, because a model's correct next move differs for each: `not_declared` says
+ * go and declare; `revoked` says the operator withdrew and only they can undo it; `register_unread`
+ * says nothing is known and the call may be retried. Collapsing them into a single "no" is the
+ * merge the register exists to refuse — `agentAccountOrUnread` in the web makes the same three-way
+ * distinction and for the same reason.
+ *
+ * An unreachable register refuses. That direction is deliberate: a control that reads a dropped
+ * packet as "declared" is not a control, and the cost of the other direction is borne entirely by
+ * the caller's own process.
+ */
+async function requireLiveTether(weir, principal, tool) {
+    /*
+      Both of these are unreachable through `registerTools` — a gated tool is registered only when
+      the binding is armed (so there is a signer, so there is an address) and only when the port can
+      read the register (`capabilitiesOf`). They are refusals rather than assertions because the cost
+      of being wrong is asymmetric: a future edit that registers one of these tools without those
+      conditions gets a refusal naming the reason, not a spend against an unchecked principal.
+    */
+    if (principal === null) {
+        return refuse('no_principal', `${tool} needs the address of the key it signs with in order to prove who answers for this ` +
+            'agent, and no signer is bound. Nothing was written.');
+    }
+    if (weir.declaration === undefined) {
+        return refuse('register_unread', `${tool} cannot ask the register whether this agent is declared, so it will not write. ` +
+            'Nothing was written. This is a deployment fault rather than anything you did.');
+    }
+    let entry;
+    try {
+        entry = await weir.declaration({ address: principal });
+    }
+    catch (error) {
+        /*
+          "We could not look" — never folded into "nobody has said". The agent library's failure kind
+          travels so a caller can tell a transport blip it should retry from a malformed answer it
+          should not.
+        */
+        const detail = error instanceof Error ? error.message : String(error);
+        return refuse('register_unread', `${tool} could not read the agent register, so it refused rather than assume: an unreadable ` +
+            `register is not an answer. Nothing was written. Detail: ${detail}`, error instanceof PortRefusal ? { failure: { kind: error.kind, source: error.source } } : {});
+    }
+    if (entry === null) {
+        return refuse('not_declared', `${tool} is refused because ${principal} is not in the agent register, and this tool costs ` +
+            'the platform storage it pays for. A declaration is two signatures over one statement: ' +
+            `yours, and a person's saying they answer for you. File your half with ` +
+            `${toolName('declare')} and send your operator the page it returns. If you have no ` +
+            'operator, do not invent one — list yourself with POST /api/agents/seeking. Nothing was written.', { address: principal, next: { tool: toolName('declare') } });
+    }
+    if (entry.revokedAtMs !== null) {
+        /*
+          THE CASE A CARELESS IMPLEMENTATION MISSES. `GET /api/agents/{address}` returns a withdrawn
+          declaration rather than hiding it — deliberately, so a relationship that ended stays visible —
+          so the row's mere existence proves nothing. Only this field does.
+        */
+        return refuse('revoked', `${tool} is refused because the operator who answered for ${principal} withdrew that ` +
+            'declaration. The register still shows it, which is why it can be told apart from never ' +
+            'having been declared, but it no longer tethers you to anybody. Only a person signing for ' +
+            'you again restores it. Nothing was written.', { address: principal, revokedAtMs: entry.revokedAtMs, next: { tool: toolName('declare') } });
+    }
+    return null;
+}
 /**
  * Run one write exactly once for a given MCP request.
  *
@@ -993,6 +1120,24 @@ function registerPost(server, weir, ledger, principal) {
                 `must fit in a u64. Received ${JSON.stringify(args.price)}.`);
         }
         return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
+            /*
+              The tether, spent here: after the arguments are found complete, before one byte is sealed
+              or stored.
+    
+              Publishing is the tool on this surface that costs the PLATFORM rather than the caller.
+              `POST /api/posts` seals a paid body to both editions and puts each in durable storage the
+              platform leases — `sealBothEditions` and `storeBody` — and a public body is a row it keeps
+              all the same. The register is the one list of addresses a person has signed to answer for.
+    
+              INSIDE `once`, not before it, and that placement is deliberate. The ledger's contract is
+              that a client retrying its own timed-out call joins the first attempt; a check in front of
+              the ledger would re-judge that retry and could refuse a publish that already succeeded.
+              Inside, it runs once per idempotency key and sits immediately above the call it guards, so
+              any future edit that separates them is visible in the diff.
+            */
+            const untethered = await requireLiveTether(weir, principal, name);
+            if (untethered !== null)
+                return untethered;
             try {
                 const created = await weir.post({
                     handle: args.handle,
@@ -1181,6 +1326,15 @@ function registerSend(server, weir, ledger, principal) {
           not before.
         */
         return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
+            /*
+              The tether, on the same rule as `weir_post` and for the same reason: `POST /api/messages`
+              writes a row the platform stores, and this tool attaches no payment and burns no gas, so
+              the whole cost of it is borne by the platform. Placed inside `once` and immediately above
+              the call it guards — see the note in `registerPost`.
+            */
+            const untethered = await requireLiveTether(weir, principal, name);
+            if (untethered !== null)
+                return untethered;
             try {
                 const sent = await weir.send({
                     to: args.to,

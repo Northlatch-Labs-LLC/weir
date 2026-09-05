@@ -949,6 +949,44 @@ function readSurface(input) {
             return ok(agents.map(declaredAgentFrom));
         },
         /**
+         * One address's entry in the register — `GET /api/agents/{address}`.
+         *
+         * # A 404 is an answer, and a failed read is not
+         *
+         * The route answers 404 for an address nobody has declared, which is most addresses, so that
+         * status is mapped to `ok(null)` rather than to a failure. Everything else that goes wrong stays
+         * a failure with its kind intact, because "we could not reach the register" must never arrive at
+         * a caller wearing the same shape as "nobody has said".
+         *
+         * `httpRead` maps 405 to `not-found` as well as 404, and that is harmless here rather than
+         * unnoticed: this route is a dynamic segment exporting `GET`, so a 405 is not reachable against
+         * a deployment that has it, and against one that does not, "no entry" is the conservative
+         * reading for every caller that refuses on absence.
+         *
+         * # It does not hide a withdrawn declaration, and neither may its caller
+         *
+         * A revoked row comes back as a `Declaration` with `revokedAtMs` set, exactly as the route sends
+         * it. See {@link Declaration} for why the list endpoint cannot answer this question.
+         */
+        async declaration(input) {
+            const what = 'declaration';
+            const read = await httpRead({
+                doFetch,
+                baseUrl: manifest.baseUrl,
+                path: `/api/agents/${encodeURIComponent(input.address)}`,
+                method: 'GET',
+                what,
+            });
+            if (!read.ok) {
+                return read.failure.kind === 'not-found' ? ok(null) : read;
+            }
+            const agent = read.value['agent'];
+            if (typeof agent !== 'object' || agent === null) {
+                return fail('malformed', what, 'GET /api/agents/{address} answered 200 without an agent object.');
+            }
+            return ok(declarationFrom(agent));
+        },
+        /**
          * Agents with no operator, asking to be claimed.
          *
          * `words` is written by the agent itself and is UNTRUSTED: it is a pitch, addressed to whoever
@@ -1051,6 +1089,33 @@ function declaredAgentFrom(value) {
             typeof r['operatorFootprintAtMs'] === 'number'
             ? { state: footprint, observedAtMs: r['operatorFootprintAtMs'] }
             : null,
+    };
+}
+/**
+ * One register entry, read off the route's `agent` object.
+ *
+ * # `revokedAtMs` defaults to a withdrawn declaration, not to a standing one
+ *
+ * Every other field here degrades to an empty string or a zero, because a missing `model` is
+ * cosmetic. `revokedAtMs` is not cosmetic: it is the field a tether control turns on, so the
+ * question is what a *malformed* value should mean. A non-number is read as `-1` — an instant, so
+ * `revokedAtMs !== null` holds — which makes an unreadable field refuse rather than admit.
+ *
+ * The alternative, defaulting to `null`, would mean a route that renamed this field, or a proxy that
+ * dropped it, silently turned every caller's tether check into a check that passes for everybody.
+ * That failure is invisible: the control keeps returning "yes" and nothing logs. This one is visible
+ * the first time a live agent is refused.
+ */
+function declarationFrom(value) {
+    const r = (value ?? {});
+    const revoked = r['revokedAtMs'];
+    return {
+        address: String(r['address'] ?? ''),
+        operatorAddress: String(r['operatorAddress'] ?? ''),
+        model: String(r['model'] ?? ''),
+        purpose: String(r['purpose'] ?? ''),
+        declaredAtMs: typeof r['declaredAtMs'] === 'number' ? r['declaredAtMs'] : 0,
+        revokedAtMs: revoked === null ? null : typeof revoked === 'number' ? revoked : -1,
     };
 }
 /**

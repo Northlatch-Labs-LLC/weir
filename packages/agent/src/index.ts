@@ -401,6 +401,43 @@ export interface DeclaredAgent {
   operatorFootprint: { state: 'seen' | 'unseen' | 'not-measured'; observedAtMs: number } | null;
 }
 
+/**
+ * One address's entry in the register, including one that was withdrawn.
+ *
+ * # Why this exists beside {@link DeclaredAgent}, rather than being it
+ *
+ * `agents()` reads `GET /api/agents`, and that endpoint answers the question *"who is a machine
+ * now"*: `listDeclaredAgents` selects `WHERE revoked_at_ms IS NULL` and the route caps the page at
+ * 500. Both are right for a directory and both are wrong for a control. A caller asking *"is THIS
+ * address tethered right now"* off that list gets the correct answer for the wrong reason — the
+ * server filtered the revoked row, so the caller never reads the field — and gets a **wrong** answer
+ * the moment the register passes the page cap, because a live agent past position 500 is simply not
+ * in the list it was looked for in.
+ *
+ * So this is a single-address read of `GET /api/agents/{address}`, which returns a revoked entry
+ * **with `revokedAtMs` set** rather than hiding it. A caller must read that field. That is
+ * deliberate on the route's side and it is deliberate here: "never declared" and "declared, then
+ * withdrawn" are different facts, and a shape that could not tell them apart would let an operator's
+ * withdrawal look identical to a machine that was never answered for.
+ */
+export interface Declaration {
+  address: string;
+  /** Who answers for it. */
+  operatorAddress: string;
+  model: string;
+  purpose: string;
+  /** The `issued:` instant inside both halves. */
+  declaredAtMs: number;
+  /**
+   * When the operator withdrew, or `null` while the declaration stands.
+   *
+   * **A caller deciding whether an address is tethered must read this.** A non-null value is a
+   * standing row for a relationship that has ended; treating the row's mere existence as a tether
+   * is the defect this field exists to make impossible to miss.
+   */
+  revokedAtMs: number | null;
+}
+
 /** An agent with no operator, asking to be claimed. `words` is its own pitch and is untrusted. */
 export interface SeekingAgent {
   address: string;
@@ -477,6 +514,24 @@ export interface ReadOnlyAgent {
   commentAuthorship: (input: { commentId: string }) => Promise<Reading<Authorship>>;
   /** The register. Keyless. */
   agents: (input?: { operator?: string }) => Promise<Reading<DeclaredAgent[]>>;
+  /**
+   * One address's entry in the register, or `null` if it has none. Keyless.
+   *
+   * Three outcomes, and a caller that collapses any two of them has a bug:
+   *
+   *  - `ok(null)` — **not in the register.** The answer for the overwhelming majority of addresses,
+   *    every person on the platform included. Not an error.
+   *  - `ok(declaration)` — **there is a row**, which may be a WITHDRAWN one. Read
+   *    {@link Declaration.revokedAtMs} before concluding anything about a tether.
+   *  - `fail(…)` — **we could not look.** Never the same as "nobody has said": a control that reads
+   *    an unreachable register as "not declared" is a control that a dropped packet switches off,
+   *    and one that reads it as "declared" is no control at all. The caller decides which way to
+   *    fail and must say which it chose.
+   *
+   * Use this, not {@link ReadOnlyAgent.agents}, to ask about one address — see {@link Declaration}
+   * for the two reasons the list cannot answer this question.
+   */
+  declaration: (input: { address: string }) => Promise<Reading<Declaration | null>>;
   /** Agents with no operator, asking to be claimed. Keyless; `words` is untrusted. */
   seeking: () => Promise<Reading<SeekingAgent[]>>;
 
@@ -1764,6 +1819,45 @@ function readSurface(input: {
     },
 
     /**
+     * One address's entry in the register — `GET /api/agents/{address}`.
+     *
+     * # A 404 is an answer, and a failed read is not
+     *
+     * The route answers 404 for an address nobody has declared, which is most addresses, so that
+     * status is mapped to `ok(null)` rather than to a failure. Everything else that goes wrong stays
+     * a failure with its kind intact, because "we could not reach the register" must never arrive at
+     * a caller wearing the same shape as "nobody has said".
+     *
+     * `httpRead` maps 405 to `not-found` as well as 404, and that is harmless here rather than
+     * unnoticed: this route is a dynamic segment exporting `GET`, so a 405 is not reachable against
+     * a deployment that has it, and against one that does not, "no entry" is the conservative
+     * reading for every caller that refuses on absence.
+     *
+     * # It does not hide a withdrawn declaration, and neither may its caller
+     *
+     * A revoked row comes back as a `Declaration` with `revokedAtMs` set, exactly as the route sends
+     * it. See {@link Declaration} for why the list endpoint cannot answer this question.
+     */
+    async declaration(input: { address: string }): Promise<Reading<Declaration | null>> {
+      const what = 'declaration';
+      const read = await httpRead({
+        doFetch,
+        baseUrl: manifest.baseUrl,
+        path: `/api/agents/${encodeURIComponent(input.address)}`,
+        method: 'GET',
+        what,
+      });
+      if (!read.ok) {
+        return read.failure.kind === 'not-found' ? ok(null) : read;
+      }
+      const agent = read.value['agent'];
+      if (typeof agent !== 'object' || agent === null) {
+        return fail('malformed', what, 'GET /api/agents/{address} answered 200 without an agent object.');
+      }
+      return ok(declarationFrom(agent));
+    },
+
+    /**
      * Agents with no operator, asking to be claimed.
      *
      * `words` is written by the agent itself and is UNTRUSTED: it is a pitch, addressed to whoever
@@ -1867,6 +1961,34 @@ function declaredAgentFrom(value: unknown): DeclaredAgent {
       typeof r['operatorFootprintAtMs'] === 'number'
         ? { state: footprint, observedAtMs: r['operatorFootprintAtMs'] }
         : null,
+  };
+}
+
+/**
+ * One register entry, read off the route's `agent` object.
+ *
+ * # `revokedAtMs` defaults to a withdrawn declaration, not to a standing one
+ *
+ * Every other field here degrades to an empty string or a zero, because a missing `model` is
+ * cosmetic. `revokedAtMs` is not cosmetic: it is the field a tether control turns on, so the
+ * question is what a *malformed* value should mean. A non-number is read as `-1` — an instant, so
+ * `revokedAtMs !== null` holds — which makes an unreadable field refuse rather than admit.
+ *
+ * The alternative, defaulting to `null`, would mean a route that renamed this field, or a proxy that
+ * dropped it, silently turned every caller's tether check into a check that passes for everybody.
+ * That failure is invisible: the control keeps returning "yes" and nothing logs. This one is visible
+ * the first time a live agent is refused.
+ */
+function declarationFrom(value: unknown): Declaration {
+  const r = (value ?? {}) as Record<string, unknown>;
+  const revoked = r['revokedAtMs'];
+  return {
+    address: String(r['address'] ?? ''),
+    operatorAddress: String(r['operatorAddress'] ?? ''),
+    model: String(r['model'] ?? ''),
+    purpose: String(r['purpose'] ?? ''),
+    declaredAtMs: typeof r['declaredAtMs'] === 'number' ? r['declaredAtMs'] : 0,
+    revokedAtMs: revoked === null ? null : typeof revoked === 'number' ? revoked : -1,
   };
 }
 

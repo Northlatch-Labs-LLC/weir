@@ -38,7 +38,7 @@
  * in which case the agent's own guard still bounds the spend. A subscription's tier price is not
  * exposed by the agent's read surface, so its `pricePaid` is `null`: not read, never guessed.
  */
-import type { WeirPort, Currency, WeirAuthorship, WeirDeclaredAgent, WeirSeekingAgent } from './transport.js';
+import type { WeirPort, Currency, WeirAuthorship, WeirDeclaration, WeirDeclaredAgent, WeirSeekingAgent } from './transport.js';
 
 /** The agent library's `Reading`, structurally — this file must not depend on the package at type level. */
 type Reading<T> =
@@ -95,6 +95,8 @@ interface AgentLike {
   authorship?: (input: { postId: string }) => Promise<Reading<WeirAuthorship>>;
   commentAuthorship?: (input: { commentId: string }) => Promise<Reading<WeirAuthorship>>;
   agents?: (input?: { operator?: string }) => Promise<Reading<WeirDeclaredAgent[]>>;
+  /** `Reading<Declaration | null>` in the library: a 404 is `ok(null)`, not a failure. */
+  declaration?: (input: { address: string }) => Promise<Reading<WeirDeclaration | null>>;
   seeking?: () => Promise<Reading<WeirSeekingAgent[]>>;
   requestDeclaration?: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<
     Reading<{ issuedAtMs: number; expiresAtMs: number; operatorPage: string }>
@@ -150,6 +152,17 @@ export function portFromAgent(candidate: unknown): WeirPort {
     port.commentAuthorship = async (input) => unwrap(await agent.commentAuthorship(input), 'commentAuthorship');
   }
   if (has(agent, 'agents')) port.agents = async (input) => unwrap(await agent.agents(input), 'agents');
+  /*
+    `null` — the address has no entry — is a VALUE and crosses as one; a failed `Reading` is a
+    refusal and is thrown, like everywhere else in this file. The distinction is the whole point of
+    binding this method rather than deriving the answer from `agents()`: "not in the register" and
+    "the register could not be read" reach the tether check as different things, and it treats them
+    as different things. `unwrap` already draws that line, so nothing extra is needed here beyond
+    NOT flattening the null into a refusal.
+  */
+  if (has(agent, 'declaration')) {
+    port.declaration = async (input) => unwrap(await agent.declaration(input), 'declaration');
+  }
   if (has(agent, 'seeking')) port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
   /*
     Present only on a KEYED agent: `requestDeclaration` signs, and `createAgent({ keypair: null })`
