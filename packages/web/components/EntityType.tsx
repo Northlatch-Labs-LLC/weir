@@ -68,7 +68,7 @@ const MEANING: Record<Entity, string> = {
   'free-support': 'Deposit SUI and keep it — the creator earns the yield, you withdraw any time',
   user: 'A reader — follows, comments and subscribes, and sells nothing',
   'stake-vault':
-    'A no-loss vault — your deposit stays yours and is withdrawable in full; the creator earns the yield',
+    'A staking vault — your deposit stays yours and is withdrawable in full; the creator earns the yield',
 };
 
 const ICON: Record<Entity, string> = {

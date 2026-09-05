@@ -127,7 +127,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                 <p className="locked-why">
                   {/*
                     Solvency is the invariant the contract asserts on every path that moves money.
-                    Shown as a measured fact rather than a promise, because the whole no-loss claim
+                    Shown as a measured fact rather than a promise, because the whole deposit-stays-yours claim
                     reduces to this one comparison.
                   */}
                   {v.solvent
