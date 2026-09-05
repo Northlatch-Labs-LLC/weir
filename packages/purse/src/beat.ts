@@ -27,6 +27,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseIntent } from './intent.js';
+import { looksLikePlan, parsePublishPlan, runPublishPlan, type PublishPorts } from './publish.js';
 import type { PurseResponse } from './protocol.js';
 import { writeState, type BeatOutcome, type BeatState } from './state.js';
 import type { Outcome } from './outcome.js';
@@ -52,6 +53,13 @@ export interface PhaseTwoOptions {
   /** Omitted, or `--dry-run`: nothing is submitted and the outcome is still `signed`. */
   readonly submit?: SubmitPort | undefined;
   readonly now?: (() => Date) | undefined;
+  /**
+   * What a publish plan needs beyond the purse: the API origin, the purse's address, the chain
+   * reads and the HTTP calls. Absent, a plan is refused locally rather than half-run.
+   */
+  readonly publish?:
+    | { readonly origin: string; readonly address: string; readonly profile: { name: string; bio: string }; readonly ports: Omit<PublishPorts, 'ask' | 'now'> }
+    | undefined;
 }
 
 export interface PhaseTwoResult {
@@ -78,6 +86,9 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
   let digest: string | undefined;
   let submittedDigest: string | undefined;
   let error: string | undefined;
+  let postId: string | undefined;
+  let handle: string | undefined;
+  let named: boolean | undefined;
 
   /*
     The work is an inner function and the write is after it, rather than a `return finish()` inside
@@ -115,6 +126,46 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
       return;
     }
 
+    if (looksLikePlan(value)) {
+      const plan = parsePublishPlan(value);
+      if (!plan.ok) {
+        outcome = 'refused';
+        ruleId = 'intent-invalid-locally';
+        error = plan.reason;
+        return;
+      }
+      if (options.publish === undefined) {
+        outcome = 'refused';
+        ruleId = 'intent-invalid-locally';
+        error = 'a publish plan was written but this beat runs without an API origin and address; nothing was sent';
+        return;
+      }
+      const result = await runPublishPlan({
+        plan: plan.plan,
+        address: options.publish.address,
+        origin: options.publish.origin,
+        beatId: options.beatId,
+        profile: options.publish.profile,
+        ports: {
+          ...options.publish.ports,
+          ask: (intent) => options.ask.ask(intent),
+          now: () => now().getTime(),
+        },
+      });
+      if (result.priceDigest !== undefined) submittedDigest = result.priceDigest;
+      if (result.outcome === 'published') {
+        outcome = 'published';
+        postId = result.postId;
+        handle = result.handle;
+        named = result.named;
+        return;
+      }
+      outcome = result.outcome;
+      error = result.error;
+      if (result.outcome === 'refused') ruleId = result.ruleId;
+      return;
+    }
+
     const parsed = parseIntent(value);
     if (!parsed.ok) {
       outcome = 'refused';
@@ -141,6 +192,11 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
       return;
     }
 
+    if (!('digest' in response)) {
+      // A statement was signed. Outside a publish plan there is nothing to submit; the beat records it.
+      outcome = 'signed';
+      return;
+    }
     digest = response.digest;
     if (options.submit === undefined) {
       outcome = 'signed';
@@ -179,6 +235,9 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
     ...(digest === undefined ? {} : { digest }),
     ...(submittedDigest === undefined ? {} : { submittedDigest }),
     ...(error === undefined ? {} : { error }),
+    ...(postId === undefined ? {} : { postId }),
+    ...(handle === undefined ? {} : { handle }),
+    ...(named === undefined ? {} : { named }),
   };
   const statePath = await writeState(options.stateDir, state);
   return { state, statePath };

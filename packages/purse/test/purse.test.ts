@@ -119,6 +119,7 @@ describe('a permitted intent', () => {
 
     expect(response.ok).toBe(true);
     if (!response.ok) throw new Error('unreachable');
+    if (!('digest' in response)) throw new Error('a transaction was expected');
     expect(response.digest).toBe(DIGEST);
 
     const bytes = Uint8Array.from(Buffer.from(response.txBytesB64, 'base64'));

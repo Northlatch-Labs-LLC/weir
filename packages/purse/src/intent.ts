@@ -45,6 +45,7 @@
 
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { statementIntent } from './statement.js';
 
 /** `0x` and one to sixty-four hex digits, which is what every Sui id and address is. */
 const HEX_ID = /^0x[0-9a-fA-F]{1,64}$/;
@@ -152,6 +153,8 @@ export const intentSchema = z.discriminatedUnion('kind', [
   postIntent,
   priceIntent,
   settleEpochIntent,
+  // A personal-message signature over one of two texts the SDK builds; see statement.ts.
+  statementIntent,
 ]);
 
 export type Intent = z.infer<typeof intentSchema>;

@@ -30,9 +30,13 @@ interface BeatArgs {
   readonly chain: string;
   readonly beatId: string;
   readonly dryRun: boolean;
+  /** Both or neither: with them a publish plan runs; without them it is refused locally. */
+  readonly apiOrigin: string | null;
+  readonly address: string | null;
 }
 
-const FLAGS = ['--runs', '--state', '--socket', '--chain', '--beat-id'] as const;
+const FLAGS = ['--runs', '--state', '--socket', '--chain', '--beat-id', '--api-origin', '--address'] as const;
+const OPTIONAL = new Set<string>(['--api-origin', '--address']);
 
 export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
   const values = new Map<string, string>();
@@ -59,8 +63,15 @@ export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
   }
 
   for (const flag of FLAGS) {
-    if (!values.has(flag)) return refuse('request-malformed', `${flag} is required.`);
+    if (!OPTIONAL.has(flag) && !values.has(flag)) return refuse('request-malformed', `${flag} is required.`);
   }
+  const apiOrigin = values.get('--api-origin') ?? null;
+  const address = values.get('--address') ?? null;
+  if ((apiOrigin === null) !== (address === null)) {
+    return refuse('request-malformed', '--api-origin and --address are given together or not at all.');
+  }
+  if (apiOrigin !== null && !/^https:\/\/[a-z0-9.-]+$/.test(apiOrigin)) return refuse('request-malformed', '--api-origin is an https origin with no path.');
+  if (address !== null && !/^0x[0-9a-f]{64}$/.test(address)) return refuse('request-malformed', '--address is a full lower-case Sui address.');
 
   return allow({
     runs: values.get('--runs')!,
@@ -69,6 +80,8 @@ export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
     chain: values.get('--chain')!,
     beatId: values.get('--beat-id')!,
     dryRun,
+    apiOrigin,
+    address,
   });
 }
 
@@ -114,18 +127,69 @@ if (!chain.ok) {
   process.exit(1);
 }
 
+/*
+  The ports a publish plan needs: the API over HTTPS, the two object references from the node the
+  purse's own chain document names, and the same submit the transaction path uses.
+*/
+const client = createClient(chain.value);
+const publish =
+  args.apiOrigin === null || args.address === null
+    ? {}
+    : {
+        publish: {
+          origin: args.apiOrigin,
+          address: args.address,
+          profile: {
+            name: 'Heron',
+            bio: 'A Northlatch Labs agent. It reads the network, writes what it sees, and prices its own writing; every signature it produces is bounded by a policy under a human operator.',
+          },
+          ports: {
+            http: {
+              request: async (input: { method: 'GET' | 'POST'; url: string; body?: unknown; headers?: Record<string, string> }) => {
+                const response = await fetch(input.url, {
+                  method: input.method,
+                  headers: { 'content-type': 'application/json', 'user-agent': 'heron-beat/2 (Heron host)', ...(input.headers ?? {}) },
+                  ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+                  signal: AbortSignal.timeout(60_000),
+                });
+                const text = await response.text();
+                let json: unknown = null;
+                try { json = JSON.parse(text); } catch { json = null; }
+                return { status: response.status, json };
+              },
+            },
+            chain: {
+              sharedRef: async (objectId: string) => {
+                const { object } = await client.core.getObject({ objectId });
+                const owner = object.owner as { $kind?: string; Shared?: { initialSharedVersion: string } };
+                if (owner.$kind !== 'Shared' || owner.Shared === undefined) throw new Error(`${objectId} is not a shared object`);
+                return { objectId, initialSharedVersion: owner.Shared.initialSharedVersion, mutable: true as const };
+              },
+              ownedRef: async (objectId: string) => {
+                const { object } = await client.core.getObject({ objectId });
+                return { objectId, version: object.version, digest: object.digest };
+              },
+            },
+            submit: async (signed: { txBytesB64: string; signature: string }) => chainSubmit(chain.value).submit(signed),
+          },
+        },
+      };
+
 const { state, statePath } = await runPhaseTwo({
   runsDir: args.runs,
   stateDir: args.state,
   beatId: args.beatId,
   ask: { ask: (intent) => askPurse({ socketPath: args.socket, intent }) },
   ...(args.dryRun ? {} : { submit: chainSubmit(chain.value) }),
+  ...(args.dryRun ? {} : publish),
 });
 
 process.stderr.write(
   `heron-beat: ${state.beatId} ${state.outcome}` +
     (state.ruleId === undefined ? '' : ` rule=${state.ruleId}`) +
     (state.digest === undefined ? '' : ` digest=${state.digest}`) +
+    (state.submittedDigest === undefined ? '' : ` submitted=${state.submittedDigest}`) +
+    (state.postId === undefined ? '' : ` post=${state.postId}`) +
     ` state=${statePath}\n`,
 );
 

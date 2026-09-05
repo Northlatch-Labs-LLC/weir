@@ -101,6 +101,13 @@ describe('heron-purse.service', () => {
     for (const line of pres) expect(line).not.toMatch(/%[a-zA-Z%]/);
   });
 
+  it('turns statements on for one origin with a daily ceiling, both flags together', async () => {
+    const purse = await unit('heron-purse.service');
+    const exec = directive(purse, 'Service', 'ExecStart').join(' ');
+    expect(exec).toContain('--api-origin https://weir.social');
+    expect(exec).toMatch(/--statements-per-day [1-9][0-9]{0,3}\b/);
+  });
+
   it("passes the multisig document, so the purse signs as Heron's 1-of-2 address and not as the hot key", async () => {
     const purse = await unit('heron-purse.service');
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');

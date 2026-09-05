@@ -26,7 +26,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export type BeatOutcome = 'signed' | 'refused' | 'no-intent' | 'error';
+export type BeatOutcome = 'signed' | 'refused' | 'no-intent' | 'error' | 'published';
 
 export interface BeatState {
   readonly beatId: string;
@@ -39,6 +39,11 @@ export interface BeatState {
   readonly error?: string;
   /** Present only when the transaction was submitted. Absent under `--dry-run`. */
   readonly submittedDigest?: string;
+  /** A publish plan's result: the post id the API returned, the handle it was published under. */
+  readonly postId?: string;
+  readonly handle?: string;
+  /** True when this beat also named the vault to the handle (a first publish). */
+  readonly named?: boolean;
 }
 
 export const STATE_FILE = 'latest.json';

@@ -74,6 +74,8 @@ ExecStart=/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js \
   --policy /srv/heron/policy/heron-policy.json \
   --policy-sha256 <POLICY_SHA256> \
   --multisig /srv/heron/policy/heron-multisig.json \
+  --api-origin https://weir.social \
+  --statements-per-day 48 \
   --chain /srv/heron/chain.json \
   --audit /var/lib/heron/audit/audit.jsonl \
   --spend /var/lib/heron/audit/spend.jsonl

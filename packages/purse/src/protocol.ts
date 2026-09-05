@@ -37,12 +37,21 @@ export type SignedResponse = {
   readonly signature: string;
 };
 
+/** The answer to a statement intent: the text that was signed and the signature over it. */
+export type StatementResponse = {
+  readonly ok: true;
+  readonly statement: string;
+  readonly statementSha256: string;
+  readonly signature: string;
+  readonly address: string;
+  readonly timestampMs: number;
+};
 export type RefusedResponse = {
   readonly ok: false;
   readonly refused: Refusal;
 };
 
-export type PurseResponse = SignedResponse | RefusedResponse;
+export type PurseResponse = SignedResponse | StatementResponse | RefusedResponse;
 
 /**
  * The largest request the purse will read off a connection.

@@ -53,6 +53,7 @@ import { intentHash, parseIntent, type Intent } from './intent.js';
 import { SpendLedger, outflowsOf } from './ledger-file.js';
 import { ruleIdIn, type Refusal } from './outcome.js';
 import { requestSchema, type PurseResponse } from './protocol.js';
+import { judgeStatement, statementSha256, statementText, type StatementBounds } from './statement.js';
 
 export interface PurseOptions {
   readonly signer: Signer;
@@ -71,6 +72,10 @@ export interface PurseOptions {
   readonly simulation?: SimulationPort | undefined;
   /** One line per decision. Defaults to stderr. Never called with key material. */
   readonly log?: ((line: string) => void) | undefined;
+  /** Statement signing: off unless the server was started with both flags (statement.ts). */
+  readonly statements?: StatementBounds | undefined;
+  /** The purse's clock, for the statement freshness rule. Tests pin it. */
+  readonly now?: (() => number) | undefined;
 }
 
 export interface Purse {
@@ -167,6 +172,36 @@ export function createPurse(options: PurseOptions): Purse {
 
     const intent: Intent = parsed.intent;
     const about = { intentKind: intent.kind, intentHash: intentHash(intent), txDigest: '' };
+
+    if (intent.kind === 'statement') {
+      /*
+        No transaction: the purse builds one of two texts itself and signs it as a personal
+        message, under the bounds statement.ts names. Recorded in the same chain as every
+        signature, under intentKind "statement", with the intent's hash; the text is not stored,
+        because the intent that produced it is reproducible from the hash and the request.
+      */
+      const refusal = await judgeStatement({
+        intent,
+        bounds: options.statements,
+        policy: options.policy,
+        nowMs: (options.now ?? (() => Date.now()))(),
+      });
+      if (refusal !== null) return refused(refusal, about);
+      const text = statementText(intent, address);
+      const signed = await signer.signPersonalMessage(new TextEncoder().encode(text));
+      if (!signed.ok) {
+        return refused({ ruleId: 'gate-refused', reason: `the statement could not be signed: ${signed.failure.detail}` }, about);
+      }
+      await record({ ...about, refusal: null, txDigest: '' });
+      return {
+        ok: true,
+        statement: text,
+        statementSha256: statementSha256(text),
+        signature: signed.value,
+        address,
+        timestampMs: intent.timestampMs,
+      };
+    }
 
     const built = buildIntent({
       intent,

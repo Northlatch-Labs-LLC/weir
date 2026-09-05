@@ -167,6 +167,11 @@ export function buildIntent(args: {
         break;
       }
 
+      case 'statement': {
+        // Never a transaction: the purse signs a statement as a personal message (statement.ts).
+        return refuse('intent-unbuildable', 'a statement intent builds no transaction.');
+      }
+
       default: {
         const exhaustive: never = intent;
         return refuse('intent-unbuildable', `no builder for ${JSON.stringify(exhaustive)}.`);

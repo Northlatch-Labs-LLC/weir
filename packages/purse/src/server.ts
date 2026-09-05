@@ -64,9 +64,12 @@ export interface ServerArgs {
    * key's own address, which is what a single-key test deployment is and what Heron is not.
    */
   readonly multisig?: string | undefined;
+  /** Both or neither: the origin statements are issued for, and how many a day. */
+  readonly apiOrigin?: string | undefined;
+  readonly statementsPerDay?: number | undefined;
 }
 
-const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig'] as const;
+const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day'] as const;
 
 /**
  * Parse argv.
@@ -103,6 +106,19 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
 
   const keyFile = values.get('--key-file');
   const multisig = values.get('--multisig');
+  const apiOrigin = values.get('--api-origin');
+  const perDayText = values.get('--statements-per-day');
+  if ((apiOrigin === undefined) !== (perDayText === undefined)) {
+    return refuse('request-malformed', '--api-origin and --statements-per-day are given together or not at all; one without the other is a purse that half-signs statements.');
+  }
+  let statementsPerDay: number | undefined;
+  if (perDayText !== undefined) {
+    if (!/^[1-9][0-9]{0,3}$/.test(perDayText)) return refuse('request-malformed', '--statements-per-day is a positive integer under 10000.');
+    statementsPerDay = Number(perDayText);
+    if (apiOrigin === undefined || !/^https:\/\/[a-z0-9.-]+$/.test(apiOrigin)) {
+      return refuse('request-malformed', '--api-origin is an https origin with no path, such as https://weir.social.');
+    }
+  }
   return allow({
     socket: values.get('--socket')!,
     policy: values.get('--policy')!,
@@ -112,6 +128,8 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
     spend: values.get('--spend')!,
     ...(keyFile === undefined ? {} : { keyFile }),
     ...(multisig === undefined ? {} : { multisig }),
+    ...(apiOrigin === undefined ? {} : { apiOrigin }),
+    ...(statementsPerDay === undefined ? {} : { statementsPerDay }),
   });
 }
 
@@ -219,6 +237,9 @@ export async function startPurse(args: {
     ...(args.recorded === undefined
       ? {}
       : { simulation: args.recorded.simulation, gas: args.recorded.gas }),
+    ...(args.server.apiOrigin === undefined || args.server.statementsPerDay === undefined
+      ? {}
+      : { statements: { origin: args.server.apiOrigin, perDay: args.server.statementsPerDay, auditPath: args.server.audit } }),
   });
 
   await mkdir(dirname(args.server.socket), { recursive: true });
@@ -260,7 +281,8 @@ export async function startPurse(args: {
 
   log(
     `heron-purse: listening on ${args.server.socket} for ${purse.address} · policy ${policy.value.policyHash} ` +
-      `· file ${policy.value.fileSha256} · audit head ${purse.auditHead()} · ${signerLine}`,
+      `· file ${policy.value.fileSha256} · audit head ${purse.auditHead()} · ${signerLine}` +
+      (args.server.apiOrigin === undefined ? ' · statements off' : ` · statements for ${args.server.apiOrigin}, ${String(args.server.statementsPerDay)} a day`),
   );
   notifyReady(args.env['NOTIFY_SOCKET']);
 

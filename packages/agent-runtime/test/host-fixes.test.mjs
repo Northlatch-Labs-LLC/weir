@@ -1759,3 +1759,14 @@ test('--install-purse ships the policy HERON_POLICY_FILE names from the committe
   assert.doesNotMatch(start, /systemctl enable --now/);
   assert.match(start, /\*"file \$POLICY_HASH_EXPECTED"\*\)/, 'the start must check the purse listens under the shipped file hash');
 });
+
+test('the launcher hands phase two the API origin and the policy address, and gives the model twenty tool steps', () => {
+  const launcher = readFileSync(path.join(DO_DIR, 'bin', 'heron-beat'), 'utf8');
+  assert.match(launcher, /^API_ORIGIN="https:\/\/weir\.social"$/m);
+  assert.match(launcher, /--api-origin "\$API_ORIGIN" --address "\$AGENT_ADDRESS"/);
+  assert.match(launcher, /AGENT_ADDRESS="\$\(python3 -c .*agentAddress.*heron-policy\.json/);
+  assert.match(launcher, /cfg\["agents"\]\["defaults"\]\["max_tool_iterations"\] = 20/);
+  // The purse unit signs statements for the same origin the launcher names.
+  const unit = readFileSync(path.join(PKG_DIR, '..', 'purse', 'systemd', 'heron-purse.service'), 'utf8');
+  assert.match(unit, /--api-origin https:\/\/weir\.social/);
+});

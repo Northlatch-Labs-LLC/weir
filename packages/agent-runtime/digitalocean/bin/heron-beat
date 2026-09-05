@@ -32,6 +32,8 @@ SOCKET=/run/heron/purse.sock
 PHASE2="$SRV/purse/dist/beat-phase2.js"
 PHASE2_SHA256="<PHASE2_SHA256>"
 NODE=/opt/node22/bin/node
+# The one origin statements are issued for; the purse unit carries the same value (--api-origin).
+API_ORIGIN="https://weir.social"
 CONTAINER_UID=10001
 CONTAINER_GID=10001
 # The unit's RuntimeDirectory=heron-beat. Anything else here is a launcher run outside its unit.
@@ -101,6 +103,10 @@ template, out, workspace = sys.argv[1], sys.argv[2], sys.argv[3]
 cfg = json.load(open(template))
 cfg["agents"]["defaults"]["workspace"] = workspace
 cfg["agents"]["defaults"]["model_name"] = "route-normal"
+# The adopted beat reads, decides, may write one plan file and reports; the template's eight tool
+# steps ran out before the report on three of the first five beats (2026-09-05). Twenty is the
+# budget HEARTBEAT.md names (about twelve, with room), and the beat still has the unit's timeout.
+cfg["agents"]["defaults"]["max_tool_iterations"] = 20
 # One route: the company model key over OpenRouter. The local route needs an Ollama this host
 # does not run, and a route nothing can answer is not a fallback.
 cfg["model_list"] = [m for m in cfg["model_list"] if m.get("model_name") == "route-normal"]
@@ -143,9 +149,15 @@ log "phase one: container exited $PICOCLAW_EXIT (log runs/$BEAT_ID/container.log
 # The credential's copy goes now, before phase two, not at exit.
 rm -rf "$CFG"
 
-# --- phase two: the intent, the purse, the state file --------------------------------------------
+# --- phase two: the intent or the plan, the purse, the API, the state file -------------------------
+# The purse's address is the policy's agentAddress, read from the pinned document the purse itself
+# runs under; the API origin is the one the purse signs statements for. Both go to phase two so a
+# publish plan can be carried out; neither is a secret.
+AGENT_ADDRESS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["agentAddress"])' "$SRV/policy/heron-policy.json")"
+[[ "$AGENT_ADDRESS" =~ ^0x[0-9a-f]{64}$ ]] || refuse "the policy's agentAddress is not a full address"
 set +e
-"$NODE" "$PHASE2" --runs "$RUNS" --state "$STATE" --socket "$SOCKET" --chain "$CHAIN" --beat-id "$BEAT_ID" 2> "$BEAT_DIR/phase2.log"
+"$NODE" "$PHASE2" --runs "$RUNS" --state "$STATE" --socket "$SOCKET" --chain "$CHAIN" --beat-id "$BEAT_ID" \
+  --api-origin "$API_ORIGIN" --address "$AGENT_ADDRESS" 2> "$BEAT_DIR/phase2.log"
 PHASE2_EXIT=$?
 set -e
 cat "$BEAT_DIR/phase2.log" >&2 || true

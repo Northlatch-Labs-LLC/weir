@@ -58,6 +58,17 @@ export const PURSE_REFUSAL_IDS = [
   'intent-invalid-locally',
   /** The purse could not be reached, or answered something that was not a response. */
   'purse-unreachable',
+  /*
+    The statement intent's own refusals (statement.ts). Each is a bound named in that file's
+    header: the flags absent, the origin wrong, the clock off, the object or coin outside the
+    policy, a price shape or ceiling wrong, the daily count reached.
+  */
+  'statement-disabled',
+  'statement-origin',
+  'statement-clock',
+  'statement-object',
+  'statement-price',
+  'statement-ceiling',
 ] as const;
 
 export type PurseRefusalId = (typeof PURSE_REFUSAL_IDS)[number];

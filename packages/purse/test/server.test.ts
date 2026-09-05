@@ -222,6 +222,7 @@ describe('signing as the multisig', () => {
     const answered = await askPurse({ socketPath: laidOut.socketPath, intent: priceIntentFor() });
     if (!answered.ok) throw new Error(`${answered.refused.ruleId}: ${answered.refused.reason}`);
     if (!answered.value.ok) throw new Error(`${answered.value.refused.ruleId}: ${answered.value.refused.reason}`);
+    if (!('digest' in answered.value)) throw new Error('a transaction was expected');
     const bytes = new Uint8Array(Buffer.from(answered.value.txBytesB64, 'base64'));
     expect(await laidOut.multisigKey!.verifyTransaction(bytes, answered.value.signature)).toBe(true);
     // The audit line carries the multisig address: the ledger and the chain are about the address
@@ -283,6 +284,7 @@ describe('over the socket', () => {
     if (!answered.ok) throw new Error(`${answered.refused.ruleId}: ${answered.refused.reason}`);
     expect(answered.value.ok).toBe(true);
     if (!answered.value.ok) throw new Error('unreachable');
+    if (!('digest' in answered.value)) throw new Error('a transaction was expected');
     expect(answered.value.digest).toBe(DIGEST);
     expect(answered.value.txBytesB64.length).toBeGreaterThan(0);
     await s.running.stop();
