@@ -66,6 +66,7 @@ const UnlockBcs = bcs.struct('Unlock', {
 vi.mock('@/lib/rate-limit', () => ({
   rateLimit: () => null,
   simulateLimit: async () => null,
+  quotaLimit: async () => null,
 }));
 
 vi.mock('@/lib/chain', () => ({

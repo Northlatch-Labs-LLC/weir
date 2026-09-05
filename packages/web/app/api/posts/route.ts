@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { newId } from '@/lib/ids';
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { quotaLimit, rateLimit } from '@/lib/rate-limit';
 import { createClient, periodOf, readContentPrice, readCreatorVault } from '@projectx-social/sdk';
 import {
   addPost,
@@ -234,6 +234,33 @@ async function publishOnce(request: Request) {
   if (!proof.ok) {
     return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
   }
+
+  /*
+    The publish quota is spent HERE: after the signature proves `author`, before anything is read
+    from chain and before any body is sealed.
+
+    After the proof, because the bucket is keyed on an address and this route is handed one in the
+    body. Spending on the body's `author` before it is proven would let a stranger empty any
+    creator's publishing budget with unsigned requests naming them — a denial of publication bought
+    for the price of a POST, which is the same mistake `checkout/submit` avoids by verifying the
+    transaction signature locally before it debits the buyer.
+
+    Before the seal, because that is where the platform's money goes: a paid post writes two durable
+    blobs through `sealBothEditions` and fronts the WAL for both. A ceiling applied after them would
+    bound the count and not the bill.
+
+    Before the signature is claimed, which is the reason this sits above the transaction rather than
+    inside it. `verifyActionDeferringSpend` has proved the signature and deliberately not spent it
+    yet, so a caller refused here keeps it and can retry the identical request when the bucket
+    refills. Spending it would make a 429 cost a signature and force a re-sign to recover from a
+    limit that is meant to be waited out.
+
+    `rateLimit(request, 'write')` above is unchanged and still runs first — it is free and refuses a
+    naive loop without a round trip. It is not the ceiling: it counts in one process's memory, so
+    what it enforces is `limit x instances`. This is the half that holds across them.
+  */
+  const overQuota = await quotaLimit(author, 'publish');
+  if (overQuota !== null) return overQuota;
 
   let postAccess: PostAccess;
   if (access === 'public') {

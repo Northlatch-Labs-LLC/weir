@@ -31,7 +31,7 @@ const COIN = '0xdba34672::usdc::USDC';
 const keypair = new Ed25519Keypair();
 const address = keypair.getPublicKey().toSuiAddress();
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null, quotaLimit: async () => null }));
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({
     ok: true,

@@ -85,7 +85,10 @@ import { opaqueDetail } from './opaque';
  * **Layer 2 — identity, the Postgres token bucket per Sui address ({@link quotaLimit}).**
  * It is the only layer that can price a *kind* of request, which is why `purchase` is 10 and `read`
  * is 600 — an agent looping on the buy path can lose ten purchases before it is stopped, and the
- * number is a judgement about money rather than about CPU. **It does not defend against an
+ * number is a judgement about money rather than about CPU. `publish` and `message` are here for the
+ * same reason and were not: publishing and sending were bounded only by `rateLimit`, so the ceiling
+ * on how much content one identity could produce was `limit x instances` — a number nobody chose,
+ * which rises with the traffic testing it. **It does not defend against an
  * adversary**, per the paragraph above: buckets are per address and addresses are cheap. It bounds
  * a mistake, not an attack.
  *
@@ -501,6 +504,37 @@ export const QUOTAS = {
     a loop meets the refill rate and stays there.
   */
   simulate: { capacity: 60, msPerToken: 2_000 },
+  /*
+    Publishing a post, keyed on the address the publish signature PROVES.
+
+    Separate from `write` because the two bound different things. `write` is a signed request
+    reaching Postgres, and its ceiling — 120 at once, one a second — is about a runaway client. A
+    post is not a row: a paid one seals two durable blobs through `sealBothEditions`, roughly 0.347
+    WAL each by `lib/storage-retention.ts`, and the platform fronts both. So the same loop that
+    `write` treats as a client bug is, on this route, a bill. Publishing under the `write` ceiling
+    would allow 120 posts at once and 3600 an hour from one address, sustained, each one paid for
+    here.
+
+    Twenty at once, then one every two minutes. Twenty covers a creator emptying a drafts folder or
+    an import backfilling an archive in one sitting, which are the honest bursts; thirty an hour
+    sustained is well past anybody writing, and it is the number that turns an unbounded WAL bill
+    into a bounded one. It is deliberately the second-tightest bucket in this table, after
+    `purchase`, and for the same kind of reason: exhausting it costs money rather than CPU.
+  */
+  publish: { capacity: 20, msPerToken: 120_000 },
+  /*
+    Sending a direct message, keyed on the address the send signature PROVES.
+
+    Cheaper than `publish` in every direction — one Postgres row, no blob, no chain — so this
+    bucket is not about cost. It is about a person receiving them. A message costs the platform
+    almost nothing and costs its recipient attention, which is the resource a spam flood is
+    actually spending, and no infrastructure ceiling notices it being spent.
+
+    Sixty at once, then one every ten seconds. A real exchange is bursty and a limiter that clips a
+    conversation is a defect, so the burst is generous; 360 an hour sustained to one deployment
+    from one address is far past anybody typing and is where a farm meets a wall.
+  */
+  message: { capacity: 60, msPerToken: 10_000 },
 } as const satisfies Record<string, Quota>;
 
 export type QuotaName = keyof typeof QUOTAS;
@@ -964,6 +998,16 @@ export const BREAKER_ENV = {
   purchase: 'PROJECTX_SOCIAL_BREAKER_PURCHASE_PER_HOUR',
   onramp: 'PROJECTX_SOCIAL_BREAKER_ONRAMP_PER_HOUR',
   simulate: 'PROJECTX_SOCIAL_BREAKER_SIMULATE_PER_MINUTE',
+  /*
+    The two content buckets get their own switches rather than sharing `write`'s, because the state
+    somebody reaches for them in is not the state they reach for `write` in. A spam flood is stopped
+    by closing the door content arrives through; closing `write` as well would also stop a creator
+    naming a vault, setting a perk or answering a comment — every signed write on the platform — to
+    deal with a problem that is about posts and messages. Two names, so the smallest door that ends
+    the flood is the one that can be shut.
+  */
+  publish: 'PROJECTX_SOCIAL_BREAKER_PUBLISH_PER_HOUR',
+  message: 'PROJECTX_SOCIAL_BREAKER_MESSAGE_PER_MINUTE',
 } as const satisfies Record<QuotaName, string>;
 
 /**
@@ -984,6 +1028,17 @@ export const BREAKER_WINDOW_MS = {
     sit under the ceiling for the remaining fifty-eight minutes.
   */
   simulate: 60_000,
+  /*
+    An hour, like `purchase`, because exhausting this one spends WAL rather than CPU and a bill is
+    judged over an hour rather than over a minute.
+  */
+  publish: 3_600_000,
+  /*
+    A minute, like `write`. A message is a per-request cost, and an hour-long window would let a
+    burst that fills every inbox on the platform in ninety seconds sit under the ceiling for the
+    remaining fifty-eight minutes.
+  */
+  message: 60_000,
 } as const satisfies Record<QuotaName, number>;
 
 /**
@@ -1021,6 +1076,19 @@ export const BREAKER_DEFAULTS = {
     ceiling would notice.
   */
   simulate: 600,
+  /*
+    Six hundred posts an hour across every identified caller on the deployment. Far past what this
+    platform's whole audience publishes in a day, and reached in minutes by a farm — which is the
+    shape a backstop should have. Per hour rather than per minute because each one is fronted WAL,
+    matching the argument on `purchase`.
+  */
+  publish: 600,
+  /*
+    Twelve hundred messages a minute across every identified caller, matching `write`: a message is
+    one row, so the deployment-wide ceiling is about the database rather than about money. Far above
+    any real conversation load at this size and far below what a flood wants.
+  */
+  message: 1_200,
 } as const satisfies Record<QuotaName, number>;
 
 /**
