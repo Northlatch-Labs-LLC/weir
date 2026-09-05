@@ -3,7 +3,7 @@ import { createClient, fold, readCurrentEpoch } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { listProfiles } from '@/lib/content';
 import { readPools } from '@/lib/pools';
-import { formatUnits } from '@/lib/units';
+import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { LADDER_DEPTH, RUNGS } from '@/lib/ladder';
 import {
   DesignTreasuries,
@@ -107,7 +107,7 @@ export async function TreasuriesData({
             ? 'not measured'
             : pool === undefined
               ? 'no pool open'
-              : `${formatUnits(pool.totalPrincipalMist, 9)} SUI`,
+              : `${formatUnits(pool.totalPrincipalMist, SUI_DECIMALS)} SUI`,
           pooledFont: !indexed || pool === undefined ? BODY : MONO,
           pooledStyle: !indexed ? 'italic' : 'normal',
           pooledColor: !indexed ? ALERT : pool === undefined ? DIM : INK,

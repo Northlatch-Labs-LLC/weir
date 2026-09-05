@@ -3,7 +3,7 @@ import { fold } from '@projectx-social/sdk';
 import { findStakeCaps, readMembers, readVault } from '@/lib/stake';
 import { siteConfig, shortId } from '@/lib/chain';
 import { reverseName } from '@/lib/names';
-import { formatUnits } from '@/lib/units';
+import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import type { MemberRow } from '@/lib/stake-members';
 import { LADDER_DEPTH, RUNGS } from '@/lib/ladder';
 import { DesignVault } from '@/components/design/Vault';
@@ -105,7 +105,7 @@ export async function VaultData({
     MIST is shown alongside SUI rather than instead of it: the formatted figure is for reading and
     the raw one is what a person comparing this against an explorer actually needs.
   */
-  const sui = (mist: bigint) => `${formatUnits(mist, 9)} SUI (${mist.toString()} MIST)`;
+  const sui = (mist: bigint) => `${formatUnits(mist, SUI_DECIMALS)} SUI (${mist.toString()} MIST)`;
 
   /*
     Three live reads, independent, so none waits on another: who is pooled here, and the creator's
@@ -199,20 +199,20 @@ async function membersFor(
     name: names.get(r.depositor) ?? null,
     short: shortId(r.depositor),
     href: network === null ? undefined : `https://suiscan.xyz/${network}/account/${r.depositor}`,
-    principal: `${formatUnits(r.principalMist, 9)} SUI`,
+    principal: `${formatUnits(r.principalMist, SUI_DECIMALS)} SUI`,
     share: pct(r.shareBps),
-    claimable: `${formatUnits(r.claimableMist, 9)} SUI`,
+    claimable: `${formatUnits(r.claimableMist, SUI_DECIMALS)} SUI`,
   });
 
   const n = view.rows.length;
-  const pooled = `${formatUnits(view.principalSumMist, 9)} SUI`;
+  const pooled = `${formatUnits(view.principalSumMist, SUI_DECIMALS)} SUI`;
   const summary = view.truncated
     ? `${n} members shown, but the read stopped at its ceiling. There are more, and the sum below is partial.`
     : n === 0
       ? 'Nobody is pooled here yet. The table was read and holds no live position.'
       : view.reconciles
-        ? `${n} member${n === 1 ? '' : 's'} · ${pooled} pooled, which is exactly total_principal · ${formatUnits(view.claimableSumMist, 9)} SUI claimable by them right now${view.dormant > 0 ? ` · ${view.dormant} withdrawn slot${view.dormant === 1 ? '' : 's'} not counted` : ''}.`
-        : `${n} member${n === 1 ? '' : 's'} · the rows sum to ${pooled} but total_principal says ${formatUnits(totalPrincipalMist, 9)} SUI. These should be equal, and are not.`;
+        ? `${n} member${n === 1 ? '' : 's'} · ${pooled} pooled, which is exactly total_principal · ${formatUnits(view.claimableSumMist, SUI_DECIMALS)} SUI claimable by them right now${view.dormant > 0 ? ` · ${view.dormant} withdrawn slot${view.dormant === 1 ? '' : 's'} not counted` : ''}.`
+        : `${n} member${n === 1 ? '' : 's'} · the rows sum to ${pooled} but total_principal says ${formatUnits(totalPrincipalMist, SUI_DECIMALS)} SUI. These should be equal, and are not.`;
 
   return { rows: view.rows.map(row), summary, reconciles: view.reconciles };
 }

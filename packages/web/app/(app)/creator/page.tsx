@@ -8,7 +8,7 @@ import { PageTabs } from '@/components/shell/PageTabs';
 import { CREATOR, titleFor } from '@/lib/site-map';
 import { PageHead } from '@/components/design/PageHead';
 import { readProtocol } from '@/lib/chain';
-import { formatUnits } from '@/lib/units';
+import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { fold } from '@projectx-social/sdk';
 
 export const metadata: Metadata = { title: titleFor('/creator') };
@@ -112,7 +112,7 @@ export default async function CreatorPage() {
                   <span className="v" style={{ fontSize: 'var(--text-h4)' }}>
                     {snapshot.platform.creationFeeMist === 0n
                       ? 'Gas only'
-                      : `${formatUnits(snapshot.platform.creationFeeMist, 9)} SUI`}
+                      : `${formatUnits(snapshot.platform.creationFeeMist, SUI_DECIMALS)} SUI`}
                   </span>
                 </div>
                 <div className="stat">

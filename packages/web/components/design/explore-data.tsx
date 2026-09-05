@@ -3,7 +3,7 @@ import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 import { fold } from '@projectx-social/sdk';
 import { listProfiles } from '@/lib/content';
 import { readPools, type PoolSummary } from '@/lib/pools';
-import { formatUnits } from '@/lib/units';
+import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { DesignExplore, type DesignCreator } from '@/components/design/Explore';
 import { Freshness } from '@/components/design/Freshness';
 
@@ -59,7 +59,7 @@ export async function ExploreData({
       ? 'not measured'
       : pool === undefined
         ? 'no pool open'
-        : `${formatUnits(pool.totalPrincipalMist, 9)} SUI`;
+        : `${formatUnits(pool.totalPrincipalMist, SUI_DECIMALS)} SUI`;
 
     const yieldStyle = !indexed ? unread : pool === undefined ? none : measured;
     const yieldShare = !indexed
