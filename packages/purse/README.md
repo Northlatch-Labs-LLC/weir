@@ -41,6 +41,18 @@ unrecognised field at any level is a refusal, not a field ignored.
 the reason it holds is that the caller is an unattended loop: an exception caught three frames up
 becomes a retry, and a retry against a policy denial is a loop hammering a wall.
 
+**One request at a time.** `handle` runs on a single promise chain, so a request that arrives while
+another is in flight waits, and every request is judged against a ledger every earlier one has
+already written to. Without it two overlapping beats each read the outflow ceiling before either
+had recorded its spend, and two requests that are individually inside the ceiling and together over
+it were both signed. The purse signs one transaction every thirty minutes; there is no throughput
+to lose.
+
+**A request over 256 KB is refused without being read — and recorded.** It never reaches the
+parser, and it carries its own refusal id, `request-too-large`, kept apart from `request-malformed`
+so a reader of `audit.jsonl` can tell "somebody sent nonsense" from "somebody streamed at the socket
+until it stopped listening". Its audit line reads `intentKind: unread`.
+
 ## The intent — the v2 content arm only
 
 | kind | what it is | what it builds |
@@ -129,6 +141,21 @@ and the fix is a policy decision; an error is the system broken.
 `systemd/heron-purse.service`, `systemd/heron-beat.service`, `systemd/heron-beat.timer`.
 `test/units.test.ts` parses them and asserts the hardening, because v1 shipped an SSH hardening file
 that sorted after cloud-init's and lost every keyword it set, and nothing read it back.
+
+**The uid ruling: `heron` is 10001, `purse` is 10002.** Fixed, never dynamically allocated — v1's
+defect 3 was an allocated uid colliding with DigitalOcean's own `do-agent` at 999. `heron` owns the
+model's workspace and the container runs as it; `purse` owns the key, the socket and the audit
+chain. The unit runs `User=purse` / `Group=purse`, and the deploy creates that account explicitly:
+`getent passwd 10002` must be empty before, then
+`useradd --uid 10002 --gid 10002 --system --no-create-home --shell /usr/sbin/nologin purse`, then
+`getent passwd 10002` must read `purse`. The same empty-before / resolves-after pair the container's
+Dockerfile already runs for 10001. `test/units.test.ts` asserts the numbers in the unit and in this
+file, so the two cannot drift apart.
+
+**The policy documents live in `policy/`.** `heron-content.json` for this unit and
+`heron-ledger.json` for the `LedgerCap` service — one signer per money path, and the purse refuses
+to start on a document that names `settle_epoch` alongside anything else. `policy/README.md` lists
+every `<ANGLE_BRACKET>` the deploy fills and where each number came from.
 
 **`MemoryDenyWriteExecute=yes` and `--jitless` are one decision.** The directive refuses mappings
 that are both writable and executable and refuses `mprotect` adding `PROT_EXEC`; V8's optimising

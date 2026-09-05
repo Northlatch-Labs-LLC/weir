@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fixedGas } from '../src/build.js';
 import { askPurse } from '../src/client.js';
+import { MAX_REQUEST_BYTES } from '../src/protocol.js';
 import { parseServerArgs, startPurse, type RunningPurse } from '../src/server.js';
 import {
   CHAIN,
@@ -173,6 +174,38 @@ describe('over the socket', () => {
     const lines = (await readFile(s.auditPath, 'utf8')).trim().split('\n').filter((l) => l !== '');
     expect(lines).toHaveLength(1);
     expect(JSON.parse(lines[0]!).ruleId).toBe('request-malformed');
+    await s.running.stop();
+  });
+
+  /*
+    A2 from Security's review of 2026-09-05.
+
+    `serve` answered an oversize request itself and never called the purse, so the one probe most
+    likely to be somebody feeling out the socket left no line at all — in the file `audit-file.ts`
+    says the purse keeps its own chain for.
+  */
+  it('chains a refused line for a request over the size limit', async () => {
+    const s = await started();
+    const oversize = `{"intent":"${'x'.repeat(MAX_REQUEST_BYTES + 1024)}"}\n`;
+
+    const answer = await new Promise<string>((resolve) => {
+      const socket = connect(s.socketPath, () => socket.write(oversize));
+      let received = '';
+      socket.on('data', (chunk: Buffer) => {
+        received += chunk.toString('utf8');
+      });
+      socket.on('close', () => resolve(received));
+      socket.on('error', () => resolve(received));
+    });
+
+    expect(answer).toContain('request-too-large');
+
+    const lines = (await readFile(s.auditPath, 'utf8')).trim().split('\n').filter((l) => l !== '');
+    expect(lines).toHaveLength(1);
+    const line = JSON.parse(lines[0]!) as Record<string, unknown>;
+    expect(line['outcome']).toBe('refused');
+    expect(line['ruleId']).toBe('request-too-large');
+    expect(line['intentKind']).toBe('unread');
     await s.running.stop();
   });
 

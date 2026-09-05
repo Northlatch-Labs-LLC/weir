@@ -297,3 +297,53 @@ describe('the key never leaves', () => {
     await h.close();
   });
 });
+
+describe('two requests that overlap', () => {
+  /*
+    A1 from Security's review of 2026-09-05.
+
+    `server.ts` hands every connection to `void serve(...)`, so two connections are in flight at
+    once, and the outflow ceiling is read from the ledger *before* either request has recorded its
+    spend. Two beats that overlap — a slow node, a timer that fired while the last beat was still
+    running, which `build.ts` already anticipates for gas coin selection — would each be judged
+    against a ledger neither has written to.
+
+    The fixture: the recorded response puts 6,000,000 MIST out and the ceiling is 10,000,000. Either
+    request alone is inside the ceiling; the two together are not. Exactly one may be signed.
+  */
+  it('judges the second against the ledger the first has already written', async () => {
+    const h = await harness({ response: { agentAmount: '-6000000' } });
+
+    const [first, second] = await Promise.all([
+      h.purse.handle({ intent: priceIntentFor() }),
+      h.purse.handle({ intent: priceIntentFor() }),
+    ]);
+
+    const signed = [first, second].filter((response) => response.ok);
+    const refused = [first, second].filter((response) => !response.ok);
+    expect(signed).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(refused[0]!.ok).toBe(false);
+    if (refused[0]!.ok) throw new Error('unreachable');
+    expect(refused[0]!.refused.ruleId).toBe('outflow-ceiling');
+    await h.close();
+  });
+
+  it('records one spend line and two audit lines, in one unbroken chain', async () => {
+    const h = await harness({ response: { agentAmount: '-6000000' } });
+    await Promise.all([
+      h.purse.handle({ intent: priceIntentFor() }),
+      h.purse.handle({ intent: priceIntentFor() }),
+    ]);
+
+    const lines = await auditLines(h.auditPath);
+    expect(lines).toHaveLength(2);
+    expect(lines.map((line) => line['outcome']).sort()).toEqual(['refused', 'signed']);
+    expect(lines[1]!['prevHash']).toBe(lines[0]!['hash']);
+
+    const spendPath = join(h.auditPath, '..', 'spend.jsonl');
+    const recorded = (await readFile(spendPath, 'utf8')).trim().split('\n').filter((l) => l !== '');
+    expect(recorded).toHaveLength(1);
+    await h.close();
+  });
+});

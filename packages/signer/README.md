@@ -269,13 +269,37 @@ so the bytes never enter the tool's heap — and refuses to finish if the hash, 
 file count beside it moved. If there is no Sui home it says so and carries on.
 
 `--encrypt` seals the `.key` to `<name>.key.enc` with
-`openssl enc -aes-256-cbc -pbkdf2`, the passphrase read from a macOS keychain item and handed to
-`openssl` on **file descriptor 3**, then shreds the plaintext. It decrypts the ciphertext back and
-compares it to the plaintext *before* shredding: a pile holding one unopenable file where a key
-used to be is worse than a pile holding a plaintext key. `--decrypt-to-stdout` is the counterpart
-for the deploy step; the child's stdout is inherited, so the secret goes from `openssl` to the
-pipe without passing through this program, and the mode refuses to run at all when stdout is a
-terminal.
+`/usr/bin/openssl enc -aes-256-cbc -pbkdf2 -iter 600000`, the passphrase read from a macOS keychain
+item and handed to `openssl` on **file descriptor 3**, then shreds the plaintext. It decrypts the
+ciphertext back and compares it to the plaintext *before* shredding: a pile holding one unopenable
+file where a key used to be is worse than a pile holding a plaintext key. `--decrypt-to-stdout` is
+the counterpart for the deploy step; the child's stdout is inherited, so the secret goes from
+`openssl` to the pipe without passing through this program, and the mode refuses to run at all when
+stdout is a terminal.
+
+**Both programs are spawned by absolute path.** `/usr/bin/openssl` and `/usr/bin/security`, never a
+bare name off `PATH`, and the tool refuses rather than falling back if either is absent. This is not
+hypothetical on a developer's machine: `which -a openssl` on the desk's laptop reports
+`/usr/local/bin/openssl` ahead of `/usr/bin/openssl`, and a shadowed `openssl` is handed the
+passphrase on fd 3 and the plaintext key's path. `test/birth-key.test.ts` puts a recording shim
+first on `PATH` and asserts it is never called. `/usr/bin/openssl` on macOS is LibreSSL — 3.3.6 on
+this laptop — which supports `-pbkdf2 -iter`; a round trip was run before the pin was made.
+
+**The deviation from `gpg`, recorded rather than left as a difference.** The CISO's rows 1, 3, 4 and
+7 say "gpg-symmetric"; this tool uses `openssl enc -aes-256-cbc -pbkdf2`, which is not AEAD. What
+that costs and what it does not: the passphrase is 32 random bytes from the macOS keychain, so the
+iteration count is not a practical bound on anybody, and a tampered ciphertext fails to open rather
+than yielding a chosen key — CBC under the wrong key gives garbage, and the round-trip comparison
+above catches it byte for byte before the shred. What is genuinely lost against `gpg` is an
+authentication tag, so tampering is caught by that comparison at decrypt time and not by the cipher
+itself.
+
+`-iter 600000` is **stated** rather than left at openssl's default of 10,000. Not only because
+10,000 is low for a password-derived key, but because a default moves with the openssl version: a
+blob sealed under one default and opened under another would silently fail to open, and the only
+copy of a key is not a place to discover that. 600,000 is OWASP's current PBKDF2-HMAC-SHA256 figure.
+The encrypt and the decrypt read the same constant in the source, because a mismatch is a ciphertext
+nobody can open.
 
 ### What it never does
 
@@ -388,11 +412,19 @@ value are the same by test and not by assertion in a comment.
 At deploy the sealed key is piped, never staged:
 
 ```sh
+set -o pipefail
+
 pnpm exec tsx packages/signer/bin/birth-key.ts heron-hot \
   --pile ~/.config/protocolx/heron \
   --decrypt-to-stdout --keychain-item northlatch-heron-pile \
   | ssh <host> 'systemd-creds encrypt --name=heron-hot - /etc/heron/creds/heron-hot.cred'
 ```
+
+`set -o pipefail` is not decoration and must not be dropped. A pipeline's exit status is its **last**
+command's, so a successful decrypt into an `ssh` that failed — a refused host key, a full disk, a
+`systemd-creds` that is not there — exits 0 with nothing sealed on the host, and the next step
+proceeds believing the credential exists. With `pipefail` the pipeline fails and the operator sees
+it. `bash`, `zsh` and `ksh` have the option; `dash` and POSIX `sh` do not, so run this under `bash`.
 
 No plaintext file is written at either end. If that pipe is ever replaced by a file, this whole
 section is void.

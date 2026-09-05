@@ -36,6 +36,14 @@ import { RULES, type RuleId } from '@projectx-social/policy';
 export const PURSE_REFUSAL_IDS = [
   /** The bytes on the socket were not one JSON object, or not the one request this purse answers. */
   'request-malformed',
+  /**
+   * The connection sent more than `MAX_REQUEST_BYTES` and was answered without being read.
+   *
+   * Kept apart from `request-malformed` on purpose: a malformed request was read and judged, this
+   * one never was, and a reader of `audit.jsonl` needs to be able to tell "somebody sent nonsense"
+   * from "somebody streamed at the socket until it stopped listening".
+   */
+  'request-too-large',
   /** The request was well-formed JSON but its `intent` did not satisfy the schema. */
   'intent-invalid',
   /** The intent was valid and could still not be turned into a transaction. */

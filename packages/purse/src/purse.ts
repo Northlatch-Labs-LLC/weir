@@ -15,6 +15,22 @@
  * two lines that show somebody probing the socket, and a log that only records what got as far as
  * the evaluator would not have them.
  *
+ * # One request at a time, and the ceiling is why
+ *
+ * `handle` runs on a single promise chain: a call that arrives while another is in flight waits,
+ * and every request is judged against a ledger every earlier request has already written to.
+ *
+ * Without that, `server.ts` hands each connection to `void serve(...)` and two overlapping beats —
+ * a slow node, a timer that fired while the last beat was still running, the same overlap
+ * `build.ts` already anticipates for gas coin selection — each read the outflow ceiling before
+ * either had recorded its spend, and each was told yes. Two requests that are individually inside
+ * the ceiling and together over it would both be signed, which is the ceiling not being a ceiling.
+ * Security's A1 of 2026-09-05; `test/purse.test.ts` sums two 6,000,000 MIST requests against a
+ * 10,000,000 ceiling and asserts exactly one signature.
+ *
+ * The cost is that the purse answers serially. It signs one transaction every thirty minutes, so
+ * there is no throughput to lose, and a queue behind a 30-second socket timeout is bounded.
+ *
  * # Every way out of `handle` is a value
  *
  * There is no `throw` on any path, including the unexpected ones: the whole body is wrapped, and an
@@ -61,8 +77,20 @@ export interface Purse {
   /** The address every signature comes from. */
   readonly address: string;
   readonly policyHash: string;
-  /** Answer one request. Never throws. */
+  /** Answer one request. Never throws. Serialised: one request is in flight at a time. */
   readonly handle: (request: unknown) => Promise<PurseResponse>;
+  /**
+   * Record and answer a refusal decided **before** the request was read.
+   *
+   * There is exactly one such refusal: a connection that sent more than `MAX_REQUEST_BYTES`, which
+   * `server.ts` must answer without ever assembling the bytes. It cannot go through `handle`,
+   * because there is no request to hand it — and it must not bypass the chain, because that probe
+   * is precisely the one `audit-file.ts` says the purse keeps its own chain for. Security's A2 of
+   * 2026-09-05.
+   *
+   * Runs on the same promise chain as `handle`, so the audit line lands in order.
+   */
+  readonly refuseUnread: (refusal: Refusal) => Promise<PurseResponse>;
   /** The head of the audit chain, for anchoring outside this host. */
   readonly auditHead: () => string;
 }
@@ -185,30 +213,58 @@ export function createPurse(options: PurseOptions): Purse {
     };
   };
 
+  /*
+    The chain every call queues on.
+
+    `then(work, work)` rather than `then(work)`: a rejected predecessor must not stop the queue, and
+    the predecessor here is a `handle` call whose own catch has already turned a fault into a
+    recorded refusal, so there is nothing left to propagate. `chain` is then reset to a promise that
+    can never reject, so a single failure cannot poison every later request.
+  */
+  let chain: Promise<unknown> = Promise.resolve();
+  const inTurn = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = chain.then(work, work);
+    chain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
+
   return {
     address,
     policyHash: options.policyHash,
     auditHead: () => options.audit.headHash,
-    handle: async (request) => {
-      try {
-        return await answer(request);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        const refusal: Refusal = {
-          ruleId: 'gate-refused',
-          reason:
-            `the purse raised an unexpected error and nothing was signed — ${detail}. This is a ` +
-            `fault in the purse rather than a decision about the intent, and it is recorded as a ` +
-            `refusal because the intent was in fact refused.`,
-        };
+    refuseUnread: (refusal) =>
+      inTurn(async () => {
         try {
-          await record({ intentKind: 'unparsed', intentHash: '', refusal, txDigest: '' });
+          await record({ intentKind: 'unread', intentHash: '', refusal, txDigest: '' });
         } catch {
-          // The append itself failed. Still a value, never a throw: the caller is a loop, and the
-          // one thing known for certain is that retrying will not help.
+          // The append failed. Still a value: the caller is a socket handler that must answer.
         }
         return { ok: false, refused: refusal };
-      }
-    },
+      }),
+    handle: (request) =>
+      inTurn(async () => {
+        try {
+          return await answer(request);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          const refusal: Refusal = {
+            ruleId: 'gate-refused',
+            reason:
+              `the purse raised an unexpected error and nothing was signed — ${detail}. This is a ` +
+              `fault in the purse rather than a decision about the intent, and it is recorded as a ` +
+              `refusal because the intent was in fact refused.`,
+          };
+          try {
+            await record({ intentKind: 'unparsed', intentHash: '', refusal, txDigest: '' });
+          } catch {
+            // The append itself failed. Still a value, never a throw: the caller is a loop, and the
+            // one thing known for certain is that retrying will not help.
+          }
+          return { ok: false, refused: refusal };
+        }
+      }),
   };
 }

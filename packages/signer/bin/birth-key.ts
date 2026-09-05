@@ -120,13 +120,68 @@ export function enforceUmask(): Result<number> {
 /* ------------------------------------------------------------------ child processes */
 
 /**
+ * The two programs this tool spawns by absolute path, and the iteration count it pins.
+ *
+ * # A pinned program is never a name
+ *
+ * `openssl` and `security` used to be spawned by bare name off the inherited `PATH`, while the
+ * hasher below already pinned `/usr/bin/shasum` first. That was a real gap and not a theoretical
+ * one: on the desk's own laptop `which -a openssl` reports `/usr/local/bin/openssl` ahead of
+ * `/usr/bin/openssl`, so the tool was already not running the program its comments described — and
+ * the program it did run was handed the passphrase on fd 3 and the plaintext key's path. The bound
+ * was "already running as `admin`", which is a real bound and is still not a reason to let `PATH`
+ * choose. Security's A4, 2026-09-05; `test/birth-key.test.ts` puts a recording shim first on `PATH`
+ * and asserts it is never called.
+ *
+ * `/usr/bin/openssl` on macOS is LibreSSL (3.3.6 on this laptop), which supports `-pbkdf2 -iter`;
+ * verified by a round trip before this pin was made. If it is ever absent the tool refuses rather
+ * than falling back to a name, because a fallback is the hole this closes.
+ *
+ * # The KDF iteration count, and the deviation it records
+ *
+ * The CISO's rows 1, 3, 4 and 7 say "gpg-symmetric" and this tool uses
+ * `openssl enc -aes-256-cbc -pbkdf2`, which is not AEAD. The deviation is deliberate and is written
+ * down here and in `README.md` rather than left as a difference nobody recorded (Security's N1).
+ * What it costs and what it does not: the passphrase is 32 random bytes read from the macOS
+ * keychain, so iterations are not a practical bound on anybody, and a tampered ciphertext fails to
+ * open rather than yielding a chosen key — CBC with a wrong key produces garbage, and the round
+ * trip in {@link encryptInPlace} compares the plaintext byte for byte before the shred. What is
+ * genuinely lost against gpg is an authentication tag, so a tampered file is detected by the
+ * comparison at decrypt time and not by the cipher.
+ *
+ * `-iter` is stated rather than left at openssl's default (10,000), which is low for a
+ * password-derived key and, worse, is a *default* — it moves with the openssl version, and a blob
+ * encrypted under one and decrypted under another would silently fail to open. 600,000 is OWASP's
+ * current PBKDF2-HMAC-SHA256 figure. Both the encrypt and the decrypt pass the same value; they
+ * must, and a mismatch is a ciphertext nobody can open.
+ */
+const OPENSSL = '/usr/bin/openssl';
+const SECURITY = '/usr/bin/security';
+const PBKDF2_ITERATIONS = '600000';
+
+/** `enc`'s KDF arguments, written once so the encrypt and the decrypt cannot drift apart. */
+const KDF_ARGS = ['-pbkdf2', '-iter', PBKDF2_ITERATIONS] as const;
+
+/** Refuse rather than fall back to a name when a pinned program is not on this machine. */
+async function pinned(program: string): Promise<Result<string>> {
+  if (await exists(program)) return allow(program);
+  return refuse(
+    'program-missing',
+    `${program} is not on this machine. This tool spawns it by absolute path and will not fall ` +
+      `back to looking the name up on PATH: a shadowed program here is handed the passphrase on ` +
+      `file descriptor 3 and the plaintext key's path.`,
+  );
+}
+
+/**
  * The one place a child process is created.
  *
  * The environment is rebuilt from three variables rather than inherited: an inherited environment
  * is an unbounded set of strings this tool did not write, handed to a program that is about to be
- * given a passphrase on a file descriptor. `PATH` is kept because `openssl`, `security` and
- * `shasum` are located through it; `HOME` because `security` needs the login keychain; `LANG=C`
- * so parsed output does not change with a locale.
+ * given a passphrase on a file descriptor. `PATH` is kept because the hasher's fallbacks are
+ * located through it; `HOME` because `security` needs the login keychain; `LANG=C` so parsed output
+ * does not change with a locale. `openssl` and `security` are **not** located through it — see
+ * {@link OPENSSL} above.
  *
  * `fd3` is written to the child's file descriptor 3 and is how a passphrase travels. It is never
  * an argument and never an environment variable, which is the whole reason this helper exists.
@@ -491,7 +546,9 @@ export interface BirthResult {
 /** Read a passphrase from the macOS keychain. Captured as bytes, never printed, never stored. */
 export function keychainPassphrase(item: string): () => Promise<Result<Buffer>> {
   return async () => {
-    const result = await run('security', ['find-generic-password', '-w', '-s', item]);
+    const program = await pinned(SECURITY);
+    if (program.refused) return program;
+    const result = await run(program.value, ['find-generic-password', '-w', '-s', item]);
     if (result.code !== 0) {
       return refuse(
         'keychain',
@@ -603,12 +660,15 @@ export async function encryptInPlace(args: {
     return refuse('no-plaintext', `${args.keyPath} does not exist, so there is nothing to encrypt.`);
   }
 
+  const openssl = await pinned(OPENSSL);
+  if (openssl.refused) return openssl;
+
   const encrypted = await run(
-    'openssl',
+    openssl.value,
     [
       'enc',
       '-aes-256-cbc',
-      '-pbkdf2',
+      ...KDF_ARGS,
       '-salt',
       '-in',
       args.keyPath,
@@ -626,8 +686,8 @@ export async function encryptInPlace(args: {
 
   // Prove the ciphertext opens before destroying the only thing that could rewrite it.
   const roundTrip = await run(
-    'openssl',
-    ['enc', '-d', '-aes-256-cbc', '-pbkdf2', '-in', encPath, '-pass', 'fd:3'],
+    openssl.value,
+    ['enc', '-d', '-aes-256-cbc', ...KDF_ARGS, '-in', encPath, '-pass', 'fd:3'],
     { fd3: args.passphrase },
   );
   if (roundTrip.code !== 0) {
@@ -689,9 +749,12 @@ export async function decryptToStdout(args: {
   if (!(await exists(args.encPath))) {
     return refuse('no-ciphertext', `${args.encPath} does not exist.`);
   }
+  const openssl = await pinned(OPENSSL);
+  if (openssl.refused) return openssl;
+
   const result = await run(
-    'openssl',
-    ['enc', '-d', '-aes-256-cbc', '-pbkdf2', '-in', args.encPath, '-pass', 'fd:3'],
+    openssl.value,
+    ['enc', '-d', '-aes-256-cbc', ...KDF_ARGS, '-in', args.encPath, '-pass', 'fd:3'],
     { fd3: args.passphrase, stdout: 'inherit' },
   );
   if (result.code !== 0) {
