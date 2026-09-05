@@ -849,7 +849,12 @@ rm -rf /tmp/agent-runtime-src && mkdir -p /tmp/agent-runtime-src
 tar -xzf /tmp/agent-runtime-src.tgz -C /tmp/agent-runtime-src
 SHIPPED_COMMIT="\$(cat /tmp/agent-runtime-src/SOURCE_COMMIT)"
 echo "host: building from commit \$SHIPPED_COMMIT"
-docker build -t heron:local /tmp/agent-runtime-src
+# git archive keeps the repository path, so the package sits at packages/agent-runtime inside the
+# tarball; the fourth real run (2026-09-05) built the extraction root and found no Dockerfile.
+BUILD_DIR="\$(dirname "\$(find /tmp/agent-runtime-src -type f -name Dockerfile -path '*/agent-runtime/*' | head -1)")"
+[ -f "\$BUILD_DIR/Dockerfile" ] || { echo "host: no Dockerfile under /tmp/agent-runtime-src" >&2; exit 1; }
+echo "host: build directory \$BUILD_DIR"
+docker build -t heron:local "\$BUILD_DIR"
 ID="\$(docker inspect --format '{{.Id}}' heron:local)"
 printf 'IMAGE=heron:local@%s\n' "\$ID" > /srv/heron/image.env
 printf 'SOURCE_COMMIT=%s\n' "\$SHIPPED_COMMIT" >> /srv/heron/image.env
