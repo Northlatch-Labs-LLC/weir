@@ -1420,14 +1420,20 @@ test('N7: a logrotate config exists, bounds the JSONL sinks only, and is install
   const config = readFileSync(path.join(DO_DIR, 'logrotate', 'heron'), 'utf8');
   // Only the stanza header -- the paths logrotate actually acts on. A comment naming runs/ to
   // explain why it is NOT here is the opposite of the defect.
-  const header = /^([^#\n].*)\{\s*$/m.exec(config);
-  assert.ok(header, 'no logrotate stanza');
-  const globbed = header[1].trim().split(/\s+/);
-  assert.deepEqual(globbed.sort(), ['/srv/heron/state/beats.jsonl', '/var/lib/heron/watchdog/alerts.jsonl']);
+  // One stanza per sink: state/ is 2770 root:heron and logrotate refuses a group-writable parent
+  // without `su root heron` (the seventh real deploy, 2026-09-05, exited non-zero on exactly that).
+  const headers = [...config.matchAll(/^([^#\n].*)\{\s*$/gm)].map((m) => m[1].trim());
+  assert.deepEqual(headers.sort(), ['/srv/heron/state/beats.jsonl', '/var/lib/heron/watchdog/alerts.jsonl']);
+  const globbed = headers.flatMap((h) => h.split(/\s+/));
   assert.ok(
     !globbed.some((g) => g.startsWith('/srv/heron/runs')),
     'a per-beat glob is exactly what rotate N cannot bound',
   );
+  const beatsStanza = config.slice(config.indexOf('/srv/heron/state/beats.jsonl {'), config.indexOf('/var/lib/heron/watchdog/alerts.jsonl {'));
+  assert.match(beatsStanza, /^\s*su root heron$/m, 'the beats stanza must carry su root heron for the 2770 root:heron parent');
+  const alertsStanza = config.slice(config.indexOf('/var/lib/heron/watchdog/alerts.jsonl {'));
+  assert.doesNotMatch(alertsStanza, /^\s*su /m, 'the alerts parent is 0700 root:root and takes no su line');
+  assert.equal((config.match(/copytruncate/g) || []).length, 2, 'both stanzas must copytruncate');
   assert.match(config, /copytruncate/);
 
   const script = readFileSync(DEPLOY_SCRIPT, 'utf8');

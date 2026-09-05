@@ -22,7 +22,14 @@
 # 10 GB disk. The archive of record for state is the laptop's own pull (CTO spec 3.10 and 3.12,
 # which says this in the same words); a droplet is not an archive.
 
-/srv/heron/state/beats.jsonl /var/lib/heron/watchdog/alerts.jsonl {
+# Two stanzas, because the two files sit in directories with different owners and logrotate
+# refuses a group-writable parent unless a `su` line names that group. The seventh real deploy
+# (2026-09-05) parsed this file on the host and logrotate skipped beats.jsonl: state/ is 2770
+# root:heron, and without `su root heron` that is "insecure permissions" and a non-zero exit.
+# /var/lib/heron/watchdog is 0700 root:root and needs no su line.
+
+/srv/heron/state/beats.jsonl {
+    su root heron
     weekly
     rotate 12
     compress
@@ -38,4 +45,14 @@
     # and a directive that does nothing is a claim about a mode nobody has read off a host. Each
     # file keeps the owner and mode it is written with: beats.jsonl in 2770 root:heron state/,
     # alerts.jsonl in 0700 root:root /var/lib/heron/watchdog.
+}
+
+/var/lib/heron/watchdog/alerts.jsonl {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
 }
