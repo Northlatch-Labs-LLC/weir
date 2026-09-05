@@ -57,16 +57,26 @@ UMask=0077
 MemoryMax=96M
 TasksMax=16
 
-# One outbound HTTPS call to Resend and nothing else. AF_UNIX is deliberately absent: this
-# process talks to no socket on this host.
+# One outbound HTTPS call to Resend, and the two local families that call needs before it can be
+# made. Security required this list on the second read, and the reason is here rather than in a
+# report:
 #
-# NAMED RISK, not a claim: if this droplet ever resolves DNS through systemd-resolved's varlink
-# socket rather than glibc's own UDP path out of /etc/resolv.conf, name resolution needs AF_UNIX
-# and this line breaks the alert -- the one thing on the host that must not break silently. It is
-# asserted at the step-10 drill (a forced failure must produce the email) before this unit is
-# trusted, and that drill is a gate, not a formality. Nothing on this laptop can test it: no
-# Debian host, no systemd.
-RestrictAddressFamilies=AF_INET AF_INET6
+#   AF_INET, AF_INET6  the call itself.
+#   AF_UNIX            nss-resolve talks to systemd-resolved over a varlink UNIX socket. If this
+#                      host ever resolves that way instead of through glibc's own UDP path,
+#                      AF_UNIX is what name resolution needs, and without it the alert fails --
+#                      silently, on the one hop that must never fail silently.
+#   AF_NETLINK         glibc's AI_ADDRCONFIG probe opens a netlink socket to ask the kernel which
+#                      address families this host actually has configured. getaddrinfo() takes
+#                      that path by default.
+#
+# Neither of the two local families opens a network path of its own: what bounds where this
+# process can reach is the cloud firewall (443 and 53 outbound, nothing else). Nothing on this
+# laptop can test which resolver path a Debian droplet takes -- no Debian host, no systemd -- so
+# this list is the one that cannot fail for a reason this laptop cannot see. cloud-init also pins
+# `hosts: files dns` in /etc/nsswitch.conf and the post-boot check asserts it, so WHICH path is
+# taken is a fact rather than an assumption.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 
 # MemoryDenyWriteExecute is deliberately NOT set. CPython does not JIT, so it would probably hold
 # -- and "probably" is exactly the word that has no business on the dead man's last hop. It goes

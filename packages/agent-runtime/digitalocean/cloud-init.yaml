@@ -10,7 +10,8 @@
 # the CTO's spec (2026-09-05-engineering-heron-v2-runtime-and-host.md sections 3, 5) and the CISO's
 # spec, amended by the executive to one host for a 1-of-2 multisig (one signer service,
 # heron-purse; the LedgerCap service also runs here). This file sets up the OS only: users, SSH
-# hardening, packages, the /srv/heron and /etc/heron/creds layout, and the heron system group/user
+# hardening, packages, the resolver path, the /srv/heron, /var/lib/heron and /etc/heron/creds
+# layout, and the heron system group/user
 # that both the host's own units and the container's fixed uid 10001 read and write through. No
 # timer is enabled here -- deploy-droplet.sh --smoke proves one real beat works before any timer
 # is turned on, and heron-beat.service/.timer/heron-purse.service (build order step 5) and the
@@ -200,10 +201,27 @@ runcmd:
   - [ install, -d, -m, "0750", -o, purse, -g, purse, /srv/heron/purse/dist ]
   - [ install, -d, -m, "0700", -o, purse, -g, purse, /var/lib/heron ]
   - [ install, -d, -m, "0700", -o, purse, -g, purse, /var/lib/heron/audit ]
+  # The dead man's own memory, and it is root's alone. heron-watchdog writes alerts.jsonl and the
+  # `degraded` marker here, and heron-alert reads them here and nowhere else. They used to live in
+  # /srv/heron/state, which is 2770 root:heron and bind-mounted read-write into the model's
+  # container as uid 10001 -- the heron group that owns it. A container that wrote a `degraded`
+  # marker with a far-future last_notified silenced the dead man watching it, permanently, and a
+  # container that created alerts.jsonl first chose the text of the Master's email (Security's N-1
+  # and N-2 on the second read of this step). 0700 root:root inside a directory owned by purse:
+  # root traverses regardless of the parent's mode, and neither purse nor heron can enter this one.
+  - [ install, -d, -m, "0700", -o, root, -g, root, /var/lib/heron/watchdog ]
   # The policy is world-readable on purpose: it is the published rule the signer enforces, it is
   # pinned by --policy-sha256 in heron-purse.service, and a rule nobody can read is not a rule.
   - [ install, -d, -m, "0755", -o, root, -g, root, /srv/heron/policy ]
   - [ install, -m, "0600", -o, root, -g, root, /dev/null, /srv/heron/image.env ]
+  # heron-purse.service names --chain /srv/heron/chain.json and reads it read-only at start, as
+  # `purse`. It was created by nothing (Security's N-6 on the second read): its parent is 0751
+  # root:root, so a step-8 placement at 0600 root:root would have made the signer refuse to start,
+  # and heron-beat.service Requires= the signer, so no beat would ever run. Created here empty at
+  # the owner and mode it must have, printed in --plan, asserted after boot. It is a PLACEHOLDER:
+  # build order step 8 writes the deployment into it, and the signer refuses to start until it
+  # parses -- which is the intended behaviour of a half-finished deploy, not a defect.
+  - [ install, -m, "0600", -o, purse, -g, purse, /dev/null, /srv/heron/chain.json ]
   - [ install, -d, -m, "0700", -o, root, -g, root, /etc/heron ]
   # ONE credential directory on this host, and this is it. Every unit's LoadCredentialEncrypted=,
   # --seal's destination, the README and --plan all name /etc/heron/creds and nothing else: the
@@ -211,6 +229,26 @@ runcmd:
   # did not look, and the beat would have failed to start at every tick with the dead man
   # reporting it as a dead host.
   - [ install, -d, -m, "0700", -o, root, -g, root, /etc/heron/creds ]
+
+  # WHICH resolver path this host takes, pinned rather than inherited. heron-alert@.service is the
+  # dead man's last hop and it carries a RestrictAddressFamilies list; whether name resolution
+  # needs AF_UNIX (nss-resolve's varlink socket to systemd-resolved) or only glibc's own UDP path
+  # is decided by this one line, and nothing on the laptop that wrote this file can observe it.
+  # `files dns` means /etc/hosts then glibc's own DNS resolver out of /etc/resolv.conf -- no
+  # nss-resolve, no myhostname, no mdns. The post-boot check asserts this exact line (Security's
+  # requirement on the second read). ASCII only, like every other byte in this document.
+  - |
+    if grep -qE '^hosts:' /etc/nsswitch.conf; then
+      sed -i -E 's/^hosts:.*/hosts:          files dns/' /etc/nsswitch.conf
+    else
+      printf 'hosts:          files dns\n' >> /etc/nsswitch.conf
+    fi
+    if ! grep -qE '^hosts:[[:space:]]+files dns$' /etc/nsswitch.conf; then
+      echo "heron cloud-init: refused - /etc/nsswitch.conf hosts line is not 'files dns'" >&2
+      grep -E '^hosts:' /etc/nsswitch.conf >&2 || true
+      exit 1
+    fi
+    echo "heron cloud-init: /etc/nsswitch.conf pins hosts: files dns"
 
   # unattended-upgrades, asserted rather than assumed installed (Security note N3). apt-config
   # dump is the MERGED view of every file under apt.conf.d, so this reads what apt itself will

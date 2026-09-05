@@ -7,7 +7,7 @@
 # what turns a refusal into mail, so the decision keeps its own failing fixture independent of
 # whether mail can be sent at all.
 #
-# WHAT THE EXIT CODE MEANS, and it changed with this fix.
+# WHAT THE EXIT CODE MEANS, and it changed with the first fix round.
 #
 # It used to mean "stale". The timer runs every 15 minutes, so one stale state file sent four
 # emails an hour, for ever, to the one mailbox the Master's ruling makes the channel -- and a
@@ -19,25 +19,42 @@
 #   exit 0  - send nothing. Either the beat is fresh, or it is stale and the desk has already been
 #             told inside the last 6 hours.
 #
-# The cost of that, said plainly rather than buried: `systemctl status heron-watchdog` shows
+# WHERE THE SUPPRESSION MEMORY LIVES, and this changed with the second round.
+#
+# /var/lib/heron/watchdog, 0700 root:root, created by cloud-init and asserted after boot. NOT
+# /srv/heron/state, which is 2770 root:heron and bind-mounted read-write into the model's container
+# as uid 10001 -- that is the heron group, which owns that directory. Security's N-1 on the second
+# read demonstrated the consequence against this very binary: a `degraded` file whose
+# `last_notified` was a far-future integer made this script print "notice already sent" and exit 0
+# on a host that had stopped beating, for ever, with no first notice and no mail. The container
+# could disarm the dead man watching it. It cannot write here.
+#
+# Two more bounds, so a corrupted marker cannot silence the notice even where the container cannot
+# reach: a marker field that is not a run of digits is not read at all, and a `last_notified` in the
+# future is not a record of a notice that was sent -- both are treated as "never notified", which
+# makes the notice DUE rather than suppressed. SILENT_FOR can never be negative.
+#
+# The cost of the cadence, said plainly rather than buried: `systemctl status heron-watchdog` shows
 # success on a host that is degraded but already reported. The record that does not lie is on disk
 # -- the `degraded` marker with the time it went stale, and one appended line per notice in
 # alerts.jsonl -- and the laptop-side pull evaluates the same 90 minutes against the fetched file,
 # which is the half that catches "the droplet is gone entirely". A host-only watchdog cannot report
 # its own host's death.
 #
-# HERON_STATE_FILE, HERON_STATE_DIR, HERON_WATCHDOG_MAX_AGE_SECONDS and
-# HERON_WATCHDOG_REPEAT_SECONDS are overridable so test/host-fixes.test.mjs can run this exact
-# binary against a fixture instead of a real /srv/heron.
+# HERON_STATE_FILE, HERON_WATCHDOG_DIR, HERON_WATCHDOG_MAX_AGE_SECONDS and
+# HERON_WATCHDOG_REPEAT_SECONDS are overridable so the tests can run this exact binary against a
+# fixture instead of a real /srv/heron and a real /var/lib/heron.
 set -euo pipefail
 
 STATE_FILE="${HERON_STATE_FILE:-/srv/heron/state/latest.json}"
-STATE_DIR="${HERON_STATE_DIR:-$(dirname "$STATE_FILE")}"
 MAX_AGE_SECONDS="${HERON_WATCHDOG_MAX_AGE_SECONDS:-5400}"      # 90 minutes (CTO 3.11 / CISO 57)
 REPEAT_SECONDS="${HERON_WATCHDOG_REPEAT_SECONDS:-21600}"       # 6 hours between repeat notices
 
-ALERTS_FILE="$STATE_DIR/alerts.jsonl"
-DEGRADED_MARKER="$STATE_DIR/degraded"
+# Root-only, and deliberately not derived from STATE_FILE: deriving it is exactly how the marker
+# ended up in the directory the container can write.
+WATCHDOG_DIR="${HERON_WATCHDOG_DIR:-/var/lib/heron/watchdog}"
+ALERTS_FILE="$WATCHDOG_DIR/alerts.jsonl"
+DEGRADED_MARKER="$WATCHDOG_DIR/degraded"
 
 NOW="$(date +%s)"
 
@@ -64,8 +81,18 @@ write_marker() {
   fi
 }
 
+# A field is a run of digits or it is not a field. Anything else -- a word, a negative number, an
+# empty value, a line somebody appended -- is read as absent, which makes the notice due.
 marker_field() {
-  grep -E "^$1=" "$DEGRADED_MARKER" 2>/dev/null | head -n 1 | cut -d= -f2 || true
+  local raw
+  raw="$(grep -E "^$1=" "$DEGRADED_MARKER" 2>/dev/null | head -n 1 | cut -d= -f2 || true)"
+  case "$raw" in
+    "" | *[!0-9]*)
+      [ -n "$raw" ] && echo "heron-watchdog: WARNING - $DEGRADED_MARKER field '$1' is '$raw', which is not a run of digits; reading it as absent" >&2
+      return 0
+      ;;
+  esac
+  printf '%s' "$raw"
 }
 
 # --- is it stale? -----------------------------------------------------------------------------
@@ -93,7 +120,14 @@ if [ "$STALE" = "1" ]; then
     LAST_NOTIFIED="$(marker_field last_notified)"
     [ -n "$SINCE" ] || SINCE="$NOW"
     [ -n "$LAST_NOTIFIED" ] || LAST_NOTIFIED=0
+    # A notice cannot have been sent later than now. A marker that says it was is not a record of a
+    # notice; it is a marker that would suppress every future notice for as long as it says.
+    if [ "$LAST_NOTIFIED" -gt "$NOW" ]; then
+      echo "heron-watchdog: WARNING - $DEGRADED_MARKER says the last notice was sent at $LAST_NOTIFIED, which is in the future; reading it as 'never notified' and sending the notice" >&2
+      LAST_NOTIFIED=0
+    fi
     SILENT_FOR=$((NOW - LAST_NOTIFIED))
+    [ "$SILENT_FOR" -lt 0 ] && SILENT_FOR=0
     if [ "$SILENT_FOR" -ge "$REPEAT_SECONDS" ]; then
       write_marker "$SINCE" "$NOW"
       append_alert "stale-repeat" "$REASON" "$SINCE"

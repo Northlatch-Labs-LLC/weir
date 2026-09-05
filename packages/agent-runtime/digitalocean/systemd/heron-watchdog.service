@@ -35,9 +35,17 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources @obsolete
 
-# The watchdog now WRITES: state/alerts.jsonl (append-only, one line per notice decision) and the
+# The watchdog WRITES two things: alerts.jsonl (append-only, one line per notice decision) and the
 # `degraded` marker that makes "already told you" a fact on disk rather than a memory this oneshot
 # does not have. Under ProtectSystem=strict with no ReadWritePaths it could not create either --
 # it would have failed at the first write and fired the alert for the wrong reason (Security's A4
 # on step 6). This is the only writable path it gets.
-ReadWritePaths=/srv/heron/state
+#
+# AND IT IS NOT /srv/heron/state ANY MORE. That directory is 2770 root:heron and run-flags.txt
+# bind-mounts it read-write into the model's container, which runs as uid 10001 -- the heron group
+# that owns it. The watchdog's suppression memory living there meant the container could write a
+# `degraded` marker with a far-future `last_notified` and silence the dead man watching it, for
+# ever, with no first notice and no mail (Security's N-1 on the second read, demonstrated against
+# the shipped binary). /var/lib/heron/watchdog is 0700 root:root, created by cloud-init and
+# asserted after boot; nothing in the container can reach it.
+ReadWritePaths=/var/lib/heron/watchdog

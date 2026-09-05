@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Built-by: @projectx.sui /|\\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+"""Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 Sends one Heron notice through the company's transactional email provider.
 
@@ -13,6 +13,23 @@ lib/email-sender.ts) already sends live company mail through Resend's HTTP API
 from/to/subject/html/text), and a grep for brevo/sendgrid/postmark across packages/web returns
 nothing. This script is written against Resend, matching the one sender that already exists in
 this codebase, not the provider merely named in passing.
+
+# Where the facts in the body come from, and where they do NOT
+
+The body of a notice names which of the three things happened and quotes the watchdog's own two
+values, `detail` and `stale_since`. Those are read from `alerts.jsonl` in
+`/var/lib/heron/watchdog` -- 0700 root:root, written by `heron-watchdog` and by nothing else.
+
+They used to be read from `/srv/heron/state/alerts.jsonl`. That directory is 2770 root:heron and is
+bind-mounted read-write into the model's container, which runs as uid 10001 -- the heron group that
+owns it (Security's N-2 on the second read). The watchdog wrote that file under the unit's own
+umask, so a container that created it first owned it: attacker-controlled prose, interpolated into
+the one channel the Master's ruling makes the channel.
+
+Two bounds now, not one. The default path is the root-only directory; and any alerts file under
+`/srv/heron` is REFUSED outright rather than read, whatever `HERON_ALERTS_FILE` says -- the notice
+still goes out, worded from the instance alone. Every value that does reach the body passes through
+`safe()` first: printable ASCII, one line, 200 characters.
 
 # The key
 
@@ -44,20 +61,46 @@ import urllib.request
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 TO_ADDRESS = "kaela@projectxprotocol.dev"
-# The watchdog's own record. Read (never written) so a notice says which of the three things
-# happened -- first stale, still stale, or recovered -- instead of calling all three an alert.
-# systemd fires this unit through one fixed instance name, so without this the recovery notice
-# would arrive worded as a failure. Overridable for the fixture; the default is the real path.
-ALERTS_FILE = os.environ.get("HERON_ALERTS_FILE", "/srv/heron/state/alerts.jsonl")
+# The watchdog's own record, in the root-only directory only. Read (never written) so a notice says
+# which of the three things happened -- first stale, still stale, or recovered -- instead of calling
+# all three an alert. systemd fires this unit through one fixed instance name, so without this the
+# recovery notice would arrive worded as a failure. Overridable for the fixture; the override cannot
+# point it at anything the container can write (see last_alert).
+ALERTS_FILE = os.environ.get("HERON_ALERTS_FILE", "/var/lib/heron/watchdog/alerts.jsonl")
+# The tree the model's container can write. Nothing under it is ever read into a notice body.
+CONTAINER_WRITABLE_ROOT = "/srv/heron"
+# What a quoted value may be: one line of printable ASCII, bounded. Everything else is dropped.
+SAFE_MAX = 200
 # Not yet a verified sending domain in Resend as of this step (packages/web's own sender notes the
 # same open item for weir.social/hello@); this address is the one the alert will use once it is.
 FROM_ADDRESS = "Heron <heron@weir.social>"
 CREDENTIAL_NAME = "mail-key"
 
 
+def safe(value: object) -> str:
+    """One line of printable ASCII, at most SAFE_MAX characters. Nothing else reaches the body.
+
+    A character outside that range is REPLACED by a space, never closed over: dropping the newline
+    out of "line one\nline two" silently welds two unrelated statements into one, which is a worse
+    sentence than the one it was protecting the reader from."""
+    text = "".join(character if " " <= character <= "~" else " " for character in str(value))
+    text = " ".join(text.split())
+    return text[:SAFE_MAX]
+
+
 def last_alert() -> dict | None:
     """The newest line of alerts.jsonl, or None. Never raises: a notice must go out even if the
     record is missing, truncated mid-write, or unreadable."""
+    resolved = os.path.realpath(ALERTS_FILE)
+    if resolved == CONTAINER_WRITABLE_ROOT or resolved.startswith(CONTAINER_WRITABLE_ROOT + os.sep):
+        # Refused, not read. This path is writable by the model's container; a notice worded from a
+        # file the subject of the notice controls is not a notice (Security's N-2).
+        print(
+            f"heron-alert: refused to read {resolved} - it is under {CONTAINER_WRITABLE_ROOT}, which "
+            "the model's container can write. The notice is sent from the instance name alone.",
+            file=sys.stderr,
+        )
+        return None
     try:
         with open(ALERTS_FILE, "r", encoding="utf-8") as handle:
             lines = [line for line in handle.read().splitlines() if line.strip()]
@@ -72,7 +115,10 @@ def last_alert() -> dict | None:
     return value if isinstance(value, dict) else None
 
 
-def build_message(instance: str) -> tuple[str, str]:
+def build_message(raw_instance: str) -> tuple[str, str]:
+    # The instance name is systemd's %i and is fixed by the unit that fires it, but it is text that
+    # reaches the subject line, so it is bounded here like every other value that does.
+    instance = safe(raw_instance) or "unknown"
     if instance == "watchdog":
         record = last_alert()
         event = (record or {}).get("event")
@@ -80,8 +126,8 @@ def build_message(instance: str) -> tuple[str, str]:
             return (
                 "Heron recovered",
                 "Heron completed a beat again.\n\n"
-                f"Stale since: {(record or {}).get('stale_since', 'unknown')}\n"
-                f"Detail: {(record or {}).get('detail', '')}\n\n"
+                f"Stale since: {safe((record or {}).get('stale_since', 'unknown'))}\n"
+                f"Detail: {safe((record or {}).get('detail', ''))}\n\n"
                 "This is the one recovery notice. The watchdog sends nothing further until the "
                 "next time the 90-minute window is missed.\n"
             )
@@ -90,11 +136,20 @@ def build_message(instance: str) -> tuple[str, str]:
             return (
                 f"Heron alert: {instance}",
                 f"Heron's watchdog raised '{instance}' ({first}).\n\n"
-                f"Detail: {(record or {}).get('detail', '')}\n"
-                f"Stale since: {(record or {}).get('stale_since', 'unknown')}\n\n"
+                f"Detail: {safe((record or {}).get('detail', ''))}\n"
+                f"Stale since: {safe((record or {}).get('stale_since', 'unknown'))}\n\n"
                 "Read the host over SSH: /srv/heron/state/latest.json, "
-                "/srv/heron/state/alerts.jsonl and `journalctl -u heron-beat.service`.\n",
+                "/var/lib/heron/watchdog/alerts.jsonl and `journalctl -u heron-beat.service`.\n",
             )
+    if instance == "smoke":
+        return (
+            "Heron smoke: the alert path works",
+            "deploy-droplet.sh --smoke sent this before enabling a single timer.\n\n"
+            "It proves the whole last hop end to end: this unit started, systemd decrypted the "
+            "host-sealed mail-key into its own tmpfs, this process read it, reached Resend and got "
+            "a message id back. If you are reading this, the dead man can reach you.\n\n"
+            "No timer was enabled until this message was accepted by Resend.\n",
+        )
     if instance == "alive":
         subject = "Heron is alive"
         text = (
