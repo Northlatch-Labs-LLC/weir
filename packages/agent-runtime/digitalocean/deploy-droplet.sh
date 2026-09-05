@@ -1084,6 +1084,9 @@ if [ ! -f /etc/heron/creds/mail-key.cred ]; then
   echo "smoke: refused - /etc/heron/creds/mail-key.cred is not sealed on this host. Seal it with --seal mail-key first. NO TIMER IS ENABLED: a host whose dead man cannot reach the desk is not a host to leave running." >&2
   exit 1
 fi
+# The start time is taken first, so the journal read below is bounded to this run of the unit
+# and to nothing older: a oneshot that has finished carries no InvocationID to filter on.
+MAIL_START="$(date +%s)"
 systemctl start heron-alert@smoke.service || true
 RESULT="$(systemctl show -p Result --value heron-alert@smoke.service)"
 if [ "$RESULT" != "success" ]; then
@@ -1091,12 +1094,22 @@ if [ "$RESULT" != "success" ]; then
   journalctl -u heron-alert@smoke.service -n 50 --no-pager >&2 || true
   exit 1
 fi
-if ! journalctl -u heron-alert@smoke.service -n 50 --no-pager | grep -q "heron-alert: sent instance=smoke id="; then
-  echo "smoke: refused - heron-alert@smoke.service exited clean but printed no Resend message id. The send did not happen. NO TIMER IS ENABLED." >&2
-  journalctl -u heron-alert@smoke.service -n 50 --no-pager >&2 || true
+# The message id is read from the journal SINCE this run's start, and the read waits for journald:
+# the unit's exit and the journal's write are not one event, and a read the instant `systemctl
+# start` returned missed the line once (2026-09-05) and refused a send that had happened. Not by
+# InvocationID: a oneshot that has finished reports none.
+SENT=""
+for i in $(seq 1 20); do
+  SENT="$(journalctl -u heron-alert@smoke.service --since "@$MAIL_START" --no-pager -o cat 2>/dev/null | grep "heron-alert: sent instance=smoke id=" | tail -1 || true)"
+  [ -n "$SENT" ] && break
+  sleep 0.5
+done
+if [ -z "$SENT" ]; then
+  echo "smoke: refused - heron-alert@smoke.service exited clean but printed no Resend message id within 10s. The send did not happen. NO TIMER IS ENABLED." >&2
+  journalctl -u heron-alert@smoke.service --since "@$MAIL_START" --no-pager >&2 || true
   exit 1
 fi
-echo "smoke: heron-alert@smoke.service sent a real message and printed its Resend id"
+echo "smoke: heron-alert@smoke.service sent a real message: $SENT"
 REMOTE
 }
 

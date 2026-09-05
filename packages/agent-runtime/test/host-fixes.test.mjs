@@ -1731,3 +1731,14 @@ test('the on-host image build points the docker client away from /root/.docker, 
   assert.ok(build.indexOf('export DOCKER_CONFIG') < build.indexOf('docker build'), 'DOCKER_CONFIG must be set before docker build runs');
   assert.ok(build.includes('rm -rf "\\$DOCKER_CONFIG"'), 'the build-scoped config directory must be removed when the build is done');
 });
+
+test("the mail gate reads the message id from the alert unit's own invocation and waits for journald", () => {
+  const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const gate = script.slice(script.indexOf('smoke_mail_gate() {'), script.indexOf('smoke_beat() {'));
+  assert.match(gate, /MAIL_START="\$\(date \+%s\)"/);
+  assert.ok(gate.indexOf('MAIL_START="$(date +%s)"') < gate.indexOf('systemctl start heron-alert@smoke.service'), 'the start time is taken before the unit starts');
+  assert.match(gate, /journalctl -u heron-alert@smoke\.service --since "@\$MAIL_START"/);
+  assert.doesNotMatch(gate, /InvocationID/, 'a finished oneshot carries no invocation id to filter on');
+  assert.match(gate, /for i in \$\(seq 1 20\)/);
+  assert.doesNotMatch(gate, /journalctl -u heron-alert@smoke\.service -n 50 --no-pager \| grep/);
+});
