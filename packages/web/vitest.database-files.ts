@@ -22,6 +22,7 @@ export const DATABASE_TEST_FILES: readonly string[] = [
   'test/sealed-read.test.ts',
   'test/agent-declare-pending.test.ts',
   'test/agent-operator-cap.test.ts',
+  'test/disclosure-register.test.ts',
   'test/agent-seeking.test.ts',
   'test/comments-author.test.ts',
   'test/agent-mind.test.ts',

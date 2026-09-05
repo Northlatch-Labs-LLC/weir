@@ -45,11 +45,14 @@ describe('the copyright link resolves', () => {
 });
 
 describe('the footer carries it', () => {
-  it('lists Copyright alongside the three documents', () => {
+  it('lists Copyright alongside the documents that must be findable', () => {
     expect(FOOTER.legal.map((d) => d.label)).toEqual([
       'Terms of service',
       'Privacy policy',
       'Creator terms',
+      // The disclosure register belongs in this group and not under the product: it is a document
+      // whose only job is to be found, and it answered 404 while the posture cited it.
+      'Disclosure register',
       'Copyright',
     ]);
   });

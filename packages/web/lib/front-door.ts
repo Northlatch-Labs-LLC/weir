@@ -88,6 +88,13 @@ export const ALWAYS_OPEN = [
   */
   '/api/',
   '/legal',
+  /*
+    The disclosure register, open for the same reason `/legal` is and one more: it is the page a
+    regulator, a journalist or a suspicious reader tries first, and every one of them arrives
+    without an account and is not asking for one. A register that redirects them to a waiting list
+    has published nothing.
+  */
+  '/disclosure',
   '/opengraph-image',
   '/security',
   /*
