@@ -27,18 +27,26 @@ packages:
   - logrotate
   - unattended-upgrades
   - python3
+  # heron-purse.service (build order step 5) starts /usr/bin/node. Debian's own nodejs package is
+  # what provides that path; without it the signer unit cannot start at all and the beat unit,
+  # which Requires= it, never runs. Reasoned from Debian's packaging, not verified on a Debian
+  # host from this laptop: trixie's nodejs ships /usr/bin/node and the purse runs a COMPILED
+  # dist/server.js, so the version's type-stripping support does not matter here.
+  - nodejs
 disable_root: true
 ssh_pwauth: false
+# One door, one key. v1's second shell account (heron-ops) carried the SAME public key as `ops`
+# and was used by nothing -- two doors, one key, and only one of them ever asserted. Security's
+# note N1 on this step: it is removed here rather than kept "in case".
+#
+# `ops` holds NOPASSWD:ALL, which is said plainly rather than implied: the desk's SSH key IS root
+# on this host. disable_root:true bounds the direct-root path only. The bound that matters is the
+# firewall (22 from the desk's address alone) and the key living in the Master's own agent.
 users:
   - name: ops
     shell: /bin/bash
     lock_passwd: true
     sudo: "ALL=(ALL) NOPASSWD:ALL"
-    ssh_authorized_keys:
-      - "SSH_PUBLIC_KEY"
-  - name: heron-ops
-    shell: /bin/bash
-    lock_passwd: true
     ssh_authorized_keys:
       - "SSH_PUBLIC_KEY"
 write_files:
@@ -59,6 +67,28 @@ write_files:
   # would already be safe; this file makes the choice explicit and load-bearing rather than
   # incidental, because an unannounced reboot mid-beat is a false dead-man alert (CTO spec 3.13).
   # Reboots stay the desk's call, read from the pending list over SSH.
+  # Installing unattended-upgrades is not enabling it (Security's note N3 on this step): the
+  # package's own default file may or may not carry these periodic keys, and nothing here read
+  # them back. This file sets both explicitly and runcmd below asserts them out of
+  # `apt-config dump`, which is the merged view of every file in apt.conf.d -- so the assertion
+  # fails loudly if some later file turns them off again.
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  # logrotate cannot rotate the systemd journal -- journald bounds itself, and nothing set a bound
+  # (CTO spec 3.12, Security note N7). 200 MB on a 10 GB disk, with the runtime (tmpfs) copy small
+  # enough that a 512 MB host does not spend its memory on logs.
+  - path: /etc/systemd/journald.conf.d/00-heron.conf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Journal]
+      SystemMaxUse=200M
+      RuntimeMaxUse=32M
+      MaxRetentionSec=1month
   - path: /etc/apt/apt.conf.d/51-heron-no-automatic-reboot
     permissions: "0644"
     owner: root:root
@@ -68,6 +98,8 @@ runcmd:
   # sshd is not restarted by cloud-init's own module when only write_files touched its config
   # directory; restart explicitly so 00-heron.conf takes effect in this boot, not the next one.
   - [ systemctl, restart, ssh ]
+  # Same reason, for the journal bound written above.
+  - [ systemctl, restart, systemd-journald ]
 
   # DigitalOcean's own monitoring agent (do-agent) is what v1 collided with at uid 999: the
   # droplet is created with monitoring:false (deploy-droplet.sh), which should mean do-agent is
@@ -93,8 +125,9 @@ runcmd:
       exit 1
     fi
   # The group is created FIRST, as its own step, matching the container's own uid/gid 10001:10001
-  # (Dockerfile, build order step 3) -- so a beat's writes under runs/, state/ and intents/ land
-  # group-owned by the same id the container runs as, on a host account that owns nothing else.
+  # (Dockerfile, build order step 3) -- so a beat's writes under runs/ and state/, the container's
+  # only two writable mounts, land group-owned by the same id the container runs as, on a host
+  # account that owns nothing else.
   - [ groupadd, --gid, "10001", heron ]
   - [ useradd, --uid, "10001", --gid, "10001", --system, --no-create-home, --home-dir, /nonexistent, --shell, /usr/sbin/nologin, heron ]
   - |
@@ -106,24 +139,93 @@ runcmd:
     fi
     echo "heron cloud-init: uid/gid 10001 confirmed to be heron:heron"
 
+  # The SECOND account, and the one that matters most: purse, uid/gid 10002. heron-purse.service
+  # (build order step 5) declares User=purse Group=purse and is the only process on this host that
+  # ever holds the hot key. Until this step it was created by nobody -- the signer would not start,
+  # heron-beat.service Requires= it and so would never run, and whoever added the account by hand
+  # would land on whatever id happened to be free. That is the uid-collision class that scrapped
+  # v1, this time on the account holding the key. Same free-then-resolved pair as 10001, for the
+  # same reason: an assumption nobody checked is what this whole rebuild exists to remove.
+  - |
+    if getent passwd 10002 >/dev/null 2>&1; then
+      echo "heron cloud-init: refused - uid 10002 already exists before the purse group/user is created" >&2
+      exit 1
+    fi
+    if getent group 10002 >/dev/null 2>&1; then
+      echo "heron cloud-init: refused - gid 10002 already exists before the purse group/user is created" >&2
+      exit 1
+    fi
+  - [ groupadd, --gid, "10002", purse ]
+  - [ useradd, --uid, "10002", --gid, "10002", --system, --no-create-home, --home-dir, /nonexistent, --shell, /usr/sbin/nologin, purse ]
+  - |
+    RESOLVED_USER="$(getent passwd 10002 | cut -d: -f1)"
+    RESOLVED_GROUP="$(getent group 10002 | cut -d: -f1)"
+    if [ "$RESOLVED_USER" != "purse" ] || [ "$RESOLVED_GROUP" != "purse" ]; then
+      echo "heron cloud-init: refused - uid/gid 10002 resolved to '$RESOLVED_USER:$RESOLVED_GROUP', not purse:purse" >&2
+      exit 1
+    fi
+    echo "heron cloud-init: uid/gid 10002 confirmed to be purse:purse"
+  # The purse must be able to speak to the beat over its socket and no further: the socket is
+  # chmod 0660 by the purse itself and the beat runs as root, so no group membership is added
+  # here. purse is NOT in the heron group and heron is NOT in the purse group -- the model's
+  # container (uid 10001) must never be able to read anything the signer owns.
+
   # The layout (CTO spec 3.7, and this step's own instructions). No key file is placed by any of
   # this -- every directory below is created empty; deploy-droplet.sh --seal is the only thing
-  # that ever writes into creds/, and it pipes straight into systemd-creds encrypt over the live
-  # SSH session, never through a plaintext intermediate on this disk.
-  - [ install, -d, -m, "0750", -o, root, -g, root, /srv/heron ]
+  # that ever writes into /etc/heron/creds, and it pipes straight into systemd-creds encrypt over
+  # the live SSH session, never through a plaintext intermediate on this disk.
+  #
+  # Every path any unit names has to be here, or its parent has to be: a directory made by hand at
+  # deploy time is a mode nobody asserts, and the one that would have been made by hand is
+  # /srv/heron/keys -- the hot key's home. test/host-fixes.test.mjs walks every unit file in this
+  # package and in packages/purse/systemd and refuses if a path it names is not covered below.
+  # 0751, not the CTO spec 3.7's 0750, and the one deliberate deviation in this file. purse
+  # (uid 10002) is not in group root, and heron-purse.service runs
+  # `/usr/bin/node /srv/heron/purse/dist/server.js --policy /srv/heron/policy/...` AS purse: at
+  # 0750 root:root the signer cannot traverse /srv/heron to open its own program or its policy and
+  # the unit dies at start. o+x is traversal only -- there is no o+r, so the directory still
+  # cannot be listed by anyone but root, and every child below carries its own owner and mode.
+  - [ install, -d, -m, "0751", -o, root, -g, root, /srv/heron ]
   - [ install, -d, -m, "0755", -o, root, -g, root, /srv/heron/bin ]
-  - [ install, -d, -m, "0700", -o, root, -g, root, /srv/heron/creds ]
   - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/runs ]
+  # runs/archive is heron-retention's destination. install(1) applies the mode literally, unlike
+  # the python makedirs the retention script also has to do at runtime, which the unit umask masks
+  # down to 0750 root:root (Security's note N8) -- created here at the mode it must actually have,
+  # so the group can read its own archived runs.
+  - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/runs/archive ]
   - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/state ]
-  # Named "intents" (plural) to match the mount source already fixed in run-flags.txt (build
-  # order step 3): "--mount type=bind,source=/srv/heron/intents,target=/app/intents". The build
-  # order's own step-6 text says "intent/", singular; the committed run-flags.txt governs here
-  # because it is the path the container actually mounts, and a host directory the container's
-  # bind mount cannot find is a beat that fails at every run, not a naming preference.
-  - [ install, -d, -m, "2770", -o, root, -g, heron, /srv/heron/intents ]
+  # The signer's own paths, owned by purse and unreadable by the container's uid.
+  - [ install, -d, -m, "0700", -o, purse, -g, purse, /srv/heron/keys ]
+  - [ install, -d, -m, "0750", -o, purse, -g, purse, /srv/heron/purse ]
+  - [ install, -d, -m, "0750", -o, purse, -g, purse, /srv/heron/purse/dist ]
+  - [ install, -d, -m, "0700", -o, purse, -g, purse, /var/lib/heron ]
+  - [ install, -d, -m, "0700", -o, purse, -g, purse, /var/lib/heron/audit ]
+  # The policy is world-readable on purpose: it is the published rule the signer enforces, it is
+  # pinned by --policy-sha256 in heron-purse.service, and a rule nobody can read is not a rule.
+  - [ install, -d, -m, "0755", -o, root, -g, root, /srv/heron/policy ]
   - [ install, -m, "0600", -o, root, -g, root, /dev/null, /srv/heron/image.env ]
   - [ install, -d, -m, "0700", -o, root, -g, root, /etc/heron ]
+  # ONE credential directory on this host, and this is it. Every unit's LoadCredentialEncrypted=,
+  # --seal's destination, the README and --plan all name /etc/heron/creds and nothing else: the
+  # split between this and /srv/heron/creds meant a sealed model key landed where the beat unit
+  # did not look, and the beat would have failed to start at every tick with the dead man
+  # reporting it as a dead host.
   - [ install, -d, -m, "0700", -o, root, -g, root, /etc/heron/creds ]
+
+  # unattended-upgrades, asserted rather than assumed installed (Security note N3). apt-config
+  # dump is the MERGED view of every file under apt.conf.d, so this reads what apt itself will
+  # act on, not what one file happens to say.
+  - |
+    if ! apt-config dump | grep -q '^APT::Periodic::Unattended-Upgrade "1";'; then
+      echo "heron cloud-init: refused - unattended-upgrades is installed but not enabled (APT::Periodic::Unattended-Upgrade is not \"1\")" >&2
+      apt-config dump | grep -i '^APT::Periodic' >&2 || true
+      exit 1
+    fi
+    if ! apt-config dump | grep -q '^Unattended-Upgrade::Automatic-Reboot "false";'; then
+      echo "heron cloud-init: refused - Unattended-Upgrade::Automatic-Reboot is not \"false\"; an unannounced reboot mid-beat is a false dead-man alert" >&2
+      exit 1
+    fi
+    echo "heron cloud-init: unattended-upgrades enabled, automatic reboot off"
 
   - [ systemctl, enable, --now, docker ]
   - [ systemctl, daemon-reload ]

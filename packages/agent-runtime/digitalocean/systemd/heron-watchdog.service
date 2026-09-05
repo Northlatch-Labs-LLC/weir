@@ -20,5 +20,24 @@ User=root
 Group=root
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+
+# The watchdog now WRITES: state/alerts.jsonl (append-only, one line per notice decision) and the
+# `degraded` marker that makes "already told you" a fact on disk rather than a memory this oneshot
+# does not have. Under ProtectSystem=strict with no ReadWritePaths it could not create either --
+# it would have failed at the first write and fired the alert for the wrong reason (Security's A4
+# on step 6). This is the only writable path it gets.
+ReadWritePaths=/srv/heron/state

@@ -1,0 +1,34 @@
+# Built-by: @projectx.sui /|\ - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Installed to /etc/logrotate.d/heron by deploy-droplet.sh's install_host_units.
+#
+# CTO spec 3.12 asked for logrotate on the journal and on state/beats.jsonl; nothing wrote it, and
+# the logrotate package was installed and given no config at all (Security's note N7 on step 6).
+#
+# What this file bounds, and what it does NOT. It bounds the two append-only JSONL sinks the host
+# writes forever: state/beats.jsonl (one line per beat, 48 a day) and state/alerts.jsonl (one line
+# per notice decision). It does NOT touch /srv/heron/runs: those are a new timestamped file or
+# directory per beat, which is exactly the shape `rotate N` cannot bound -- that is heron-retention's
+# job, and v1's whole defect 8b was pointing logrotate at a per-beat glob and believing it.
+#
+# The journal is not bounded here either. logrotate does not rotate the systemd journal; journald
+# bounds itself, and cloud-init writes /etc/systemd/journald.conf.d/00-heron.conf to do it.
+#
+# ROTATED COPIES LEAVE THIS HOST, and that is deliberate rather than an oversight of the estate's
+# never-delete law: `rotate 12` on a weekly cycle drops a copy after roughly three months on a
+# 10 GB disk. The archive of record for state is the laptop's own pull (CTO spec 3.10 and 3.12,
+# which says this in the same words); a droplet is not an archive.
+
+/srv/heron/state/beats.jsonl /srv/heron/state/alerts.jsonl {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # The writers hold these open across a whole beat; copytruncate keeps the open file descriptor
+    # valid instead of leaving a writer appending to an unlinked inode nobody can read.
+    copytruncate
+    # 2770 root:heron, matching state/ itself, so the group that writes them can still read them.
+    create 0660 root heron
+}

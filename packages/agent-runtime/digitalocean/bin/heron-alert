@@ -44,13 +44,57 @@ import urllib.request
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 TO_ADDRESS = "kaela@projectxprotocol.dev"
+# The watchdog's own record. Read (never written) so a notice says which of the three things
+# happened -- first stale, still stale, or recovered -- instead of calling all three an alert.
+# systemd fires this unit through one fixed instance name, so without this the recovery notice
+# would arrive worded as a failure. Overridable for the fixture; the default is the real path.
+ALERTS_FILE = os.environ.get("HERON_ALERTS_FILE", "/srv/heron/state/alerts.jsonl")
 # Not yet a verified sending domain in Resend as of this step (packages/web's own sender notes the
 # same open item for weir.social/hello@); this address is the one the alert will use once it is.
 FROM_ADDRESS = "Heron <heron@weir.social>"
 CREDENTIAL_NAME = "mail-key"
 
 
+def last_alert() -> dict | None:
+    """The newest line of alerts.jsonl, or None. Never raises: a notice must go out even if the
+    record is missing, truncated mid-write, or unreadable."""
+    try:
+        with open(ALERTS_FILE, "r", encoding="utf-8") as handle:
+            lines = [line for line in handle.read().splitlines() if line.strip()]
+    except OSError:
+        return None
+    if not lines:
+        return None
+    try:
+        value = json.loads(lines[-1])
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def build_message(instance: str) -> tuple[str, str]:
+    if instance == "watchdog":
+        record = last_alert()
+        event = (record or {}).get("event")
+        if event == "recovered":
+            return (
+                "Heron recovered",
+                "Heron completed a beat again.\n\n"
+                f"Stale since: {(record or {}).get('stale_since', 'unknown')}\n"
+                f"Detail: {(record or {}).get('detail', '')}\n\n"
+                "This is the one recovery notice. The watchdog sends nothing further until the "
+                "next time the 90-minute window is missed.\n"
+            )
+        if event in ("stale", "stale-repeat"):
+            first = "the first notice" if event == "stale" else "a repeat notice, sent every 6 hours while it stays stale"
+            return (
+                f"Heron alert: {instance}",
+                f"Heron's watchdog raised '{instance}' ({first}).\n\n"
+                f"Detail: {(record or {}).get('detail', '')}\n"
+                f"Stale since: {(record or {}).get('stale_since', 'unknown')}\n\n"
+                "Read the host over SSH: /srv/heron/state/latest.json, "
+                "/srv/heron/state/alerts.jsonl and `journalctl -u heron-beat.service`.\n",
+            )
     if instance == "alive":
         subject = "Heron is alive"
         text = (

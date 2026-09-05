@@ -32,11 +32,38 @@ Group=root
 
 # The model credential, decrypted for the life of this beat only and mounted into the container from
 # $CREDENTIALS_DIRECTORY. Never written to /srv/heron in the clear.
-LoadCredentialEncrypted=openrouter:/srv/heron/creds/openrouter.cred
+#
+# /etc/heron/creds, not /srv/heron/creds. There is ONE sealed-credential directory on this host and
+# every unit, --seal, the README and --plan name the same one: the split meant `--seal openrouter`
+# wrote where this unit does not look, this unit failed to start at every tick, and the dead man
+# reported a live host as dead (Security's B3 on step 6).
+LoadCredentialEncrypted=openrouter:/etc/heron/creds/openrouter.cred
 
 ExecStart=/srv/heron/bin/heron-beat
 
-# Phase one's output and the sink phase two writes. The only writable paths.
+# ProtectSystem=strict mounts the whole hierarchy read-only except /dev, /proc and /sys; the
+# ReadWritePaths below are the exceptions carved back out of it. Without a ProtectSystem= at all,
+# ReadWritePaths carves an exception out of nothing and the unit ran as root with the filesystem
+# writable while the comment above claimed otherwise (Security's A8 on step 6).
+ProtectSystem=strict
+
+# Phase one's output (runs/<beat-id>/intent.json and the beat log) and the sink phase two writes.
+# These two, and nothing else.
+#
+# /run/docker.sock is deliberately NOT listed, and the reason is worth writing down because it is
+# the one place strict could plausibly break this unit. ProtectSystem=strict makes /run read-only,
+# and this unit must connect() to the daemon's socket to start the container. The kernel's
+# read-only check (sb_permission) returns EROFS for regular files, directories and symlinks only;
+# a socket inode is exempt, so connecting to a unix socket on a read-only mount succeeds. Reasoned
+# from that rule, NOT observed -- there is no Debian host on the laptop this was written on. If
+# the smoke beat of build order step 9 cannot reach the daemon, the fix is one line,
+# `ReadWritePaths=... /run/docker.sock`, and the smoke beat is exactly the gate that would catch
+# it: it fails loudly, before any timer is enabled.
+#
+# What the socket means either way is said plainly: a process that can talk to it can run
+# `docker run -v /:/host` and undo every other line in this file. That is why this unit is
+# root-owned and the `heron` account the model's container runs as has neither sudo nor the docker
+# group -- the ability to launch a beat lives with the timer, never with the workspace.
 ReadWritePaths=/srv/heron/runs /srv/heron/state
 
 NoNewPrivileges=yes

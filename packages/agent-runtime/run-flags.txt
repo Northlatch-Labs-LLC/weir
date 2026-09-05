@@ -23,16 +23,22 @@
 --cpus 0.9
 --user 10001:10001
 
-# Mounts. Only these four; nothing else is bind-mounted into the container.
+# Mounts. Only these three; nothing else is bind-mounted into the container.
 #   host path (owner:mode)              container path        mode
-#   /srv/heron/runs        (heron:2770) -> /app/runs           rw   (beat logs; the container's only writable data mount besides state)
+#   /srv/heron/runs        (heron:2770) -> /app/runs           rw   (beat logs AND the intent: runs/<beat-id>/intent.json)
 #   /srv/heron/state       (heron:2770) -> /app/state          rw   (state/latest.json, state/beats.jsonl — the heartbeat sink, spec §3.10)
 #   /srv/heron/image.env   (root:0600)  -> /app/image.env      ro   (the pinned config the container reads, never writes)
-#   /srv/heron/intents     (heron:2770) -> /app/intents        rw   (the two-phase beat writes an intent here for the signer to read outside the container; nothing here signs)
+#
+# ONE intent path, and it is under runs/. The contract is packages/purse/src/beat.ts's
+# `join(runsDir, beatId, INTENT_FILE)` — `runs/<beat-id>/intent.json` — which is what
+# packages/purse/bin/beat-phase2.ts actually reads and what packages/purse/systemd/heron-beat.service
+# documents. A fourth writable mount at /srv/heron/intents was carried here and created by
+# cloud-init while NOTHING read it: surface into the model's container for a handoff that happens
+# somewhere else (Security's A6 on step 6). It is removed from this file and from cloud-init in the
+# same change, and test/host-fixes.test.mjs asserts all four artefacts still agree.
 --mount type=bind,source=/srv/heron/runs,target=/app/runs,readonly=false
 --mount type=bind,source=/srv/heron/state,target=/app/state,readonly=false
 --mount type=bind,source=/srv/heron/image.env,target=/app/image.env,readonly=true
---mount type=bind,source=/srv/heron/intents,target=/app/intents,readonly=false
 
 # What is never mounted, on purpose, at this step and at every step after it:
 #   - no key file of any kind (the hot key, the brake key's public half, the model key)

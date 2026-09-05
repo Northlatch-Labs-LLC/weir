@@ -223,15 +223,23 @@ test('heron-retention.service and .timer run the retention binary daily', () => 
   assert.match(timer, /OnCalendar=/);
 });
 
-test('heron-retention never calls a bare delete on the live runs directory -- only archive-then-remove-the-original', () => {
+test('heron-retention never removes anything that is not already compressed in archive/ first', () => {
   const script = readFileSync(path.join(DO_DIR, 'bin', 'heron-retention'), 'utf8');
-  // The only os.remove() in the script is inside archive_one(), AFTER the file's bytes have
-  // already been written into archive/ (gzip-compressed) -- i.e. archiving, not deleting. There
-  // is no rmtree, no shutil.rmtree, and no unlink of anything under archive/ itself.
-  assert.doesNotMatch(script, /shutil\.rmtree/);
+
+  // Two removals exist in this script and no more: os.remove() for a plain file, after its bytes
+  // have been gzipped into archive/, and shutil.rmtree() for a beat directory, after the .tar.gz
+  // has been written AND read back and its file count compared against the tree. There is no
+  // os.unlink anywhere, and nothing removes anything under archive/ itself.
   assert.doesNotMatch(script, /os\.unlink/);
-  const removeCalls = script.match(/os\.remove\(/g) ?? [];
-  assert.equal(removeCalls.length, 1, 'exactly one os.remove() call, the one inside archive_one() after the gzip copy');
+  assert.equal((script.match(/os\.remove\(/g) ?? []).length, 1, 'exactly one os.remove(), the one after the gzip copy');
+  assert.equal((script.match(/shutil\.rmtree\(/g) ?? []).length, 1, 'exactly one shutil.rmtree(), the one after the verified tar.gz');
+
+  // Order is the whole difference between archiving and deleting: the rmtree must come after the
+  // read-back that proves the archive holds every file the tree held.
+  const verification = script.indexOf('if len(members) != expected:');
+  const rmtree = script.indexOf('shutil.rmtree(');
+  assert.ok(verification > 0, 'the archive read-back must exist');
+  assert.ok(rmtree > verification, 'shutil.rmtree() must come after the archive has been read back and counted');
 });
 
 // ---------------------------------------------------------------------------
