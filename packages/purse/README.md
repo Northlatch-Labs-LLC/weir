@@ -31,7 +31,7 @@ container (untrusted)          heron-purse (holds the key)
                      └─► /run/heron/purse.sock ─► build the transaction
                                                   simulate it
                                                   the SDK gate
-                                                  the twelve rules
+                                                  the policy rules
                                                   record, then sign
                      ◄─ { ok, digest, txBytesB64, signature }
                         or { ok: false, refused: { ruleId, reason } }

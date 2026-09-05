@@ -11,7 +11,7 @@
  * document that produced the refusal, and so that an unattended beat can tell a policy denial
  * (never retry; the policy has to change) from a node that was unreachable (retry next beat).
  *
- * So a refusal carries a `ruleId`. When the policy evaluator refused, it is one of the twelve rule
+ * So a refusal carries a `ruleId`. When the policy evaluator refused, it is one of the rule
  * ids from `@projectx-social/policy`. When something before the evaluator refused, it is one of
  * {@link PURSE_REFUSAL_IDS} — a closed union, so a new refusal path cannot be added without being
  * named here and in the README.
@@ -30,7 +30,7 @@ import { RULES, type RuleId } from '@projectx-social/policy';
 /**
  * Refusals the purse itself produces, before or around the policy evaluator.
  *
- * Each one is a place where the answer is "no" for a reason the twelve policy rules cannot express,
+ * Each one is a place where the answer is "no" for a reason the policy rules cannot express,
  * because the transaction they judge does not exist yet.
  */
 export const PURSE_REFUSAL_IDS = [
@@ -113,7 +113,7 @@ const POLICY_RULE_IDS: ReadonlySet<string> = new Set(RULES.map((rule) => rule.id
  * prose cannot manufacture an id.
  *
  * Returning `null` is a real answer: it means the signer refused for a reason that was not one of
- * the twelve rules, and the caller records `gate-refused`. Guessing a rule id there would put a
+ * the policy rules, and the caller records `gate-refused`. Guessing a rule id there would put a
  * false attribution in the audit chain, which is the one file that has to be believable.
  *
  * The alternative — widening `Reading` or `PolicySigner` to carry the id — is a change to the

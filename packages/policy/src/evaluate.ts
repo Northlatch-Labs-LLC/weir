@@ -18,6 +18,13 @@
  * different answer must change the policy document, which is hashed into the audit trail — so the
  * widening is visible afterwards, at the exact entry where it first took effect. A runtime
  * override would be invisible in exactly the record that exists to make it visible.
+ *
+ * `approvalRequired` is not a third outcome and was written carefully so that it could not become
+ * one. It appears only on a refusal, `allow` is still `false`, and every caller that reads `allow`
+ * and nothing else stops — including every caller written before the flag existed. What it says is
+ * narrow: *this* refusal is one an approval the operator has already granted would have lifted, so
+ * a surface can tell somebody "your operator has to approve this" without matching on the wording
+ * of a reason. It permits nothing, and there is no argument to this function that grants it.
  */
 
 import type { SimulatedEffects } from './effects.js';
@@ -27,7 +34,13 @@ import { RULES, type Rule, type RuleId } from './rules.js';
 
 export type Decision =
   | { readonly allow: true }
-  | { readonly allow: false; readonly reason: string; readonly ruleId: RuleId };
+  | {
+      readonly allow: false;
+      readonly reason: string;
+      readonly ruleId: RuleId;
+      /** Present only when an approval the operator granted would have lifted this refusal. */
+      readonly approvalRequired?: true;
+    };
 
 /**
  * Evaluate a simulation against a policy and the agent's prior spending.
@@ -72,7 +85,12 @@ export function evaluateWith(
   for (const rule of rules) {
     const reason = rule.check(input);
     if (reason !== null) {
-      return { allow: false, reason: `[${rule.id}] ${reason}`, ruleId: rule.id };
+      const decision = { allow: false, reason: `[${rule.id}] ${reason}`, ruleId: rule.id } as const;
+      // The flag is copied from the rule rather than decided here, so the loop stays a loop and
+      // no rule id is special-cased in it. A rule that does not set it produces the same object
+      // this function has always produced, key for key — which is what keeps `toEqual` assertions
+      // in callers' tests meaningful rather than quietly loosened.
+      return rule.approvalRequired === true ? { ...decision, approvalRequired: true } : decision;
     }
   }
   return { allow: true };

@@ -7,7 +7,7 @@
  *
  *  1. asserts the full rule set REFUSES a transaction that violates exactly that rule, and names
  *     that rule as the reason — not merely that something refused;
- *  2. deletes the rule and asserts the remaining ten now PERMIT the same transaction.
+ *  2. deletes the rule and asserts the remaining rules now PERMIT the same transaction.
  *
  * Step 2 is the mutation. Without it, a rule sitting behind another that happened to fire first
  * would look tested. With it, a rule that has been commented out, short-circuited, or made

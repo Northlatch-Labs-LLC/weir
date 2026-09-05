@@ -52,6 +52,21 @@ export const policyDocSchema = z.strictObject({
   allowedTypeArguments: z.array(z.string().min(1)),
   allowedRecipients: z.array(z.string().min(1)),
   allowedObjects: z.array(z.string().min(1)),
+  /*
+    Optional, and the only optional key in this schema, because it is the only one a
+    previously-valid deployed document can lack — `policy/heron-content.json` and
+    `policy/heron-ledger.json` were both written before approval bars existed and must keep
+    loading. `strictObject` is why this line has to exist at all: without it a document carrying a
+    bar would be REFUSED at start, and the operator who wrote the bar would be told their document
+    has an unknown key rather than that their gate works.
+
+    `.optional()` here means absent-or-a-list. It does not mean the evaluator treats absence as a
+    bar of zero; `PolicyDoc.approvalThresholds` says why absence is the permissive reading for this
+    one field and the strict reading for every other.
+  */
+  approvalThresholds: z
+    .array(z.strictObject({ coinType: z.string().min(1), maxWithoutApproval: u64 }))
+    .optional(),
   maxGasBudgetMist: u64,
   allowedCommandKinds: z.array(z.string().min(1)),
 });

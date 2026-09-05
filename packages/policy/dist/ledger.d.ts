@@ -1,5 +1,9 @@
 /**
- * What the agent has already spent.
+ * What the agent has already spent, and what the operator has already approved.
+ *
+ * Both are records the caller keeps and hands in; neither is read or remembered here. They sit in
+ * one type because they are answers to the same question at two bars — how much has gone out in
+ * this window, and how much of it the operator said yes to.
  *
  * # A ceiling without a memory is not a ceiling
  *
@@ -39,6 +43,49 @@ export interface LedgerEntry {
     /** When it left, in epoch milliseconds. */
     readonly atMs: number;
 }
+/**
+ * One approval the operator granted, already authenticated by whoever is passing it in.
+ *
+ * # What this package can check, and the one thing it cannot
+ *
+ * It checks scope: the coin type, the amount covered, and whether the grant is still live at
+ * `nowMs`. It **cannot check that the operator granted it**, because verifying a signature means
+ * a cryptographic dependency and this package has none — that is the property that makes it the
+ * last thing that says no, and it is not being traded for this.
+ *
+ * So an approval is a fact the caller asserts, exactly as a ledger entry is. `@projectx-social/signer`
+ * is the caller that matters and it is where the operator's signature is verified; a caller that
+ * passes an approval it did not authenticate has not been permitted anything by this package — it
+ * has lied to it, in the same way a caller that signs and forgets to record the spend has.
+ *
+ * # An approval is not a coupon, and cannot be replayed
+ *
+ * There is no "uses" count here and none is needed. An approval is compared against the same
+ * cumulative windowed total the ceiling is compared against, so approving 5 SUI approves 5 SUI in
+ * that window and not one transaction of 5 SUI, repeatable. A per-transaction approval would be
+ * defeated by the same loop a per-transaction ceiling is.
+ */
+export interface OperatorApproval {
+    /** Fully-qualified coin type. Normalised at comparison time. */
+    readonly coinType: string;
+    /**
+     * The windowed total this approval covers, as an unsigned decimal string in the smallest unit.
+     *
+     * Compared against **prior spend plus this transaction**, not against this transaction alone.
+     */
+    readonly maxAmount: string;
+    /**
+     * When the grant stops being live, in epoch milliseconds. Exclusive: at exactly this instant it
+     * is expired.
+     *
+     * The ceiling's window is inclusive at both ends and this bound is exclusive, which is not an
+     * inconsistency — both are the strict edge of what they do. The window is a bound that
+     * *refuses*, so including the boundary closes a one-millisecond hole a loop could be timed
+     * against. An approval *permits*, so excluding the boundary closes the same millisecond from the
+     * other side.
+     */
+    readonly expiresAtMs: number;
+}
 export interface LedgerState {
     /**
      * The current time, supplied by the caller.
@@ -46,6 +93,16 @@ export interface LedgerState {
      * An input rather than a read, so an evaluation is reproducible. See this file's header.
      */
     readonly nowMs: number;
+    /**
+     * Approvals the operator has granted and the caller has authenticated. Absent means none.
+     *
+     * Absence here is read strictly — an approval nobody passed is an approval nobody granted — and
+     * it is the opposite reading to `PolicyDoc.approvalThresholds`, whose absence means no bar was
+     * configured. The two are opposite because one is authority and the other is a bar on authority:
+     * an ungranted approval must never permit, and an unconfigured bar must never refuse a policy
+     * written before bars existed.
+     */
+    readonly approvals?: readonly OperatorApproval[];
     /**
      * Prior outflows. Order does not matter; entries outside every window are simply ignored.
      *

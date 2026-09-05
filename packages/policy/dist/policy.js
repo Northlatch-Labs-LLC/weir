@@ -55,6 +55,10 @@
  * reviewer comparing an old entry to a new one **should** see a different policy, because it is
  * one.
  *
+ * `approvalThresholds` was added the same way and moves every hash again, and the same reading
+ * applies: an audit entry written before it references a document under which nothing was ever
+ * held back for the operator to see. A reviewer should be shown that, not shielded from it.
+ *
  * # This does not hash
  *
  * There is no `sha256` here and there will not be, because a cryptographic hash means either a
@@ -90,6 +94,18 @@ export function canonicalPolicyJson(doc) {
         allowedRecipients: [...doc.allowedRecipients],
         allowedTargets: [...doc.allowedTargets],
         allowedTypeArguments: [...doc.allowedTypeArguments],
+        // `null` when absent and an array when present, for the reason given above `allowedObjects`:
+        // a document that configures no approval bar and a document written before bars existed are
+        // the same policy in force and DIFFERENT documents, and the second is the one whose author
+        // never considered the question. `[]` is emitted for a document that thought about it and
+        // configured none. Encoding them alike would make an operator's decision indistinguishable
+        // from an operator's absence, in the record that exists to show which policy made a decision.
+        approvalThresholds: Array.isArray(doc.approvalThresholds)
+            ? doc.approvalThresholds.map((t) => ({
+                coinType: t.coinType,
+                maxWithoutApproval: t.maxWithoutApproval,
+            }))
+            : null,
         maxGasBudgetMist: doc.maxGasBudgetMist,
         outflowCeilings: ceilings,
     });

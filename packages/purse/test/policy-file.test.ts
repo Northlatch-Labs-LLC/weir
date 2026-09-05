@@ -76,6 +76,46 @@ describe('the document', () => {
     expect(loaded.refused.reason).toContain('allowed');
   });
 
+  it('loads a document that sets an approval bar, and one written before bars existed', async () => {
+    /*
+      The schema is a `strictObject`, so a key it does not name is a refusal to start. That is the
+      right default and it is also why this test exists: without `approvalThresholds` in the
+      schema, an operator who wrote a bar would be told at start that their document has an
+      unknown field, and the deployed purse could never run the gate at all. Both documents must
+      load — the one with a bar, and every document deployed before there were bars.
+    */
+    const withBar = await writePolicy({
+      ...policyFor(AGENT),
+      approvalThresholds: [{ coinType: `0x${'0'.repeat(63)}2::sui::SUI`, maxWithoutApproval: '500000' }],
+    });
+    const loaded = await loadPinnedPolicy({ path: withBar.path, expectedSha256: withBar.sha256 });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.refused.reason);
+    expect(loaded.value.doc.approvalThresholds).toEqual([
+      { coinType: `0x${'0'.repeat(63)}2::sui::SUI`, maxWithoutApproval: '500000' },
+    ]);
+
+    const withoutBar = await writePolicy(policyFor(AGENT));
+    const legacy = await loadPinnedPolicy({
+      path: withoutBar.path,
+      expectedSha256: withoutBar.sha256,
+    });
+    expect(legacy.ok).toBe(true);
+    if (!legacy.ok) throw new Error(legacy.refused.reason);
+    expect(legacy.value.doc.approvalThresholds).toBeUndefined();
+    // Different documents, so different policy hashes in the audit chain.
+    expect(loaded.value.policyHash).not.toBe(legacy.value.policyHash);
+  });
+
+  it('refuses a bar whose amount is not a u64 written as a decimal string', async () => {
+    const written = await writePolicy({
+      ...policyFor(AGENT),
+      approvalThresholds: [{ coinType: `0x${'0'.repeat(63)}2::sui::SUI`, maxWithoutApproval: '' }],
+    });
+    const loaded = await loadPinnedPolicy({ path: written.path, expectedSha256: written.sha256 });
+    expect(loaded.ok).toBe(false);
+  });
+
   it('refuses a policy that is not JSON', async () => {
     const dir = await temporaryDirectory();
     const path = join(dir, 'heron-policy.json');

@@ -10,7 +10,7 @@
  * `test/mutation.test.ts` deletes each rule in turn and asserts that a transaction the full set
  * refuses becomes one the reduced set permits.
  *
- * That test is not a nicety. It is the difference between twelve rules and twelve comments.
+ * That test is not a nicety. It is the difference between a list of rules and a list of comments.
  *
  * # First denial wins, and the order is fixed
  *
@@ -166,9 +166,9 @@ const transferRecipient = {
     },
 };
 /**
- * The twelfth rule, and the one the other eleven leave a hole under.
+ * The rule the others leave a hole under.
  *
- * # What the other eleven do not bound
+ * # What the other rules do not bound
  *
  * `move-call-target` bounds the verb. `type-argument` bounds the currency. `transfer-recipient`
  * bounds where objects end up. `outflow-ceiling` and `gas-budget` bound the size. Between them
@@ -397,6 +397,43 @@ const coinTypeUnlisted = {
         return null;
     },
 };
+/**
+ * What the ledger says already went out in this coin type, inside `[nowMs - periodMs, nowMs]`.
+ *
+ * Shared by `outflow-ceiling` and `approval-threshold` on purpose. The bar and the ceiling must be
+ * measured over the same arithmetic or they disagree silently — a threshold that counted one entry
+ * differently would be a gate an operator believes in that does not fire where they think it does,
+ * and the two would only be found to differ by an audit nobody runs. One function, one window.
+ *
+ * Inclusive at both ends. An entry recorded at exactly `nowMs - periodMs` is still inside the
+ * window; excluding it would open a one-millisecond hole a loop could be timed against.
+ */
+function priorInWindow(ledger, coinType, periodMs) {
+    const windowStart = ledger.nowMs - periodMs;
+    let prior = 0n;
+    for (const entry of ledger.spend) {
+        const entryCoinType = normaliseType(entry.coinType);
+        if (entryCoinType === null) {
+            return {
+                error: `a ledger entry names the coin type ${JSON.stringify(entry.coinType)}, which ` +
+                    `does not parse. An unreadable record of past spending must not be counted as zero.`,
+            };
+        }
+        if (entryCoinType !== coinType)
+            continue;
+        if (entry.atMs < windowStart || entry.atMs > ledger.nowMs)
+            continue;
+        const amount = parseUnsignedAmount(entry.amountOut);
+        if (amount === null) {
+            return {
+                error: `a ledger entry for ${coinType} records ${JSON.stringify(entry.amountOut)}, ` +
+                    `which is not an unsigned decimal integer.`,
+            };
+        }
+        prior += amount;
+    }
+    return prior;
+}
 const outflowCeiling = {
     id: 'outflow-ceiling',
     summary: 'Prior spend in the rolling window plus this outflow must stay under the ceiling.',
@@ -423,27 +460,9 @@ const outflowCeiling = {
                     `window that is zero, negative or fractional cannot contain a prior spend, so the ` +
                     `ceiling would apply to this transaction alone and a loop would defeat it.`;
             }
-            const windowStart = ledger.nowMs - ceiling.periodMs;
-            let prior = 0n;
-            for (const entry of ledger.spend) {
-                const entryCoinType = normaliseType(entry.coinType);
-                if (entryCoinType === null) {
-                    return `a ledger entry names the coin type ${JSON.stringify(entry.coinType)}, which ` +
-                        `does not parse. An unreadable record of past spending must not be counted as zero.`;
-                }
-                if (entryCoinType !== coinType)
-                    continue;
-                // Inclusive at both ends. An entry recorded at exactly `nowMs - periodMs` is still inside
-                // the window; excluding it would open a one-millisecond hole at the boundary.
-                if (entry.atMs < windowStart || entry.atMs > ledger.nowMs)
-                    continue;
-                const amount = parseUnsignedAmount(entry.amountOut);
-                if (amount === null) {
-                    return `a ledger entry for ${coinType} records ${JSON.stringify(entry.amountOut)}, ` +
-                        `which is not an unsigned decimal integer.`;
-                }
-                prior += amount;
-            }
+            const prior = priorInWindow(ledger, coinType, ceiling.periodMs);
+            if (isError(prior))
+                return prior.error;
             const now = outflows.get(coinType) ?? 0n;
             const total = prior + now;
             if (total > limit) {
@@ -457,10 +476,156 @@ const outflowCeiling = {
     },
 };
 /**
+ * The operator's bar: above it, the transaction is permitted only with a live approval.
+ *
+ * # Why this rule is last
+ *
+ * It is the only refusal in the list an operator can answer with a yes rather than an edit, so it
+ * must never be the refusal a caller sees when something else is also wrong. A transaction over
+ * the ceiling, calling a target nobody allowed, is refused by those rules first — and it should
+ * be, because "your operator can approve this" is a false sentence about a transaction the policy
+ * forbids outright. Last in the list, first denial wins, and this one is reached only when
+ * everything else already said yes.
+ *
+ * # A bar at or above its own ceiling is refused, not ignored
+ *
+ * An operator who writes a threshold of 20 SUI under a ceiling of 10 has written a gate that can
+ * never fire: every total large enough to cross the bar is refused by the ceiling before this rule
+ * runs. Ignoring it would leave them believing they are asked about large spends when nothing will
+ * ever ask them — a false belief about a safety control, held by the one person the control exists
+ * for. That is worse than an outage, because an outage is noticed. So it is refused, by name, with
+ * the two numbers in the sentence.
+ */
+const approvalThreshold = {
+    id: 'approval-threshold',
+    approvalRequired: true,
+    summary: "A windowed total above the operator's bar needs a live approval from the operator.",
+    check: ({ effects, policy, ledger }) => {
+        const thresholds = policy.approvalThresholds;
+        // Absent means no bar was configured — see `PolicyDoc.approvalThresholds` for why absence
+        // reads permissively HERE and strictly everywhere else in that document.
+        if (thresholds === undefined)
+            return null;
+        if (!Array.isArray(thresholds)) {
+            return `approvalThresholds is present and is not a list. A policy document arrives as JSON, ` +
+                `where a field can be any shape; a bar this evaluator cannot read is refused rather than ` +
+                `skipped, because skipping it signs unattended exactly what the operator asked to see.`;
+        }
+        const agent = agentAddress(policy);
+        if (agent === null)
+            return `policy agentAddress is not a Sui address.`;
+        const outflows = agentOutflows(effects, agent);
+        if (isError(outflows))
+            return outflows.error;
+        for (const threshold of thresholds) {
+            const coinType = normaliseType(threshold.coinType);
+            if (coinType === null) {
+                return `an approvalThreshold names the coin type ${JSON.stringify(threshold.coinType)}, ` +
+                    `which is not a valid Move type. A bar that cannot be matched to a coin is a bar that ` +
+                    `never asks anybody.`;
+            }
+            const bar = parseUnsignedAmount(threshold.maxWithoutApproval);
+            if (bar === null) {
+                return `the approval threshold for ${coinType} is ` +
+                    `${JSON.stringify(threshold.maxWithoutApproval)}, which is not an unsigned decimal ` +
+                    `integer. BigInt('') is 0n, and a bar that silently became zero would ask the operator ` +
+                    `about every transaction until somebody switched the gate off.`;
+            }
+            /*
+              The ceiling supplies the window. This is also the check that a threshold cannot be written
+              for a coin type the policy never let out at all: `coin-type-unlisted` would refuse the
+              outflow anyway, but a bar with no window is a malformed document and it is named here
+              rather than left to be discovered as a gate that never fired.
+            */
+            let ceiling = null;
+            for (const candidate of policy.outflowCeilings) {
+                const candidateType = normaliseType(candidate.coinType);
+                if (candidateType === null) {
+                    return `an outflowCeiling names the coin type ${JSON.stringify(candidate.coinType)}, ` +
+                        `which is not a valid Move type, so no approval bar can borrow its window.`;
+                }
+                if (candidateType === coinType)
+                    ceiling = candidate;
+            }
+            if (ceiling === null) {
+                return `this policy sets an approval threshold for ${coinType} and no ceiling for it. A ` +
+                    `threshold is measured over its ceiling's rolling window, so there is no window to ` +
+                    `measure this one over.`;
+            }
+            if (!Number.isInteger(ceiling.periodMs) || ceiling.periodMs <= 0) {
+                return `the ceiling for ${coinType} declares periodMs ${String(ceiling.periodMs)}, which ` +
+                    `is not a positive integer, so the approval bar that borrows its window cannot be ` +
+                    `measured either.`;
+            }
+            const limit = parseUnsignedAmount(ceiling.maxPerPeriod);
+            if (limit === null) {
+                return `the ceiling for ${coinType} is ${JSON.stringify(ceiling.maxPerPeriod)}, which is ` +
+                    `not an unsigned decimal integer, so the approval bar cannot be compared against it.`;
+            }
+            if (bar >= limit) {
+                return `the approval threshold for ${coinType} is ${bar.toString()} and the ceiling is ` +
+                    `${limit.toString()}. Every total that crosses that bar is already refused by the ` +
+                    `ceiling, so the operator would never be asked about anything — a gate that cannot ` +
+                    `fire, in a document its author would read as one that does. Lower the threshold below ` +
+                    `the ceiling, or remove it.`;
+            }
+            const prior = priorInWindow(ledger, coinType, ceiling.periodMs);
+            if (isError(prior))
+                return prior.error;
+            const now = outflows.get(coinType) ?? 0n;
+            const total = prior + now;
+            if (total <= bar)
+                continue;
+            const approvals = ledger.approvals;
+            if (approvals !== undefined && !Array.isArray(approvals)) {
+                return `the ledger's approvals field is present and is not a list, so no approval can be ` +
+                    `read from it.`;
+            }
+            let covered = false;
+            for (const approval of approvals ?? []) {
+                const approvedType = normaliseType(approval.coinType);
+                if (approvedType === null) {
+                    return `an operator approval names the coin type ${JSON.stringify(approval.coinType)}, ` +
+                        `which is not a valid Move type. An approval that cannot be matched to a coin is not ` +
+                        `read as an approval of everything.`;
+                }
+                if (approvedType !== coinType)
+                    continue;
+                const amount = parseUnsignedAmount(approval.maxAmount);
+                if (amount === null) {
+                    return `an operator approval for ${coinType} covers ` +
+                        `${JSON.stringify(approval.maxAmount)}, which is not an unsigned decimal integer.`;
+                }
+                if (!Number.isInteger(approval.expiresAtMs)) {
+                    return `an operator approval for ${coinType} expires at ` +
+                        `${String(approval.expiresAtMs)}, which is not an integer millisecond. An approval ` +
+                        `whose lifetime cannot be read is not treated as one that has not expired.`;
+                }
+                // Exclusive: at exactly `expiresAtMs` the grant is over. See `OperatorApproval`.
+                if (ledger.nowMs >= approval.expiresAtMs)
+                    continue;
+                if (amount < total)
+                    continue;
+                covered = true;
+                break;
+            }
+            if (!covered) {
+                return `this transaction would put ${total.toString()} of ${coinType} out in the last ` +
+                    `${String(ceiling.periodMs)}ms (${prior.toString()} already spent, ${now.toString()} ` +
+                    `now), above the ${bar.toString()} this policy lets the agent spend unattended. It is ` +
+                    `inside the ceiling, so the operator may approve it — an approval for at least ` +
+                    `${total.toString()} of ${coinType}, still live at ${String(ledger.nowMs)}, permits it. ` +
+                    `Widening the policy is the other answer, and it is the one the audit trail records.`;
+            }
+        }
+        return null;
+    },
+};
+/**
  * The rules, in evaluation order. First denial wins.
  *
  * Exported as the whole list so `evaluateWith` can be handed a subset — which is how the mutation
- * test deletes one rule at a time and proves the remaining ten no longer refuse what the eleven
+ * test deletes one rule at a time and proves the remaining rules no longer refuse what the whole
  * did.
  */
 export const RULES = [
@@ -476,5 +641,8 @@ export const RULES = [
     amountWellformed,
     coinTypeUnlisted,
     outflowCeiling,
+    // Last, and the header above this rule says why: it is the only refusal an operator can answer
+    // with a yes, so it must never be the one reported about a transaction another rule forbids.
+    approvalThreshold,
 ];
 //# sourceMappingURL=rules.js.map

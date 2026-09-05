@@ -34,7 +34,7 @@ decoration that is trusted is worse than nothing.
 
 `test/mutation.test.ts` therefore does two things for **every** rule: it asserts the full rule set
 refuses a transaction that violates exactly that rule *and names that rule*, then deletes the rule
-and asserts the remaining ten now permit the same transaction. Step two is the one that matters —
+and asserts the remaining rules now permit the same transaction. Step two is the one that matters —
 without it, a rule sitting behind another that happened to fire first would look tested.
 
 Each fixture violates **exactly one** rule. A fixture that violated two would leave the other still
@@ -58,6 +58,7 @@ rule cannot enter the list quietly.
 | `amount-wellformed` | an amount `BigInt` would silently read as zero | ✅ |
 | `coin-type-unlisted` | an outflow in a coin type with no configured ceiling | ✅ |
 | `outflow-ceiling` | a spend that fits alone but breaches the rolling window total | ✅ |
+| `approval-threshold` | a spend inside the ceiling but above what may go out unattended | ✅ |
 
 ---
 
@@ -148,6 +149,54 @@ spend two full allowances across.
 **On SUI, gas counts.** The node reports gas as an ordinary outflow: a one-MIST self-transfer
 measured live produced a balance change of `-1088000`, essentially all of it gas. Set the SUI
 ceiling high enough to cover it, and bound gas separately with `maxGasBudgetMist`.
+
+---
+
+## The operator's bar: what may go out **unattended**
+
+A ceiling answers "may this ever happen?". `approvalThresholds` answers a different question —
+"may this happen without the operator seeing it?" — and it is the only refusal in this package
+whose answer can be a person's yes instead of an edit to the policy.
+
+```ts
+approvalThresholds: [{ coinType: '0x2::sui::SUI', maxWithoutApproval: '500000' }]
+// under the ceiling and under the bar  -> allow
+// under the ceiling and over the bar   -> deny, approvalRequired: true
+// over the ceiling                     -> deny, and no approval lifts it
+```
+
+An approval arrives on `LedgerState.approvals`, beside prior spend, because it is the same kind of
+fact: something the caller records and hands in. It carries a coin type, the total it covers and
+an expiry, and the rule checks all three.
+
+**The bar borrows the ceiling's window.** There is no `periodMs` on a threshold and there will not
+be one. Two windows are two chances to get a window wrong, silently: a bar with a shorter window is
+a bar an agent walks under once per short window, which is a per-transaction limit in a rolling
+window's clothes and is defeated by the loop this package's ceilings exist to stop. Borrowing the
+ceiling's window also means **an approval cannot be replayed** — it is compared against the same
+cumulative total, so approving 5 SUI approves 5 SUI in that window, not one transaction of 5 SUI,
+repeated.
+
+**A bar at or above its own ceiling is refused by name.** Every total large enough to cross it is
+already refused by the ceiling, so the operator would never be asked about anything — a gate that
+cannot fire, in a document whose author would read it as one that does. A false belief about a
+safety control, held by the one person the control exists for, is worse than an outage, because an
+outage gets noticed.
+
+**What this package cannot check is that the operator granted the approval.** Verifying a
+signature means a cryptographic dependency and there are none here. An approval is a fact the
+caller asserts, exactly as a ledger entry is; `@projectx-social/signer` is where the operator's
+signature is verified. The two honest limitations are the same shape and neither is hidden.
+
+### `approvalRequired` is not a third outcome
+
+It is a flag on a **refusal**. `allow` is still `false`, and every caller that reads `allow` and
+nothing else stops — including every caller written before the flag existed. What it says is
+narrow: this particular refusal is one an approval would have lifted, so a surface can say "your
+operator has to approve this" without matching on the wording of a reason. There is still no
+`allowWithWarning`, no `override` and no `force`.
+
+---
 
 ### The ledger is an input, and the honest limitation
 
