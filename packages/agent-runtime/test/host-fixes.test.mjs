@@ -1729,5 +1729,5 @@ test('the on-host image build points the docker client away from /root/.docker, 
   const build = script.slice(script.indexOf('build_image_on_host() {'), script.indexOf('install_host_units() {'));
   assert.match(build, /export DOCKER_CONFIG=\/tmp\/heron-docker-config/);
   assert.ok(build.indexOf('export DOCKER_CONFIG') < build.indexOf('docker build'), 'DOCKER_CONFIG must be set before docker build runs');
-  assert.match(build, /rm -rf "\\\$DOCKER_CONFIG"/);
+  assert.ok(build.includes('rm -rf "\\$DOCKER_CONFIG"'), 'the build-scoped config directory must be removed when the build is done');
 });
