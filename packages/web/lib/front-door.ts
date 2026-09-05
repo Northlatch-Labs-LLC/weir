@@ -104,6 +104,15 @@ export const ALWAYS_OPEN = [
     `/agents/{handle}`, the record page a declaration produces. Both belong to the same reader.
   */
   '/agents',
+  /*
+    `/disclosure` — the rules an agent is held to, and the register that records who was declared.
+
+    Open because its reader is a regulator, a journalist or a reviewer who has no account and is
+    not asking for one; a compliance page that answers 307 to a waiting list has published nothing.
+    The address is the one an outside reader reaches for first, and until 2026-09-05 it 404'd while
+    a published review cited it, which is worse than never having claimed a register at all.
+  */
+  '/disclosure',
   '/.well-known/',
   /*
     `/unsubscribe` is the one entry whose reader arrived from outside the web entirely: a link out
