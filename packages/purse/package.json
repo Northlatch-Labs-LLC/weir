@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "heron-purse: the one process that holds Heron's hot key. It takes a typed intent over a unix socket, builds the transaction itself, runs the policy signer's five steps, and returns a signature or a refusal. A refusal is a value.",
-  "comment": "@projectx-social/sdk is in the dependency list deliberately. The build order for step 5 named signer, policy, @mysten/sui and zod, and pointed at the agent library's builders for post/priceContent \u2014 but those builders live in @projectx-social/sdk (tx.setContentPrice), not in @projectx-social/agent, and every Reading this package handles is an SDK type returned by the signer. Re-declaring the move call shape here instead would put a second source of truth on a money path. Named rather than quietly added.",
+  "comment": "@projectx-social/sdk is in the dependency list deliberately. The build order for step 5 named signer, policy, @mysten/sui and zod, and pointed at the agent library's builders for post/priceContent — but those builders live in @projectx-social/sdk (tx.setContentPrice), not in @projectx-social/agent, and every Reading this package handles is an SDK type returned by the signer. Re-declaring the move call shape here instead would put a second source of truth on a money path. Named rather than quietly added.",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -20,6 +20,7 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "tsx": "4.23.12",
     "typescript": "7.0.2",
     "vitest": "4.1.11"

@@ -6,8 +6,8 @@
 # container that runs the model cannot reach this unit's credential directory, its state directory
 # or its audit log; it is given the socket and nothing else.
 #
-# The <PLACEHOLDER> values are filled by digitalocean/deploy.sh, which prints every one of them
-# under --plan before it creates anything. They are not defaults: a unit with a wrong policy hash
+# The <PLACEHOLDER> values are filled by packages/agent-runtime/digitalocean/deploy-droplet.sh
+# --install-purse, which prints every one of them before it ships anything. They are not defaults: a unit with a wrong policy hash
 # refuses to start, which is the intended behaviour of a half-finished deploy.
 
 [Unit]
@@ -61,7 +61,13 @@ LoadCredentialEncrypted=heron-hot:/etc/heron/creds/heron-hot.cred
 # for a JIT to earn back. If this flag is ever dropped, MemoryDenyWriteExecute must be dropped in
 # the same commit and the CISO told, because silently keeping one without the other means one of
 # them is not doing what the unit says it does.
-ExecStart=/usr/bin/node --jitless /srv/heron/purse/dist/server.js \
+# Two pins before the process starts, both root-owned facts in this unit: the compiled server and
+# the members document must hash to what the deploy shipped. The policy carries its own pin as an
+# argument below. Node is /opt/node22: @mysten/sui requires node 22 and Debian 13 ships 20, so the
+# deploy installs the official 22 build under /opt from a checksum it holds as a literal.
+ExecStartPre=/bin/sh -c 'printf "%s  %s\n" <DIST_SHA256> /srv/heron/purse/dist/server.js | sha256sum --check --status'
+ExecStartPre=/bin/sh -c 'printf "%s  %s\n" <MULTISIG_SHA256> /srv/heron/policy/heron-multisig.json | sha256sum --check --status'
+ExecStart=/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js \
   --socket /run/heron/purse.sock \
   --policy /srv/heron/policy/heron-policy.json \
   --policy-sha256 <POLICY_SHA256> \

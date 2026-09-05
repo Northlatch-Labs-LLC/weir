@@ -163,6 +163,11 @@ const NOT_CLOUD_INIT = new Map([
   ['/usr/local/sbin/heron-alert', 'installed by deploy-droplet.sh install_host_units, 0755 root:root'],
   ['/usr/local/sbin/heron-retention', 'installed by deploy-droplet.sh install_host_units, 0755 root:root'],
   ['/usr/bin/node', "provided by the nodejs package in cloud-init's packages: list"],
+  ['/opt/node22/bin/node', 'installed by deploy-droplet.sh --install-purse from the official node 22 build, checksum held as a literal; @mysten/sui requires 22 and Debian 13 ships 20'],
+  ['/bin/sh', "the shell the purse unit's ExecStartPre pins run under; the base system's"],
+  ['/srv/heron/purse/dist/server.js', 'installed by deploy-droplet.sh --install-purse, 0640 purse:purse, sha256 pinned in the unit'],
+  ['/srv/heron/policy/heron-multisig.json', 'installed by deploy-droplet.sh --install-purse, 0644 root:root, sha256 pinned in the unit'],
+  ['/srv/heron/policy/heron-policy.json', 'installed by deploy-droplet.sh --install-purse, 0644 root:root, sha256 pinned as --policy-sha256'],
   ['/var/lib/heron/audit/audit.jsonl', 'written by the purse; its directory is created by cloud-init'],
   ['/var/lib/heron/audit/spend.jsonl', 'written by the purse; its directory is created by cloud-init'],
 ]);
@@ -1487,4 +1492,126 @@ test('the deploy script and every library it added parse cleanly', () => {
     });
     assert.equal(result.status, 0, `${path.basename(file)}: ${result.stderr}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// --install-purse: build order step 5 on the host. The sequence, the pins, the refusals.
+// ---------------------------------------------------------------------------
+
+const PURSE_UNIT = path.join(PKG_DIR, '..', 'purse', 'systemd', 'heron-purse.service');
+const SHA_A = 'a'.repeat(64);
+const SHA_B = 'b'.repeat(64);
+const SHA_C = 'c'.repeat(64);
+
+function installStubs({ failAt } = {}) {
+  const dir = tmp('install-purse');
+  const stubs = path.join(dir, 'stubs');
+  mkdirSync(stubs);
+  const orderFile = path.join(dir, 'order');
+  writeFileSync(orderFile, '', 'utf8');
+  const stub = (name, body) => {
+    const file = path.join(stubs, name);
+    writeFileSync(file, `#!/usr/bin/env bash\nprintf '%s\\n' "${name}" >> "$HERON_TEST_ORDER"\n${body}\n`, 'utf8');
+    chmodSync(file, 0o755);
+  };
+  stub('build_purse_bundle', 'printf "bundle\\n" > "$1"');
+  stub('install_node22', failAt === 'install_node22' ? 'exit 1' : 'echo "node present"');
+  stub('ship_purse_files', 'echo "shipped $3 $4 $5"');
+  stub('start_purse', failAt === 'start_purse' ? 'echo "host: refused - not active" >&2; exit 1' : 'echo "active"');
+  stub('probe_purse', 'echo "refused and recorded"');
+  return {
+    dir,
+    orderFile,
+    records: path.join(dir, 'records'),
+    env: {
+      ...process.env,
+      HERON_DEPLOY_CONFIRMED: '1',
+      HERON_NO_NETWORK: '1',
+      HERON_STUB_DIR: stubs,
+      HERON_TEST_ORDER: orderFile,
+      HERON_RUN_RECORD_DIR: path.join(dir, 'records'),
+      HERON_HOST: 'ops@203.0.113.9',
+    },
+  };
+}
+
+function installRun(fixture, extraEnv = {}) {
+  return spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...fixture.env, ...extraEnv } });
+}
+
+function installOrder(fixture) {
+  return readFileSync(fixture.orderFile, 'utf8').trim().split('\n').filter(Boolean);
+}
+
+function installEvents(fixture) {
+  const file = path.join(fixture.records, 'deploy-runs.jsonl');
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l).event);
+}
+
+test('--install-purse refuses without HERON_HOST, and without the word, before touching anything', () => {
+  const fixture = installStubs();
+  const noHost = spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...fixture.env, HERON_HOST: '' } });
+  assert.notEqual(noHost.status, 0);
+  assert.match(noHost.stderr, /HERON_HOST is unset/);
+  const noWord = installRun(fixture, { HERON_DEPLOY_CONFIRMED: '' });
+  assert.notEqual(noWord.status, 0);
+  assert.match(noWord.stderr, /HERON_DEPLOY_CONFIRMED is not 1/);
+  assert.deepEqual(installOrder(fixture), [], 'nothing may be called before the preconditions pass');
+  assert.deepEqual(installEvents(fixture), []);
+});
+
+test('--install-purse runs bundle, node, ship, start, probe in that order and records begin then succeeded', () => {
+  const fixture = installStubs();
+  const result = installRun(fixture);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(installOrder(fixture), ['build_purse_bundle', 'install_node22', 'ship_purse_files', 'start_purse', 'probe_purse']);
+  assert.deepEqual(installEvents(fixture), ['install-purse-begin', 'install-purse-succeeded']);
+  assert.match(result.stdout, /pinned in the unit/);
+  assert.match(result.stdout, /heron-beat\.service is NOT installed by this mode/);
+});
+
+test('--install-purse: a step that fails stops the sequence, records install-purse-failed with the step, and rolls back nothing', () => {
+  const fixture = installStubs({ failAt: 'start_purse' });
+  const result = installRun(fixture);
+  assert.notEqual(result.status, 0);
+  assert.deepEqual(installOrder(fixture), ['build_purse_bundle', 'install_node22', 'ship_purse_files', 'start_purse']);
+  assert.deepEqual(installEvents(fixture), ['install-purse-begin', 'install-purse-failed']);
+  assert.match(result.stderr, /at step 'start_purse'/);
+  assert.match(result.stderr, /nothing is rolled back/);
+  const record = readFileSync(path.join(fixture.records, 'deploy-runs.jsonl'), 'utf8').trim().split('\n').at(-1);
+  assert.match(record, /step=start_purse/);
+});
+
+test('--install-purse: the rendered unit carries the three pins and no substitution, and refuses a pin that is not a sha256', () => {
+  const rendered = spawnSync('bash', [DEPLOY_SCRIPT, '--render-purse-unit', SHA_A, SHA_B, SHA_C], { encoding: 'utf8' });
+  assert.equal(rendered.status, 0, rendered.stderr);
+  const directives = rendered.stdout.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.doesNotMatch(directives, /<[A-Z_]+>/, 'a substitution was left in a directive of the rendered unit');
+  assert.match(rendered.stdout, new RegExp(`${SHA_A} +/srv/heron/purse/dist/server\\.js`));
+  assert.match(rendered.stdout, new RegExp(`${SHA_B} +/srv/heron/policy/heron-multisig\\.json`));
+  assert.match(rendered.stdout, new RegExp(`--policy-sha256 ${SHA_C}`));
+  assert.match(rendered.stdout, /ExecStart=\/opt\/node22\/bin\/node --jitless/);
+  const bad = spawnSync('bash', [DEPLOY_SCRIPT, '--render-purse-unit', 'nope', SHA_B, SHA_C], { encoding: 'utf8' });
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /is not a sha256/);
+  // The template the render reads is the one the purse package ships and tests.
+  assert.match(readFileSync(PURSE_UNIT, 'utf8'), /<DIST_SHA256>[\s\S]*<MULTISIG_SHA256>[\s\S]*<POLICY_SHA256>/);
+});
+
+test('--install-purse: node 22 is pinned by version and a literal sha256, downloaded over https and verified before extraction', () => {
+  const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  assert.match(script, /^NODE22_VERSION="22\.\d+\.\d+"$/m);
+  assert.match(script, /^NODE22_SHA256="[0-9a-f]{64}"$/m);
+  const remote = script.slice(script.indexOf('install_node22() {'), script.indexOf('ship_purse_files() {'));
+  assert.match(remote, /https:\/\/nodejs\.org\/dist\/v\{version\}/);
+  assert.match(remote, /sha256sum "\$TGZ"/);
+  assert.ok(remote.indexOf('sha256sum "$TGZ"') < remote.indexOf('tar -xzf "$TGZ"'), 'the checksum must be verified before the tarball is extracted');
+  assert.doesNotMatch(remote, /curl[^\n]*\|\s*(sh|bash)\b/);
+  // The files ship with the modes the plan names, and are re-hashed on the host before install.
+  const ship = script.slice(script.indexOf('ship_purse_files() {'), script.indexOf('start_purse() {'));
+  assert.match(ship, /install -m 0640 -o purse -g purse "\$S\/server\.js" \/srv\/heron\/purse\/dist\/server\.js/);
+  assert.match(ship, /install -m 0644 -o root -g root "\$S\/heron-multisig\.json"/);
+  assert.match(ship, /install -m 0600 -o purse -g purse "\$S\/chain\.json" \/srv\/heron\/chain\.json/);
+  assert.ok(ship.indexOf('check "$S/server.js"') < ship.indexOf('install -m 0640'), 'hashes are checked before anything is installed');
 });

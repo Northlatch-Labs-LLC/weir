@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "agentAddress": "0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70",
+  "outflowCeilings": [
+    {
+      "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+      "maxPerPeriod": "400000000",
+      "periodMs": 86400000
+    }
+  ],
+  "allowedTargets": [
+    "0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5::creator::set_content_price"
+  ],
+  "allowedTypeArguments": [
+    "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+  ],
+  "allowedRecipients": [
+    "0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70"
+  ],
+  "allowedObjects": [],
+  "maxGasBudgetMist": "20000000",
+  "allowedCommandKinds": [
+    "MoveCall"
+  ]
+}

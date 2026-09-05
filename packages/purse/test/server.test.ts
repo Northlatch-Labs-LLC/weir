@@ -53,6 +53,8 @@ interface Laid {
   readonly address: string;
   /** The multisig public key, when laid with one, for verifying what comes back over the socket. */
   readonly multisigKey: MultiSigPublicKey | null;
+  /** Where the members document was written, so a test can tamper with it before start. */
+  readonly multisigDocPath: string;
 }
 
 async function laid(
@@ -65,6 +67,8 @@ async function laid(
     readonly policyForHot?: boolean;
     /** Name a stranger as the multisig's first member instead of the hot key. */
     readonly hotNotMember?: boolean;
+    /** Write the policy for the multisig but start the purse WITHOUT --multisig. */
+    readonly dropFlag?: boolean;
   } = {},
 ): Promise<Laid> {
   const dir = await temporaryDirectory();
@@ -107,6 +111,8 @@ async function laid(
   }
   const address = multisigKey === null ? hotAddress : multisigKey.toSuiAddress();
   const policyAddress = overrides.policyForHot === true ? hotAddress : address;
+  if (overrides.dropFlag === true) multisigPath = undefined;
+  const multisigDocPath = join(dir, 'heron-multisig.json');
 
   const policyPath = join(dir, 'heron-policy.json');
   const policyText = `${JSON.stringify(policyFor(policyAddress), null, 2)}\n`;
@@ -128,6 +134,7 @@ async function laid(
     hotAddress,
     address,
     multisigKey,
+    multisigDocPath,
     start: () =>
       startPurse({
         server: {
@@ -232,6 +239,28 @@ describe('signing as the multisig', () => {
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error('unreachable');
     expect(outcome.refused.reason).toContain(`signs as ${laidOut.address}`);
+    expect(outcome.refused.reason).toContain('bounds nothing');
+    await expect(stat(laidOut.socketPath)).rejects.toThrow();
+  });
+
+  it('refuses to start when the document was tampered with after the policy was pinned: a swapped brake is a different address', async () => {
+    const laidOut = await laid({ multisig: true });
+    const tampered = JSON.parse(await readFile(laidOut.multisigDocPath, 'utf8')) as { members: { publicKey: string }[] };
+    tampered.members[1]!.publicKey = Ed25519Keypair.generate().getPublicKey().toSuiPublicKey();
+    await writeFile(laidOut.multisigDocPath, JSON.stringify(tampered), 'utf8');
+    const outcome = await laidOut.start();
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('unreachable');
+    expect(outcome.refused.reason).toContain('bounds nothing');
+    await expect(stat(laidOut.socketPath)).rejects.toThrow();
+  });
+
+  it('refuses to start without --multisig against a policy written for the multisig: the bare-key mode fails closed', async () => {
+    const laidOut = await laid({ multisig: true, dropFlag: true });
+    const outcome = await laidOut.start();
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('unreachable');
+    expect(outcome.refused.reason).toContain(`signs as ${laidOut.hotAddress}`);
     expect(outcome.refused.reason).toContain('bounds nothing');
     await expect(stat(laidOut.socketPath)).rejects.toThrow();
   });

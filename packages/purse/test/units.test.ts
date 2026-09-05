@@ -90,6 +90,15 @@ describe('heron-purse.service', () => {
     expect(exec).not.toContain('--key-file');
   });
 
+  it('pins the compiled server and the members document by sha256 before the process starts, and runs node 22 from /opt', async () => {
+    const purse = await unit('heron-purse.service');
+    const pres = directive(purse, 'Service', 'ExecStartPre');
+    expect(pres.some((line) => line.includes('<DIST_SHA256>') && line.includes('/srv/heron/purse/dist/server.js') && line.includes('sha256sum --check'))).toBe(true);
+    expect(pres.some((line) => line.includes('<MULTISIG_SHA256>') && line.includes('/srv/heron/policy/heron-multisig.json') && line.includes('sha256sum --check'))).toBe(true);
+    const exec = directive(purse, 'Service', 'ExecStart').join(' ');
+    expect(exec.startsWith('/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js')).toBe(true);
+  });
+
   it("passes the multisig document, so the purse signs as Heron's 1-of-2 address and not as the hot key", async () => {
     const purse = await unit('heron-purse.service');
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');

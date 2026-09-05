@@ -42,6 +42,14 @@
 #                           heron-alert@smoke, one real beat, and only then the timers. The mail
 #                           gate is hard: no sealed mail-key, or no message id in the journal, and
 #                           not one timer is enabled.
+#   --install-purse        build order step 5 on the host (HERON_HOST, HERON_DEPLOY_CONFIRMED=1):
+#                           bundles packages/purse from the committed tree with the pinned esbuild,
+#                           renders heron-purse.service with three sha256 pins (the bundle, the
+#                           members document, the policy), installs the official node 22 build
+#                           under /opt/node22 from a checksum held here as a literal, ships and
+#                           installs the files with their modes, starts and enables the unit, and
+#                           probes the socket with a malformed request that must come back as a
+#                           recorded refusal. The policy shipped is heron-content-pre-soul.json.
 #   --status               reads back the timers, the newest state file, and the effective inbound
 #                           ruleset for tag heron-v2 from the account.
 #   --render-cloud-init    internal: prints the rendered user_data to stdout and exits. Used by
@@ -96,6 +104,15 @@ IMAGE_SLUG="debian-13-x64"
 FIREWALL_TAG="heron-v2"
 HERON_SSH_KEY_NAME="${HERON_SSH_KEY_NAME:-heron-ssh}"
 
+# --install-purse. The purse package beside this one, and the node 22 the purse needs: @mysten/sui
+# declares engines node>=22 and Debian 13 ships 20, so the official build goes under /opt/node22.
+# The checksum is a literal read by hand from https://nodejs.org/dist/v22.23.2/SHASUMS256.txt on
+# 2026-09-05 -- the same discipline as PicoClaw's checksum in the Dockerfile: no checksums file is
+# fetched at install time from the place it is meant to verify.
+PURSE_DIR="$(cd "$PKG_DIR/../purse" && pwd)"
+NODE22_VERSION="22.23.2"
+NODE22_SHA256="b294a556e639d64338823920e5866c21c02741742d2e1529ee1a225c1ec9252a"
+
 # ---------------------------------------------------------------------------
 # THE PRECONDITIONS, AS DATA. One row per check: <function>|<the sentence --plan prints>.
 #
@@ -129,6 +146,7 @@ usage: deploy-droplet.sh --plan
        deploy-droplet.sh --create   (HERON_DEPLOY_CONFIRMED=1 required)
        deploy-droplet.sh --seal <name> [--dry-run]
        deploy-droplet.sh --smoke
+       deploy-droplet.sh --install-purse   (HERON_HOST and HERON_DEPLOY_CONFIRMED=1 required)
        deploy-droplet.sh --status
 EOF
 }
@@ -1085,6 +1103,246 @@ smoke_enable_timers() {
 }
 
 # ---------------------------------------------------------------------------
+# --install-purse. Build order step 5 on the host: the signer service that holds the hot key.
+#
+# What ships, and what pins it. The bundle is built here from the COMMITTED purse tree (the tree
+# must be clean, so the commit named in the run record is what shipped) with the esbuild version
+# the purse package pins; its sha256 goes into the unit as an ExecStartPre check, beside the
+# members document's sha256 and the policy's --policy-sha256. All three are root-owned facts in
+# /etc/systemd/system; a file on the host that does not hash to them stops the unit before node
+# starts. The unit itself is rendered from packages/purse/systemd/heron-purse.service, and a
+# rendered unit with any <SUBSTITUTION> left in it is refused before anything is copied.
+#
+# Nothing here is a rollback of the host: a failed purse install leaves the droplet as it was,
+# with whatever partial file it wrote, and records install-purse-failed with the step's name.
+# ---------------------------------------------------------------------------
+HERON_INSTALL_STEP=""
+HERON_INSTALL_SUCCEEDED=0
+
+install_purse_on_exit() {
+  local status=$?
+  trap - EXIT
+  if [ "$HERON_INSTALL_SUCCEEDED" = "1" ]; then return 0; fi
+  echo "deploy-droplet.sh --install-purse: did not reach success (exit $status) at step '${HERON_INSTALL_STEP:-preconditions}'. The host is left as it was at that step; nothing is rolled back." >&2
+  record_run "install-purse-failed" "step=${HERON_INSTALL_STEP:-preconditions}"
+  exit "$status"
+}
+
+file_sha256() {
+  python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"
+}
+
+render_purse_unit() {
+  # $1 dist sha256, $2 members-document sha256, $3 policy sha256. Prints the unit.
+  local dist="$1" multisig="$2" policy="$3"
+  for value in "$dist" "$multisig" "$policy"; do
+    if ! [[ "$value" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "deploy-droplet.sh: refused - '$value' is not a sha256; the unit is not rendered" >&2
+      return 1
+    fi
+  done
+  sed -e "s/<DIST_SHA256>/$dist/g" -e "s/<MULTISIG_SHA256>/$multisig/g" -e "s/<POLICY_SHA256>/$policy/g" \
+    "$PURSE_DIR/systemd/heron-purse.service"
+}
+
+cmd_install_purse() {
+  local ssh_target="${HERON_HOST:-}"
+  if [ -z "$ssh_target" ]; then
+    echo "deploy-droplet.sh --install-purse: refused - HERON_HOST is unset (ops@<droplet ip>)" >&2
+    return 1
+  fi
+  validate_ssh_target "$ssh_target" "HERON_HOST"
+  check_confirmed
+
+  if [ -n "$(git -C "$PURSE_DIR" status --porcelain -- .)" ]; then
+    echo "deploy-droplet.sh --install-purse: refused - packages/purse has uncommitted changes; there is no committed sha to name as what shipped" >&2
+    return 1
+  fi
+  local commit
+  commit="$(git -C "$PURSE_DIR" rev-parse HEAD)"
+
+  for f in policy/heron-content-pre-soul.json policy/heron-multisig.json policy/heron-chain.mainnet.json systemd/heron-purse.service; do
+    if [ ! -f "$PURSE_DIR/$f" ]; then
+      echo "deploy-droplet.sh --install-purse: refused - $PURSE_DIR/$f is missing" >&2
+      return 1
+    fi
+  done
+
+  trap install_purse_on_exit EXIT
+  record_run "install-purse-begin" "commit=$commit"
+
+  local stage
+  stage="$(mktemp -d "${TMPDIR:-/tmp}/heron-purse-stage.XXXXXX")"
+
+  HERON_INSTALL_STEP="build_purse_bundle"
+  build_purse_bundle "$stage/server.js"
+  cp "$PURSE_DIR/policy/heron-content-pre-soul.json" "$stage/heron-policy.json"
+  cp "$PURSE_DIR/policy/heron-multisig.json" "$stage/heron-multisig.json"
+  cp "$PURSE_DIR/policy/heron-chain.mainnet.json" "$stage/chain.json"
+
+  local dist_sha multisig_sha policy_sha
+  dist_sha="$(file_sha256 "$stage/server.js")"
+  multisig_sha="$(file_sha256 "$stage/heron-multisig.json")"
+  policy_sha="$(file_sha256 "$stage/heron-policy.json")"
+
+  HERON_INSTALL_STEP="render_purse_unit"
+  render_purse_unit "$dist_sha" "$multisig_sha" "$policy_sha" > "$stage/heron-purse.service"
+  # Directive lines only: the unit's comments name the substitution convention itself.
+  if grep -v '^[[:space:]]*#' "$stage/heron-purse.service" | grep -q '<[A-Z_]*>'; then
+    echo "deploy-droplet.sh --install-purse: refused - the rendered unit still carries a substitution: $(grep -v '^[[:space:]]*#' "$stage/heron-purse.service" | grep -o '<[A-Z_]*>' | sort -u | tr '\n' ' ')" >&2
+    return 1
+  fi
+
+  echo "deploy-droplet.sh --install-purse: shipping from commit $commit"
+  echo "  server.js           sha256 $dist_sha  -> /srv/heron/purse/dist/server.js   0640 purse:purse (pinned in the unit)"
+  echo "  heron-multisig.json sha256 $multisig_sha  -> /srv/heron/policy/heron-multisig.json 0644 root:root (pinned in the unit)"
+  echo "  heron-policy.json   sha256 $policy_sha  -> /srv/heron/policy/heron-policy.json   0644 root:root (--policy-sha256)"
+  echo "  chain.json          mainnet, v5 package                     -> /srv/heron/chain.json 0600 purse:purse"
+  echo "  heron-purse.service rendered, no substitution left           -> /etc/systemd/system/heron-purse.service 0644 root:root"
+  echo "  node                v$NODE22_VERSION, sha256 $NODE22_SHA256 -> /opt/node22"
+
+  HERON_INSTALL_STEP="install_node22"
+  install_node22 "$ssh_target"
+  HERON_INSTALL_STEP="ship_purse_files"
+  ship_purse_files "$ssh_target" "$stage" "$dist_sha" "$multisig_sha" "$policy_sha"
+  HERON_INSTALL_STEP="start_purse"
+  start_purse "$ssh_target"
+  HERON_INSTALL_STEP="probe_purse"
+  probe_purse "$ssh_target"
+
+  HERON_INSTALL_SUCCEEDED=1
+  trap - EXIT
+  record_run "install-purse-succeeded" "commit=$commit dist=$dist_sha multisig=$multisig_sha policy=$policy_sha"
+  rm -rf "$stage"
+  echo "deploy-droplet.sh --install-purse: heron-purse.service is active on $ssh_target, listening on /run/heron/purse.sock as Heron's address, under the pre-soul policy. A malformed request was refused and recorded. heron-beat.service is NOT installed by this mode."
+}
+
+build_purse_bundle() {
+  if is_stubbed; then "$HERON_STUB_DIR/build_purse_bundle" "$@"; return; fi
+  local out="$1"
+  # One file, ESM, node 22. The banner gives CommonJS dependencies inside the bundle a `require`.
+  (cd "$PURSE_DIR" && pnpm exec esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 \
+      --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" \
+      --log-level=warning --outfile="$out")
+  [ -s "$out" ] || { echo "deploy-droplet.sh: the bundle at $out is empty or missing" >&2; return 1; }
+}
+
+install_node22() {
+  if is_stubbed; then "$HERON_STUB_DIR/install_node22" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" sudo bash -s -- "$NODE22_VERSION" "$NODE22_SHA256" <<'REMOTE'
+set -euo pipefail
+VERSION="$1"; EXPECTED="$2"
+if [ -x /opt/node22/bin/node ] && [ "$(/opt/node22/bin/node -v)" = "v$VERSION" ]; then
+  echo "host: node v$VERSION already at /opt/node22"
+  exit 0
+fi
+TGZ="/tmp/node-v$VERSION-linux-x64.tar.gz"
+python3 - "$VERSION" "$TGZ" <<'PY'
+import sys, urllib.request
+version, out = sys.argv[1], sys.argv[2]
+url = f"https://nodejs.org/dist/v{version}/node-v{version}-linux-x64.tar.gz"
+with urllib.request.urlopen(url, timeout=120) as r, open(out, "wb") as f:
+    while True:
+        chunk = r.read(1 << 20)
+        if not chunk: break
+        f.write(chunk)
+PY
+ACTUAL="$(sha256sum "$TGZ" | cut -d' ' -f1)"
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "host: refused - node tarball hashes $ACTUAL, not the literal $EXPECTED; nothing installed" >&2
+  rm -f "$TGZ"
+  exit 1
+fi
+echo "host: node tarball sha256 verified against the literal: $ACTUAL"
+mkdir -p /opt
+tar -xzf "$TGZ" -C /opt
+rm -f "$TGZ"
+chown -R root:root "/opt/node-v$VERSION-linux-x64"
+ln -sfn "/opt/node-v$VERSION-linux-x64" /opt/node22
+echo "host: /opt/node22/bin/node is $(/opt/node22/bin/node -v)"
+REMOTE
+}
+
+ship_purse_files() {
+  if is_stubbed; then "$HERON_STUB_DIR/ship_purse_files" "$@"; return; fi
+  local ssh_target="$1" stage="$2" dist_sha="$3" multisig_sha="$4" policy_sha="$5"
+  ssh -- "$ssh_target" 'rm -rf /tmp/heron-purse-stage && mkdir -m 0700 /tmp/heron-purse-stage'
+  scp -q -- "$stage/server.js" "$stage/heron-policy.json" "$stage/heron-multisig.json" "$stage/chain.json" \
+      "$stage/heron-purse.service" "$ssh_target:/tmp/heron-purse-stage/"
+  ssh -- "$ssh_target" sudo bash -s -- "$dist_sha" "$multisig_sha" "$policy_sha" <<'REMOTE'
+set -euo pipefail
+S=/tmp/heron-purse-stage
+check() { local actual; actual="$(sha256sum "$1" | cut -d' ' -f1)"; [ "$actual" = "$2" ] || { echo "host: refused - $1 hashes $actual, not $2 as shipped" >&2; exit 1; }; }
+check "$S/server.js" "$1"
+check "$S/heron-multisig.json" "$2"
+check "$S/heron-policy.json" "$3"
+echo "host: the three shipped files hash as the laptop said"
+install -m 0640 -o purse -g purse "$S/server.js" /srv/heron/purse/dist/server.js
+install -m 0644 -o root -g root "$S/heron-multisig.json" /srv/heron/policy/heron-multisig.json
+install -m 0644 -o root -g root "$S/heron-policy.json" /srv/heron/policy/heron-policy.json
+install -m 0600 -o purse -g purse "$S/chain.json" /srv/heron/chain.json
+install -m 0644 -o root -g root "$S/heron-purse.service" /etc/systemd/system/heron-purse.service
+rm -rf "$S"
+echo "host: purse files installed with their modes"
+REMOTE
+}
+
+start_purse() {
+  if is_stubbed; then "$HERON_STUB_DIR/start_purse" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" sudo bash -s <<'REMOTE'
+set -euo pipefail
+systemctl daemon-reload
+systemctl enable --now heron-purse.service >/dev/null 2>&1 || true
+for i in $(seq 1 30); do
+  if [ "$(systemctl is-active heron-purse.service)" = "active" ]; then break; fi
+  sleep 1
+done
+if [ "$(systemctl is-active heron-purse.service)" != "active" ]; then
+  echo "host: refused - heron-purse.service is $(systemctl is-active heron-purse.service), not active. The journal:" >&2
+  journalctl -u heron-purse.service -n 40 --no-pager >&2 || true
+  exit 1
+fi
+SOCK="$(stat -c '%a %U %G' /run/heron/purse.sock)"
+[ "$SOCK" = "660 purse purse" ] || { echo "host: refused - /run/heron/purse.sock is '$SOCK', not '660 purse purse'" >&2; exit 1; }
+LINE="$(journalctl -u heron-purse.service -n 30 --no-pager -o cat | grep 'heron-purse: listening on /run/heron/purse.sock for 0x' | tail -1 || true)"
+[ -n "$LINE" ] || { echo "host: refused - the purse is active but never printed its listening line" >&2; journalctl -u heron-purse.service -n 40 --no-pager >&2; exit 1; }
+echo "host: $LINE"
+echo "host: heron-purse.service active, enabled at boot, socket 660 purse:purse"
+REMOTE
+}
+
+probe_purse() {
+  if is_stubbed; then "$HERON_STUB_DIR/probe_purse" "$@"; return; fi
+  local ssh_target="$1"
+  ssh -- "$ssh_target" sudo bash -s <<'REMOTE'
+set -euo pipefail
+ANSWER="$(python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(30)
+s.connect("/run/heron/purse.sock")
+s.sendall(b'{"ping": 1}\n')
+s.shutdown(socket.SHUT_WR)
+data = b""
+while True:
+    chunk = s.recv(65536)
+    if not chunk: break
+    data += chunk
+print(data.decode("utf-8", "replace").strip())
+PY
+)"
+echo "host: the purse answered: ${ANSWER:0:200}"
+echo "$ANSWER" | grep -q '"request-malformed"' || { echo "host: refused - the answer to a malformed request was not a request-malformed refusal" >&2; exit 1; }
+LAST="$(tail -n 1 /var/lib/heron/audit/audit.jsonl)"
+echo "host: last audit line: ${LAST:0:220}"
+echo "$LAST" | grep -q '"outcome": *"refused"' || { echo "host: refused - the audit chain did not record the refusal" >&2; exit 1; }
+echo "host: a malformed request was refused as a value and recorded in the chain"
+REMOTE
+}
+
+# ---------------------------------------------------------------------------
 # --status. Read-only: what is on the host, and what the ACCOUNT says applies to it.
 # ---------------------------------------------------------------------------
 cmd_status() {
@@ -1122,6 +1380,8 @@ main() {
     --seal) shift; cmd_seal "$@" ;;
     --smoke) cmd_smoke ;;
     --status) cmd_status ;;
+    --install-purse) cmd_install_purse ;;
+    --render-purse-unit) shift; render_purse_unit "$@" ;;
     --render-cloud-init) render_cloud_init ;;
     *) usage; exit 2 ;;
   esac

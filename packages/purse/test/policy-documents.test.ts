@@ -47,6 +47,7 @@ import {
   LEDGER_CAP_ID,
   REGISTRY_ID,
   SETTLE_EPOCH,
+  SET_CONTENT_PRICE,
   SOUL_ID,
   SOUL_PACKAGE,
   policyFor,
@@ -317,5 +318,96 @@ describe('policy/heron-multisig.json, the committed members document', () => {
       publicKeys: loaded.value.doc.members.map((m, i) => ({ publicKey: keys[i]!, weight: m.weight })),
     });
     expect(derived.toSuiAddress()).toBe(HERON_ADDRESS);
+  });
+});
+
+describe('policy/heron-content-pre-soul.json, the document the purse runs under before the soul exists', () => {
+  const HERON_ADDRESS = '0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70';
+
+  it('loads through the real pinned loader with no substitution left in it', async () => {
+    const path = join(POLICY_DIR, 'heron-content-pre-soul.json');
+    const text = await readFile(path, 'utf8');
+    expect(text).not.toContain('<');
+    const loaded = await loadPinnedPolicy({ path, expectedSha256: createHash('sha256').update(text, 'utf8').digest('hex') });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.refused.reason);
+    expect(loaded.value.doc.agentAddress).toBe(HERON_ADDRESS);
+    expect(loaded.value.doc.allowedObjects).toEqual([]);
+    expect(loaded.value.doc.allowedRecipients).toEqual([HERON_ADDRESS]);
+  });
+
+  it('refuses a price intent at the object allowlist, so a purse under it signs nothing until the vault exists', async () => {
+    const path = join(POLICY_DIR, 'heron-content-pre-soul.json');
+    const text = await readFile(path, 'utf8');
+    const loaded = await loadPinnedPolicy({ path, expectedSha256: createHash('sha256').update(text, 'utf8').digest('hex') });
+    if (!loaded.ok) throw new Error(loaded.refused.reason);
+    const dir = await temporaryDirectory();
+    const audit = await AuditFile.open(join(dir, 'audit.jsonl'));
+    if (!audit.ok) throw new Error(audit.reason);
+    const ledger = await SpendLedger.open({ path: join(dir, 'spend.jsonl'), policy: loaded.value.doc });
+    if (!ledger.ok) throw new Error(ledger.reason);
+    // The signer stands in for the multisig; only the address matters to the policy.
+    const signer = { ...signerFor(throwawayKeypair()), address: HERON_ADDRESS };
+    const response = setPriceResponse(HERON_ADDRESS);
+    // The real v5 package, so the built target matches the document's and the refusal is the
+    // objects rule's, not the target rule's.
+    const V5 = '0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5';
+    const purse: Purse = createPurse({
+      signer,
+      policy: loaded.value.doc,
+      policyHash: loaded.value.policyHash,
+      policyFileSha256: loaded.value.fileSha256,
+      chain: { ...CHAIN, latestPackageId: V5 },
+      client: stubClient(response),
+      audit: audit.file,
+      ledger: ledger.ledger,
+      gas: GAS,
+      simulation: stubPort(response, HERON_ADDRESS),
+      log: () => undefined,
+    });
+    const answered = await purse.handle({ intent: priceIntentFor() });
+    expect(answered.ok).toBe(false);
+    if (answered.ok) throw new Error('unreachable');
+    // The recorded simulation calls the fixture package, so under the document as committed the
+    // target rule speaks first. The claim under test is the EMPTY object list: with the fixture's
+    // target admitted and nothing else changed, the refusal is the objects rule's.
+    expect(answered.refused.ruleId).toBe('move-call-target');
+    const targetAdmitted: Purse = createPurse({
+      signer,
+      policy: { ...loaded.value.doc, allowedTargets: [SET_CONTENT_PRICE] },
+      policyHash: loaded.value.policyHash,
+      policyFileSha256: loaded.value.fileSha256,
+      chain: CHAIN,
+      client: stubClient(response),
+      audit: audit.file,
+      ledger: ledger.ledger,
+      gas: GAS,
+      simulation: stubPort(response, HERON_ADDRESS),
+      log: () => undefined,
+    });
+    const objectsRefused = await targetAdmitted.handle({ intent: priceIntentFor() });
+    expect(objectsRefused.ok).toBe(false);
+    if (objectsRefused.ok) throw new Error('unreachable');
+    expect(objectsRefused.refused.ruleId).toBe('object-input');
+    await audit.file.close();
+  });
+});
+
+describe('policy/heron-chain.mainnet.json, the chain document the purse reads on the host', () => {
+  it('loads through the real loader and names the packages Published.toml records', async () => {
+    const { loadChainConfig } = await import('../src/chain.js');
+    const loaded = await loadChainConfig(join(POLICY_DIR, 'heron-chain.mainnet.json'));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.refused.reason);
+    expect(loaded.value.network).toBe('mainnet');
+    const published = await readFile(join(POLICY_DIR, '..', '..', '..', 'sui-contracts', 'Published.toml'), 'utf8');
+    const publishedAt = /published-at = "(0x[0-9a-f]+)"/.exec(published)?.[1];
+    const originalId = /original-id = "(0x[0-9a-f]+)"/.exec(published)?.[1];
+    expect(loaded.value.latestPackageId).toBe(publishedAt);
+    expect(loaded.value.packageId).toBe(originalId);
+    // The platform and registry are the shared objects the original package's publish transaction
+    // created (DbB4fSp7GV9C2UTRWe2T7f8G7ddT8fo4QjnnBtLddpct, read from mainnet 2026-09-05).
+    expect(loaded.value.platformId).toBe('0x3f695b2c32714e2359c4bb9515598d8dd765b216148c5b8fa818073d52b50f36');
+    expect(loaded.value.registryId).toBe('0x1a3fb4ac25458d7524be064a2b7e1586ccd9ed09c0d5b351621e3b101e1203a0');
   });
 });

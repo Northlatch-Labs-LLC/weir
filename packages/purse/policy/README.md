@@ -9,6 +9,15 @@ loader and evaluates real intents against them; nothing here is asserted by rest
 | `heron-ledger.json` | the `LedgerCap` service | `ledger` | `soul::settle_epoch` |
 | `heron-multisig.json` | `heron-purse.service` (`--multisig`) | the members: `hot` and `brake`, weight 1 each, threshold 1 | nothing; it says who the address is made of |
 
+`heron-content-pre-soul.json` is the document the purse runs under **today**, before Heron's soul is
+published and before Heron's vault and creator cap exist: no substitution in it, every value real.
+It is `heron-content.json` with the entries that do not exist yet left out rather than filled with a
+placeholder: `agentAddress` and the one recipient are Heron's address, the one target is
+`creator::set_content_price` on the v5 package, and `allowedObjects` is **empty**, so every price
+intent is refused by the `object-input` rule until the vault exists and this document is replaced by
+the rendered `heron-content.json` (a redeploy, not a reload). The purse is live, hardened and
+answering, and it signs nothing; `test/policy-documents.test.ts` loads it and proves the refusal.
+
 `heron-multisig.json` holds no substitution: two public keys and two integers, real, committed.
 The hot member is the key born 2026-09-05 (`0x51704a…10b0`); the brake is the Master's, read from
 the chain (`0x4668e5…6c9a`). Together at threshold 1 they derive Heron's address

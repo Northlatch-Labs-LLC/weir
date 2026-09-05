@@ -5,11 +5,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { symlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { MultiSigPublicKey } from '@mysten/sui/multisig';
-import { loadMultisigDoc, wrapAsMultisig, type MultisigDoc } from '../src/multisig-file.js';
+import { MAX_DOCUMENT_BYTES, loadMultisigDoc, wrapAsMultisig, type MultisigDoc } from '../src/multisig-file.js';
 import { signerFor, temporaryDirectory, throwawayKeypair } from './helpers.js';
 
 function docFor(hot: Ed25519Keypair, brake: Ed25519Keypair, overrides: Partial<MultisigDoc> = {}): MultisigDoc {
@@ -83,13 +83,48 @@ describe('the document', () => {
     expect(sameName.ok).toBe(false);
   });
 
-  it('refuses a file that is not JSON and a path that is not there, naming the path', async () => {
-    const notJson = await loadMultisigDoc(await written('{ nope'));
+  it('refuses a file that is not JSON without quoting its bytes, and a path that is not there, naming the path', async () => {
+    const prefix = 'suipriv' + 'key1';
+    const notJson = await loadMultisigDoc(await written(`${prefix}notreallyakey`));
     expect(notJson.ok).toBe(false);
+    if (notJson.ok) throw new Error('unreachable');
+    expect(notJson.refused.reason).not.toContain(prefix);
+    expect(notJson.refused.reason).toContain('deliberately not shown');
     const missing = await loadMultisigDoc('/nonexistent/heron-multisig.json');
     expect(missing.ok).toBe(false);
     if (missing.ok) throw new Error('unreachable');
     expect(missing.refused.reason).toContain('/nonexistent/heron-multisig.json');
+  });
+});
+
+describe('the document, hardened', () => {
+  it('refuses a symlink rather than following it, and a document over the size cap unread', async () => {
+    const hot = throwawayKeypair();
+    const real = await written(docFor(hot, throwawayKeypair()));
+    const link = join(dirname(real), 'linked.json');
+    await symlink(real, link);
+    const viaLink = await loadMultisigDoc(link);
+    expect(viaLink.ok).toBe(false);
+    if (viaLink.ok) throw new Error('unreachable');
+    expect(viaLink.refused.reason).toContain('symbolic link');
+    const big = await written(`${JSON.stringify(docFor(hot, throwawayKeypair()))}${' '.repeat(MAX_DOCUMENT_BYTES)}`);
+    const oversized = await loadMultisigDoc(big);
+    expect(oversized.ok).toBe(false);
+    if (oversized.ok) throw new Error('unreachable');
+    expect(oversized.refused.reason).toContain('Refused unread');
+  });
+
+  it('refuses a member name that could carry a separator into the journal, and bounds weight and threshold to what Sui encodes', async () => {
+    const hot = throwawayKeypair();
+    const brake = throwawayKeypair();
+    const badName = docFor(hot, brake);
+    const renamed = { ...badName, members: [{ ...badName.members[0]!, name: 'hot\nforged line' }, badName.members[1]!] };
+    expect((await loadMultisigDoc(await written(renamed))).ok).toBe(false);
+    const heavy = { ...docFor(hot, brake), members: [{ ...docFor(hot, brake).members[0]!, weight: 256 }, docFor(hot, brake).members[1]!] };
+    expect((await loadMultisigDoc(await written(heavy))).ok).toBe(false);
+    expect((await loadMultisigDoc(await written(docFor(hot, brake, { threshold: 65536 })))).ok).toBe(false);
+    // The bounds' inside edge still loads.
+    expect((await loadMultisigDoc(await written(docFor(hot, brake, { threshold: 2 })))).ok).toBe(true);
   });
 });
 
@@ -146,6 +181,20 @@ describe('the wrap', () => {
     expect(signature.ok).toBe(false);
     if (signature.ok) throw new Error('unreachable');
     expect(signature.failure.detail).toContain('1 of the 2 weight required');
+  });
+
+  it('a member swapped or a member added is a different address, as much as a different threshold', () => {
+    const hot = throwawayKeypair();
+    const brake = throwawayKeypair();
+    const base = wrapAsMultisig(docFor(hot, brake), signerFor(hot));
+    const swapped = wrapAsMultisig(docFor(hot, throwawayKeypair()), signerFor(hot));
+    const added = wrapAsMultisig(
+      { ...docFor(hot, brake), members: [...docFor(hot, brake).members, { name: 'third', publicKey: throwawayKeypair().getPublicKey().toSuiPublicKey(), weight: 1 }] },
+      signerFor(hot),
+    );
+    if (!base.ok || !swapped.ok || !added.ok) throw new Error('unreachable');
+    expect(swapped.value.signer.address).not.toBe(base.value.signer.address);
+    expect(added.value.signer.address).not.toBe(base.value.signer.address);
   });
 
   it('a different threshold is a different address', () => {
