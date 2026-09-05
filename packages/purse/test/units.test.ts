@@ -97,6 +97,8 @@ describe('heron-purse.service', () => {
     expect(pres.some((line) => line.includes('<MULTISIG_SHA256>') && line.includes('/srv/heron/policy/heron-multisig.json') && line.includes('sha256sum --check'))).toBe(true);
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
     expect(exec.startsWith('/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js')).toBe(true);
+    // systemd expands %-specifiers in Exec lines (%s is the user's shell); a pin line must not use one.
+    for (const line of pres) expect(line).not.toMatch(/%[a-zA-Z%]/);
   });
 
   it("passes the multisig document, so the purse signs as Heron's 1-of-2 address and not as the hot key", async () => {

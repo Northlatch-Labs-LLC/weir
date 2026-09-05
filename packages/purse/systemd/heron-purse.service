@@ -65,8 +65,10 @@ LoadCredentialEncrypted=heron-hot:/etc/heron/creds/heron-hot.cred
 # the members document must hash to what the deploy shipped. The policy carries its own pin as an
 # argument below. Node is /opt/node22: @mysten/sui requires node 22 and Debian 13 ships 20, so the
 # deploy installs the official 22 build under /opt from a checksum it holds as a literal.
-ExecStartPre=/bin/sh -c 'printf "%s  %s\n" <DIST_SHA256> /srv/heron/purse/dist/server.js | sha256sum --check --status'
-ExecStartPre=/bin/sh -c 'printf "%s  %s\n" <MULTISIG_SHA256> /srv/heron/policy/heron-multisig.json | sha256sum --check --status'
+# echo, not printf: systemd expands %s (the user's shell) inside a unit, and the first real start
+# on the host (2026-09-05) fed sha256sum a line with /usr/sbin/nologin in it.
+ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/heron/purse/dist/server.js" | sha256sum --check --status'
+ExecStartPre=/bin/sh -c 'echo "<MULTISIG_SHA256>  /srv/heron/policy/heron-multisig.json" | sha256sum --check --status'
 ExecStart=/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js \
   --socket /run/heron/purse.sock \
   --policy /srv/heron/policy/heron-policy.json \
