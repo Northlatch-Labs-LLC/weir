@@ -879,6 +879,12 @@ rm -rf /tmp/agent-runtime-src && mkdir -p /tmp/agent-runtime-src
 tar -xzf /tmp/agent-runtime-src.tgz -C /tmp/agent-runtime-src
 SHIPPED_COMMIT="\$(cat /tmp/agent-runtime-src/SOURCE_COMMIT)"
 echo "host: building from commit \$SHIPPED_COMMIT"
+# The docker client writes its config, buildx state and token seed under \$HOME/.docker. Run as root
+# that is /root/.docker, which heron-beat.service (ProtectHome=yes) cannot see and the smoke's
+# first gate refuses (twice on 2026-09-05, after the create and after the rebuild). The client
+# is pointed at a directory that goes away with the build.
+export DOCKER_CONFIG=/tmp/heron-docker-config
+rm -rf "\$DOCKER_CONFIG" && mkdir -m 0700 "\$DOCKER_CONFIG"
 # git archive keeps the repository path, so the package sits at packages/agent-runtime inside the
 # tarball; the fourth real run (2026-09-05) built the extraction root and found no Dockerfile.
 BUILD_DIR="\$(dirname "\$(find /tmp/agent-runtime-src -type f -name Dockerfile -path '*/agent-runtime/*' | head -1)")"
@@ -889,6 +895,7 @@ ID="\$(docker inspect --format '{{.Id}}' heron:local)"
 printf 'IMAGE=heron:local@%s\n' "\$ID" > /srv/heron/image.env
 printf 'SOURCE_COMMIT=%s\n' "\$SHIPPED_COMMIT" >> /srv/heron/image.env
 printf 'SOURCE_SHA256=%s\n' "$sha256" >> /srv/heron/image.env
+rm -rf "\$DOCKER_CONFIG"
 chmod 0600 /srv/heron/image.env
 chown root:root /srv/heron/image.env
 cat /srv/heron/image.env

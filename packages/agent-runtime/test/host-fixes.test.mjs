@@ -1723,3 +1723,11 @@ test('--rebuild-image builds through the same on-host build as --create, records
   assert.notEqual(noWord.status, 0);
   assert.match(noWord.stderr, /HERON_DEPLOY_CONFIRMED is not 1/);
 });
+
+test('the on-host image build points the docker client away from /root/.docker, which the beat unit cannot see', () => {
+  const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const build = script.slice(script.indexOf('build_image_on_host() {'), script.indexOf('install_host_units() {'));
+  assert.match(build, /export DOCKER_CONFIG=\/tmp\/heron-docker-config/);
+  assert.ok(build.indexOf('export DOCKER_CONFIG') < build.indexOf('docker build'), 'DOCKER_CONFIG must be set before docker build runs');
+  assert.match(build, /rm -rf "\\\$DOCKER_CONFIG"/);
+});
