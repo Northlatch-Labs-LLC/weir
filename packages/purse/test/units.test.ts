@@ -90,6 +90,12 @@ describe('heron-purse.service', () => {
     expect(exec).not.toContain('--key-file');
   });
 
+  it("passes the multisig document, so the purse signs as Heron's 1-of-2 address and not as the hot key", async () => {
+    const purse = await unit('heron-purse.service');
+    const exec = directive(purse, 'Service', 'ExecStart').join(' ');
+    expect(exec).toContain('--multisig /srv/heron/policy/heron-multisig.json');
+  });
+
   it('is Type=notify, so After=heron-purse.service means the socket exists', async () => {
     const purse = await unit('heron-purse.service');
     expect(onlyValue(purse, 'Service', 'Type')).toBe('notify');

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "threshold": 1,
+  "members": [
+    {
+      "name": "hot",
+      "publicKey": "AG9VOoj5ByZVfrZPjvF02jeOMwqVn/t5vVQcorOPYmx2",
+      "weight": 1
+    },
+    {
+      "name": "brake",
+      "publicKey": "ANpUu+e6v2DPe5nqlUv34O+y4+AWVY8m4Zq2stPp1KAF",
+      "weight": 1
+    }
+  ]
+}

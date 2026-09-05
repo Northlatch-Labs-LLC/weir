@@ -30,6 +30,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { MultiSigPublicKey } from '@mysten/sui/multisig';
+import { publicKeyFromSuiBytes } from '@mysten/sui/verify';
+import { loadMultisigDoc } from '../src/multisig-file.js';
 import type { PolicyDoc } from '@projectx-social/policy';
 import { AuditFile } from '../src/audit-file.js';
 import { fixedGas } from '../src/build.js';
@@ -282,5 +285,37 @@ describe('one signer per money path', () => {
     expect(started.ok).toBe(true);
     if (!started.ok) throw new Error(started.refused.reason);
     await started.value.stop();
+  });
+});
+
+describe('policy/heron-multisig.json, the committed members document', () => {
+  /*
+    Heron's real members: the hot key born 2026-09-05 and the brake key read from the chain. The
+    address is what the SDK derives from them, computed here rather than restated, and compared to
+    the one written in the estate's records so the document and the records cannot drift apart.
+  */
+  const HERON_ADDRESS = '0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70';
+  const HOT_ADDRESS = '0x51704a474f342e9f50a408f8be090b05ae73b17b98a0f8f7597abb62ec4310b0';
+  const BRAKE_ADDRESS = '0x4668e5bf1dfd48129d6037d027c344577163f9685389be1f43a8a8e9ce726c9a';
+
+  it('loads through the real loader, has two members at weight 1 and threshold 1', async () => {
+    const loaded = await loadMultisigDoc(join(POLICY_DIR, 'heron-multisig.json'));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error('unreachable');
+    expect(loaded.value.doc.threshold).toBe(1);
+    expect(loaded.value.doc.members.map((m) => [m.name, m.weight])).toEqual([['hot', 1], ['brake', 1]]);
+  });
+
+  it('derives the address the records name, from the members the records name', async () => {
+    const loaded = await loadMultisigDoc(join(POLICY_DIR, 'heron-multisig.json'));
+    if (!loaded.ok) throw new Error(loaded.refused.reason);
+    const keys = loaded.value.doc.members.map((m) => publicKeyFromSuiBytes(m.publicKey));
+    expect(keys[0]!.toSuiAddress()).toBe(HOT_ADDRESS);
+    expect(keys[1]!.toSuiAddress()).toBe(BRAKE_ADDRESS);
+    const derived = MultiSigPublicKey.fromPublicKeys({
+      threshold: loaded.value.doc.threshold,
+      publicKeys: loaded.value.doc.members.map((m, i) => ({ publicKey: keys[i]!, weight: m.weight })),
+    });
+    expect(derived.toSuiAddress()).toBe(HERON_ADDRESS);
   });
 });

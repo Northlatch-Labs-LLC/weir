@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { connect } from 'node:net';
 import { join } from 'node:path';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { MultiSigPublicKey } from '@mysten/sui/multisig';
 import { fixedGas } from '../src/build.js';
 import { askPurse } from '../src/client.js';
 import { MAX_REQUEST_BYTES } from '../src/protocol.js';
@@ -41,19 +42,74 @@ interface Started {
   readonly logged: readonly string[];
 }
 
+interface Laid {
+  readonly start: () => ReturnType<typeof startPurse>;
+  readonly socketPath: string;
+  readonly auditPath: string;
+  readonly logged: string[];
+  /** The hot key's own address. */
+  readonly hotAddress: string;
+  /** The address the purse is expected to sign as: the multisig's when laid with one, else the hot key's. */
+  readonly address: string;
+  /** The multisig public key, when laid with one, for verifying what comes back over the socket. */
+  readonly multisigKey: MultiSigPublicKey | null;
+}
+
 async function laid(
-  overrides: { readonly pin?: string; readonly env?: Record<string, string | undefined> } = {},
-): Promise<{ start: () => ReturnType<typeof startPurse>; socketPath: string; auditPath: string; logged: string[] }> {
+  overrides: {
+    readonly pin?: string;
+    readonly env?: Record<string, string | undefined>;
+    /** Lay out a 1-of-2 multisig of the hot key and a throwaway brake, and pass --multisig. */
+    readonly multisig?: boolean;
+    /** Write the policy for the hot key's own address even though the purse signs as the multisig. */
+    readonly policyForHot?: boolean;
+    /** Name a stranger as the multisig's first member instead of the hot key. */
+    readonly hotNotMember?: boolean;
+  } = {},
+): Promise<Laid> {
   const dir = await temporaryDirectory();
   const keypair = Ed25519Keypair.generate();
-  const address = keypair.toSuiAddress();
+  const hotAddress = keypair.toSuiAddress();
 
   const keyPath = join(dir, 'heron-hot');
   await writeFile(keyPath, `${keypair.getSecretKey()}\n`, { mode: 0o600 });
   await chmod(keyPath, 0o600);
 
+  let multisigPath: string | undefined;
+  let multisigKey: MultiSigPublicKey | null = null;
+  if (overrides.multisig === true) {
+    const brake = Ed25519Keypair.generate();
+    const first = overrides.hotNotMember === true ? Ed25519Keypair.generate() : keypair;
+    multisigKey = MultiSigPublicKey.fromPublicKeys({
+      threshold: 1,
+      publicKeys: [
+        { publicKey: first.getPublicKey(), weight: 1 },
+        { publicKey: brake.getPublicKey(), weight: 1 },
+      ],
+    });
+    multisigPath = join(dir, 'heron-multisig.json');
+    await writeFile(
+      multisigPath,
+      JSON.stringify(
+        {
+          version: 1,
+          threshold: 1,
+          members: [
+            { name: 'hot', publicKey: first.getPublicKey().toSuiPublicKey(), weight: 1 },
+            { name: 'brake', publicKey: brake.getPublicKey().toSuiPublicKey(), weight: 1 },
+          ],
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+  }
+  const address = multisigKey === null ? hotAddress : multisigKey.toSuiAddress();
+  const policyAddress = overrides.policyForHot === true ? hotAddress : address;
+
   const policyPath = join(dir, 'heron-policy.json');
-  const policyText = `${JSON.stringify(policyFor(address), null, 2)}\n`;
+  const policyText = `${JSON.stringify(policyFor(policyAddress), null, 2)}\n`;
   await writeFile(policyPath, policyText, 'utf8');
   const policySha = createHash('sha256').update(policyText, 'utf8').digest('hex');
 
@@ -69,6 +125,9 @@ async function laid(
     socketPath,
     auditPath,
     logged,
+    hotAddress,
+    address,
+    multisigKey,
     start: () =>
       startPurse({
         server: {
@@ -79,6 +138,7 @@ async function laid(
           audit: auditPath,
           spend: join(dir, 'spend.jsonl'),
           keyFile: keyPath,
+          ...(multisigPath === undefined ? {} : { multisig: multisigPath }),
         },
         argv: ['node', 'server.js'],
         env: overrides.env ?? {},
@@ -131,6 +191,57 @@ describe('starting', () => {
     // The environment complaint, not the pin complaint: the surface check runs first, so a process
     // started wrongly dies at its first instruction rather than after creating a socket.
     expect(outcome.refused.reason).toContain('ANYTHING');
+    await expect(stat(laidOut.socketPath)).rejects.toThrow();
+  });
+});
+
+describe('signing as the multisig', () => {
+  it("starts as the multisig address, not the hot key's, and says so on the startup line", async () => {
+    const laidOut = await laid({ multisig: true });
+    const outcome = await laidOut.start();
+    if (!outcome.ok) throw new Error(outcome.refused.reason);
+    expect(outcome.value.purse.address).toBe(laidOut.address);
+    expect(outcome.value.purse.address).not.toBe(laidOut.hotAddress);
+    expect(laidOut.logged[0]).toContain(`for ${laidOut.address}`);
+    expect(laidOut.logged[0]).toContain('multisig 1-of-2');
+    expect(laidOut.logged[0]).toContain(`hot member "hot" ${laidOut.hotAddress}`);
+    await outcome.value.stop();
+  });
+
+  it('answers a permitted intent with a signature the multisig public key accepts over the returned bytes', async () => {
+    const laidOut = await laid({ multisig: true });
+    const outcome = await laidOut.start();
+    if (!outcome.ok) throw new Error(outcome.refused.reason);
+    const answered = await askPurse({ socketPath: laidOut.socketPath, intent: priceIntentFor() });
+    if (!answered.ok) throw new Error(`${answered.refused.ruleId}: ${answered.refused.reason}`);
+    if (!answered.value.ok) throw new Error(`${answered.value.refused.ruleId}: ${answered.value.refused.reason}`);
+    const bytes = new Uint8Array(Buffer.from(answered.value.txBytesB64, 'base64'));
+    expect(await laidOut.multisigKey!.verifyTransaction(bytes, answered.value.signature)).toBe(true);
+    // The audit line carries the multisig address: the ledger and the chain are about the address
+    // that spends, which is the multisig's.
+    const audit = await readFile(laidOut.auditPath, 'utf8');
+    const last = JSON.parse(audit.trim().split('\n').at(-1)!) as { address: string; outcome: string };
+    expect(last.outcome).toBe('signed');
+    expect(last.address).toBe(laidOut.address);
+    await outcome.value.stop();
+  });
+
+  it("refuses to start when the policy is written for the hot key's own address, and binds nothing", async () => {
+    const laidOut = await laid({ multisig: true, policyForHot: true });
+    const outcome = await laidOut.start();
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('unreachable');
+    expect(outcome.refused.reason).toContain(`signs as ${laidOut.address}`);
+    expect(outcome.refused.reason).toContain('bounds nothing');
+    await expect(stat(laidOut.socketPath)).rejects.toThrow();
+  });
+
+  it('refuses to start when the hot key is not a member of the document, and binds nothing', async () => {
+    const laidOut = await laid({ multisig: true, hotNotMember: true });
+    const outcome = await laidOut.start();
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('unreachable');
+    expect(outcome.refused.reason).toContain('is not a member of this multisig');
     await expect(stat(laidOut.socketPath)).rejects.toThrow();
   });
 });
@@ -242,7 +353,10 @@ describe('the arguments', () => {
       '--chain', '/srv/heron/chain.json',
       '--audit', '/var/lib/heron/audit/audit.jsonl',
       '--spend', '/var/lib/heron/audit/spend.jsonl',
+      '--multisig', '/srv/heron/policy/heron-multisig.json',
     ]);
     expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error('unreachable');
+    expect(parsed.value.multisig).toBe('/srv/heron/policy/heron-multisig.json');
   });
 });

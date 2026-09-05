@@ -32,6 +32,15 @@ export { buildIntent, fixedGas, nodeGas, type GasCoinRef, type GasPort } from '.
 
 export { chainConfigSchema, loadChainConfig, type ChainConfig } from './chain.js';
 
+export {
+  loadMultisigDoc,
+  multisigDocSchema,
+  wrapAsMultisig,
+  type LoadedMultisig,
+  type MultisigDoc,
+  type MultisigWrapped,
+} from './multisig-file.js';
+
 export { askPurse, type AskOptions } from './client.js';
 
 export {

@@ -7,6 +7,17 @@ behind the policy; the second member is the brake, made by his hand and never on
 the host. There is no co-signing purse and no second droplet. The accepted cost, said plainly: a
 leaked hot key can act up to one epoch's allowance until it is swept.
 
+**The purse signs AS the multisig address.** `--multisig policy/heron-multisig.json` names the two
+members and the threshold; at start the hot key is wrapped as the one available member
+(`multiSigSigner` from the signer package), the transaction's sender is the multisig address, and
+every signature the purse returns is the hot key's partial signature inside the multisig envelope,
+verified against the multisig public key before it leaves the process. The policy's `agentAddress`
+must equal the derived address or the purse refuses to start, which is one check proving three
+things: members, threshold and hot key together are the address the pinned policy was written for.
+The document carries no pin of its own for that reason (`src/multisig-file.ts`). Without
+`--multisig` the purse signs as the hot key's own address, which is a single-key test deployment
+and not Heron; the unit passes the flag and `test/units.test.ts` asserts it.
+
 Everything that makes that bound real lives here.
 
 ## The shape

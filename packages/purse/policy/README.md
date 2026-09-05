@@ -7,6 +7,15 @@ loader and evaluates real intents against them; nothing here is asserted by rest
 |---|---|---|---|
 | `heron-content.json` | `heron-purse.service` | `heron-hot` (multisig member 1) | `creator::set_content_price`, `soul::record_spend` |
 | `heron-ledger.json` | the `LedgerCap` service | `ledger` | `soul::settle_epoch` |
+| `heron-multisig.json` | `heron-purse.service` (`--multisig`) | the members: `hot` and `brake`, weight 1 each, threshold 1 | nothing; it says who the address is made of |
+
+`heron-multisig.json` holds no substitution: two public keys and two integers, real, committed.
+The hot member is the key born 2026-09-05 (`0x51704a…10b0`); the brake is the Master's, read from
+the chain (`0x4668e5…6c9a`). Together at threshold 1 they derive Heron's address
+`0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70`, and
+`test/policy-documents.test.ts` derives it with the SDK and compares. A change to any member,
+weight or threshold is a different address, so the purse's start-time check against the pinned
+policy's `agentAddress` covers this document without a pin of its own.
 
 They are separate files because the caps are separate keys under separate services (executive
 decision 6). `src/policy-file.ts` refuses to start a purse on a document that names `settle_epoch`
@@ -21,8 +30,8 @@ starting with something plausible.
 
 | Substitution | What it is | Exists yet? |
 |---|---|---|
-| `<HERON_ADDRESS>` | the 1-of-2 multisig address Heron signs from | no — no key is born |
-| `<LEDGER_ADDRESS>` | the `LedgerCap` service's own address | no |
+| `<HERON_ADDRESS>` | the 1-of-2 multisig address Heron signs from | **yes:** `0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70` (derived from `heron-multisig.json`) |
+| `<LEDGER_ADDRESS>` | the `LedgerCap` service's own address | **yes:** `0x9af1e7ec1344d487245b1a223c59c8c1c771dbf670db5ad5bfbc9abc17b4b666` (`heron-ledger`, born 2026-09-05) |
 | `<OPERATOR_ADDRESS>` | the operator, one of the three recipients | no address named yet |
 | `<TREASURY_ADDRESS>` | the treasury, one of the three recipients | no address named yet |
 | `<HERON_VAULT_ID>` | Heron's `CreatorVault<SUI>` | created at first post |

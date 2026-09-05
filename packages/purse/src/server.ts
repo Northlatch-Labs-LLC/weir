@@ -43,6 +43,7 @@ import type { GasPort } from './build.js';
 import { AuditFile } from './audit-file.js';
 import { loadChainConfig } from './chain.js';
 import { loadHotKey, refuseKeyInProcessSurface } from './key.js';
+import { loadMultisigDoc, wrapAsMultisig } from './multisig-file.js';
 import { SpendLedger } from './ledger-file.js';
 import { loadPinnedPolicy } from './policy-file.js';
 import { createPurse, type Purse } from './purse.js';
@@ -57,9 +58,15 @@ export interface ServerArgs {
   readonly audit: string;
   readonly spend: string;
   readonly keyFile?: string | undefined;
+  /**
+   * The multisig document (`policy/heron-multisig.json`). With it the purse signs AS the multisig
+   * address, the hot key being the one member it holds; without it the purse signs as the hot
+   * key's own address, which is what a single-key test deployment is and what Heron is not.
+   */
+  readonly multisig?: string | undefined;
 }
 
-const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file'] as const;
+const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig'] as const;
 
 /**
  * Parse argv.
@@ -95,6 +102,7 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
   }
 
   const keyFile = values.get('--key-file');
+  const multisig = values.get('--multisig');
   return allow({
     socket: values.get('--socket')!,
     policy: values.get('--policy')!,
@@ -103,6 +111,7 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
     audit: values.get('--audit')!,
     spend: values.get('--spend')!,
     ...(keyFile === undefined ? {} : { keyFile }),
+    ...(multisig === undefined ? {} : { multisig }),
   });
 }
 
@@ -156,10 +165,31 @@ export async function startPurse(args: {
   });
   if (!key.ok) return key;
 
-  if (key.value.signer.address !== normaliseAddress(policy.value.doc.agentAddress)) {
+  /*
+    Heron signs AS its 1-of-2 multisig address. The hot key is the one member this process holds;
+    the document names both members and the threshold, and the address they derive is what the
+    policy below must be written for. See multisig-file.ts for why that one check is enough.
+  */
+  let signer = key.value.signer;
+  let signerLine = `key from ${key.value.path}`;
+  if (args.server.multisig !== undefined) {
+    const doc = await loadMultisigDoc(args.server.multisig);
+    if (!doc.ok) return doc;
+    const wrapped = wrapAsMultisig(doc.value.doc, key.value.signer);
+    if (!wrapped.ok) return wrapped;
+    signer = wrapped.value.signer;
+    signerLine =
+      `multisig ${String(wrapped.value.threshold)}-of-${String(wrapped.value.memberCount)} from ` +
+      `${doc.value.path} · hot member "${wrapped.value.memberName}" ${key.value.signer.address} · ` +
+      `key from ${key.value.path}`;
+  }
+
+  if (signer.address !== normaliseAddress(policy.value.doc.agentAddress)) {
     return refuse(
       'request-malformed',
-      `the key at ${key.value.path} controls ${key.value.signer.address}, and the policy document ` +
+      `the key at ${key.value.path} signs as ${signer.address}` +
+        (args.server.multisig === undefined ? '' : ` (the multisig of ${args.server.multisig})`) +
+        `, and the policy document ` +
         `is written for ${policy.value.doc.agentAddress}. The purse will not start: a policy ` +
         `evaluated against one address while another signs is a policy that bounds nothing. The ` +
         `\`sender-mismatch\` rule would catch it per transaction; catching it at start means it is ` +
@@ -177,7 +207,7 @@ export async function startPurse(args: {
   }
 
   const purse = createPurse({
-    signer: key.value.signer,
+    signer,
     policy: policy.value.doc,
     policyHash: policy.value.policyHash,
     policyFileSha256: policy.value.fileSha256,
@@ -230,7 +260,7 @@ export async function startPurse(args: {
 
   log(
     `heron-purse: listening on ${args.server.socket} for ${purse.address} · policy ${policy.value.policyHash} ` +
-      `· file ${policy.value.fileSha256} · audit head ${purse.auditHead()} · key from ${key.value.path}`,
+      `· file ${policy.value.fileSha256} · audit head ${purse.auditHead()} · ${signerLine}`,
   );
   notifyReady(args.env['NOTIFY_SOCKET']);
 
