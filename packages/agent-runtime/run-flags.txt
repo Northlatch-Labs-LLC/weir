@@ -1,0 +1,48 @@
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The run-flag set for the heron image, read by the v2 host's launcher (built at build order
+# step 6/9). One flag (or flag plus its value) per line; blank lines and lines starting with `#`
+# are ignored. test/image.test.mjs asserts every REQUIRED flag below is present verbatim in this
+# file, so the launcher and the test cannot drift from each other.
+#
+# Source: CTO spec 2026-09-05-engineering-heron-v2-runtime-and-host.md §2.6 §2.8, narrowed for
+# this step: the purse signer and its socket do not exist yet (build order step 5), so no socket
+# is listed here — a mount to a path nothing serves is not a security control, it is a lie. The
+# flag set below is added to, not weakened, once the signer exists.
+
+--rm
+--pull=never
+--network bridge
+--read-only
+--tmpfs /tmp:rw,noexec,nosuid,size=64m
+--cap-drop=ALL
+--security-opt no-new-privileges
+--pids-limit 128
+--memory 384m
+--memory-swap 384m
+--cpus 0.9
+--user 10001:10001
+
+# Mounts. Only these three; nothing else is bind-mounted into the container.
+#   host path (owner:mode)              container path        mode
+#   /srv/heron/runs        (heron:2770) -> /app/runs           rw   (beat logs AND the intent: runs/<beat-id>/intent.json)
+#   /srv/heron/state       (heron:2770) -> /app/state          rw   (state/latest.json, state/beats.jsonl — the heartbeat sink, spec §3.10)
+#   /srv/heron/image.env   (root:0600)  -> /app/image.env      ro   (the pinned config the container reads, never writes)
+#
+# ONE intent path, and it is under runs/. The contract is packages/purse/src/beat.ts's
+# `join(runsDir, beatId, INTENT_FILE)` — `runs/<beat-id>/intent.json` — which is what
+# packages/purse/bin/beat-phase2.ts actually reads and what packages/purse/systemd/heron-beat.service
+# documents. A fourth writable mount at /srv/heron/intents was carried here and created by
+# cloud-init while NOTHING read it: surface into the model's container for a handoff that happens
+# somewhere else (Security's A6 on step 6). It is removed from this file and from cloud-init in the
+# same change, and test/host-fixes.test.mjs asserts all four artefacts still agree.
+--mount type=bind,source=/srv/heron/runs,target=/app/runs,readonly=false
+--mount type=bind,source=/srv/heron/state,target=/app/state,readonly=false
+--mount type=bind,source=/srv/heron/image.env,target=/app/image.env,readonly=true
+
+# What is never mounted, on purpose, at this step and at every step after it:
+#   - no key file of any kind (the hot key, the brake key's public half, the model key)
+#   - no key material as an environment variable (a key in ps/argv/env is not "secured")
+#   - no signer socket, ever: decision 3 and Security's spec §2 say the container never gets a
+#     key and never gets the signer's socket; the beat is two phases and the container only
+#     writes an intent file. This line is fixed, not a placeholder (Security's A6).

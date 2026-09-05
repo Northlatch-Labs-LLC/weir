@@ -1,0 +1,17 @@
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Once a day, at a fixed hour, so the desk's mailbox proves the machine is still capable of
+# sending mail even on a day nothing else went wrong -- his ruling of 2026-09-05: the machine
+# emails the desk once a day as "alive", read at the start of every session. Unit= is explicit
+# because a template instance's default match would look for "heron-alive@.service", which does
+# not exist; this points at the plain instance heron-alert@alive.service instead.
+[Unit]
+Description=Send Heron's daily alive notice
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 UTC
+Persistent=true
+Unit=heron-alert@alive.service
+
+[Install]
+WantedBy=timers.target

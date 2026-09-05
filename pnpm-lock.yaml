@@ -40,7 +40,11 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.4.0)(happy-dom@20.11.12)(vite@8.2.1(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
-  packages/agent-runtime: {}
+  packages/agent-runtime:
+    devDependencies:
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
 
   packages/daemon:
     dependencies:
@@ -91,6 +95,34 @@ importers:
 
   packages/policy:
     devDependencies:
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@26.4.0)(happy-dom@20.11.12)(vite@8.2.1(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+
+  packages/purse:
+    dependencies:
+      '@mysten/sui':
+        specifier: 2.27.1
+        version: 2.27.1(typescript@7.0.2)
+      '@projectx-social/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@projectx-social/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@projectx-social/signer':
+        specifier: workspace:*
+        version: link:../signer
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      tsx:
+        specifier: 4.23.12
+        version: 4.23.12
       typescript:
         specifier: 7.0.2
         version: 7.0.2

@@ -1,0 +1,73 @@
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# A parameterized oneshot: `systemctl start heron-alert@<instance>.service` sends one email naming
+# <instance>. Triggered by heron-watchdog.service's OnFailure=heron-alert@watchdog.service, by
+# heron-alive.timer's Unit=heron-alert@alive.service, and (build order step 5, not this branch)
+# by heron-beat.service's own OnFailure=heron-alert@%n.service on a failed beat.
+#
+# The credential is loaded ONLY through systemd's own encrypted-credential mechanism -- never an
+# environment variable, never a file this unit names directly. LoadCredentialEncrypted decrypts
+# the sealed blob (placed by deploy-droplet.sh --seal mail-key, piped straight into
+# `systemd-creds encrypt --with-key=host` over the SSH session, never as a plaintext file on this
+# disk) into a per-unit tmpfs at $CREDENTIALS_DIRECTORY/mail-key, 0400, gone when the unit stops.
+# bin/heron-alert reads that path itself and only in its non-dry-run branch -- see that file.
+[Unit]
+Description=Send one Heron notice for instance %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/heron-alert %i
+LoadCredentialEncrypted=mail-key:/etc/heron/creds/mail-key.cred
+
+# Root, and it stays root: PID 1 is what decrypts the host-sealed credential, and the unit needs
+# no privilege of its own beyond that. DynamicUser=yes was the reviewer's suggested shape; it is
+# not taken here because a dynamic user changes who owns $CREDENTIALS_DIRECTORY and that
+# interaction is not something this laptop can test. What IS taken is the rest of the purse unit's
+# hardening set, because the least-hardened unit on this host was the one holding a live API key
+# (Security's A5 on step 6).
+User=root
+Group=root
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+# Root with an empty bounding set: no capability survives, so the process cannot use the one
+# thing being root would otherwise buy an attacker who reached it through this path.
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+MemoryMax=96M
+TasksMax=16
+
+# One outbound HTTPS call to Resend and nothing else. AF_UNIX is deliberately absent: this
+# process talks to no socket on this host.
+#
+# NAMED RISK, not a claim: if this droplet ever resolves DNS through systemd-resolved's varlink
+# socket rather than glibc's own UDP path out of /etc/resolv.conf, name resolution needs AF_UNIX
+# and this line breaks the alert -- the one thing on the host that must not break silently. It is
+# asserted at the step-10 drill (a forced failure must produce the email) before this unit is
+# trusted, and that drill is a gate, not a formality. Nothing on this laptop can test it: no
+# Debian host, no systemd.
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# MemoryDenyWriteExecute is deliberately NOT set. CPython does not JIT, so it would probably hold
+# -- and "probably" is exactly the word that has no business on the dead man's last hop. It goes
+# in when a real host has run heron-alert under it once, and not before.

@@ -38,6 +38,7 @@ packages/mcp/dist/
 packages/agent/dist/
 packages/signer/dist/
 packages/policy/dist/
+packages/purse/dist/
 
 # Test-address key material. Never committed.
 # A throwaway address used to exercise the subscribe path end to end; it holds only the small

@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# Built-by: @projectx.sui /|\ - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The post-boot assertions, run on the droplet over the deploy's SSH session:
+#
+#     ssh ops@<ip> bash -s < lib/post-boot-assert.sh
+#
+# It is a FILE, not a heredoc inside deploy-droplet.sh, for one reason: a block that only ever runs
+# on a host nobody has built yet is a block nobody has ever run. As a file it can be executed on
+# this laptop against a fixture that stands in for the host (test/host-fixes.test.mjs), so the
+# thing that decides whether a droplet lives or is destroyed has itself been run before it decides.
+#
+# WHY EVERY PRIVILEGED LINE CARRIES sudo. This runs as `ops`, an unprivileged login account.
+#   - /usr/sbin is not on a non-root PATH on Debian, so a bare `sshd -T` is "command not found";
+#   - `sshd -T` must read /etc/ssh/ssh_host_*_key, mode 0600 root, so even found it exits 1;
+#   - `cloud-init status`/`schema --system` read root-only state;
+#   - /etc/ssh/sshd_config.d and /etc/heron are 0700-ish root.
+# Under `set -euo pipefail` the first of those failures propagated, this block returned non-zero,
+# and the deploy destroyed the droplet it had just paid for -- every single time, while the three
+# hardening keywords it claims to assert were never actually read (Security's B4 on step 6).
+# `ops` holds NOPASSWD:ALL from cloud-init, so sudo here adds no privilege that the SSH key did not
+# already carry; it only stops the assertions from failing for the wrong reason.
+#
+# The HERON_* variables below are seams for the local fixture ONLY. Every default is the real host
+# path, and the deploy passes none of them: on the droplet this script runs entirely on its
+# defaults.
+set -euo pipefail
+
+SUDO="${HERON_SUDO:-sudo}"
+SSHD_BIN="${HERON_SSHD_BIN:-/usr/sbin/sshd}"
+CLOUD_INIT_BIN="${HERON_CLOUD_INIT_BIN:-cloud-init}"
+DEBIAN_VERSION_FILE="${HERON_DEBIAN_VERSION_FILE:-/etc/debian_version}"
+SSHD_CONFIG_D="${HERON_SSHD_CONFIG_D:-/etc/ssh/sshd_config.d}"
+SRV_ROOT="${HERON_SRV_ROOT:-/srv/heron}"
+ETC_ROOT="${HERON_ETC_ROOT:-/etc/heron}"
+VAR_ROOT="${HERON_VAR_ROOT:-/var/lib/heron}"
+ASSERT_OWNERS="${HERON_ASSERT_OWNERS:-1}"
+ASSERT_ACCOUNTS="${HERON_ASSERT_ACCOUNTS:-1}"
+
+fail() {
+  echo "post-boot: refused - $1" >&2
+  exit 1
+}
+
+# --- 1. cloud-init actually applied -----------------------------------------------------------
+# The decisive one. v1 booted with root open because cloud-init refused the whole document over a
+# single byte and NOTHING asked it whether it had succeeded.
+CLOUD_INIT_STATUS="$($SUDO "$CLOUD_INIT_BIN" status --wait --long 2>&1)" || {
+  echo "$CLOUD_INIT_STATUS" >&2
+  fail "cloud-init status --wait --long exited non-zero"
+}
+echo "$CLOUD_INIT_STATUS"
+grep -q '^status: done$' <<<"$CLOUD_INIT_STATUS" || fail "cloud-init did not finish with 'status: done'"
+
+# "status: done" alone is not enough: cloud-init reports done with a non-empty error list. Both
+# shapes it prints an error list in are refused -- the inline `errors: ['...']` and the multi-line
+# one whose entries are dashed continuation lines.
+ERRORS_LINE="$(grep '^errors:' <<<"$CLOUD_INIT_STATUS" || true)"
+if [ -n "$ERRORS_LINE" ] && [ "$ERRORS_LINE" != "errors: []" ]; then
+  fail "cloud-init printed '$ERRORS_LINE'; it must be exactly 'errors: []'"
+fi
+if grep -A5 '^errors:' <<<"$CLOUD_INIT_STATUS" | grep -qE '^[[:space:]]+-[[:space:]]*\S'; then
+  fail "cloud-init listed at least one error under 'errors:' in its own status output"
+fi
+
+$SUDO "$CLOUD_INIT_BIN" schema --system || fail "cloud-init schema --system refused the applied config"
+
+# --- 2. the two accounts, by id, both directions ----------------------------------------------
+if [ "$ASSERT_ACCOUNTS" = "1" ]; then
+  [ "$(getent passwd 10001 | cut -d: -f1)" = "heron" ] || fail "uid 10001 is not heron"
+  [ "$(getent group 10001 | cut -d: -f1)" = "heron" ] || fail "gid 10001 is not heron"
+  # The account that holds the hot key. It was created by nobody before this fix.
+  [ "$(getent passwd 10002 | cut -d: -f1)" = "purse" ] || fail "uid 10002 is not purse"
+  [ "$(getent group 10002 | cut -d: -f1)" = "purse" ] || fail "gid 10002 is not purse"
+  # The container's uid must not be able to read the signer's files through a shared group.
+  if id -nG purse 2>/dev/null | tr ' ' '\n' | grep -qx heron; then
+    fail "the purse account is in the heron group; the model's container could read the signer's files"
+  fi
+fi
+
+# --- 3. Debian 13 -----------------------------------------------------------------------------
+grep -q "^13" "$DEBIAN_VERSION_FILE" || fail "$DEBIAN_VERSION_FILE does not start with 13"
+
+# --- 4. SSH hardening, read out of sshd's own merged view --------------------------------------
+# `sshd -T` is the merged configuration sshd will actually use, which is the only thing worth
+# asserting: it settles the 00- vs 50-cloud-init.conf ordering question as a fact rather than an
+# argument about glob order.
+$SUDO ls "$SSHD_CONFIG_D" >/dev/null 2>&1 || fail "$SSHD_CONFIG_D cannot be read even with sudo"
+SSHD_CONF_FILES="$($SUDO ls "$SSHD_CONFIG_D")"
+grep -qx '00-heron.conf' <<<"$SSHD_CONF_FILES" || fail "00-heron.conf is not in $SSHD_CONFIG_D"
+FIRST_CONF="$(grep '\.conf$' <<<"$SSHD_CONF_FILES" | LC_ALL=C sort | head -n 1)"
+[ "$FIRST_CONF" = "00-heron.conf" ] \
+  || fail "00-heron.conf does not sort first in $SSHD_CONFIG_D (first is '$FIRST_CONF'); sshd keeps the FIRST value it reads"
+
+SSHD_EFFECTIVE="$($SUDO "$SSHD_BIN" -T)" || fail "$SSHD_BIN -T failed even under sudo"
+for KEYWORD in passwordauthentication permitrootlogin kbdinteractiveauthentication; do
+  LINE="$(grep -iE "^${KEYWORD} " <<<"$SSHD_EFFECTIVE" || true)"
+  [ -n "$LINE" ] || fail "sshd -T printed no '$KEYWORD' line at all"
+  grep -qiE "^${KEYWORD} no$" <<<"$LINE" || fail "sshd -T says '$LINE'; it must read '${KEYWORD} no'"
+  echo "post-boot: sshd -T: $LINE"
+done
+
+# --- 5. the layout, at the owner and mode cloud-init claims ------------------------------------
+# Every path the units name. A directory made by hand at deploy time is a mode nobody asserts, and
+# the one that would have been made by hand is the hot key's home.
+$SUDO python3 - "$SRV_ROOT" "$ETC_ROOT" "$VAR_ROOT" "$ASSERT_OWNERS" <<'PY'
+import os
+import pwd
+import grp
+import stat
+import sys
+
+srv, etc, var, assert_owners = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+
+EXPECTED = [
+    (srv,                       0o751, "root",  "root"),
+    (f"{srv}/bin",              0o755, "root",  "root"),
+    (f"{srv}/runs",            0o2770, "root",  "heron"),
+    (f"{srv}/runs/archive",    0o2770, "root",  "heron"),
+    (f"{srv}/state",           0o2770, "root",  "heron"),
+    (f"{srv}/keys",             0o700, "purse", "purse"),
+    (f"{srv}/purse",            0o750, "purse", "purse"),
+    (f"{srv}/purse/dist",       0o750, "purse", "purse"),
+    (f"{srv}/policy",           0o755, "root",  "root"),
+    (var,                       0o700, "purse", "purse"),
+    (f"{var}/audit",            0o700, "purse", "purse"),
+    (etc,                       0o700, "root",  "root"),
+    (f"{etc}/creds",            0o700, "root",  "root"),
+]
+
+problems = []
+for path, mode, owner, group in EXPECTED:
+    try:
+        info = os.stat(path)
+    except OSError as exc:
+        problems.append(f"{path}: {exc.strerror}")
+        continue
+    if not stat.S_ISDIR(info.st_mode):
+        problems.append(f"{path}: not a directory")
+        continue
+    actual_mode = stat.S_IMODE(info.st_mode)
+    if actual_mode != mode:
+        problems.append(f"{path}: mode {actual_mode:04o}, expected {mode:04o}")
+    if assert_owners:
+        actual_owner = pwd.getpwuid(info.st_uid).pw_name
+        actual_group = grp.getgrgid(info.st_gid).gr_name
+        if (actual_owner, actual_group) != (owner, group):
+            problems.append(f"{path}: {actual_owner}:{actual_group}, expected {owner}:{group}")
+
+# No plaintext credential anywhere under /srv/heron, ever. The sealed blobs live in /etc/heron/creds
+# and systemd-creds decrypts them into a per-unit tmpfs; a readable file here is the v1 corner.
+for root, _dirs, files in os.walk(srv):
+    for name in files:
+        if name.endswith((".cred", ".key", ".token", ".pem")):
+            problems.append(f"{os.path.join(root, name)}: a credential-shaped file under {srv}")
+
+if problems:
+    for problem in problems:
+        print(f"post-boot: refused - {problem}", file=sys.stderr)
+    sys.exit(1)
+print(f"post-boot: every path under {srv}, {etc} and {var} is at the owner and mode cloud-init claims")
+PY
+
+echo "post-boot assertions passed"

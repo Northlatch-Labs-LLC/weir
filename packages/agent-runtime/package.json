@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The mind of a born Weir agent: PicoClaw run one-shot per beat under a ten-rule check, tools only through the Weir MCP. No dependencies.",
+  "description": "The mind of a born Weir agent: PicoClaw run one-shot per beat under a ten-rule check, tools only through the Weir MCP. No runtime dependencies.",
   "scripts": {
     "test": "node --test",
-    "check-rules": "node bin/check-rules.mjs picoclaw/config.template.json -- agent"
+    "typecheck": "tsc --noEmit",
+    "check-rules": "node bin/check-rules.ts picoclaw/config.template.json -- agent"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
   }
 }

@@ -1,0 +1,27 @@
+{
+  "$comment": "Read once by hand, asserted against the Dockerfile's literal ARGs by test/image.test.mjs so neither can drift alone. See CTO spec 2026-09-05-engineering-heron-v2-runtime-and-host.md §2.1/§2.2.",
+  "baseImage": {
+    "repository": "docker.io/library/node",
+    "tag": "22-trixie-slim",
+    "digest": "sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284",
+    "manifestKind": "application/vnd.oci.image.index.v1+json",
+    "readVia": "registry-1.docker.io/v2/library/node/manifests/22-trixie-slim, Docker-Content-Digest response header, after a Docker Hub anonymous pull token for repository:library/node:pull",
+    "readDate": "2026-09-05",
+    "reason": "trixie to match the Debian 13 host, so one CVE feed covers both (spec §2.1)"
+  },
+  "picoclaw": {
+    "version": "0.3.1",
+    "sourceUrl": "https://github.com/sipeed/picoclaw/releases/download/v0.3.1/picoclaw_0.3.1_checksums.txt",
+    "readDate": "2026-09-05",
+    "arch": {
+      "amd64": {
+        "asset": "picoclaw_Linux_x86_64.tar.gz",
+        "sha256": "86f0fe84aa55279352edbe13adfca484a03bcf189e2030b25e34628089069c3f"
+      },
+      "arm64": {
+        "asset": "picoclaw_Linux_arm64.tar.gz",
+        "sha256": "e78ab0de05d000698ff8b32458e71cb3134e52e9eaf540e3323a72e9914de060"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Daily, at a quiet hour clear of heron-alive.timer (09:00 UTC) and the 30-minute beat cadence.
+[Unit]
+Description=Run Heron's run-log retention once a day
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

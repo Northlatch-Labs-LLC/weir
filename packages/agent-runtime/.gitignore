@@ -7,3 +7,13 @@ picoclaw/workspace/cron/
 picoclaw/workspace/.artifacts/
 picoclaw/config.json
 .security.yml
+
+# Built by scripts/make-source-tarball.sh — a reproducible derivative of the committed tree,
+# never itself the source of truth.
+agent-runtime-src.tgz
+agent-runtime-src.sha
+
+# The deploy's own run record: what --create made and what a rollback destroyed, on this machine.
+# The directory and its README are committed; the record itself is not source, and a deploy must
+# not make the tree dirty for the next one's `git status --porcelain` precondition.
+digitalocean/runs/deploy-runs.jsonl

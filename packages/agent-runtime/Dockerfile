@@ -1,26 +1,48 @@
 # Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
-# Multi-stage (Security findings B1 + A9). Stage "fetch" downloads and verifies the PicoClaw
-# v0.3.1 Linux binary; the runtime stage is node:22-bookworm-slim, carrying only the verified
-# picoclaw binary, bin/, and picoclaw/ — no curl, no perl, no apt in the image that actually runs.
-# No gateway is exposed — this image's ENTRYPOINT runs bin/beat.sh, which checks the rules, then
-# runs `picoclaw agent -m ...` once and exits.
+# Heron v2 image. Multi-stage, one pinned base for both stages so one CVE feed covers the image
+# and the Debian 13 host it runs on (CTO spec 2026-09-05-engineering-heron-v2-runtime-and-host.md
+# §2.1). Stage "fetch" downloads and verifies the PicoClaw v0.3.1 Linux binary against a literal
+# checksum ARG (never a checksums file fetched from the same release it is meant to verify — v1's
+# Security finding A10, carried forward); the runtime stage carries only the verified picoclaw
+# binary, the CA bundle, bin/ and picoclaw/. No curl, no package manager invocation, in the
+# runtime stage. Honest disclosure (nothing here claims a stripped image): node:22-trixie-slim is
+# a Debian slim image, so dpkg and apt are present on disk in the runtime stage the same as they
+# are in the fetch stage — this Dockerfile never runs apt in the runtime stage, but does not and
+# cannot remove what the base image ships.
 #
-# Both base images pinned by digest, read live 2026-09-04 via `docker buildx imagetools inspect`:
-#   debian:bookworm-slim
-#     -> docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
-#   node:22-bookworm-slim
-#     -> docker.io/library/node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+# No EXPOSE, no HEALTHCHECK. This container never listens and no process runs between beats — a
+# healthcheck would be exactly the always-on process that rule 8 (bin/check-rules.mjs) exists to
+# forbid; liveness is the state sink (state/latest.json), not a probe.
 #
-# The PicoClaw binary's checksum is verified against a literal ARG, not against a checksums file
-# fetched at build time from the same origin as the asset (Security finding A10 — the old
-# Dockerfile fetched picoclaw_0.3.1_checksums.txt from the same GitHub release as the binary
-# itself, which proves nothing against a compromised release). Both values were read once, by
-# hand, from
+# The base image is pinned by digest, read live from the registry (Docker Hub does not support
+# `docker buildx imagetools inspect` without a running daemon, and Docker stays down on this
+# laptop by the Master's order; read instead via the registry HTTP API — an anonymous pull token
+# for repository:library/node:pull, then GET the manifest list and take the
+# Docker-Content-Digest response header):
+#
+#   node:22-trixie-slim
+#     -> docker.io/library/node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284
+#     read 2026-09-05, recorded in picoclaw.provenance.json alongside this file; a base bump and
+#     its digest land in the same commit, and test/image.test.mjs asserts the two never drift
+#     apart from each other.
+#
+# The PicoClaw binary's checksum is verified against a literal ARG, read once, by hand, from
 # https://github.com/sipeed/picoclaw/releases/download/v0.3.1/picoclaw_0.3.1_checksums.txt
-# on 2026-09-04.
+# on 2026-09-05, and also recorded in picoclaw.provenance.json.
+#
+# The user is `heron`, uid 10001, gid 10001, fixed — never a dynamically allocated system uid.
+# v1 collided at uid 999 with DigitalOcean's own `do-agent` on the host (see the CTO spec §1 #3);
+# 10001 is chosen because it sits above the entire range Debian's own tooling allocates from
+# (Debian Policy §9.2.2: 0 root, 1-99 static, 100-999 dynamic system, 1000-59999 dynamic login,
+# 60000-64999 on demand, 65534 nobody) — reasoned from policy, not verified on a Debian host from
+# this laptop, and therefore also asserted empirically below: the build refuses if uid or gid
+# 10001 already exist before `heron` is created, and refuses again if the id does not resolve to
+# `heron` afterward.
 
-FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS fetch
+ARG NODE_BASE_DIGEST=sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284
+
+FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284 AS fetch
 
 ARG PICOCLAW_VERSION=0.3.1
 ARG TARGETARCH
@@ -32,7 +54,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Map Docker's TARGETARCH to PicoClaw's release asset naming (goreleaser: amd64 -> x86_64), and to
-# the literal checksum ARG for that arch. No checksums file is fetched at build time.
+# the literal checksum ARG for that arch. No checksums file is fetched at build time — the whole
+# point of a literal ARG is that a compromised release cannot supply its own proof.
 RUN set -eux; \
     case "${TARGETARCH:-amd64}" in \
         amd64) PICOCLAW_ARCH="x86_64"; EXPECTED="$PICOCLAW_SHA256_AMD64" ;; \
@@ -56,26 +79,49 @@ RUN set -eux; \
     install -m 0755 /tmp/picoclaw /usr/local/bin/picoclaw; \
     rm -rf /tmp/*
 
-# --- runtime stage: node:22-bookworm-slim, nothing else installed into it ---
-FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+# --- runtime stage: same pinned base as "fetch", nothing else installed into it ---
+FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284 AS runtime
 
-# Non-root user. No exposed ports — this image never runs `picoclaw gateway`.
-RUN useradd --system --create-home --home-dir /app --shell /usr/sbin/nologin weir-agent
+# uid 10001 / gid 10001, fixed, never dynamically allocated. Empirically asserted both sides of
+# creation (Debian Policy §9.2.2 reasoning is not verified from this laptop — see the header
+# comment) so a future base-image bump that happens to pre-allocate 10001 fails the build loudly
+# instead of silently colliding, the way v1's uid 999 did against `do-agent`.
+RUN set -eux; \
+    if getent passwd 10001 >/dev/null 2>&1; then \
+        echo "FATAL: uid 10001 already exists before heron is created — refusing to shadow it" >&2; \
+        exit 1; \
+    fi; \
+    if getent group 10001 >/dev/null 2>&1; then \
+        echo "FATAL: gid 10001 already exists before heron is created — refusing to shadow it" >&2; \
+        exit 1; \
+    fi; \
+    echo "uid/gid 10001 confirmed empty before heron is created"; \
+    groupadd --gid 10001 heron; \
+    useradd --uid 10001 --gid 10001 --system --no-create-home --home-dir /app --shell /usr/sbin/nologin heron; \
+    RESOLVED_USER="$(getent passwd 10001 | cut -d: -f1)"; \
+    RESOLVED_GROUP="$(getent group 10001 | cut -d: -f1)"; \
+    if [ "$RESOLVED_USER" != "heron" ] || [ "$RESOLVED_GROUP" != "heron" ]; then \
+        echo "FATAL: uid/gid 10001 resolved to '$RESOLVED_USER:$RESOLVED_GROUP', not heron:heron" >&2; \
+        exit 1; \
+    fi; \
+    echo "uid/gid 10001 confirmed to be heron:heron after creation"
 
 COPY --from=fetch /usr/local/bin/picoclaw /usr/local/bin/picoclaw
 # The CA bundle the fetch stage installed, so PicoClaw can verify mcp.weir.social over TLS;
-# no package manager runs in this stage.
+# no package manager runs in this stage — only a COPY from the stage that already ran it.
 COPY --from=fetch /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app
-COPY --chown=weir-agent:weir-agent bin/ /app/bin/
-COPY --chown=weir-agent:weir-agent picoclaw/ /app/picoclaw/
-RUN chmod +x /app/bin/beat.sh
-USER weir-agent
+COPY --chown=heron:heron bin/ /app/bin/
+COPY --chown=heron:heron picoclaw/ /app/picoclaw/
+RUN chmod +x /app/bin/beat.sh \
+    && chown heron:heron /app
+
+USER 10001:10001
 
 ENV PICOCLAW_CONFIG=/app/picoclaw/config.json
 ENV PICOCLAW_GATEWAY_HOST=""
 ENV PICOCLAW_BIN=/usr/local/bin/picoclaw
 
-# No EXPOSE — this container never listens.
+# No EXPOSE — this container never listens. No HEALTHCHECK — no process runs between beats.
 ENTRYPOINT ["bin/beat.sh"]
