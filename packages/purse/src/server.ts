@@ -264,18 +264,33 @@ async function serve(connection: Socket, purse: Purse): Promise<void> {
   connection.on('timeout', () => connection.destroy());
 
   connection.on('data', (chunk: Buffer) => {
+    if (answered) return;
     received += chunk.byteLength;
     if (received > MAX_REQUEST_BYTES) {
+      /*
+        Answered without the bytes ever being assembled — and **recorded**, which it was not before
+        (Security's A2, 2026-09-05). A peer that streams at the socket without ever sending a
+        newline is the probe `audit-file.ts` says the purse keeps its own chain for, and it used to
+        be the one refusal that left no line at all.
+
+        `refuseUnread` records on the purse's own queue and answers with a value. The chunks
+        collected so far are dropped rather than parsed: reading them is exactly what the cap
+        exists to refuse.
+      */
       answered = true;
-      connection.end(
-        `${JSON.stringify({
-          ok: false,
-          refused: {
-            ruleId: 'request-malformed',
-            reason: `a request may be at most ${String(MAX_REQUEST_BYTES)} bytes.`,
-          },
-        })}\n`,
-      );
+      chunks.length = 0;
+      void purse
+        .refuseUnread({
+          ruleId: 'request-too-large',
+          reason:
+            `a request may be at most ${String(MAX_REQUEST_BYTES)} bytes and this connection sent ` +
+            `more. Nothing was read, parsed or built. The cap is here because the socket's peer is ` +
+            `the beat and the beat's input came from a model: a peer that streams without ever ` +
+            `sending a newline is a memory exhaustion on a 512 MB droplet that also has to hold ` +
+            `the Docker daemon.`,
+        })
+        .then((response) => connection.end(`${JSON.stringify(response)}\n`))
+        .catch(() => connection.destroy());
       return;
     }
     chunks.push(chunk);

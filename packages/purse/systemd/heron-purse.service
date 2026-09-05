@@ -25,6 +25,25 @@ Type=notify
 # what lets a child notify; this unit's cgroup holds the purse and its children and nothing else.
 NotifyAccess=all
 
+# The uid ruling, written here because systemd has no directive that carries one.
+#
+# `heron` is uid/gid 10001 and `purse` is uid/gid 10002, both fixed and both asserted free before
+# they are created. v1's defect 3 was a dynamically allocated uid that collided with DigitalOcean's
+# own `do-agent` at 999; 10001 and 10002 sit above the whole range Debian's tooling allocates from.
+# `heron` owns the model's workspace and the container runs as it; `purse` owns the key, the socket
+# and the audit chain, and the two must never be the same account.
+#
+# The deploy creates this one as:
+#
+#   getent passwd 10002 || getent group 10002   # must BOTH be empty, or refuse
+#   groupadd --gid 10002 --system purse
+#   useradd --uid 10002 --gid 10002 --system --no-create-home --shell /usr/sbin/nologin purse
+#   getent passwd 10002 | cut -d: -f1           # must read `purse`, or refuse
+#
+# — the same empty-before / resolves-after pair the container's Dockerfile already runs for 10001,
+# because a uid that silently resolves to somebody else is how a hardened unit ends up running as
+# a service account that already had a shell. `test/units.test.ts` asserts these numbers here and
+# in README.md so the deploy has one place to copy from and drift fails a test, not a droplet.
 User=purse
 Group=purse
 

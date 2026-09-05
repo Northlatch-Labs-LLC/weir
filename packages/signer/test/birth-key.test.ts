@@ -33,6 +33,7 @@ import {
   encryptInPlace,
   enforceUmask,
   fingerprintKeystore,
+  keychainPassphrase,
   keystoreDrift,
   parseArgs,
 } from '../bin/birth-key.js';
@@ -557,5 +558,98 @@ describe('the command line surface', () => {
       expect(derive.value.threshold).toBe(1);
       expect(derive.value.pubs).toEqual(['a', 'b']);
     }
+  });
+});
+
+describe('the pinned programs', () => {
+  /*
+    A4 from Security's review of 2026-09-05.
+
+    `openssl` and `security` were spawned by bare name off the inherited `PATH`, while the hasher
+    already pinned `/usr/bin/shasum` first. A shadowed `openssl` is handed the passphrase on fd 3
+    and the plaintext key's path; a shadowed `security` is handed the keychain item's name and
+    answers with whatever passphrase it likes. The bound was "already running as `admin`" — which
+    is row 13's stated bound — but step 1's own ruling is that a pinned program is never a name.
+
+    This laptop makes the point concretely: `which -a openssl` reports `/usr/local/bin/openssl`
+    ahead of `/usr/bin/openssl`, so the tool was already not using the program it documented.
+
+    The fixture builds a shim that records having been called, puts it first on `PATH`, and asserts
+    the recording never happens.
+  */
+  let shimDir: string;
+  let marker: string;
+  let originalPath: string | undefined;
+
+  beforeAll(async () => {
+    shimDir = join(root, 'shadowed-bin');
+    await mkdir(shimDir, { recursive: true });
+    marker = join(root, 'shim-was-called');
+    for (const program of ['openssl', 'security']) {
+      const shim = join(shimDir, program);
+      await writeFile(
+        shim,
+        `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(marker)}\nexit 0\n`,
+        { mode: 0o755 },
+      );
+      await chmod(shim, 0o755);
+    }
+    originalPath = process.env['PATH'];
+    process.env['PATH'] = `${shimDir}:${originalPath ?? ''}`;
+  });
+
+  afterAll(() => {
+    if (originalPath === undefined) delete process.env['PATH'];
+    else process.env['PATH'] = originalPath;
+  });
+
+  it('does not call a shadowing openssl, and still encrypts with the real one', async () => {
+    const pile = await makePile('pinned-pile');
+    const born = await cli(['pinned', '--pile', pile]);
+    expect(born.code).toBe(0);
+    const keyPath = join(pile, 'pinned.key');
+    const plaintext = await readFile(keyPath, 'utf8');
+
+    const result = await encryptInPlace({
+      keyPath,
+      passphrase: Buffer.from(TEST_PASSPHRASE, 'utf8'),
+    });
+
+    expect(result.refused).toBe(false);
+    if (result.refused) return;
+
+    // The shim exits 0 and writes nothing, so a tool that called it would "succeed" with an empty
+    // ciphertext. The real openssl produced one, verified the round trip and shredded the plaintext.
+    await expect(stat(marker)).rejects.toThrow();
+    await expect(stat(keyPath)).rejects.toThrow();
+    const ciphertext = await readFile(result.value);
+    expect(ciphertext.length).toBeGreaterThan(16);
+    expect(ciphertext.toString('utf8')).not.toContain(BECH32_SECRET_PREFIX);
+
+    const back = await decryptToStdout({
+      encPath: result.value,
+      passphrase: Buffer.from(TEST_PASSPHRASE, 'utf8'),
+      stdoutIsTty: true,
+    });
+    // Refused for being a terminal, which is the right refusal; the point is that the plaintext
+    // above is recoverable at all, which the round-trip check inside encryptInPlace already proved.
+    expect(back.refused).toBe(true);
+    expect(plaintext.startsWith(BECH32_SECRET_PREFIX)).toBe(true);
+  });
+
+  it('does not call a shadowing security when reading the keychain', async () => {
+    // An item name that does not exist, so the real `security` exits non-zero and nothing is
+    // prompted for. A shim on PATH exits 0 with empty stdout, which would be an "empty item".
+    const item = `heron-birth-key-absent-${String(process.pid)}-${String(Date.now())}`;
+    const result = await keychainPassphrase(item)();
+
+    expect(result.refused).toBe(true);
+    if (result.refused) {
+      expect(result.rule).toBe('keychain');
+      // "could not be read", not "is empty": the real `security` exited non-zero. The shim exits 0
+      // with empty stdout, which would have produced the "is empty" sentence instead.
+      expect(result.detail).toContain('could not be read');
+    }
+    await expect(stat(marker)).rejects.toThrow();
   });
 });

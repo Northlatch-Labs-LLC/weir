@@ -19,6 +19,11 @@ async function unit(name: string): Promise<ParsedUnit> {
   return parseUnit(await readFile(join(SYSTEMD, name), 'utf8'));
 }
 
+/** The unit's raw text, comments included — where the uid ruling is written. */
+async function text(name: string): Promise<string> {
+  return readFile(join(SYSTEMD, name), 'utf8');
+}
+
 describe('heron-purse.service', () => {
   it('runs as the purse user and takes the key as an encrypted systemd credential', async () => {
     const purse = await unit('heron-purse.service');
@@ -26,6 +31,27 @@ describe('heron-purse.service', () => {
     expect(directive(purse, 'Service', 'LoadCredentialEncrypted')).toContain(
       'heron-hot:/etc/heron/creds/heron-hot.cred',
     );
+  });
+
+  /*
+    A5 from Security's review of 2026-09-05: `User=purse` named no uid, and v1's defect 3 was a
+    dynamically allocated uid colliding with a platform account. The ruling the build log records is
+    `heron` 10001 and `purse` 10002, both asserted free before they are created.
+
+    systemd has no directive that carries a uid alongside a user name, so the ruling lives in the
+    unit's header comment — which is precisely the kind of text this test file exists to stop being
+    decorative. The numbers are asserted here and in the README so the deploy has one place to copy
+    from and drift fails a test rather than a droplet.
+  */
+  it('runs as purse:purse and names the uid the deploy must create', async () => {
+    const purse = await unit('heron-purse.service');
+    expect(onlyValue(purse, 'Service', 'User')).toBe('purse');
+    expect(onlyValue(purse, 'Service', 'Group')).toBe('purse');
+
+    const raw = await text('heron-purse.service');
+    expect(raw).toContain('--uid 10002');
+    expect(raw).toContain('getent passwd 10002');
+    expect(raw).toContain('10001');
   });
 
   it('carries the hardening set the CISO named', async () => {
@@ -88,6 +114,17 @@ describe('heron-beat.service', () => {
   it('can write only the runs and state directories', async () => {
     const beat = await unit('heron-beat.service');
     expect(onlyValue(beat, 'Service', 'ReadWritePaths')).toBe('/srv/heron/runs /srv/heron/state');
+  });
+});
+
+describe('the uid ruling', () => {
+  it('is the same in the unit and in the README, so the deploy has one source', async () => {
+    const raw = await text('heron-purse.service');
+    const readme = await readFile(join(SYSTEMD, '..', 'README.md'), 'utf8');
+    for (const fact of ['10001', '10002', 'getent passwd 10002', '--uid 10002']) {
+      expect(raw).toContain(fact);
+      expect(readme).toContain(fact);
+    }
   });
 });
 

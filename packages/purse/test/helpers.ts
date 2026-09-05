@@ -217,3 +217,129 @@ export function stubPort(response: unknown, sender: string): SimulationPort {
     },
   };
 }
+
+/* ------------------------------------------------------- the LedgerCap arm, for the A3 fixtures */
+
+/**
+ * The unpublished soul package, and the four objects `soul::settle_epoch` takes.
+ *
+ * These are fixture ids, not addresses: the soul package has no `Published.toml` and no object id
+ * anywhere in the estate, which is exactly why `policy/heron-ledger.json` names its package as a
+ * substitution the deploy fills. The Clock is `0x6` because that one really is fixed.
+ */
+export const SOUL_PACKAGE = `0x${'0'.repeat(62)}5e`;
+export const SETTLE_EPOCH = `${SOUL_PACKAGE}::soul::settle_epoch`;
+export const RECORD_SPEND = `${SOUL_PACKAGE}::soul::record_spend`;
+export const LEDGER_CAP_ID = `0x${'8'.repeat(64)}`;
+export const REGISTRY_ID = `0x${'9'.repeat(64)}`;
+export const SOUL_ID = `0x${'a'.repeat(64)}`;
+export const CLOCK_ID = '0x6';
+
+export function settleEpochIntentFor(
+  overrides: Partial<Extract<Intent, { kind: 'settle_epoch' }>> = {},
+): Intent {
+  return {
+    kind: 'settle_epoch',
+    packageId: SOUL_PACKAGE,
+    ledgerCap: { objectId: LEDGER_CAP_ID, version: '11', digest: '11111111111111111111111111111111' },
+    registry: { objectId: REGISTRY_ID, initialSharedVersion: '2', mutable: true },
+    soul: { objectId: SOUL_ID, initialSharedVersion: '2', mutable: true },
+    clock: { objectId: CLOCK_ID, initialSharedVersion: '1', mutable: false },
+    vaultSui: '4000000000',
+    epochNetNonneg: true,
+    ...overrides,
+  };
+}
+
+/**
+ * A simulation response for a `soul::settle_epoch` transaction.
+ *
+ * The same recorded shape as {@link setPriceResponse} — two-level object input enum, signed decimal
+ * amount, digest on `effects` — with the inputs and the one command that `settle_epoch` actually
+ * has. It exists so a content policy can be shown refusing a **well-formed** settlement rather than
+ * a malformed one; a fixture that was rejected by the schema would prove nothing about the policy.
+ */
+export function settleEpochResponse(agentAddress: string, overrides: ResponseOverrides = {}) {
+  return {
+    $kind: 'Transaction',
+    Transaction: {
+      status: { success: true, error: null },
+      balanceChanges: [
+        { coinType: SUI_TYPE, address: agentAddress, amount: overrides.agentAmount ?? '-1188000' },
+      ],
+      effects: {
+        transactionDigest: DIGEST,
+        gasUsed: {
+          computationCost: '100000',
+          storageCost: '988000',
+          storageRebate: '0',
+          nonRefundableStorageFee: '0',
+        },
+      },
+      transaction: {
+        sender: overrides.sender ?? agentAddress,
+        gasData: {
+          budget: overrides.gasBudget ?? '1188000',
+          owner: overrides.sender ?? agentAddress,
+          payment: [],
+          price: '100',
+        },
+        inputs: [
+          {
+            $kind: 'Object',
+            Object: {
+              $kind: 'ImmOrOwnedObject',
+              ImmOrOwnedObject: {
+                objectId: LEDGER_CAP_ID,
+                version: '11',
+                digest: '11111111111111111111111111111111',
+              },
+            },
+          },
+          {
+            $kind: 'Object',
+            Object: {
+              $kind: 'SharedObject',
+              SharedObject: { objectId: REGISTRY_ID, initialSharedVersion: '2', mutable: true },
+            },
+          },
+          {
+            $kind: 'Object',
+            Object: {
+              $kind: 'SharedObject',
+              SharedObject: { objectId: SOUL_ID, initialSharedVersion: '2', mutable: true },
+            },
+          },
+          { $kind: 'Pure', Pure: { bytes: 'AAAAAAAAAAA=' } },
+          { $kind: 'Pure', Pure: { bytes: 'AQ==' } },
+          {
+            $kind: 'Object',
+            Object: {
+              $kind: 'SharedObject',
+              SharedObject: { objectId: CLOCK_ID, initialSharedVersion: '1', mutable: false },
+            },
+          },
+        ],
+        commands: [
+          {
+            $kind: 'MoveCall',
+            MoveCall: {
+              package: SOUL_PACKAGE,
+              module: 'soul',
+              function: 'settle_epoch',
+              typeArguments: [],
+              arguments: [
+                { $kind: 'Input', Input: 0 },
+                { $kind: 'Input', Input: 1 },
+                { $kind: 'Input', Input: 2 },
+                { $kind: 'Input', Input: 3 },
+                { $kind: 'Input', Input: 4 },
+                { $kind: 'Input', Input: 5 },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  };
+}

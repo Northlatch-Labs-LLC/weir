@@ -56,6 +56,36 @@ export const policyDocSchema = z.strictObject({
   allowedCommandKinds: z.array(z.string().min(1)),
 });
 
+/** `soul::settle_epoch`, the one call the `LedgerCap` service is for. */
+const SETTLEMENT_SUFFIX = '::soul::settle_epoch';
+
+/**
+ * Refuse a document whose target set spans both money paths.
+ *
+ * The rule is deliberately blunt: a document that names `settle_epoch` may name **nothing else**.
+ * A subtler rule — "settle_epoch may not appear beside a content entry" — would have to enumerate
+ * what counts as a content entry, and an enumeration is the thing that goes stale when the next
+ * entry point is added. `policy/heron-ledger.json` is that document and it names one target.
+ *
+ * Returns the sentence to refuse with, or `null` when the document keeps to one path.
+ */
+export function refuseMixedMoneyPaths(targets: readonly string[]): string | null {
+  const settlement = targets.filter((target) => target.endsWith(SETTLEMENT_SUFFIX));
+  if (settlement.length === 0) return null;
+  const others = targets.filter((target) => !target.endsWith(SETTLEMENT_SUFFIX));
+  if (others.length === 0) return null;
+
+  return (
+    `the document allows ${settlement.join(', ')} and also ${others.join(', ')}. One signer per ` +
+    `money path: the \`LedgerCap\` that settles an epoch and the key that prices content are ` +
+    `different capabilities on different keys under different services (executive decision 6), and ` +
+    `a single document naming both would put both money paths behind one signature. A settlement ` +
+    `would then consume the content arm's outflow ceiling, and a compromise of either key would ` +
+    `reach both. Deploy \`policy/heron-content.json\` to the content purse and ` +
+    `\`policy/heron-ledger.json\` to the ledger purse; do not merge them.`
+  );
+}
+
 export interface PinnedPolicy {
   readonly doc: PolicyDoc;
   /** sha256 of the file's bytes, hex. What the unit pins. */
@@ -112,5 +142,11 @@ export async function loadPinnedPolicy(args: {
   }
 
   const doc: PolicyDoc = parsed.data;
+
+  const mixed = refuseMixedMoneyPaths(doc.allowedTargets);
+  if (mixed !== null) {
+    return refuse('request-malformed', `the policy document at ${args.path} is refused: ${mixed}`);
+  }
+
   return allow({ doc, fileSha256, policyHash: createHash('sha256').update(canonicalPolicyJson(doc), 'utf8').digest('hex') });
 }
