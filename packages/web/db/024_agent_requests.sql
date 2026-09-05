@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 -- 024_agent_requests.sql — a machine that times out may retry without doing the thing twice.
 --
 -- # What was wrong, and why nobody noticed

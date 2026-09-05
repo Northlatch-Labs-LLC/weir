@@ -1,4 +1,4 @@
-<!-- Built-by: @projectx.sui /|\ · Co-authored-by: Claude -->
+<!-- Built-by: @projectx.sui · Co-authored-by: Claude -->
 # Registry submissions — prepared, not sent
 
 Everything in this directory is a file that has been written and **deliberately not submitted**.

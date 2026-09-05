@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * Every entitlement the reader holds, not the first fifty.
  *

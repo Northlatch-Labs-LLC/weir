@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * A blob read has a deadline and a ceiling.
  *

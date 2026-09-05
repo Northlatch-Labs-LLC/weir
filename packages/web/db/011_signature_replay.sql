@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- 011: a write signature may be spent exactly once.
 --
 -- `verifyAction` proved that an address signed a statement, and that the statement was recent. It

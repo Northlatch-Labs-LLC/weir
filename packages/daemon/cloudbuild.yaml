@@ -1,4 +1,4 @@
-# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Built-by: @projectx.sui · Co-authored-by: Claude
 # Cloud Build for the harvest daemon image.
 #
 # `gcloud builds submit --tag` exists and would be shorter, but it only ever looks for a Dockerfile

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Built-by: @projectx.sui · Co-authored-by: Claude
 # Install the harvest daemon on a Container-Optimized OS host.
 #
 # COS has no package manager and no Node, so the daemon runs as a container from Artifact Registry

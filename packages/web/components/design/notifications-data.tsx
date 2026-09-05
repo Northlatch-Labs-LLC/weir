@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { fold } from '@projectx-social/sdk';
 import { readNotifications } from '@/lib/notifications';
 import { formatUnits } from '@/lib/units';

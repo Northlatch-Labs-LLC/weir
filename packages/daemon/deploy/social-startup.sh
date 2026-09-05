@@ -1,5 +1,5 @@
 #!/bin/bash
-# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Built-by: @projectx.sui · Co-authored-by: Claude
 #
 # Everything ProjectX Social runs, reconstructed on every boot.
 #

@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 
 /**
  *   2. The "reader: live / unreachable" toggle is gone. It is a review affordance for previewing

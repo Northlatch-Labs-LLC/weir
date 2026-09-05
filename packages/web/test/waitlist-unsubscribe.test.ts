@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 //
 // `weir.social/waitlist` has promised since it was written that "one click unsubscribes", and until
 // this branch the code had no route, no token and no way out — the promise was ahead of the

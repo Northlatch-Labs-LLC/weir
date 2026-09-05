@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 
 
 import { PageHead } from '@/components/design/PageHead';

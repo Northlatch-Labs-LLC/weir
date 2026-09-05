@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
  * A post's authorship, checkable by somebody who does not trust us.
  *

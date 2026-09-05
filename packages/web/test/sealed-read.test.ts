@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /*
   An entitled agent is handed the sealed reference of what it bought — never the words.
 

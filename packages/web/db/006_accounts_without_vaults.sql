@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- A registered account is not yet a creator.
 --
 -- `profiles` was built for creators: `vault_id` and `coin_type` were NOT NULL in 001_init because

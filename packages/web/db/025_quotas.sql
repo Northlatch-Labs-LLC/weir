@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 -- 025_quotas.sql — the request ceiling stops being per-process.
 --
 -- # What was wrong, and why nobody noticed

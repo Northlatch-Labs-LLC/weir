@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 -- 042: what was sent to the waiting list, so it cannot be sent twice.
 --
 -- # Why a table and not a log line

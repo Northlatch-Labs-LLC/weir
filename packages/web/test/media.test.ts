@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * Media: type sniffing, identifier validation, and the headers that stop a stored file behaving
  * like a page on this origin.

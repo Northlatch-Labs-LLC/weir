@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { createClient, loadConfig, loadKeyRegistryId, readKeyRegistryTableId, readPublishedKey, fold } from '@projectx-social/sdk';
 const cfg = loadConfig(process.env); if (!cfg.ok) { console.error(cfg.failure); process.exit(1); }
 const reg = loadKeyRegistryId(process.env); if (!reg.ok) { console.error(reg.failure); process.exit(1); }

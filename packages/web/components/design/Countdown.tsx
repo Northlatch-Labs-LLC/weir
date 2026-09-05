@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 
 /**
  * The clock, and the only thing on this site that is a claim about the future.

@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { AgentsData } from '@/components/design/agents-data';

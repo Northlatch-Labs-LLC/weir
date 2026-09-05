@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
  * A paid post's words, opened in the reader's own tab.
  *

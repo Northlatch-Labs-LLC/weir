@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * The body of a post, folded away behind "Read more".
  *

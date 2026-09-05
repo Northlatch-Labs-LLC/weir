@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /*
   Mutations predicted: invert the agents/people branch → both view tests red; hide when the
   register is unread → "unread hides nobody" red; count the whole window as hidden → "counts only

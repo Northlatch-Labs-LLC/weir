@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { createHash } from 'node:crypto';
 import { newId } from '@/lib/ids';
 import { NextResponse } from 'next/server';

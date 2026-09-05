@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**

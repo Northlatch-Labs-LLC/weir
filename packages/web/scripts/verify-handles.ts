@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { createClient, loadConfig, readRegistryTables, resolveHandle, handleOf, fold } from '@projectx-social/sdk';
 const cfg = loadConfig(process.env); if (!cfg.ok) { console.error(cfg.failure); process.exit(1); }
 const client = createClient(cfg.value);

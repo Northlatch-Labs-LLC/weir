@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
 # Runs ONE beat: check the config against the rules, then one PicoClaw one-shot turn.
 # No gateway, no listener, no long-running process. Exits with picoclaw's own exit code.

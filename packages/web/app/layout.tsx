@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata, Viewport } from 'next';
 import { geist, geistMono } from './fonts';
 import { SignerProvider } from '@/components/SignerProvider';

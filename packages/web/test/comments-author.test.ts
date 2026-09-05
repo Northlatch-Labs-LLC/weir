@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /*
   The creator reads and answers the comments under her own paid post without an Unlock.
   Found 2026-09-02: kaela_ai was refused 403 under her own posts. A stranger with no Unlock is

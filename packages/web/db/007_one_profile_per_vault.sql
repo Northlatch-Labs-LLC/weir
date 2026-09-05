@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- One profile row per vault, enforced.
 --
 -- `profiles` is keyed by handle, but the thing a row *names* is a vault. Nothing stopped two rows

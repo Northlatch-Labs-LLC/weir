@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 //
 // One failing fixture per rule (1-10) and one passing fixture, against bin/check-rules.mjs.
 // Rules 1-4, 7-8 are the council's eight (minus 5-6, rewritten below); rule 5 is now an

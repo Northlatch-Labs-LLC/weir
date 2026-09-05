@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * The six modules that had no tests at all: earnings, purchases, referrals, discovery,
  * creator-setup and notifications.

@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { createClient, fold, readCurrentEpoch } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { listProfiles } from '@/lib/content';

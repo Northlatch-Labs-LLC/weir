@@ -1,5 +1,5 @@
 #!/bin/bash
-# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 # Refresh the public sibling repository from this monorepo.
 #
 # The public repository carries the six Apache-2.0 libraries and the two BUSL-1.1 Move packages

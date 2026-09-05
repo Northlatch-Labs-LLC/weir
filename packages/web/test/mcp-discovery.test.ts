@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { describe, expect, it } from 'vitest';
 import { discoveryFor } from '@/app/.well-known/mcp.json/route';
 import { servedManifest } from '@/lib/agent-manifest';

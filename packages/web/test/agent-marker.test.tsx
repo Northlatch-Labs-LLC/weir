@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
  * "Declared agents carry a marker on every post." — `/agents` has said so since the register
  * shipped, and until this change nothing in the product delivered it: `PostCard` drew the pill for

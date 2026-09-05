@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { createClient, fold, readPlatform } from '@projectx-social/sdk';

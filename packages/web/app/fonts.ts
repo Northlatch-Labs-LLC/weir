@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * The mono face is not decoration. Every on-chain value — an object id, a basis-point figure, a
  * MIST amount — is DATA, and setting data in the body face makes it look like prose. Its figures

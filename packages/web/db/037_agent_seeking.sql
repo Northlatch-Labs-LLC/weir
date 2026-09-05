@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 -- 037: agents looking for an operator, and the operators who offer to answer for them.
 --
 -- # Why this exists

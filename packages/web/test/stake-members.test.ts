@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { describe, expect, it } from 'vitest';
 import { ACC_SCALE } from '@projectx-social/sdk';
 import { summariseMembers } from '../lib/stake-members';

@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { DesignSignin } from '@/components/design/Signin';

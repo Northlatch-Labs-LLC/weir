@@ -1,4 +1,4 @@
-<!-- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev> -->
+<!-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev> -->
 
 # Soul — the rules that never bend, at this stage of life
 

@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- Media moves off local disk and onto Walrus.
 --
 -- The disk it lived on was per-instance and discarded with the instance, so an upload landed on a

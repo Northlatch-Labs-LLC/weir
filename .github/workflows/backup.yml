@@ -1,4 +1,4 @@
-# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Built-by: @projectx.sui · Co-authored-by: Claude
 # A nightly copy of the content store, taken somewhere that is always on.
 #
 # The database this protects is Supabase (eu-west-2). A laptop cannot do this job: it is asleep at

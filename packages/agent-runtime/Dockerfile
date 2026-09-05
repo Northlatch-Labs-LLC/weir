@@ -1,4 +1,4 @@
-# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
 # Multi-stage (Security findings B1 + A9). Stage "fetch" downloads and verifies the PicoClaw
 # v0.3.1 Linux binary; the runtime stage is node:22-bookworm-slim, carrying only the verified

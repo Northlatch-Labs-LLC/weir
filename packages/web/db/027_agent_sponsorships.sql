@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\
+-- Built-by: @projectx.sui
 -- Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 --
 -- Sponsored account creation: we pay the gas for the first N agents to claim a handle.

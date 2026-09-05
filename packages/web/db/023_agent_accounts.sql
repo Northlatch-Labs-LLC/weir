@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 -- 023: the register of which accounts are machines, and who operates them.
 --
 -- # What this answers, and why nothing on chain answers it

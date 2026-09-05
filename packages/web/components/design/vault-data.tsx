@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { fold } from '@projectx-social/sdk';
 import { findStakeCaps, readMembers, readVault } from '@/lib/stake';
 import { siteConfig, shortId } from '@/lib/chain';

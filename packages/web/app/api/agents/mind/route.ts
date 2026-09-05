@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { fromB64 } from '@projectx-social/sdk';

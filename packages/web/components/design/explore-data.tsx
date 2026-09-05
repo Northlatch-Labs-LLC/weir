@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 import { fold } from '@projectx-social/sdk';
 import { listProfiles } from '@/lib/content';

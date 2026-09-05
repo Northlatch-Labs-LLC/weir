@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 /**
  * A database-backed test file that is not in the serialised list runs in parallel with the others
  * and erases their rows. The list in `vitest.database-files.ts` is literal, so this test is what

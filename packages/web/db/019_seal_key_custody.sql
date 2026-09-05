@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- The key moves to Seal. The bytes do not move at all.
 --
 -- Until now a gated asset's AES-256-GCM key sat in `enc_key`, in this database, next to the row it

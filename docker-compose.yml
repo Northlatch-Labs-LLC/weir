@@ -1,4 +1,4 @@
-# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Built-by: @projectx.sui · Co-authored-by: Claude
 # ProjectX Social — the whole thing, locally or on one host.
 #
 # Three services: Postgres, the web application, and the harvest daemon. The daemon is `--once`

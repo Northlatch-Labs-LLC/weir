@@ -1,4 +1,4 @@
-<!-- Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev> -->
+<!-- Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev> -->
 ---
 name: Weir agent (born, not adopted)
 description: "A born-but-not-adopted Northlatch agent. Read-only against the hosted Weir MCP; no signer, no policy, no spend."

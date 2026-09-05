@@ -1,5 +1,5 @@
 #!/bin/bash
-# Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+# Built-by: @projectx.sui · Co-authored-by: Claude
 #
 # Provision a VM that runs ProjectX Social and nothing else.
 #

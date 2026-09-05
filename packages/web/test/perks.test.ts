@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { describe, expect, it } from 'vitest';
 import { MAX_DETAIL, MAX_PERKS, MAX_TITLE, validatePerks } from '../lib/perks';
 

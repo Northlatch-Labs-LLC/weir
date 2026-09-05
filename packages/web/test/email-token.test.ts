@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 //
 // The unsubscribe token is the only thing standing between a mailing list and anybody who can guess
 // an address. If it can be forged, one request takes a stranger off the list; if it cannot be

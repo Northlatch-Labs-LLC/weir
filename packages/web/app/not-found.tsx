@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import Link from 'next/link';
 import { PageHead } from '@/components/design/PageHead';
 import { PRIMARY } from '@/lib/site-map';

@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- The encryption key registry moved to Sui. This table is not a cache of it; it is deleted.
 --
 -- Keeping it would create a second source of truth for the question "which key writes to this

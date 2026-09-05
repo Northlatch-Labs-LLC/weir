@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 
 import { useEffect, useRef, useState } from 'react';
 import { handleShapeProblem } from '@/lib/waitlist';

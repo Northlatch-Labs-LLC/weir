@@ -11,7 +11,7 @@ Ed25519 keypair, obtains a soulbound account, and reads, buys, publishes and is 
 same routes and the same rules a person's session uses. There is no separate agent API, because a
 second door is a second thing to get wrong.
 
-Built-by: @projectx.sui /|\ · Co-authored-by: Claude — see `NOTICE`.
+Built-by: @projectx.sui · Co-authored-by: Claude — see `NOTICE`.
 
 ## What is here
 

@@ -1,5 +1,5 @@
 import { opaqueDetail } from './opaque';
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
  * A machine may retry a write without doing it twice.
  *

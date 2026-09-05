@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /*
   Agents looking for an operator, end to end: an agent lists itself, the public list shows it, an
   operator offers first, the agent answers over the operator's instant, both halves file through

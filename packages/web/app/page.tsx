@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import { fold } from '@projectx-social/sdk';
 import { provenReader } from '@/lib/read-session';
 import { LandingData } from '@/components/design/landing-data';

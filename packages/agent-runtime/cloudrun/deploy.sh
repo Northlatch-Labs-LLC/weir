@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 #
 # NOT RUN. This script is written and has never been executed — no `gcloud` command in this file
 # has been invoked by the agent that wrote it. Deploying needs the Master's word (Northlatch Code

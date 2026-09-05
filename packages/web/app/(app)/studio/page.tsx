@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata } from 'next';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { CREATOR, titleFor } from '@/lib/site-map';

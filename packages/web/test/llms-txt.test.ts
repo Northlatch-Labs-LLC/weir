@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 //
 // `llms.txt` is the first thing an agent reads, and it makes claims about the contracts and about
 // what we refuse to claim. A static file cannot notice when the thing it describes changes, so

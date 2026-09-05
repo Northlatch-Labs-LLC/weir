@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui /|\ · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude
 -- 013: a reader's identity is proved once, then carried by a cookie.
 --
 -- # What was wrong

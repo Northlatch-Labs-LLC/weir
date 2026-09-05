@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { classify, createClient, fail, ok, type Reading } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 
