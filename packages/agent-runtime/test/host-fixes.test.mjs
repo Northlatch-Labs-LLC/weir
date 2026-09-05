@@ -1688,7 +1688,7 @@ test('--install-beat: the rendered launcher carries the phase-two pin and no sub
 test('the launcher: runs the image by its pinned id, refuses a tag mismatch, keeps the credential on tmpfs, and appends beats.jsonl', () => {
   const launcher = readFileSync(path.join(DO_DIR, 'bin', 'heron-beat'), 'utf8');
   assert.match(launcher, /docker image inspect --format '\{\{\.Id\}\}' heron:local/);
-  assert.match(launcher, /"\$ACTUAL_ID" = "\$IMAGE_ID" \|\| refuse/);
+  assert.match(launcher, /"\$ACTUAL_ID" = "\$IMAGE_ID" \] \|\| refuse/);
   assert.match(launcher, /findmnt -n -o FSTYPE --target "\$CFG_ROOT"\)" = "tmpfs" \]/);
   assert.match(launcher, /install -m 0400 -o "\$CONTAINER_UID" -g "\$CONTAINER_GID" "\$CREDENTIALS_DIRECTORY\/openrouter"/);
   assert.match(launcher, /rm -rf "\$CFG"\n\n# --- phase two/, 'the credential copy must go before phase two runs');
