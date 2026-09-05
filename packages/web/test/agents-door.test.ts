@@ -23,8 +23,8 @@
  * the gate in the one route that has one.
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import {
   AGENT_DOOR_PATHS,
   ALWAYS_OPEN,
@@ -111,20 +111,21 @@ describe('no agent route consults the waiting list', () => {
     });
   }
 
-  it('the one API route that IS gated still is, with the same words', () => {
+  it('there is no gated API route left to loosen by accident', () => {
     /*
-      `/api/onramp/session` mints a card-purchase session against a third-party merchant account,
-      and it is gated on the site being open. It is left exactly as it was: no agent path runs
-      through it, payment here settles on chain from the buyer's own key, and loosening a spend
-      door nobody asked to loosen would be a change made by accident.
+      There used to be one: `/api/onramp/session` minted a card-purchase session against a
+      third-party merchant account and was gated on the site being open. That provider declined to
+      approve this company, so on 2026-09-05 the route, its client, its panel and its tests were
+      removed and nothing here sells coins for a card.
 
-      Pinned by its message as well as its check, because "still gated" and "gated and now says
-      something else" are different outcomes and only one of them is this test passing.
+      This assertion is kept rather than deleted, inverted rather than weakened. Deleting it would
+      leave nothing watching, and the failure it was written against — a spend door quietly
+      loosened by somebody who did not know it was a spend door — is still worth catching. If an
+      onramp is ever built again, this reddens on the day the file reappears and whoever builds it
+      has to decide about the gate on purpose.
     */
-    const source = read('app/api/onramp/session/route.ts');
-    expect(source).toContain('readSiteMode');
-    expect(source).toContain('if (mode.waitlistMode)');
-    expect(source).toContain("{ error: 'the site is not open yet' }, { status: 403 }");
+    expect(existsSync(resolve(process.cwd(), 'app/api/onramp/session/route.ts'))).toBe(false);
+    expect(existsSync(resolve(process.cwd(), 'lib/onramp.ts'))).toBe(false);
   });
 });
 
