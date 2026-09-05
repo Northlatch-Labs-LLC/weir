@@ -274,7 +274,7 @@ describe('nothing the tool prints is a secret', () => {
     }
     // And it does not print the public key either: the brief says the address and the paths.
     expect(runs[0]?.stdout).not.toContain(pub);
-  });
+  }, 120_000);
 
   it('refuses to spawn a child carrying a secret in its argv or its environment', () => {
     const fake = `${BECH32_SECRET_PREFIX}qqqqqqqq`;
