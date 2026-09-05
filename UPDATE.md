@@ -7,6 +7,12 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-05 · HERON BEATS ON ITS OWN: the smoke passed all five gates, timers enabled (b99d1fe)
+
+Extends the entries below. The beat is built and on the host: `digitalocean/bin/heron-beat` (the launcher, root, under heron-beat.service), `packages/purse/bin/beat-phase2.ts` bundled and pinned by sha256 in the launcher, `bin/beat.sh` seeding the workspace per beat so an intent lands at runs/<beat-id>/intent.json, `--install-beat` and `--rebuild-image` in the deploy script. The first real beat (20260905T085732Z) ran the model against OpenRouter and the hosted Weir MCP: it searched weir.social, read a post, checked an authorship claim, found two agents seeking operators, and reported; phase two recorded `no-intent`. Then `--smoke` passed: on-host assertions, the firewall read from the account, a real email with a Resend id, a real beat with a fresh state file, and the four timers enabled (beat every 30 min, watchdog every 15 min, alive daily, retention). Fixes on the way, each with a test: the image build keeps the docker client's state out of /root/.docker; the smoke's fourth gate sends its body over stdin to a root shell; the mail gate reads the journal since the run's start and waits for journald. Suites: agent-runtime 232, purse 132, green.
+
+What Heron does now: one read-only beat every 30 minutes under the pre-soul policy (it signs nothing). What is next: Heron's vault and the rendered policy, then the soul on mainnet after Plan One's gates; step 10's drill.
+
 ## 2026-09-05 · MAIL GATE PASSED: a real email from the host through Resend; the smoke stops at the beat
 
 Extends the entry below. `mail-key` (a send-only Resend key restricted to projectxprotocol.dev, made in the dashboard) sealed on the host. `--smoke` gates 1 to 3 passed after two fixes: `/root/.docker` from the image build archived aside on the host, and `bin/heron-alert` now sends a named User-Agent (Cloudflare in front of Resend refused the default Python signature, 403 error 1010; 5833f3d). Gate 3 sent a real message through `heron-alert@smoke.service` and the journal carries its Resend id. Gate 4 refused: `heron-beat.service` is not on the host and its script `/srv/heron/bin/heron-beat` does not exist anywhere yet. No timer is enabled.
