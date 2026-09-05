@@ -1,1 +1,0 @@
-{"version":3,"file":"protocol.js","sourceRoot":"","sources":["../src/protocol.ts"],"names":[],"mappings":"AAAA,mFAAmF;AACnF;;;;;;;;;;;;;;;;;;;;GAoBG;AAEH,OAAO,EAAE,CAAC,EAAE,MAAM,KAAK,CAAC;AAGxB,MAAM,CAAC,MAAM,aAAa,GAAG,CAAC,CAAC,YAAY,CAAC;IAC1C,MAAM,EAAE,CAAC,CAAC,OAAO,EAAE;CACpB,CAAC,CAAC;AAkBH;;;;;;;GAOG;AACH,MAAM,CAAC,MAAM,iBAAiB,GAAG,GAAG,GAAG,IAAI,CAAC"}
