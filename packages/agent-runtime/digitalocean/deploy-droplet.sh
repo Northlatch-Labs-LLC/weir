@@ -927,6 +927,12 @@ cmd_seal() {
   fi
 
   local pile_path="${HERON_PILE:-$HOME/.config/protocolx/heron}/$name"
+  # The key-birth tool (packages/signer/bin/birth-key.ts) writes a born key as <name>.key beside its
+  # .pub and .address; a provider token sits in the pile as a bare <name>. Both shapes are the pile's
+  # own; the bare name wins when both exist, and the row printed below names the file actually read.
+  if [ ! -f "$pile_path" ] && [ -f "$pile_path.key" ]; then
+    pile_path="$pile_path.key"
+  fi
   local ssh_target="${HERON_HOST:-<unset - set HERON_HOST to ops@<the droplet IP>>}"
   # THE TARGET IS VALIDATED HERE, wherever it came from, before it is printed as a command or
   # handed to ssh (Security's N-7). --dry-run with HERON_HOST unset prints the placeholder above
@@ -953,7 +959,7 @@ cmd_seal() {
     return 1
   fi
   if [ ! -f "$pile_path" ]; then
-    echo "deploy-droplet.sh --seal: refused - there is nothing at $pile_path. The pile is the only source; this never generates a credential." >&2
+    echo "deploy-droplet.sh --seal: refused - there is nothing at $pile_path (or $pile_path.key). The pile is the only source; this never generates a credential." >&2
     return 1
   fi
   local pile_mode

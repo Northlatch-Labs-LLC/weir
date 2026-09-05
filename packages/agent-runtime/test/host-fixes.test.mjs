@@ -15,16 +15,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
-  mkdtempSync,
+  chmodSync,
+  existsSync,
   mkdirSync,
-  writeFileSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
-  existsSync,
-  chmodSync,
   rmSync,
-  utimesSync,
   statSync,
+  utimesSync,
+  writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1442,6 +1442,19 @@ test('N7: a logrotate config exists, bounds the JSONL sinks only, and is install
 
   // The journal is bounded by journald, which logrotate cannot rotate.
   assert.match(readCloudInit(), /SystemMaxUse=200M/);
+});
+
+test('--seal reads a born key as <name>.key when the bare name is absent, and refuses when both are absent', () => {
+  const pile = mkdtempSync(path.join(os.tmpdir(), 'heron-pile-'));
+  writeFileSync(path.join(pile, 'heron-hot.key'), 'not-a-real-secret\n', { mode: 0o600 });
+  const env = { ...process.env, HERON_PILE: pile, HERON_HOST: 'ops@192.0.2.1', HERON_DEPLOY_CONFIRMED: '1' };
+  delete env.HERON_NO_NETWORK;
+  const shown = spawnSync('bash', [DEPLOY_SCRIPT, '--seal', 'heron-hot', '--dry-run'], { encoding: 'utf8', env });
+  assert.equal(shown.status, 0, shown.stderr);
+  assert.match(shown.stdout + shown.stderr, /heron-hot\.key/, 'the dry run must name the .key file it would read');
+  const missing = spawnSync('bash', [DEPLOY_SCRIPT, '--seal', 'heron-ledger', '--dry-run'], { encoding: 'utf8', env });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /nothing at .*heron-ledger \(or .*heron-ledger\.key\)/);
 });
 
 test('N9: the README names the Resend sender as a gate before the first alert, not a footnote', () => {
