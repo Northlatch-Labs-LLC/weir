@@ -27,7 +27,9 @@ package_upgrade: true
 # installer runs on this host at all.
 vendor_data:
   enabled: false
-# The packages are installed by the first runcmd entry below, with a lock wait and retries,
+# iptables is listed because Docker's bridge NAT needs it: on the fifth real run (2026-09-05) the
+# host reached the mirrors but containers could not (a connection timeout to deb.debian.org:80),
+# the signature of a bridge with no masquerade. The packages are installed by the first runcmd entry below, with a lock wait and retries,
 # instead of the packages: module, so a transient apt failure is retried and named rather than
 # fatal and silent (the second real run failed here with exit 100 and no stderr).
 disable_root: true
@@ -98,7 +100,7 @@ runcmd:
       set -e
       for i in 1 2 3 4 5; do
         while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do sleep 3; done
-        if DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confold -y -q install docker.io ca-certificates logrotate unattended-upgrades python3 nodejs; then echo "heron: packages installed on attempt $i"; exit 0; fi
+        if DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confold -y -q install docker.io iptables ca-certificates logrotate unattended-upgrades python3 nodejs; then echo "heron: packages installed on attempt $i"; exit 0; fi
         echo "heron: apt install attempt $i failed; updating and retrying" >&2; sleep 10; apt-get -q update || true
       done
       echo "heron: package install failed after 5 attempts" >&2; exit 1
