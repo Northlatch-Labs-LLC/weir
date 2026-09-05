@@ -748,6 +748,7 @@ test('N-4: a firewall whose readback is widened is DELETED by the very call that
     },
   });
   const server = await doServer((method, url) => {
+    if (method === 'POST' && url === '/v2/tags') return { status: 201, body: { tag: { name: 'heron-v2' } } }; // the tag must exist before a firewall targets it
     if (method === 'POST' && url === '/v2/firewalls') return { status: 201, body: { firewall: widened } };
     if (method === 'GET' && url === '/v2/firewalls/fw-1') return { body: { firewall: widened } };
     if (method === 'DELETE' && url === '/v2/firewalls/fw-1') return null;
@@ -790,6 +791,7 @@ test('N-4: a firewall whose readback matches is kept, and its id is printed', as
   const dir = tmpdir('fwok');
   const good = echoOf();
   const server = await doServer((method, url) => {
+    if (method === 'POST' && url === '/v2/tags') return { status: 201, body: { tag: { name: 'heron-v2' } } }; // the tag must exist before a firewall targets it
     if (method === 'POST' && url === '/v2/firewalls') return { status: 201, body: { firewall: good } };
     if (method === 'GET' && url === '/v2/firewalls/fw-1') return { body: { firewall: good } };
     return { status: 404, body: {} };
