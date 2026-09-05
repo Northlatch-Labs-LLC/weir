@@ -120,3 +120,20 @@ MULTISIG-RECOVERY-CARD.md
 # publication path.
 __pycache__/
 *.pyc
+
+# Linked worktrees, which sessions create inside the repository as `.<name>-worktree/`.
+#
+# Git does not ignore a linked worktree's directory just because it registered it, so every one of
+# them shows as untracked in every other session. On 2026-09-04 there were twenty-two: `git status`
+# in this repository returned twenty-two phantom entries before it returned anything real, in every
+# session, for every agent. Nobody could see an actual uncommitted file among them, which is the
+# failure — a noisy status is a status people stop reading.
+#
+# The directories themselves are disposable: `git worktree list` is the register, and
+# `git worktree remove` is how one goes. Nothing here is the source of anything.
+.*-worktree/
+
+# graphify's knowledge-graph output, written into whichever directory it is run from. It is a build
+# artifact of the analysis, regenerated on demand, and internal review material that must not reach
+# a publication path.
+graphify-out/
