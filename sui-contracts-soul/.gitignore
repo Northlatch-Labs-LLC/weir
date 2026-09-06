@@ -1,0 +1,9 @@
+build/*
+traces/*
+.trace
+.coverage*
+Pub.*.toml
+MUTATION-REPORT.md
+mutation-report.json
+mutation-report.sarif
+MUTATION-DELTA.md
