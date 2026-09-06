@@ -80,7 +80,7 @@ export function DesignJoin({
   const yieldNote =
     joinYield === 0
       ? 'You keep all of it. Perfectly normal, and the number is public, so say why if you like.'
-      : `Poolers get ${joinYield}% of the yield their deposit earns; you keep ${100 - joinYield}%. It is written on the object, so nobody has to trust you to keep it there.`;
+      : `You give poolers back ${joinYield}% of the yield their deposit generates for you; you keep ${100 - joinYield}% as your own. It is written on the object, so nobody has to trust you to keep it there.`;
 
   const onJoinHandle = (e: React.ChangeEvent<HTMLInputElement>) => setHandle(e.target.value);
   const onJoinTier = (e: React.ChangeEvent<HTMLInputElement>) => setTier(e.target.value);

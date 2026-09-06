@@ -113,7 +113,7 @@ export function DesignTreasuries({
               kicker="Treasury"
               title="The pot that yield alone"
               accent="fills."
-              lede={`Pooled SUI is delegated to validators. The staking yield it earns flows into the treasury; the principal never does. Nothing in this pot came out of anybody's balance; it is interest, gathered. The ladder below is why a withdrawal never waits on an epoch boundary, and why the capture is ${capturePct} rather than 100%. We publish the cost in the same breath as the convenience.`}
+              lede={`Pooled SUI is delegated to validators. The staking yield it earns flows into the treasury; the principal never does. Nothing in this pot came out of anybody's balance; it is staking reward, gathered. The ladder below is why a withdrawal never waits on an epoch boundary, and why the capture is ${capturePct} rather than 100%. We publish the cost in the same breath as the convenience.`}
             />
 
             <p style={{ margin: '0 0 1rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>The pools that fill it</p>
