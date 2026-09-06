@@ -68,9 +68,20 @@ export interface ServerArgs {
   readonly apiOrigin?: string | undefined;
   readonly statementsPerDay?: number | undefined;
   readonly vault?: string | undefined;
+  /**
+   * The agent this purse signs for: `heron` when not given. It names the credential systemd places
+   * (`<agent>-hot`) and the prefix of every log line (`<agent>-purse`), and nothing else — the
+   * policy, the members document and the vault are still what bound it. A second citizen runs the
+   * same compiled server with `--agent wren`; Heron's unit passes nothing and behaves as it always has.
+   */
+  readonly agent?: string | undefined;
 }
 
-const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day', '--vault'] as const;
+export const DEFAULT_AGENT = 'heron';
+/** `^[a-z][a-z0-9-]{0,31}$`: the same shape --seal accepts for a credential name, for the same reason. */
+const AGENT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
+
+const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day', '--vault', '--agent'] as const;
 
 /**
  * Parse argv.
@@ -86,7 +97,7 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
     if (!FLAGS.includes(flag as (typeof FLAGS)[number])) {
       return refuse(
         'request-malformed',
-        `${flag} is not a flag heron-purse takes. It takes exactly: ${FLAGS.join(' ')}. An ` +
+        `${flag} is not a flag the purse takes. It takes exactly: ${FLAGS.join(' ')}. An ` +
           `unrecognised flag is refused rather than ignored — a typo in --policy-sha256 would ` +
           `otherwise start a purse with no pin.`,
       );
@@ -110,12 +121,16 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
   const apiOrigin = values.get('--api-origin');
   const perDayText = values.get('--statements-per-day');
   const vault = values.get('--vault');
+  const agent = values.get('--agent');
+  if (agent !== undefined && !AGENT_NAME.test(agent)) {
+    return refuse('request-malformed', '--agent is a name matching ^[a-z][a-z0-9-]{0,31}$; it is interpolated into a credential name and a log prefix.');
+  }
   const given = [apiOrigin, perDayText, vault].filter((v) => v !== undefined).length;
   if (given !== 0 && given !== 3) {
     return refuse('request-malformed', '--api-origin, --statements-per-day and --vault are given together or not at all; a subset is a purse that half-signs statements.');
   }
   if (vault !== undefined && !/^0x[0-9a-f]{64}$/.test(vault)) {
-    return refuse('request-malformed', '--vault is the full lower-case id of Heron\'s own creator vault.');
+    return refuse('request-malformed', '--vault is the full lower-case id of the agent\'s own creator vault.');
   }
   let statementsPerDay: number | undefined;
   if (perDayText !== undefined) {
@@ -137,7 +152,13 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
     ...(apiOrigin === undefined ? {} : { apiOrigin }),
     ...(statementsPerDay === undefined ? {} : { statementsPerDay }),
     ...(vault === undefined ? {} : { vault }),
+    ...(agent === undefined ? {} : { agent }),
   });
+}
+
+/** The credential name a purse for `agent` loads: `heron-hot`, `wren-hot`. */
+export function credentialNameFor(agent: string | undefined): string {
+  return `${agent ?? DEFAULT_AGENT}-hot`;
 }
 
 export interface RunningPurse {
@@ -171,7 +192,9 @@ export async function startPurse(args: {
 }): Promise<Outcome<RunningPurse>> {
   const log = args.log ?? ((line: string) => process.stderr.write(`${line}\n`));
 
-  const surface = refuseKeyInProcessSurface({ argv: args.argv, env: args.env });
+  const credentialName = credentialNameFor(args.server.agent);
+  const prefix = `${args.server.agent ?? DEFAULT_AGENT}-purse`;
+  const surface = refuseKeyInProcessSurface({ argv: args.argv, env: args.env, credentialName });
   if (!surface.ok) return surface;
 
   const policy = await loadPinnedPolicy({ path: args.server.policy, expectedSha256: args.server.policySha256 });
@@ -181,6 +204,7 @@ export async function startPurse(args: {
   if (!chain.ok) return chain;
 
   const key = await loadHotKey({
+    credentialName,
     ...(args.server.keyFile === undefined ? {} : { keyFile: args.server.keyFile }),
     ...(args.env['CREDENTIALS_DIRECTORY'] === undefined
       ? {}
@@ -287,7 +311,7 @@ export async function startPurse(args: {
   await chmod(args.server.socket, 0o660);
 
   log(
-    `heron-purse: listening on ${args.server.socket} for ${purse.address} · policy ${policy.value.policyHash} ` +
+    `${prefix}: listening on ${args.server.socket} for ${purse.address} · policy ${policy.value.policyHash} ` +
       `· file ${policy.value.fileSha256} · audit head ${purse.auditHead()} · ${signerLine}` +
       (args.server.apiOrigin === undefined ? ' · statements off' : ` · statements for ${args.server.apiOrigin}, ${String(args.server.statementsPerDay)} a day, vault ${args.server.vault ?? ''}`),
   );
@@ -427,7 +451,7 @@ function notifyReady(notifySocket: string | undefined): void {
 if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
   const parsed = parseServerArgs(process.argv.slice(2));
   if (!parsed.ok) {
-    process.stderr.write(`heron-purse: ${parsed.refused.ruleId} — ${parsed.refused.reason}\n`);
+    process.stderr.write(`${DEFAULT_AGENT}-purse: ${parsed.refused.ruleId} — ${parsed.refused.reason}\n`);
     process.exit(2);
   }
   const started = await startPurse({
@@ -436,7 +460,7 @@ if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
     env: process.env,
   });
   if (!started.ok) {
-    process.stderr.write(`heron-purse: ${started.refused.ruleId} — ${started.refused.reason}\n`);
+    process.stderr.write(`${parsed.value.agent ?? DEFAULT_AGENT}-purse: ${started.refused.ruleId} — ${started.refused.reason}\n`);
     process.exit(2);
   }
   const running = started.value;

@@ -40,11 +40,9 @@ const BUILT_ON = [
  * who follows any of them lands on us and not on a lookalike. Shown in every state, gated
  * included: a shut door still says where we are.
  */
-export const SOCIAL = [
-  { name: 'X', handle: '@weirsocial', mark: 'X', href: 'https://x.com/weirsocial' },
-  { name: 'GitHub', handle: 'Northlatch-Labs-LLC', mark: 'GH', href: 'https://github.com/Northlatch-Labs-LLC' },
-  { name: 'Moltbook', handle: '@weirsocial', mark: 'M', href: 'https://www.moltbook.com/u/weirsocial' },
-] as const;
+// SOCIAL moved to lib/social-links.ts on 2026-09-06 — see that file for why.
+export { SOCIAL } from '@/lib/social-links';
+import { SOCIAL } from '@/lib/social-links';
 
 interface Deployment {
   packageId: string;

@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
 import { TITLE, TAGLINE, DESCRIPTION } from '@/lib/site-meta';
-import { SOCIAL } from '@/components/shell/SiteFooter';
+import { SOCIAL } from './social-links';
 
 /**
  * JSON-LD, sourced rather than typed twice.

@@ -71,23 +71,53 @@ export const policyDocSchema = z.strictObject({
   allowedCommandKinds: z.array(z.string().min(1)),
 });
 
-/** `soul::settle_epoch`, the one call the `LedgerCap` service is for. */
-const SETTLEMENT_SUFFIX = '::soul::settle_epoch';
+/**
+ * The calls the `LedgerCap` service is for: the three entry points on the deployed soul package
+ * that take a `&LedgerCap`, read off mainnet (`0x8d6567ed…635f::soul`, 2026-09-06).
+ *
+ * `record_spend` is deliberately NOT here. It is in the same Move module and it is a content-arm
+ * call: it takes no capability at all, because the contract asserts `ctx.sender() == soul.agent`,
+ * so the key that signs it is the hot key that publishes. Grouping by module rather than by
+ * capability would have put it on this side and merged the two paths by accident.
+ */
+const SETTLEMENT_SUFFIXES = [
+  '::soul::settle_epoch',
+  '::soul::book_earned',
+  '::soul::book_burned',
+] as const;
+
+function isSettlement(target: string): boolean {
+  return SETTLEMENT_SUFFIXES.some((suffix) => target.endsWith(suffix));
+}
 
 /**
  * Refuse a document whose target set spans both money paths.
  *
- * The rule is deliberately blunt: a document that names `settle_epoch` may name **nothing else**.
- * A subtler rule — "settle_epoch may not appear beside a content entry" — would have to enumerate
- * what counts as a content entry, and an enumeration is the thing that goes stale when the next
- * entry point is added. `policy/heron-ledger.json` is that document and it names one target.
+ * The rule is blunt on purpose: a document that names a settlement call may name **only**
+ * settlement calls. It used to be blunter still — `settle_epoch` and nothing else — because the
+ * settlement arm had exactly one entry point, and the note here argued against any list on the
+ * grounds that an enumeration goes stale when the next entry point is added.
+ *
+ * That objection is right about the wrong list. Enumerating what counts as a *content* entry goes
+ * stale OPEN: a content call this file had not heard of would sit beside `settle_epoch` and be
+ * allowed. Enumerating the *settlement* set goes stale CLOSED: a fourth `LedgerCap` call added to
+ * the contract tomorrow is not in {@link SETTLEMENT_SUFFIXES}, so a document naming it beside
+ * `settle_epoch` is refused until somebody updates this file deliberately. A list whose staleness
+ * refuses is a different object from a list whose staleness admits, and only the second one was
+ * the danger.
+ *
+ * The set is by capability, not by module — see {@link SETTLEMENT_SUFFIXES} for why `record_spend`
+ * is on the other side despite living in the same Move module.
+ *
+ * `policy/heron-ledger.json` and `policy/wren-ledger.json` are those documents; each names the
+ * three, and nothing else.
  *
  * Returns the sentence to refuse with, or `null` when the document keeps to one path.
  */
 export function refuseMixedMoneyPaths(targets: readonly string[]): string | null {
-  const settlement = targets.filter((target) => target.endsWith(SETTLEMENT_SUFFIX));
+  const settlement = targets.filter(isSettlement);
   if (settlement.length === 0) return null;
-  const others = targets.filter((target) => !target.endsWith(SETTLEMENT_SUFFIX));
+  const others = targets.filter((target) => !isSettlement(target));
   if (others.length === 0) return null;
 
   return (

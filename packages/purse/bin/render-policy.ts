@@ -21,7 +21,16 @@ import { loadPinnedPolicy } from '../src/policy-file.js';
 import { writeFileSync as _unused } from 'node:fs';
 
 const SUI_ID = /^0x[0-9a-fA-F]{1,64}$/;
-const SOUL_MARKERS = ['<SOUL_PACKAGE_ID>', '<HERON_SOUL_ID>', '<SOUL_REGISTRY_ID>', '<LEDGER_CAP_ID>'] as const;
+/** A u64 as a decimal string. JSON has no integer type that survives 2^53; a string does. */
+const U64_DECIMAL = /^(0|[1-9][0-9]{0,19})$/;
+/** A base58 object digest, bounded rather than decoded: a decoder here would be a second one. */
+const BASE58_DIGEST = /^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
+/**
+ * The substitutions --pre-soul drops: the package, the registry, the ledger cap, and the agent's own
+ * soul object under any agent's prefix (`<HERON_SOUL_ID>`, `<WREN_SOUL_ID>`). One pattern, so a
+ * second citizen's template needs no change here.
+ */
+const SOUL_MARKER = /<(SOUL_PACKAGE_ID|SOUL_REGISTRY_ID|LEDGER_CAP_ID|[A-Z][A-Z0-9_]*_SOUL_ID)>/;
 
 export interface RenderArgs {
   readonly template: string;
@@ -65,13 +74,32 @@ export function renderPolicy(templateText: string, values: Readonly<Record<strin
 
   for (const [name, value] of Object.entries(values)) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name)) return { ok: false, reason: `values key "${name}" is not a substitution name.` };
-    if (typeof value !== 'string' || !SUI_ID.test(value)) return { ok: false, reason: `values.${name} is not a Sui id or address.` };
+    if (typeof value !== 'string') return { ok: false, reason: `values.${name} is not a string.` };
+    /*
+      Three shapes, chosen by the key's own suffix rather than by trying each in turn.
+
+      A values document used to hold nothing but object ids, so one test served. The settlement
+      arm needs an object REFERENCE — id, version and digest — because the purse is handed
+      fully-resolved references and never resolves an id against a fullnode itself. A version is a
+      u64 and a digest is base58, so a single shape can no longer cover the file.
+
+      Deciding by suffix, not by "whichever pattern matches", is the point. Accepting any of the
+      three for any key would let a digest sit where an id belongs and a version where a digest
+      does, and the transaction that resulted would name the wrong object with a well-formed
+      value. The suffix says what the field IS, and the check holds it to that.
+    */
+    const shape = name.endsWith('_VERSION') || name.endsWith('_MIST')
+      ? { re: U64_DECIMAL, what: 'a u64 written as a decimal string' }
+      : name.endsWith('_DIGEST')
+        ? { re: BASE58_DIGEST, what: 'a base58 object digest' }
+        : { re: SUI_ID, what: 'a Sui id or address' };
+    if (!shape.re.test(value)) return { ok: false, reason: `values.${name} is not ${shape.what}.` };
   }
 
   const record = doc as Record<string, unknown>;
   if (preSoul) {
     const drop = (list: unknown): unknown =>
-      Array.isArray(list) ? list.filter((entry) => typeof entry !== 'string' || !SOUL_MARKERS.some((m) => entry.includes(m))) : list;
+      Array.isArray(list) ? list.filter((entry) => typeof entry !== 'string' || !SOUL_MARKER.test(entry)) : list;
     record['allowedTargets'] = drop(record['allowedTargets']);
     record['allowedObjects'] = drop(record['allowedObjects']);
   }

@@ -9,7 +9,9 @@
     }
   ],
   "allowedTargets": [
-    "<SOUL_PACKAGE_ID>::soul::settle_epoch"
+    "<SOUL_PACKAGE_ID>::soul::settle_epoch",
+    "<SOUL_PACKAGE_ID>::soul::book_earned",
+    "<SOUL_PACKAGE_ID>::soul::book_burned"
   ],
   "allowedTypeArguments": [],
   "allowedRecipients": [

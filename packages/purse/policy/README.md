@@ -75,7 +75,7 @@ gas budget, not a purchase budget. That is deliberate: Heron sells and does not 
 
 **`periodMs` 86400000 (seven days).** The policy window is *rolling*, `[now - periodMs, now]`, not
 a calendar epoch, so it has no boundary to wait for. Seven days is the soul package's `EPOCH_MS` as
-built. **Open:** the two soul trees disagree — one carries `EPOCH_MS = 604_800_000`, the other
+built. **Closed 2026-09-06:** the two soul trees no longer disagree. `weir/sui-contracts-soul` now holds the deployed contract — a release build there reproduces mainnet module `0x8d6567ed…635f` byte for byte, proved by `check-matches-mainnet.sh --chain` — and the copy that carried `EPOCH_MS = 604_800_000` is gone. The chain's own epoch is the epoch.
 deletes it and uses the chain epoch instead. If the published soul settles on chain epochs, this
 number is wrong and must move with it. Named in the branch's report rather than left to be found.
 
