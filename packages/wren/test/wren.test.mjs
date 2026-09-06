@@ -186,7 +186,10 @@ test('the policy template and values are Wren\'s, with no address typed in befor
   assert.ok(rendered.allowedObjects.includes(values.WREN_VAULT_ID));
   assert.ok(rendered.allowedObjects.includes(values.WREN_CREATOR_CAP_ID));
   assert.ok(!JSON.stringify(rendered).includes('<'), 'no substitution left');
-  assert.ok(!rendered.allowedTargets.some((t) => t.includes('soul')), 'pre-soul: no soul row until her soul is minted');
+  // Her soul was minted 2026-09-06 (tx HU6nayxPJZvmxWiiwYUR8Fx7mpPux1mXxwnKsjdbifK7); the document carries the soul rows.
+  assert.equal(values.WREN_SOUL_ID, '0xcfab890c2b033a350750d06b0f94e34a6af2e5d0b4f26af805e3f2924bb615bc');
+  assert.ok(rendered.allowedObjects.includes(values.WREN_SOUL_ID), 'her soul object is named');
+  assert.ok(rendered.allowedTargets.some((t) => t.endsWith('::soul::record_spend')), 'record_spend is allowed');
 });
 
 test('the profile is one name and one bio, and the name is Wren', () => {
