@@ -299,6 +299,20 @@
     }
   }
 
+  /* ---- the owned clause, louder ---------------------------------------------
+     The waitlist hero's <h1> runs up to 3.75rem, the largest headline on the
+     site, and its own pasted copy of this treatment carried a wider, stronger
+     bloom (30px / 0.4) than the other 20-odd copies (26px / 0.35) to answer
+     that size — a real difference, so it survives consolidation as a modifier
+     rather than being flattened into the base class. Still `--bloom-a`-driven
+     (base + 0.1) so daylight still dims it instead of relighting it to night
+     strength, which was the bug in every hardcoded copy. */
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .weir-owned.loud {
+      filter: drop-shadow(0 0 30px rgba(var(--crest-rgb), calc(var(--bloom-a) + 0.1)));
+    }
+  }
+
   @keyframes weir-aurora-a {
     from { transform: translate3d(-6%, -3%, 0) scale(1); }
     to { transform: translate3d(8%, 6%, 0) scale(1.18); }
