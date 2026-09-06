@@ -1560,11 +1560,13 @@ test('--install-purse refuses until the values document carries the vault, and i
   assert.notEqual(noVault.status, 0, 'no vault id, no purse');
   assert.match(noVault.stderr, /carries no WREN_VAULT_ID; birth the vault first/);
   assert.deepEqual(installOrder(fixture), [], 'nothing may run before the refusal');
-  // Without the seam's gate the fixture directory is not read at all: the committed policy/ is,
-  // and it has no members document yet, so the refusal names that file under packages/wren.
-  const real = spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...fixture.env, WREN_NO_NETWORK: '' } });
-  assert.notEqual(real.status, 0);
-  assert.match(real.stderr, /packages\/wren\/policy\/wren-multisig\.json is missing/);
+  // Without the seam's gate the fixture directory is not read at all. Asserted on the script's
+  // text rather than by running a real install against a fake host: the committed policy/ is
+  // complete now that Wren is born, so a real run would proceed to the network.
+  const script = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const seam = script.slice(script.indexOf('POLICY_DIR="$PKG_DIR/policy"'), script.indexOf('POLICY_DIR="$WREN_POLICY_DIR"') + 40);
+  assert.match(seam, /if \[ "\$\{WREN_NO_NETWORK:-\}" = "1" \] && \[ -n "\$\{WREN_POLICY_DIR:-\}" \]; then\s+POLICY_DIR="\$WREN_POLICY_DIR"/, 'the override must sit behind WREN_NO_NETWORK=1 and nothing else');
+  assert.equal((script.match(/WREN_POLICY_DIR/g) ?? []).length, 3, 'the seam variable is read in exactly one place (the comment, the test, the assignment)');
 });
 
 function installRun(fixture, extraEnv = {}) {
