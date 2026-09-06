@@ -1463,6 +1463,11 @@ fi
 install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger
 install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger/audit
 install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger/state
+# Asserted every install, not just created once. Both settlement units declare
+# StateDirectory=wren-ledger, and systemd chowns that directory to whatever user the unit runs
+# as. A single run of either unit under the wrong user takes the tree with it and the other unit
+# then cannot write its audit chain — which is exactly how this line came to exist.
+chown -R ledger:ledger /var/lib/wren-ledger
 # The settlement signer's own tree. 0750 ledger:ledger, and the content purse cannot read into
 # it any more than this account can read into /srv/wren/purse.
 install -d -m 0750 -o ledger -g ledger /srv/wren-ledger
