@@ -79,6 +79,18 @@ export const POLICY: PolicyDoc = {
   allowedCommandKinds: ['MoveCall', 'SplitCoins', 'TransferObjects'],
 };
 
+/**
+ * The same policy with an approval bar the baseline crosses.
+ *
+ * The baseline spends 1_088_000 of SUI, so a bar of 500_000 is crossed by the transaction that
+ * every other rule permits — which is what makes the mutation for `approval-threshold` meaningful.
+ * The ceiling stays at 10_000_000, well above the bar, so the gate can actually fire.
+ */
+export const POLICY_WITH_APPROVAL_BAR: PolicyDoc = {
+  ...POLICY,
+  approvalThresholds: [{ coinType: '0x2::sui::SUI', maxWithoutApproval: '500000' }],
+};
+
 /** Nothing spent yet. `nowMs` is fixed so window arithmetic in tests is exact. */
 export const NOW = 1_788_000_000_000;
 export const LEDGER: LedgerState = { nowMs: NOW, spend: [] };
@@ -254,5 +266,19 @@ export const VIOLATIONS: readonly Violation[] = [
       // which is 88_000 over the 10_000_000 ceiling. Neither figure alone breaches it.
       spend: [{ coinType: '0x2::sui::SUI', amountOut: '9000000', atMs: NOW - 1000 }],
     },
+  },
+  {
+    ruleId: 'approval-threshold',
+    what: 'a spend inside the ceiling but above what the agent may spend unattended, with no approval',
+    /*
+      Nothing about the transaction changes: it is the baseline every other rule permits. Only the
+      policy gains a bar of 500_000, which the baseline's 1_088_000 outflow crosses, and the ledger
+      carries no approval to cover it. Delete this rule and the transaction is signed unattended —
+      which is exactly what the operator asked not to happen and what nothing else in the list
+      would have stopped.
+    */
+    effects: BASELINE,
+    policy: POLICY_WITH_APPROVAL_BAR,
+    ledger: LEDGER,
   },
 ];

@@ -5,7 +5,7 @@
  * # Why the purse builds and the container does not
  *
  * The container is the untrusted side: it runs a model that reads the internet. If it handed over
- * bytes, everything downstream — the simulation, the twelve rules, the audit line — would be
+ * bytes, everything downstream — the simulation, the policy rules, the audit line — would be
  * judging an artefact chosen by whatever text the model last read. The policy would still refuse
  * anything outside the allow-lists, but the *shape* of what is signed would be the attacker's, and
  * every unexamined corner of that shape (a second command appended after the one the policy looked

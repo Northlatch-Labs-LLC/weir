@@ -146,7 +146,7 @@ export type ObjectOwnership = 'shared' | 'imm-or-owned' | 'receiving' | 'unclass
  *
  * So a transaction can call the permitted `creator::unlock`, at the permitted coin type, inside
  * the outflow ceiling, transferring the resulting `Unlock` back to the agent's own address — and
- * pay a **stranger's** vault. Every one of the other eleven rules passes. The loss is capped by
+ * pay a **stranger's** vault. Every other rule in the list passes. The loss is capped by
  * the ceiling and by nothing else, and since anyone may open a vault for 29 SUI
  * (`UPDATE.md`, 2026-08-30, read live from mainnet), the destination is attacker-supplied,
  * repeatable and funded. That is the hole `allowedObjects` closes.

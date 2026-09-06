@@ -1,6 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 /**
- * What the agent has already spent.
+ * What the agent has already spent, and what the operator has already approved.
+ *
+ * Both are records the caller keeps and hands in; neither is read or remembered here. They sit in
+ * one type because they are answers to the same question at two bars — how much has gone out in
+ * this window, and how much of it the operator said yes to.
  *
  * # A ceiling without a memory is not a ceiling
  *

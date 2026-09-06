@@ -9,7 +9,7 @@
  * `test/mutation.test.ts` deletes each rule in turn and asserts that a transaction the full set
  * refuses becomes one the reduced set permits.
  *
- * That test is not a nicety. It is the difference between twelve rules and twelve comments.
+ * That test is not a nicety. It is the difference between a list of rules and a list of comments.
  *
  * # First denial wins, and the order is fixed
  *
@@ -29,7 +29,7 @@
 import type { SimulatedEffects } from './effects.js';
 import type { LedgerState } from './ledger.js';
 import type { PolicyDoc } from './policy.js';
-export type RuleId = 'policy-version' | 'sender-mismatch' | 'command-kind' | 'move-call-target' | 'type-argument' | 'transfer-recipient' | 'object-input' | 'gas-budget' | 'balance-evidence' | 'amount-wellformed' | 'coin-type-unlisted' | 'outflow-ceiling';
+export type RuleId = 'policy-version' | 'sender-mismatch' | 'command-kind' | 'move-call-target' | 'type-argument' | 'transfer-recipient' | 'object-input' | 'gas-budget' | 'balance-evidence' | 'amount-wellformed' | 'coin-type-unlisted' | 'outflow-ceiling' | 'approval-threshold';
 export interface RuleInput {
     readonly effects: SimulatedEffects;
     readonly policy: PolicyDoc;
@@ -50,12 +50,22 @@ export interface Rule {
      * already, which is why every interface member in these two packages is written this way.
      */
     readonly check: (input: RuleInput) => string | null;
+    /**
+     * Set only on a rule whose refusal an operator's approval would lift.
+     *
+     * It changes nothing about the refusal — {@link evaluate} still returns `allow: false` and a
+     * caller that reads only `allow` still stops, which is the whole reason the flag lives on the
+     * refusal rather than in a third verdict. What it gives a surface that wants to say "your
+     * operator has to approve this" is a way to know that sentence is true, instead of matching on
+     * the text of a reason.
+     */
+    readonly approvalRequired?: true;
 }
 /**
  * The rules, in evaluation order. First denial wins.
  *
  * Exported as the whole list so `evaluateWith` can be handed a subset — which is how the mutation
- * test deletes one rule at a time and proves the remaining ten no longer refuse what the eleven
+ * test deletes one rule at a time and proves the remaining rules no longer refuse what the whole
  * did.
  */
 export declare const RULES: readonly Rule[];

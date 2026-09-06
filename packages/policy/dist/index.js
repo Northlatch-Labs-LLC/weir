@@ -9,8 +9,8 @@
  * caller that matters, and it is the only place in this repository where a signature is produced.
  */
 export {} from './effects.js';
-export { canonicalPolicyJson } from './policy.js';
-export { EMPTY_LEDGER } from './ledger.js';
+export { canonicalPolicyJson, } from './policy.js';
+export { EMPTY_LEDGER, } from './ledger.js';
 export { RULES } from './rules.js';
 export { evaluate, evaluateWith, rulesWithout } from './evaluate.js';
 export { normaliseAddress, normaliseTarget, normaliseType } from './names.js';

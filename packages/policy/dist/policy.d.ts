@@ -42,6 +42,41 @@ export interface OutflowCeiling {
     /** Window width in milliseconds. Must be a positive integer. */
     readonly periodMs: number;
 }
+/**
+ * The amount of one coin type that may leave in a window **before the operator has to be asked**.
+ *
+ * # This is a second bar under the ceiling, not a second ceiling
+ *
+ * {@link OutflowCeiling} answers "may this ever happen?". A threshold answers a different
+ * question — "may this happen *unattended*?" — and it is the only place in this package where the
+ * answer to a refusal is a person rather than an edit to the policy document. Above the bar the
+ * agent is not forbidden; it is required to carry an approval the operator granted, which arrives
+ * on {@link LedgerState.approvals} the same way prior spend does.
+ *
+ * # The window is the ceiling's window, and there is no second one to configure
+ *
+ * A threshold is compared against the **same rolling total** the ceiling for that coin type is
+ * compared against, over that ceiling's `periodMs`. That is why there is no `periodMs` here.
+ *
+ * Two windows would be two chances to get a window wrong, and the failure would be silent: a
+ * threshold with a shorter window than its ceiling is a bar an agent walks under once per short
+ * window, which is a per-transaction limit wearing a rolling window's clothes and is defeated by
+ * exactly the loop this package's ceilings exist to stop. Borrowing the ceiling's window means an
+ * approval cannot be replayed either — the total it was granted against keeps climbing.
+ *
+ * A threshold naming a coin type with no ceiling is refused rather than ignored: there is no
+ * window to measure it over, and a bar that cannot be measured is a bar that never fires.
+ */
+export interface ApprovalThreshold {
+    /** Fully-qualified coin type. Normalised at comparison time, so `0x2::sui::SUI` is fine here. */
+    readonly coinType: string;
+    /**
+     * Unsigned decimal string, in the coin's smallest unit. A windowed total **above** this — not
+     * equal to it — requires a live approval. Equal is still unattended, so a bar of `0` means
+     * every non-zero outflow of this coin type must be approved.
+     */
+    readonly maxWithoutApproval: string;
+}
 export interface PolicyDoc {
     /**
      * Schema version. Only `1` is understood.
@@ -93,6 +128,35 @@ export interface PolicyDoc {
      * simulation.
      */
     readonly allowedObjects: readonly string[];
+    /**
+     * Per-coin-type bars above which the operator must have approved. Absent means none configured.
+     *
+     * # Why this one field may be absent, when absence is refusal everywhere else in this document
+     *
+     * Every other list here **grants**: a target not in `allowedTargets` is refused, an object not in
+     * `allowedObjects` is refused, a coin type with no ceiling may not leave at all. Absence there is
+     * authority nobody gave, so absence is a refusal and that reading is the strict one.
+     *
+     * A threshold grants nothing. It **subdivides authority the operator already wrote down** into
+     * "sign it" and "ask me first", and everything it governs was already inside a ceiling, an
+     * allow-list and a gas bound before it was written. So the strict reading here points the other
+     * way: a document with no thresholds is a document whose author chose to be asked about nothing,
+     * and the bounds that refuse are all still in force. Reading an absent list as "ask me about
+     * everything" would refuse every transaction of every policy written before this field existed —
+     * which is not a stricter policy engine, it is an outage, and an outage is switched off within a
+     * day.
+     *
+     * The field is optional in the type for the same reason `policy-version` is enforced by a rule:
+     * a policy document arrives as JSON from disk or from an operator, TypeScript is not present at
+     * that moment, and every document written before this field existed genuinely lacks it.
+     *
+     * `| undefined` is written out rather than left to `?` because this repository compiles under
+     * `exactOptionalPropertyTypes`, where the two are different types: `?` alone accepts a document
+     * with no such key and REFUSES one that carries the key holding `undefined`. A document parsed
+     * from JSON by a schema that marks the field optional produces exactly the second shape, so
+     * without this the field would typecheck everywhere except where policies are actually read.
+     */
+    readonly approvalThresholds?: readonly ApprovalThreshold[] | undefined;
     /** Ceiling on the gas budget, in MIST, as an unsigned decimal string. */
     readonly maxGasBudgetMist: string;
     /** Command kinds permitted at all. Anything else is refused unread. */
@@ -126,6 +190,10 @@ export interface PolicyDoc {
  * drift to be papered over: those documents genuinely did not bound which vault got paid, and a
  * reviewer comparing an old entry to a new one **should** see a different policy, because it is
  * one.
+ *
+ * `approvalThresholds` was added the same way and moves every hash again, and the same reading
+ * applies: an audit entry written before it references a document under which nothing was ever
+ * held back for the operator to see. A reviewer should be shown that, not shielded from it.
  *
  * # This does not hash
  *

@@ -178,6 +178,57 @@ describe('the policy gate', () => {
   });
 });
 
+/**
+ * The operator's bar, at the boundary where a signature is actually produced.
+ *
+ * The evaluator's own tests prove the arithmetic. What has to be proved HERE is narrower and more
+ * important: `policySigner` reads `decision.allow` and nothing else, so a verdict shape it has
+ * never seen — a refusal carrying `approvalRequired` — must stop it exactly as any other refusal
+ * does. A gate that returned a new kind of no and signed anyway would be the worst possible way to
+ * add one.
+ */
+describe('the approval threshold at the signing boundary', () => {
+  const BARRED: PolicyDoc = {
+    ...policyFor(AGENT),
+    // The transaction spends 1_088_000 of SUI. The operator is asked above 500_000.
+    approvalThresholds: [{ coinType: SUI_TYPE, maxWithoutApproval: '500000' }],
+  };
+
+  it('refuses, records the rule by name, and never reaches the inner signer', async () => {
+    const inner = signerFor(KEYPAIR);
+    const spy = vi.spyOn(inner, 'signTransaction');
+    const signer = makeSigner({ policy: BARRED, inner });
+
+    const result = await signer.signTransaction(localTransaction());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.failure.detail).toContain('approval-threshold');
+    expect(spy).not.toHaveBeenCalled();
+    expect(signer.audit.entries[0]!.decision).toBe('deny');
+    expect(signer.audit.verify().intact).toBe(true);
+  });
+
+  it('signs once the operator has approved, and the audit still verifies', async () => {
+    const signer = makeSigner({
+      policy: BARRED,
+      ledger: () => ({
+        nowMs: 1_788_000_000_000,
+        spend: [],
+        approvals: [
+          { coinType: SUI_TYPE, maxAmount: '1088000', expiresAtMs: 1_788_000_000_001 },
+        ],
+      }),
+    });
+
+    const result = await signer.signTransaction(localTransaction());
+
+    expect(result.ok).toBe(true);
+    expect(signer.audit.entries[0]!.decision).toBe('allow');
+    expect(signer.audit.verify().intact).toBe(true);
+  });
+});
+
 describe('the simulation gate', () => {
   it('refuses an aborting transaction and reports the decoded abort, not a shape mismatch', async () => {
     const failed = {
