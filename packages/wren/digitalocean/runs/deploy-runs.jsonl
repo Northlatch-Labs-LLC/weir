@@ -1,0 +1,5 @@
+{"at": "2026-09-06T03:04:01Z", "detail": "firewall first, then droplet", "droplet_id": "", "event": "create-begin", "firewall_id": "", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:04:03Z", "detail": "", "droplet_id": "", "event": "firewall-created", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:04:06Z", "detail": "", "droplet_id": "598149813", "event": "droplet-created", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:06:20Z", "detail": "exit 1", "droplet_id": "598149813", "event": "rollback-begin", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:06:22Z", "detail": "exit 1", "droplet_id": "598149813", "event": "rollback-done", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}

@@ -889,11 +889,14 @@ build_image_on_host() {
   # picoclaw/workspace on the host, before docker build reads the tree. The runtime tarball is
   # git-archive of a committed tree; this one is tar of a committed tree (check_git_clean covers
   # this package too), reproducible by construction: sorted names, fixed mtime, fixed owner.
-  local ws_tgz ws_sha256
-  ws_tgz="$(mktemp "${TMPDIR:-/tmp}/wren-workspace.XXXXXX.tgz")"
-  ( cd "$WORKSPACE_DIR" && find . -type f | LC_ALL=C sort | tar --mtime='2026-01-01 00:00:00' --owner=0 --group=0 --numeric-owner -czf "$ws_tgz" -T - )
+  # lib/make-workspace-tarball.py, not tar: macOS's bsdtar has no --mtime and the first real
+  # --create (2026-09-06) died here on the laptop after the droplet was already up. The script is
+  # run on this laptop by test/wren.test.mjs, twice, and the two archives must be identical.
+  local ws_tgz ws_sha256 ws_count
+  ws_tgz="$(mktemp "${TMPDIR:-/tmp}/wren-workspace.XXXXXX")"
+  ws_count="$(python3 "$LIB_DIR/make-workspace-tarball.py" "$WORKSPACE_DIR" "$ws_tgz")"
   ws_sha256="$(shasum -a 256 "$ws_tgz" | cut -d' ' -f1)"
-  echo "deploy-droplet.sh: workspace tarball sha256 $ws_sha256 ($(tar -tzf "$ws_tgz" | wc -l | tr -d ' ') files from packages/wren/workspace)" >&2
+  echo "deploy-droplet.sh: workspace tarball sha256 $ws_sha256 ($ws_count files from packages/wren/workspace)" >&2
 
   validate_ssh_target "ops@$ip" "the droplet address the API returned"
   scp -- "$tgz" "ops@$ip:/tmp/agent-runtime-src.tgz"

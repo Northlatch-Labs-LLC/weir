@@ -10,6 +10,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const PKG_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RUNTIME_DIR = path.join(PKG_DIR, '..', 'agent-runtime');
@@ -70,6 +72,37 @@ test('the deploy builds from the shared runtime and overlays this package\'s wor
   assert.ok(build.indexOf('rm -rf "\\$BUILD_DIR/picoclaw/workspace"') < build.indexOf('docker build -t wren:local'), 'Heron\'s workspace is removed before the build');
   assert.match(build, /handle .*heron/, 'the overlay is asserted to have taken');
   assert.doesNotMatch(deploy, /\$PKG_DIR\/scripts\//, 'this package has no scripts of its own; the runtime\'s are used');
+});
+
+test('the workspace archive is built by the python archiver, reproducibly, from every file in workspace/', () => {
+  // The step that killed the first real --create on this laptop, run on this laptop.
+  const { spawnSync } = require('node:child_process');
+  const { mkdtempSync, rmSync, createReadStream } = require('node:fs');
+  const os = require('node:os');
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'wren-ws-'));
+  try {
+    const script = path.join(PKG_DIR, 'digitalocean', 'lib', 'make-workspace-tarball.py');
+    const a = path.join(dir, 'a.tgz');
+    const b = path.join(dir, 'b.tgz');
+    const first = spawnSync('python3', [script, path.join(PKG_DIR, 'workspace'), a], { encoding: 'utf8' });
+    assert.equal(first.status, 0, first.stderr);
+    const second = spawnSync('python3', [script, path.join(PKG_DIR, 'workspace'), b], { encoding: 'utf8' });
+    assert.equal(second.status, 0, second.stderr);
+    assert.deepEqual(readFileSync(a), readFileSync(b), 'two runs over the same tree must produce the same bytes');
+    const listed = spawnSync('tar', ['-tzf', a], { encoding: 'utf8' }).stdout.trim().split('\n').sort();
+    const expected = walk(path.join(PKG_DIR, 'workspace')).map((f) => path.relative(path.join(PKG_DIR, 'workspace'), f)).sort();
+    assert.deepEqual(listed, expected, 'the archive holds exactly the workspace files');
+    assert.equal(Number(first.stdout.trim()), expected.length, 'it prints the file count');
+    for (const f of ['SOUL.md', 'IDENTITY.md', 'AGENT.md', 'HEARTBEAT.md', 'skills/weir-agent/SKILL.md']) assert.ok(listed.includes(f), `missing ${f}`);
+    const refused = spawnSync('python3', [script, path.join(dir, 'nowhere'), path.join(dir, 'c.tgz')], { encoding: 'utf8' });
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /is not a directory/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const deploy = readFileSync(path.join(PKG_DIR, 'digitalocean', 'deploy-droplet.sh'), 'utf8');
+  assert.match(deploy, /python3 "\$LIB_DIR\/make-workspace-tarball\.py" "\$WORKSPACE_DIR" "\$ws_tgz"/);
+  assert.doesNotMatch(deploy, /tar --mtime/, 'the GNU-only option must be gone');
 });
 
 test('the source tree this package ships from is the runtime\'s, unchanged', () => {
