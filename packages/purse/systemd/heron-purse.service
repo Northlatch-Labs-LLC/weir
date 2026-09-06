@@ -52,15 +52,18 @@ Group=purse
 # ever written to /srv/heron.
 LoadCredentialEncrypted=heron-hot:/etc/heron/creds/heron-hot.cred
 
-# --jitless is not a performance choice and must not be removed.
+# WHY THERE IS NO --jitless AND NO MemoryDenyWriteExecute HERE ANY MORE (2026-09-06).
 #
-# MemoryDenyWriteExecute below refuses any mapping that is both writable and executable, and refuses
-# mprotect adding PROT_EXEC. V8's optimising compiler needs exactly that to emit machine code, so a
-# plain `node` under this directive dies at start. --jitless runs the interpreter only, which needs
-# no W->X transition. The purse signs one transaction every thirty minutes; there is nothing here
-# for a JIT to earn back. If this flag is ever dropped, MemoryDenyWriteExecute must be dropped in
-# the same commit and the CISO told, because silently keeping one without the other means one of
-# them is not doing what the unit says it does.
+# The pair was the W^X posture: MemoryDenyWriteExecute refuses writable-and-executable memory, and
+# --jitless keeps V8 from needing any. --jitless also switches WebAssembly off, and on node 22 the
+# HTTP stack (undici) compiles its parser to WebAssembly the moment any fetch-family global is
+# touched -- Headers included, which the Sui gRPC-web transport constructs for every call. So the
+# purse could sign a publish statement (no network) and died on its first priced post (a simulate
+# over the network): Wren, 2026-09-06 04:48 UTC, `ReferenceError: WebAssembly is not defined`,
+# restart loop, beat refused. A transport on node:https was tried and died the same way, because
+# the crash is in the global's loader, not in the request. There is no HTTP client for this process
+# under --jitless on node 22. The unit's own rule was that the two directives go together or not at
+# all, and the CISO is told; the rest of the hardening set below is unchanged.
 # Two pins before the process starts, both root-owned facts in this unit: the compiled server and
 # the members document must hash to what the deploy shipped. The policy carries its own pin as an
 # argument below. Node is /opt/node22: @mysten/sui requires node 22 and Debian 13 ships 20, so the
@@ -69,7 +72,7 @@ LoadCredentialEncrypted=heron-hot:/etc/heron/creds/heron-hot.cred
 # on the host (2026-09-05) fed sha256sum a line with /usr/sbin/nologin in it.
 ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/heron/purse/dist/server.js" | sha256sum --check --status'
 ExecStartPre=/bin/sh -c 'echo "<MULTISIG_SHA256>  /srv/heron/policy/heron-multisig.json" | sha256sum --check --status'
-ExecStart=/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js \
+ExecStart=/opt/node22/bin/node /srv/heron/purse/dist/server.js \
   --socket /run/heron/purse.sock \
   --policy /srv/heron/policy/heron-policy.json \
   --policy-sha256 <POLICY_SHA256> \
@@ -99,7 +102,6 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
-MemoryDenyWriteExecute=yes
 # AF_UNIX for the socket; AF_INET and AF_INET6 for the outbound 443 the simulation needs against a
 # fullnode. Nothing else — no AF_NETLINK, no AF_PACKET.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
