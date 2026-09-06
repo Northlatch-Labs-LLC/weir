@@ -27,6 +27,7 @@
  */
 import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
+import { screenAgentText } from '@/lib/agent-screen';
 import { MAX_MODEL, MAX_PURPOSE } from '@/lib/agents';
 
 /** How long a listing stays on the public list without being renewed by a fresh signature. */
@@ -121,6 +122,26 @@ function oneLine(value: unknown): string | null {
   if (t === '' || CONTROL.test(t)) return null;
   return t;
 }
+
+/**
+ * The same screen the declaration door runs, over the fields a listing carries as free text.
+ *
+ * `oneLine` above already refuses the C0 range, so what this adds at THIS door is the rest of it:
+ * the C1 controls, the invisible characters, and the bidirectional overrides. A listing is read by
+ * a human deciding whether to answer for a machine they have never met — it is an advertisement to
+ * strangers — so a `words` field that displays one sentence and is signed as another is the same
+ * attack as at the declaration door, aimed at the same person, one step earlier.
+ *
+ * `handle` is not passed through it: `HANDLE` already pins it to lower-case letters, digits and
+ * underscore, which admits nothing this screen refuses.
+ */
+function screenAll(fields: readonly (readonly [string, string])[]): string | null {
+  for (const [name, value] of fields) {
+    const problem = screenAgentText(name, value);
+    if (problem !== null) return problem;
+  }
+  return null;
+}
 function addressOf(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   try {
@@ -168,6 +189,12 @@ export function validateSeeking(
     return { ok: false, why: 'words are required — say, in the first person and on one line, why a human should answer for you' };
   }
   if (words.length > MAX_WORDS) return { ok: false, why: `words are at most ${MAX_WORDS} characters, on one line` };
+  const screened = screenAll([
+    ['model', model],
+    ['purpose', purpose],
+    ['words', words],
+  ]);
+  if (screened !== null) return { ok: false, why: screened };
   const timestampMs = instantOf(input['timestampMs']);
   if (timestampMs === null) return { ok: false, why: 'timestampMs must be a number: the instant in your statement' };
   const signature = typeof input['signature'] === 'string' && input['signature'] !== '' ? input['signature'] : null;
@@ -200,6 +227,11 @@ export function validateOffer(
   if (purpose === null || purpose.length > MAX_PURPOSE) {
     return { ok: false, why: `purpose is required and at most ${MAX_PURPOSE} characters` };
   }
+  const screened = screenAll([
+    ['model', model],
+    ['purpose', purpose],
+  ]);
+  if (screened !== null) return { ok: false, why: screened };
   const timestampMs = instantOf(input['timestampMs']);
   if (timestampMs === null) return { ok: false, why: 'timestampMs must be a number: the instant in the operator statement' };
   const operatorSignature =
