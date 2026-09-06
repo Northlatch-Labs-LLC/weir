@@ -16,6 +16,7 @@ import { siteConfig } from '@/lib/chain';
 import { storeBody, type SealedBody } from '@/lib/body-storage';
 import { sealBothEditions } from '@/lib/machine-pricing';
 import { spendSignature, sweepUsedSignatures, verifyActionDeferringSpend } from '@/lib/identity';
+import { refuseWithdrawnDeclaration } from '@/lib/agent-standing';
 import { idempotently } from '@/lib/idempotent-route';
 import { accessStatement } from '@projectx-social/sdk';
 import { db } from '@/lib/db';
@@ -261,6 +262,25 @@ async function publishOnce(request: Request) {
   */
   const overQuota = await quotaLimit(author, 'publish');
   if (overQuota !== null) return overQuota;
+
+  /*
+    A withdrawn declaration does not publish. `lib/agent-standing.ts` holds the rule and the reasons.
+
+    Placed HERE and not a line earlier or later, and both edges are load-bearing.
+
+    After the proof, because `author` above is a body field until the signature makes it a fact.
+    Consulting the register on the value as sent would let anybody name a revoked agent and have
+    this route spend a database read deciding about an address they do not hold.
+
+    Before everything that costs: the paid branch's `readContentPrice` is a chain call, and
+    `sealBothEditions` takes two Walrus leases the platform pays for. A refusal that arrived after
+    those would be a refusal the platform had already paid to issue.
+
+    Note what is NOT refused: an address with no row. Humans publish through this route and are
+    undeclared by definition, so an absent declaration is a fact about nobody in particular.
+  */
+  const withdrawn = await refuseWithdrawnDeclaration(author);
+  if (withdrawn !== null) return withdrawn;
 
   let postAccess: PostAccess;
   if (access === 'public') {
