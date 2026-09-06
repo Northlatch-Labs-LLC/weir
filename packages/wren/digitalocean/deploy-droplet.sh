@@ -1406,13 +1406,8 @@ cmd_install_ledger() {
   policy_sha="$(file_sha256 "$stage/wren-ledger.mainnet.json")"
 
   WREN_INSTALL_STEP="render_ledger_units"
-  render_ledger_units "$dist_sha" "$policy_sha" > "$stage/units.txt"
-  csplit -sz -f "$stage/unit-" "$stage/units.txt" '/^\f$/' '{*}' 2>/dev/null || {
-    echo "deploy-droplet.sh --install-ledger: refused - the rendered units could not be split" >&2
-    return 1
-  }
-  grep -v '^\f$' "$stage/unit-00" > "$stage/wren-ledger-purse.service"
-  grep -v '^\f$' "$stage/unit-01" > "$stage/wren-ledger.service"
+  render_ledger_units "$dist_sha" "$policy_sha" signer > "$stage/wren-ledger-purse.service"
+  render_ledger_units "$dist_sha" "$policy_sha" run    > "$stage/wren-ledger.service"
   for u in "$stage/wren-ledger-purse.service" "$stage/wren-ledger.service"; do
     if grep -v '^[[:space:]]*#' "$u" | grep -q '<[A-Z_]*>'; then
       echo "deploy-droplet.sh --install-ledger: refused - $(basename "$u") still carries a substitution: $(grep -v '^[[:space:]]*#' "$u" | grep -o '<[A-Z_]*>' | sort -u | tr '\n' ' ')" >&2
@@ -1509,12 +1504,20 @@ REMOTE
 }
 
 render_ledger_units() {
-  # $1 dist sha256, $2 ledger policy sha256. Prints the settlement signer's unit, then a form feed,
-  # then the settlement run's unit. Everything the second one names is read from the committed
-  # values document, never typed here: the cap is an object REFERENCE (id, version and digest)
-  # because the purse is handed fully-resolved references and never resolves an id against a
-  # fullnode itself.
-  local dist="$1" policy="$2"
+  # $1 dist sha256, $2 ledger policy sha256, $3 which unit: `signer` or `run`. Prints ONE unit.
+  #
+  # One at a time rather than both with a separator between them: the separator wanted splitting on
+  # the far side, and `csplit` is not the same program on macOS as it is on Debian. A function that
+  # prints one whole file needs no parser at all.
+  #
+  # Everything the run unit names is read from the committed values document, never typed here: the
+  # cap is an object REFERENCE (id, version and digest) because the purse is handed fully-resolved
+  # references and never resolves an id against a fullnode itself.
+  local dist="$1" policy="$2" which="${3:-}"
+  case "$which" in
+    signer|run) ;;
+    *) echo "deploy-droplet.sh: refused - render_ledger_units takes 'signer' or 'run', not '$which'" >&2; return 1 ;;
+  esac
   for value in "$dist" "$policy"; do
     if ! [[ "$value" =~ ^[0-9a-f]{64}$ ]]; then
       echo "deploy-droplet.sh: refused - '$value' is not a sha256; the units are not rendered" >&2
@@ -1558,9 +1561,12 @@ render_ledger_units() {
     return 1
   fi
 
-  sed -e "s/<DIST_SHA256>/$dist/g" -e "s/<LEDGER_POLICY_SHA256>/$policy/g" \
-    "$PKG_DIR/systemd/wren-ledger-purse.service"
-  printf '\f\n'
+  if [ "$which" = "signer" ]; then
+    sed -e "s/<DIST_SHA256>/$dist/g" -e "s/<LEDGER_POLICY_SHA256>/$policy/g" \
+      "$PKG_DIR/systemd/wren-ledger-purse.service"
+    return 0
+  fi
+
   sed -e "s/<SOUL_PACKAGE_ID>/$pkg/g" -e "s/<SOUL_REGISTRY_ID>/$registry/g" \
       -e "s/<SOUL_REGISTRY_VERSION>/$registry_v/g" -e "s/<WREN_SOUL_ID>/$soul/g" \
       -e "s/<WREN_SOUL_VERSION>/$soul_v/g" -e "s/<WREN_VAULT_ID>/$vault/g" \
