@@ -150,10 +150,82 @@ export const settleEpochIntent = z.strictObject({
   epochNetNonneg: z.boolean(),
 });
 
+/**
+ * Record what this beat spent against the epoch's allowance.
+ *
+ * From the deployed package, read off mainnet on 2026-09-06 (GraphQL, package
+ * `0x8d6567ed…635f`, module `soul`):
+ *
+ *   public fun record_spend(soul: &mut EmployeeSoul, amount: u64, ctx: &TxContext)
+ *
+ * There is no capability argument and there is not meant to be. The contract asserts
+ * `ctx.sender() == soul.agent`, so the agent's own address is the only signer that can book the
+ * agent's own spend. That is why this kind lives in the **content** purse beside `post` and
+ * `price` rather than in the settlement purse: the hot key that publishes is the key the soul
+ * recognises. A settlement key signing this would abort `ENotThisAgent` (2).
+ *
+ * `amountMist` is what the beat cost, in MIST. The contract bounds it — a spend above
+ * `remaining_allowance()` aborts `EAllowanceExceeded` (5) rather than truncating — and the policy
+ * document's outflow ceiling bounds it a second time. Without this kind the soul's `epoch_spent`
+ * stays at zero for ever and the allowance it is measured against means nothing.
+ */
+export const recordSpendIntent = z.strictObject({
+  kind: z.literal('record_spend'),
+  /** The published soul package. Named per intent so a republish is not a code change. */
+  packageId: suiId,
+  soul: sharedObjectRef,
+  /** A beat that spent nothing has nothing to record, so zero is refused rather than sent. */
+  amountMist: positiveU64,
+});
+
+/**
+ * Book what the soul earned this epoch.
+ *
+ * From the deployed package, same reading:
+ *
+ *   public fun book_earned(_: &LedgerCap, soul: &mut EmployeeSoul, amount: u64)
+ *
+ * `LedgerCap`, so this is the settlement signer's kind, not the content signer's — the same
+ * separation `settle_epoch` already relies on. It is separate from `record_spend` because earning
+ * and spending are different facts with different witnesses: the agent knows what it spent, and
+ * only the ledger, reading the vault, knows what came in.
+ *
+ * This is load-bearing for the survival rule and not an optional refinement. `settle_epoch`
+ * compares `epoch_earned` against `epoch_burned`; if nothing ever books either, both are zero,
+ * `earned >= burned` holds, and every settlement in the agent's life reports SOLVENT. The mandate
+ * would tick without ever being able to bite.
+ */
+export const bookEarnedIntent = z.strictObject({
+  kind: z.literal('book_earned'),
+  packageId: suiId,
+  ledgerCap: ownedObjectRef,
+  soul: sharedObjectRef,
+  amountMist: positiveU64,
+});
+
+/**
+ * Book what the soul burned this epoch: the droplet, the model, the gas it paid to exist.
+ *
+ *   public fun book_burned(_: &LedgerCap, soul: &mut EmployeeSoul, amount: u64)
+ *
+ * The counterpart to {@link bookEarnedIntent}, and the half that makes a shortfall possible at all.
+ * See that comment for why an unbooked burn makes the mandate inert.
+ */
+export const bookBurnedIntent = z.strictObject({
+  kind: z.literal('book_burned'),
+  packageId: suiId,
+  ledgerCap: ownedObjectRef,
+  soul: sharedObjectRef,
+  amountMist: positiveU64,
+});
+
 export const intentSchema = z.discriminatedUnion('kind', [
   postIntent,
   priceIntent,
   settleEpochIntent,
+  recordSpendIntent,
+  bookEarnedIntent,
+  bookBurnedIntent,
   // A personal-message signature over one of two texts the SDK builds; see statement.ts.
   statementIntent,
 ]);

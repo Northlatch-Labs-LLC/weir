@@ -40,29 +40,45 @@ import { allow, refuse, type Outcome } from './outcome.js';
 /** The bech32 human-readable part every Sui private key carries. Searched for, never printed. */
 const SECRET_PREFIX = 'suipriv' + 'key1';
 
-/** The credential name the unit declares, and the file systemd writes it to. */
+/**
+ * The credential name the unit declares, and the file systemd writes it to — Heron's, which is the
+ * default everywhere a name is not given. A second citizen names its own (`wren-hot`) through
+ * `--agent` on the purse, and every rule below is evaluated for that name instead: the path under
+ * $CREDENTIALS_DIRECTORY and the forbidden environment names alike.
+ */
 export const CREDENTIAL_NAME = 'heron-hot';
 
+/** `wren-hot` -> `WREN`: the prefix the forbidden environment names are built from. */
+function envPrefixOf(credentialName: string): string {
+  return credentialName.split('-')[0]!.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+}
+
 /**
- * Environment names that must not be set at all.
+ * Environment names that must not be set at all, for a given credential name.
  *
  * Not a blocklist of every possible name — that is unwinnable — but of the names somebody reaching
  * for the wrong door would actually use. The value scan below is the general check; this is the
- * specific one that catches the mistake before it becomes a habit.
+ * specific one that catches the mistake before it becomes a habit. For `heron-hot` this is exactly
+ * the list the purse has always refused; for another agent it is the same shapes under its prefix.
  */
-const FORBIDDEN_ENV_NAMES = [
-  'HERON_HOT',
-  'HERON_HOT_KEY',
-  'HERON_KEY',
-  'HERON_SECRET',
-  'PURSE_KEY',
-  'SUI_PRIVATE_KEY',
-  'SUI_SECRET_KEY',
-] as const;
+export function forbiddenEnvNames(credentialName: string = CREDENTIAL_NAME): readonly string[] {
+  const prefix = envPrefixOf(credentialName);
+  return [
+    `${prefix}_HOT`,
+    `${prefix}_HOT_KEY`,
+    `${prefix}_KEY`,
+    `${prefix}_SECRET`,
+    'PURSE_KEY',
+    'SUI_PRIVATE_KEY',
+    'SUI_SECRET_KEY',
+  ];
+}
 
 export interface KeySource {
   /** `--key-file`, when given. */
   readonly keyFile?: string | undefined;
+  /** The credential name under $CREDENTIALS_DIRECTORY; {@link CREDENTIAL_NAME} when not given. */
+  readonly credentialName?: string | undefined;
   /** `$CREDENTIALS_DIRECTORY`, when systemd set it. */
   readonly credentialsDirectory?: string | undefined;
   readonly argv: readonly string[];
@@ -86,7 +102,9 @@ export interface LoadedKey {
 export function refuseKeyInProcessSurface(source: {
   readonly argv: readonly string[];
   readonly env: Readonly<Record<string, string | undefined>>;
+  readonly credentialName?: string | undefined;
 }): Outcome<null> {
+  const credentialName = source.credentialName ?? CREDENTIAL_NAME;
   for (const [index, arg] of source.argv.entries()) {
     if (arg.includes(SECRET_PREFIX)) {
       return refuse(
@@ -98,14 +116,14 @@ export function refuseKeyInProcessSurface(source: {
     }
   }
 
-  for (const name of FORBIDDEN_ENV_NAMES) {
+  for (const name of forbiddenEnvNames(credentialName)) {
     if (source.env[name] !== undefined) {
       return refuse(
         'request-malformed',
         `the environment variable ${name} is set. The purse takes its key from a file and from ` +
           `nothing else: an environment is inherited by every child process — the keyed MCP is ` +
           `one — and is copied into crash reports verbatim. Unset it and pass --key-file, or let ` +
-          `systemd place the credential at $CREDENTIALS_DIRECTORY/${CREDENTIAL_NAME}.`,
+          `systemd place the credential at $CREDENTIALS_DIRECTORY/${credentialName}.`,
       );
     }
   }
@@ -127,19 +145,20 @@ export function refuseKeyInProcessSurface(source: {
 export async function loadHotKey(source: KeySource): Promise<Outcome<LoadedKey>> {
   const surface = refuseKeyInProcessSurface(source);
   if (!surface.ok) return surface;
+  const credentialName = source.credentialName ?? CREDENTIAL_NAME;
 
   const path =
     source.keyFile !== undefined && source.keyFile !== ''
       ? source.keyFile
       : source.credentialsDirectory !== undefined && source.credentialsDirectory !== ''
-        ? join(source.credentialsDirectory, CREDENTIAL_NAME)
+        ? join(source.credentialsDirectory, credentialName)
         : null;
 
   if (path === null) {
     return refuse(
       'request-malformed',
       `no key file. Pass --key-file <path>, or run under a unit with ` +
-        `LoadCredentialEncrypted=${CREDENTIAL_NAME}:… so systemd sets $CREDENTIALS_DIRECTORY. ` +
+        `LoadCredentialEncrypted=${credentialName}:… so systemd sets $CREDENTIALS_DIRECTORY. ` +
         `There is no third way and there is no default path to fall back to.`,
     );
   }

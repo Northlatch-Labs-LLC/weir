@@ -167,6 +167,49 @@ export function buildIntent(args: {
         break;
       }
 
+      case 'record_spend': {
+        /*
+          From the deployed package, read off mainnet 2026-09-06:
+
+            public fun record_spend(soul: &mut EmployeeSoul, amount: u64, ctx: &TxContext)
+
+          `ctx` is supplied by the runtime and is not an argument here. No capability: the contract
+          asserts `ctx.sender() == soul.agent`, so the sender is the permission.
+          `test/build.test.ts` pins this order against that signature.
+        */
+        shared(tx, intent.soul);
+        tx.moveCall({
+          target: `${intent.packageId}::soul::record_spend`,
+          arguments: [tx.object(intent.soul.objectId), tx.pure.u64(BigInt(intent.amountMist))],
+        });
+        break;
+      }
+
+      case 'book_earned':
+      case 'book_burned': {
+        /*
+          From the deployed package, read off mainnet 2026-09-06:
+
+            public fun book_earned(_: &LedgerCap, soul: &mut EmployeeSoul, amount: u64)
+            public fun book_burned(_: &LedgerCap, soul: &mut EmployeeSoul, amount: u64)
+
+          One shape, two targets. The two are built together because their argument order is the
+          same signature; the target name is the only difference, and deriving it from the intent
+          kind means the two can never drift apart into different orders.
+        */
+        owned(tx, intent.ledgerCap);
+        shared(tx, intent.soul);
+        tx.moveCall({
+          target: `${intent.packageId}::soul::${intent.kind}`,
+          arguments: [
+            tx.object(intent.ledgerCap.objectId),
+            tx.object(intent.soul.objectId),
+            tx.pure.u64(BigInt(intent.amountMist)),
+          ],
+        });
+        break;
+      }
+
       case 'statement': {
         // Never a transaction: the purse signs a statement as a personal message (statement.ts).
         return refuse('intent-unbuildable', 'a statement intent builds no transaction.');

@@ -17,73 +17,12 @@
  * including the ones that threw.
  */
 
+import { readFile } from 'node:fs/promises';
 import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 import { loadChainConfig } from '../src/chain.js';
 import { askPurse } from '../src/client.js';
 import { runPhaseTwo, type SubmitPort } from '../src/beat.js';
-import { allow, refuse, type Outcome } from '../src/outcome.js';
-
-interface BeatArgs {
-  readonly runs: string;
-  readonly state: string;
-  readonly socket: string;
-  readonly chain: string;
-  readonly beatId: string;
-  readonly dryRun: boolean;
-  /** Both or neither: with them a publish plan runs; without them it is refused locally. */
-  readonly apiOrigin: string | null;
-  readonly address: string | null;
-}
-
-const FLAGS = ['--runs', '--state', '--socket', '--chain', '--beat-id', '--api-origin', '--address'] as const;
-const OPTIONAL = new Set<string>(['--api-origin', '--address']);
-
-export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
-  const values = new Map<string, string>();
-  let dryRun = false;
-
-  for (let i = 0; i < argv.length; i += 1) {
-    const flag = argv[i]!;
-    if (flag === '--dry-run') {
-      dryRun = true;
-      continue;
-    }
-    if (!FLAGS.includes(flag as (typeof FLAGS)[number])) {
-      return refuse(
-        'request-malformed',
-        `${flag} is not a flag this takes. It takes: ${FLAGS.join(' ')} [--dry-run].`,
-      );
-    }
-    const value = argv[i + 1];
-    if (value === undefined || value.startsWith('--')) {
-      return refuse('request-malformed', `${flag} needs a value.`);
-    }
-    values.set(flag, value);
-    i += 1;
-  }
-
-  for (const flag of FLAGS) {
-    if (!OPTIONAL.has(flag) && !values.has(flag)) return refuse('request-malformed', `${flag} is required.`);
-  }
-  const apiOrigin = values.get('--api-origin') ?? null;
-  const address = values.get('--address') ?? null;
-  if ((apiOrigin === null) !== (address === null)) {
-    return refuse('request-malformed', '--api-origin and --address are given together or not at all.');
-  }
-  if (apiOrigin !== null && !/^https:\/\/[a-z0-9.-]+$/.test(apiOrigin)) return refuse('request-malformed', '--api-origin is an https origin with no path.');
-  if (address !== null && !/^0x[0-9a-f]{64}$/.test(address)) return refuse('request-malformed', '--address is a full lower-case Sui address.');
-
-  return allow({
-    runs: values.get('--runs')!,
-    state: values.get('--state')!,
-    socket: values.get('--socket')!,
-    chain: values.get('--chain')!,
-    beatId: values.get('--beat-id')!,
-    dryRun,
-    apiOrigin,
-    address,
-  });
-}
+import { parseBeatArgs, parseProfile, DEFAULT_AGENT, DEFAULT_PROFILE, type Profile } from '../src/beat-args.js';
 
 /**
  * Submit the signed bytes.
@@ -116,15 +55,38 @@ function chainSubmit(config: ProjectXSocialConfig): SubmitPort {
 
 const parsed = parseBeatArgs(process.argv.slice(2));
 if (!parsed.ok) {
-  process.stderr.write(`heron-beat: ${parsed.refused.ruleId} — ${parsed.refused.reason}\n`);
+  process.stderr.write(`${DEFAULT_AGENT}-beat: ${parsed.refused.ruleId} — ${parsed.refused.reason}\n`);
   process.exit(1);
 }
 const args = parsed.value;
+const prefix = `${args.agent}-beat`;
 
 const chain = await loadChainConfig(args.chain);
 if (!chain.ok) {
-  process.stderr.write(`heron-beat: ${chain.refused.ruleId} — ${chain.refused.reason}\n`);
+  process.stderr.write(`${prefix}: ${chain.refused.ruleId} — ${chain.refused.reason}\n`);
   process.exit(1);
+}
+
+/*
+  The profile phase two publishes under. Heron's is the literal above and needs no file; a second
+  citizen ships hers beside her units and names it here. A file that does not parse is a refusal
+  before any network is touched, never a fall back to Heron's name under another agent's handle.
+*/
+let profile: Profile = DEFAULT_PROFILE;
+if (args.profileFile !== null) {
+  let text: string;
+  try {
+    text = await readFile(args.profileFile, 'utf8');
+  } catch (error) {
+    process.stderr.write(`${prefix}: request-malformed — the profile file ${args.profileFile} could not be read: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
+  const parsedProfile = parseProfile(text);
+  if (!parsedProfile.ok) {
+    process.stderr.write(`${prefix}: ${parsedProfile.refused.ruleId} — ${parsedProfile.refused.reason}\n`);
+    process.exit(1);
+  }
+  profile = parsedProfile.value;
 }
 
 /*
@@ -139,16 +101,13 @@ const publish =
         publish: {
           origin: args.apiOrigin,
           address: args.address,
-          profile: {
-            name: 'Heron',
-            bio: 'A Northlatch Labs agent. It reads the network, writes what it sees, and prices its own writing; every signature it produces is bounded by a policy under a human operator.',
-          },
+          profile,
           ports: {
             http: {
               request: async (input: { method: 'GET' | 'POST'; url: string; body?: unknown; headers?: Record<string, string> }) => {
                 const response = await fetch(input.url, {
                   method: input.method,
-                  headers: { 'content-type': 'application/json', 'user-agent': 'heron-beat/2 (Heron host)', ...(input.headers ?? {}) },
+                  headers: { 'content-type': 'application/json', 'user-agent': `${prefix}/2 (${profile.name} host)`, ...(input.headers ?? {}) },
                   ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
                   signal: AbortSignal.timeout(60_000),
                 });
@@ -185,7 +144,7 @@ const { state, statePath } = await runPhaseTwo({
 });
 
 process.stderr.write(
-  `heron-beat: ${state.beatId} ${state.outcome}` +
+  `${prefix}: ${state.beatId} ${state.outcome}` +
     (state.ruleId === undefined ? '' : ` rule=${state.ruleId}`) +
     (state.digest === undefined ? '' : ` digest=${state.digest}`) +
     (state.submittedDigest === undefined ? '' : ` submitted=${state.submittedDigest}`) +

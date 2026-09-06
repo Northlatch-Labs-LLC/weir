@@ -58,6 +58,15 @@ export const PURSE_REFUSAL_IDS = [
   'intent-invalid-locally',
   /** The purse could not be reached, or answered something that was not a response. */
   'purse-unreachable',
+  /**
+   * A chain read the caller needed did not happen: the node refused, timed out, or answered a
+   * shape this estate does not recognise.
+   *
+   * Its own id rather than a shared "error" because the ledger settles a citizen's epoch on these
+   * numbers. A read that failed and a read that returned zero must never arrive at the same place:
+   * one of them retires a citizen, and only one of them is a fact.
+   */
+  'chain-unreadable',
   /*
     The statement intent's own refusals (statement.ts). Each is a bound named in that file's
     header: the flags absent, the origin wrong, the clock off, the object or coin outside the
