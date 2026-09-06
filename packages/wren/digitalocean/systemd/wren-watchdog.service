@@ -1,0 +1,52 @@
+# Derived from packages/agent-runtime/digitalocean/systemd/heron-watchdog.service (Heron's) at weir main bfc070e, renamed for Wren; the history in these comments is Heron's.
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The host-side half of the dead man (CTO spec 2026-09-05-engineering-heron-v2-runtime-and-host.md
+# section 3.11): fires OnFailure into wren-alert@watchdog.service, which is the only thing that
+# actually sends mail. This unit's own job is narrow -- decide stale-or-not and exit accordingly --
+# so the decision has one failing fixture (test/host.test.mjs) independent of whether mail can be
+# sent at all.
+#
+# The laptop-side half (a pull over SSH that the Desk raises staleness from) is not this file; it
+# is named here only so the two are not mistaken for each other. A host-only watchdog cannot
+# report its own host's death -- if this droplet is gone entirely, nothing here can run at all.
+[Unit]
+Description=Assert Wren has completed a beat within the dead-man window
+OnFailure=wren-alert@watchdog.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wren-watchdog
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+
+# The watchdog WRITES two things: alerts.jsonl (append-only, one line per notice decision) and the
+# `degraded` marker that makes "already told you" a fact on disk rather than a memory this oneshot
+# does not have. Under ProtectSystem=strict with no ReadWritePaths it could not create either --
+# it would have failed at the first write and fired the alert for the wrong reason (Security's A4
+# on step 6). This is the only writable path it gets.
+#
+# AND IT IS NOT /srv/wren/state ANY MORE. That directory is 2770 root:wren and run-flags.txt
+# bind-mounts it read-write into the model's container, which runs as uid 10001 -- the wren group
+# that owns it. The watchdog's suppression memory living there meant the container could write a
+# `degraded` marker with a far-future `last_notified` and silence the dead man watching it, for
+# ever, with no first notice and no mail (Security's N-1 on the second read, demonstrated against
+# the shipped binary). /var/lib/wren/watchdog is 0700 root:root, created by cloud-init and
+# asserted after boot; nothing in the container can reach it.
+ReadWritePaths=/var/lib/wren/watchdog

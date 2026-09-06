@@ -14,9 +14,10 @@
  * never env). Nothing here prints a secret; it prints addresses, ids and digests.
  *
  * usage: birth-vault.ts --key-file <path> --multisig <doc> --chain <doc> --handle <handle>
- *                       [--referrer <address>] [--values <path>] [--dry-run]
+ *                       [--referrer <address>] [--values <path>] [--values-prefix HERON] [--dry-run]
  * --dry-run builds and simulates both steps as far as the chain state allows and executes nothing.
- * --values merges HERON_VAULT_ID and HERON_CREATOR_CAP_ID into that JSON file when the vault exists.
+ * --values merges <PREFIX>_VAULT_ID and <PREFIX>_CREATOR_CAP_ID into that JSON file when the vault
+ * exists; the prefix is HERON unless --values-prefix names another agent's (WREN).
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -37,8 +38,11 @@ interface Args {
   readonly handle: string;
   readonly referrer: string | null;
   readonly values: string | null;
+  readonly valuesPrefix: string;
   readonly dryRun: boolean;
 }
+
+const VALUES_PREFIX = /^[A-Z][A-Z0-9_]{0,15}$/;
 
 function parseArgs(argv: readonly string[]): Args | string {
   const map = new Map<string, string>();
@@ -46,7 +50,7 @@ function parseArgs(argv: readonly string[]): Args | string {
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i]!;
     if (flag === '--dry-run') { dryRun = true; continue; }
-    if (!['--key-file', '--multisig', '--chain', '--handle', '--referrer', '--values'].includes(flag)) return `${flag} is not a flag this takes.`;
+    if (!['--key-file', '--multisig', '--chain', '--handle', '--referrer', '--values', '--values-prefix'].includes(flag)) return `${flag} is not a flag this takes.`;
     const value = argv[i + 1];
     if (value === undefined || value.startsWith('--')) return `${flag} needs a value.`;
     map.set(flag, value);
@@ -57,6 +61,8 @@ function parseArgs(argv: readonly string[]): Args | string {
   }
   const referrer = map.get('--referrer') ?? null;
   if (referrer !== null && !/^0x[0-9a-fA-F]{64}$/.test(referrer)) return '--referrer is not a full Sui address.';
+  const valuesPrefix = map.get('--values-prefix') ?? 'HERON';
+  if (!VALUES_PREFIX.test(valuesPrefix)) return '--values-prefix is an upper-case substitution prefix such as HERON or WREN.';
   return {
     keyFile: map.get('--key-file')!,
     multisig: map.get('--multisig')!,
@@ -64,6 +70,7 @@ function parseArgs(argv: readonly string[]): Args | string {
     handle: map.get('--handle')!,
     referrer,
     values: map.get('--values') ?? null,
+    valuesPrefix,
     dryRun,
   };
 }
@@ -115,7 +122,7 @@ async function main(): Promise<number> {
   const chain = await loadChainConfig(args.chain);
   if (!chain.ok) { say(chain.refused.reason); return 1; }
   const config = chain.value as ProjectXSocialConfig;
-  if (config.network !== 'mainnet') { say(`refused - the chain document is ${config.network}, and Heron's vault is a mainnet object`); return 1; }
+  if (config.network !== 'mainnet') { say(`refused - the chain document is ${config.network}, and a citizen's vault is a mainnet object`); return 1; }
 
   const key = await loadHotKey({ keyFile: args.keyFile, argv: process.argv, env: process.env });
   if (!key.ok) { say(key.refused.reason); return 1; }
@@ -238,10 +245,10 @@ async function main(): Promise<number> {
 
   if (args.values !== null && vaultId !== null && capId !== null) {
     const values = JSON.parse(readFileSync(args.values, 'utf8')) as Record<string, string>;
-    values['HERON_VAULT_ID'] = vaultId;
-    values['HERON_CREATOR_CAP_ID'] = capId;
+    values[`${args.valuesPrefix}_VAULT_ID`] = vaultId;
+    values[`${args.valuesPrefix}_CREATOR_CAP_ID`] = capId;
     writeFileSync(args.values, `${JSON.stringify(values, null, 2)}\n`);
-    say(`values: HERON_VAULT_ID and HERON_CREATOR_CAP_ID written to ${args.values}`);
+    say(`values: ${args.valuesPrefix}_VAULT_ID and ${args.valuesPrefix}_CREATOR_CAP_ID written to ${args.values}`);
   }
   return 0;
 }

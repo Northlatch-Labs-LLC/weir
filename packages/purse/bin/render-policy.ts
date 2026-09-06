@@ -21,7 +21,12 @@ import { loadPinnedPolicy } from '../src/policy-file.js';
 import { writeFileSync as _unused } from 'node:fs';
 
 const SUI_ID = /^0x[0-9a-fA-F]{1,64}$/;
-const SOUL_MARKERS = ['<SOUL_PACKAGE_ID>', '<HERON_SOUL_ID>', '<SOUL_REGISTRY_ID>', '<LEDGER_CAP_ID>'] as const;
+/**
+ * The substitutions --pre-soul drops: the package, the registry, the ledger cap, and the agent's own
+ * soul object under any agent's prefix (`<HERON_SOUL_ID>`, `<WREN_SOUL_ID>`). One pattern, so a
+ * second citizen's template needs no change here.
+ */
+const SOUL_MARKER = /<(SOUL_PACKAGE_ID|SOUL_REGISTRY_ID|LEDGER_CAP_ID|[A-Z][A-Z0-9_]*_SOUL_ID)>/;
 
 export interface RenderArgs {
   readonly template: string;
@@ -71,7 +76,7 @@ export function renderPolicy(templateText: string, values: Readonly<Record<strin
   const record = doc as Record<string, unknown>;
   if (preSoul) {
     const drop = (list: unknown): unknown =>
-      Array.isArray(list) ? list.filter((entry) => typeof entry !== 'string' || !SOUL_MARKERS.some((m) => entry.includes(m))) : list;
+      Array.isArray(list) ? list.filter((entry) => typeof entry !== 'string' || !SOUL_MARKER.test(entry)) : list;
     record['allowedTargets'] = drop(record['allowedTargets']);
     record['allowedObjects'] = drop(record['allowedObjects']);
   }

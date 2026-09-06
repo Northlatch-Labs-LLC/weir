@@ -1,0 +1,13 @@
+# Derived from packages/agent-runtime/digitalocean/systemd/heron-retention.timer (Heron's) at weir main bfc070e, renamed for Wren; the history in these comments is Heron's.
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Daily, at a quiet hour clear of wren-alive.timer (09:00 UTC) and the 30-minute beat cadence.
+[Unit]
+Description=Run Wren's run-log retention once a day
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
