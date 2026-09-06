@@ -38,6 +38,8 @@ import { DesignCreator, type CreatorTab, type DesignStat, type DesignTier } from
 import type { DesignFeedPost } from '@/components/design/Home';
 import { TipButton } from '@/components/TipButton';
 import { DepositCheckout } from '@/components/DepositCheckout';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { profilePageJsonLd } from '@/lib/structured-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -473,7 +475,22 @@ export default async function CreatorPage({
     );
 
   return (
-    <DesignCreator
+    <>
+      {/*
+        This is a profile, not an article or a product: one account, its name, and how many follow
+        it — the same figure the identity line below renders as "`@handle · N followers`".
+        `lib/structured-data.ts` explains what `profilePageJsonLd` omits when a creator has not
+        written a bio, rather than inventing one for the markup.
+      */}
+      <JsonLd
+        data={profilePageJsonLd({
+          handle: profile.handle,
+          displayName: profile.displayName,
+          bio: profile.bio,
+          followers,
+        })}
+      />
+      <DesignCreator
       tab={tab}
       tabHref={{ posts: tabHref('posts'), membership: tabHref('membership') }}
       signedIn={viewer !== null}
@@ -536,6 +553,7 @@ export default async function CreatorPage({
             depositShare: `This creator hands back ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of what their vault earns to the people pooled behind them. Your part accrues in proportion to what you deposited, and you claim it yourself.`,
           }
         : {})}
-    />
+      />
+    </>
   );
 }
