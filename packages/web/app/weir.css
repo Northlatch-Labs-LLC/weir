@@ -1102,7 +1102,17 @@
   select,
   textarea {
     background: rgba(var(--pd), 0.6);
-    border: 1px solid rgba(var(--line-rgb), 0.9);
+    /*
+      `--line` is a hairline meant to separate surfaces that already differ, not to carry meaning on
+      its own — on an unfocused field it is the only thing marking where the control is, which is
+      WCAG 1.4.11 Non-text Contrast (3:1) rather than 1.4.3, and `--line` measures 1.59:1 on night's
+      ground and about as little on day's. `--dim` is the next step up the same palette rather than a
+      colour invented for this: it is already tuned for exactly this job (see its own comment above,
+      and `--text-secondary`/`--text-tertiary` below) at 9.18:1 / 6.55:1 (night, ground/panel) and
+      6.18:1 / 6.54:1 (day) — reused solid rather than composited, since alpha would just spend that
+      margin buying back some of the 1.59:1 this replaces.
+    */
+    border: 1px solid var(--dim);
     border-radius: var(--weir-radius);
     color: var(--ink);
     transition:
@@ -1126,7 +1136,8 @@
   /* ---- tabs ---------------------------------------------------------------- */
   .tab {
     border-radius: 99px;
-    border: 1px solid rgba(var(--line-rgb), 0.9);
+    /* Same 1.4.11 fix as the fields above: `--line` at 1.59:1 to `--dim`, well past 3:1. */
+    border: 1px solid var(--dim);
     color: var(--dim);
     transition:
       color var(--motion-fast) var(--ease-surface),
@@ -2682,6 +2693,32 @@
       color: var(--crest);
       background: rgba(var(--crest-rgb), 0.08);
     }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Keyboard focus vs. the fixed chrome — WCAG 2.4.11 Focus Not Obscured
+   (Minimum).
+
+   `.sh-header` is sticky at the top (65px — `4rem + 1px`, see the shell
+   rail's own comment above) and, below 760px, shrinks to 57px
+   (`3.5rem + 1px`, see `.sh-header__row`'s own `min-height` at that
+   breakpoint) while `.mbar` takes over a fixed 64px along the bottom.
+   With no `scroll-padding` set anywhere, the browser's default
+   "scroll the newly focused element just into view" lands its edge flush
+   with the viewport edge — which is to say behind whichever bar is sitting
+   there. Unlayered, like the reduced-motion `html` rule above: this has to
+   win over anything utilities might set on `html`, and there is nothing to
+   cascade it against.
+   -------------------------------------------------------------------------- */
+html {
+  scroll-padding-top: calc(4rem + 1px);
+}
+
+@media (max-width: 760px) {
+  html {
+    scroll-padding-top: calc(3.5rem + 1px);
+    scroll-padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }
 

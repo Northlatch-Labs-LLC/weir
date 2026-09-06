@@ -178,6 +178,12 @@ export function AccountMenu() {
 
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') close(true);
+      // Tab moves focus on regardless — this is a menu button, not a modal, so nothing should trap
+      // it. Left unhandled the popup stayed open and visible while focus walked past it onto the
+      // rest of the page, which is its own confusion for a sighted keyboard user and a stale
+      // `aria-expanded="true"` for anyone on a screen reader. `close(false)`, not `close(true)`:
+      // focus is already headed somewhere on purpose and must not be dragged back to the trigger.
+      else if (event.key === 'Tab') close(false);
     }
     // `pointerdown`, not `click`: closing on click can beat a link's own navigation to the event
     // loop, so the menu closes and the reader stays exactly where they were.
@@ -312,7 +318,12 @@ export function AccountMenu() {
       </button>
 
       {open && (
-        <div className="account-pop" role="menu" onKeyDown={onMenuKeyDown}>
+        <div
+          className="account-pop"
+          role="menu"
+          aria-label="Account menu"
+          onKeyDown={onMenuKeyDown}
+        >
           <div className="account-pop__head">
             <span className="k">Signed in with {signer.label}</span>
             {typeof suiName === 'string' && (
