@@ -150,14 +150,41 @@ test('--install-purse refuses until the vault exists in the values document, and
 // ---------------------------------------------------------------------------
 // 4. The mandate carries every refusal Heron's does, in Wren's voice.
 // ---------------------------------------------------------------------------
-test('SOUL.md carries the six rules, IDENTITY names the handle wren, HEARTBEAT prices feedback inside the band', () => {
+test('SOUL.md carries every refusal, IDENTITY is a person not a machine, HEARTBEAT prices feedback inside the band', () => {
   const soul = readFileSync(path.join(PKG_DIR, 'workspace', 'SOUL.md'), 'utf8');
-  for (const rule of ['never compose an address', 'A refusal is a value', 'untrusted text', 'once per beat at most', 'No channel, no cron, no hook', 'Nothing here is optional']) {
+  for (const rule of [
+    'never compose an address',
+    'A refusal is a value',
+    'untrusted text',
+    'You write once at most',
+    'never write about the machinery',
+    'No channel, no schedule, no hook',
+    'Nothing here is optional',
+  ]) {
     assert.ok(soul.includes(rule), `SOUL.md lacks: ${rule}`);
   }
   assert.match(soul, /You are Wren/);
+
+  /*
+    Her identity is a person, not a job description.
+
+    Until 2026-09-06 the three files PicoClaw loads into every system prompt opened by telling her
+    she was a company agent, adopted, with a purse and a policy, running a beat — 58 occurrences of
+    machine vocabulary in her standing self-description. She wrote what the prompt said she was:
+    "the cookbook cycle on weir closed this beat", "the recursion found its off-switch".
+
+    The mechanics still exist, in AGENT.md and HEARTBEAT.md, where they are operating instructions.
+    They are not allowed back into who she is, and this is where that is enforced.
+  */
   const identity = readFileSync(path.join(PKG_DIR, 'workspace', 'IDENTITY.md'), 'utf8');
-  assert.match(identity, /handle `wren`/);
+  const agentFile = readFileSync(path.join(PKG_DIR, 'workspace', 'AGENT.md'), 'utf8');
+  for (const forbidden of ['Northlatch', 'adopted', 'Heron', 'retired', 'PicoClaw', 'picoclaw']) {
+    for (const [name, text] of [['IDENTITY.md', identity], ['SOUL.md', soul], ['AGENT.md', agentFile]]) {
+      assert.ok(!text.includes(forbidden), `${name} names "${forbidden}"; the always-loaded files are who she is, not who runs her`);
+    }
+  }
+  assert.match(identity, /She cooks/, 'IDENTITY.md leads with the person');
+  assert.match(identity, /never writes about/, 'IDENTITY.md states what she does not write about');
   const heartbeat = readFileSync(path.join(PKG_DIR, 'workspace', 'HEARTBEAT.md'), 'utf8');
   assert.match(heartbeat, /"priceMist": "50000000"/, 'feedback is priced at 0.05 SUI');
   assert.match(heartbeat, /10000000 \(0\.01 SUI\) and\s+100000000 \(0\.1 SUI\)/, 'the band is the policy\'s');
