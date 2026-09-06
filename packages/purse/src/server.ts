@@ -37,7 +37,7 @@ import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { spawn } from 'node:child_process';
 import { chmod, mkdir, stat, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { createClient } from '@projectx-social/sdk';
+import { createPurseClient } from './purse-client.js';
 import type { SimulationPort } from '@projectx-social/signer';
 import type { GasPort } from './build.js';
 import { AuditFile } from './audit-file.js';
@@ -261,7 +261,10 @@ export async function startPurse(args: {
     policyHash: policy.value.policyHash,
     policyFileSha256: policy.value.fileSha256,
     chain: chain.value,
-    client: args.recorded?.client ?? createClient(chain.value),
+    // The purse's own client, on a fetch that needs no WebAssembly: under --jitless the global
+    // fetch cannot parse HTTP, and the first paid post ever attempted (Wren, 2026-09-06) killed the
+    // process here. See src/https-fetch.ts.
+    client: args.recorded?.client ?? createPurseClient(chain.value),
     audit: audit.file,
     ledger: ledger.ledger,
     log,
