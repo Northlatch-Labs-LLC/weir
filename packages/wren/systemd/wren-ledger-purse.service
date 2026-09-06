@@ -1,0 +1,98 @@
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# The settlement signer: the only process on this host that holds Wren's ledger key.
+#
+# It is the same binary as wren-purse.service, one systemd user over, with its own credential, its
+# own socket and its own policy document. That separation is the whole point. The content purse may
+# price content and record a spend; this one may book earnings, book burn and settle an epoch. A
+# compromised beat cannot close an epoch, and a compromised settlement cannot price anything or
+# consume the content ceiling.
+#
+# The <PLACEHOLDER> values are filled by digitalocean/deploy-droplet.sh --install-ledger, which
+# prints every one of them before it ships anything. They are not defaults: a unit with a wrong
+# policy hash refuses to start, which is the intended behaviour of a half-finished deploy.
+
+[Unit]
+Description=Wren ledger purse — settlement signer behind its own policy
+Documentation=file:///srv/wren/purse/README.md
+After=network-online.target
+Wants=network-online.target
+Before=wren-ledger.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+
+# The uid ruling. `wren` is 10001 and the content purse is 10002, both already on this host; the
+# settlement account is 10003 and is created the same way, asserted free before and resolving after:
+#
+#   getent passwd 10003 || getent group 10003   # must BOTH be empty, or refuse
+#   groupadd --gid 10003 --system ledger
+#   useradd --uid 10003 --gid 10003 --system --no-create-home --shell /usr/sbin/nologin ledger
+#   getent passwd 10003 | cut -d: -f1           # must read `ledger`, or refuse
+#
+# A third account rather than a second policy on the same one: two policies under one uid share a
+# credential directory, and "one signer per money path" would then be a claim about argv.
+User=ledger
+Group=ledger
+
+# The ledger key, sealed to this host and worthless off it.
+LoadCredentialEncrypted=wren-ledger:/etc/wren/creds/wren-ledger.cred
+
+# See the note in wren-purse.service for why there is no --jitless and no MemoryDenyWriteExecute:
+# this process simulates every transaction against a fullnode, so it needs the HTTP stack, and on
+# node 22 that stack needs WebAssembly.
+ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/wren/purse/dist/server.js" | sha256sum --check --status'
+ExecStartPre=/bin/sh -c 'echo "<LEDGER_MULTISIG_SHA256>  /srv/wren/policy/wren-ledger-multisig.json" | sha256sum --check --status'
+ExecStart=/opt/node22/bin/node /srv/wren/purse/dist/server.js \
+  --agent wren-ledger \
+  --socket /run/wren-ledger/purse.sock \
+  --policy /srv/wren/policy/wren-ledger.mainnet.json \
+  --policy-sha256 <LEDGER_POLICY_SHA256> \
+  --multisig /srv/wren/policy/wren-ledger-multisig.json \
+  --vault <WREN_VAULT_ID> \
+  --chain /srv/wren/chain.json \
+  --audit /var/lib/wren-ledger/audit/audit.jsonl \
+  --spend /var/lib/wren-ledger/audit/spend.jsonl
+
+RuntimeDirectory=wren-ledger
+RuntimeDirectoryMode=0750
+StateDirectory=wren-ledger
+StateDirectoryMode=0700
+
+Restart=on-failure
+RestartSec=5s
+
+# The hardening set, identical to the content purse's. A settlement signer is not a lesser process.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=pid
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+MemoryMax=192M
+TasksMax=64
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

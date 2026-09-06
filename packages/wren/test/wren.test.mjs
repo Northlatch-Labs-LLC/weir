@@ -181,7 +181,16 @@ test('the policy template and values are Wren\'s, with no address typed in befor
   assert.equal(values.WREN_ADDRESS, '0x1ad691c028dc59eb3eac09afa6dafe96c0d544dfd223b6071681007f777a4cbb');
   assert.equal(values.WREN_VAULT_ID, '0x81a4edbb5545f67158dc5f5f760e01a8ad32ba45402774410822422157d38e2a');
   assert.equal(values.WREN_CREATOR_CAP_ID, '0x5cd419da8c5f8e3e2b547de231cd2fcd6bcbc7d01348a7f323fbf07788d418f2');
-  for (const value of Object.values(values)) assert.match(value, /^0x[0-9a-f]{1,64}$/);
+  // Every value is a chain-shaped fact and none is free text. Which shape is decided by the key,
+  // not by trying both: a version that reads as an id, or an amount that reads as a version, is
+  // exactly the confusion this guard exists to catch.
+  for (const [key, value] of Object.entries(values)) {
+    if (key.endsWith('_VERSION') || key.endsWith('_MIST')) {
+      assert.match(value, /^(0|[1-9][0-9]{0,19})$/, `${key} is a u64 written as a decimal string`);
+    } else {
+      assert.match(value, /^0x[0-9a-f]{1,64}$/, `${key} is a Sui object id or address`);
+    }
+  }
   // The rendered mainnet document is the template over these values, pre-soul, and names her vault.
   const rendered = JSON.parse(readFileSync(path.join(PKG_DIR, 'policy', 'wren-content.mainnet.json'), 'utf8'));
   assert.equal(rendered.agentAddress, values.WREN_ADDRESS);
