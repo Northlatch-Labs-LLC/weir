@@ -17,7 +17,6 @@
     "@projectx-social/policy": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
     "@projectx-social/signer": "workspace:*",
-    "@protobuf-ts/grpcweb-transport": "2.11.1",
     "zod": "4.5.4"
   },
   "devDependencies": {

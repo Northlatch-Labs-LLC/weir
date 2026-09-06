@@ -1633,7 +1633,7 @@ test('--install-purse: the rendered unit carries the three pins and the vault an
   assert.match(rendered.stdout, new RegExp(`--policy-sha256 ${SHA_C}`));
   assert.match(rendered.stdout, new RegExp(`--vault ${VAULT_X}`));
   assert.match(rendered.stdout, /--agent wren/);
-  assert.match(rendered.stdout, /ExecStart=\/opt\/node22\/bin\/node --jitless/);
+  assert.match(rendered.stdout, /ExecStart=\/opt\/node22\/bin\/node \//);
   const bad = spawnSync('bash', [DEPLOY_SCRIPT, '--render-purse-unit', 'nope', SHA_B, SHA_C, VAULT_X], { encoding: 'utf8' });
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /is not a sha256/);

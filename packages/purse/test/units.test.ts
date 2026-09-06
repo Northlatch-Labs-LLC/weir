@@ -61,23 +61,24 @@ describe('heron-purse.service', () => {
     expect(onlyValue(purse, 'Service', 'ProtectHome')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'PrivateTmp')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'PrivateDevices')).toBe('yes');
-    expect(onlyValue(purse, 'Service', 'MemoryDenyWriteExecute')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'RestrictAddressFamilies')).toBe('AF_UNIX AF_INET AF_INET6');
   });
 
-  it('pairs MemoryDenyWriteExecute with --jitless, or one of the two is not doing its job', async () => {
+  it('carries neither --jitless nor MemoryDenyWriteExecute, and says why in the unit', async () => {
     /*
-      MemoryDenyWriteExecute refuses mappings that are both writable and executable and refuses
-      mprotect adding PROT_EXEC. V8's optimising compiler needs exactly that, so a plain `node` under
-      this directive dies at start. Keeping the directive without the flag means the unit does not
-      run at all; keeping the flag without the directive means the hardening line is decoration.
-      Neither is allowed to happen quietly.
+      The pair went together or not at all. On node 22 the HTTP stack compiles its parser to
+      WebAssembly the moment a fetch-family global is touched, --jitless forbids WebAssembly, and
+      the purse's first priced post (a simulate over the network) killed the process (Wren,
+      2026-09-06). One of the two left alone is a unit that does not run or a line that is
+      decoration, so both are gone, and the reason is written where the next reader will look.
     */
     const purse = await unit('heron-purse.service');
-    const denies = onlyValue(purse, 'Service', 'MemoryDenyWriteExecute') === 'yes';
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
-    expect(denies).toBe(true);
-    expect(exec).toContain('--jitless');
+    expect(exec).not.toContain('--jitless');
+    expect(directive(purse, 'Service', 'MemoryDenyWriteExecute')).toEqual([]);
+    const text = await readFile(join(SYSTEMD, 'heron-purse.service'), 'utf8');
+    expect(text).toMatch(/WHY THERE IS NO --jitless AND NO MemoryDenyWriteExecute/);
+    expect(text).toMatch(/WebAssembly is not defined/);
   });
 
   it('passes the policy path and a pin, and never a key path in argv', async () => {
@@ -96,7 +97,7 @@ describe('heron-purse.service', () => {
     expect(pres.some((line) => line.includes('<DIST_SHA256>') && line.includes('/srv/heron/purse/dist/server.js') && line.includes('sha256sum --check'))).toBe(true);
     expect(pres.some((line) => line.includes('<MULTISIG_SHA256>') && line.includes('/srv/heron/policy/heron-multisig.json') && line.includes('sha256sum --check'))).toBe(true);
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
-    expect(exec.startsWith('/opt/node22/bin/node --jitless /srv/heron/purse/dist/server.js')).toBe(true);
+    expect(exec.startsWith('/opt/node22/bin/node /srv/heron/purse/dist/server.js')).toBe(true);
     // systemd expands %-specifiers in Exec lines (%s is the user's shell); a pin line must not use one.
     for (const line of pres) expect(line).not.toMatch(/%[a-zA-Z%]/);
   });

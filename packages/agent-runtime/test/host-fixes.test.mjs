@@ -1597,7 +1597,7 @@ test('--install-purse: the rendered unit carries the three pins and no substitut
   assert.match(rendered.stdout, new RegExp(`${SHA_A} +/srv/heron/purse/dist/server\\.js`));
   assert.match(rendered.stdout, new RegExp(`${SHA_B} +/srv/heron/policy/heron-multisig\\.json`));
   assert.match(rendered.stdout, new RegExp(`--policy-sha256 ${SHA_C}`));
-  assert.match(rendered.stdout, /ExecStart=\/opt\/node22\/bin\/node --jitless/);
+  assert.match(rendered.stdout, /ExecStart=\/opt\/node22\/bin\/node \//);
   const bad = spawnSync('bash', [DEPLOY_SCRIPT, '--render-purse-unit', 'nope', SHA_B, SHA_C], { encoding: 'utf8' });
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /is not a sha256/);

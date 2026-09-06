@@ -120,7 +120,8 @@ test('wren-purse.service runs the shared server with --agent wren, Wren\'s crede
   assert.match(unit, /^LoadCredentialEncrypted=wren-hot:\/etc\/wren\/creds\/wren-hot\.cred$/m);
   assert.match(unit, /^\s+--agent wren \\$/m);
   assert.match(unit, /^\s+--vault <VAULT_ID> \\$/m, 'the vault is rendered from the values document, never typed into the unit');
-  assert.match(unit, /^ExecStart=\/opt\/node22\/bin\/node --jitless \/srv\/wren\/purse\/dist\/server\.js \\$/m);
+  assert.match(unit, /^ExecStart=\/opt\/node22\/bin\/node \/srv\/wren\/purse\/dist\/server\.js \\$/m);
+  assert.doesNotMatch(unit, /--jitless|MemoryDenyWriteExecute=yes/, 'the pair is gone together; see the unit for why');
   assert.match(unit, /^User=purse$/m);
 });
 
