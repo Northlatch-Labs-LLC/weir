@@ -7,6 +7,42 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-06 · SEC-003 CLOSED: the signing path is diff-reviewable text again; SEC-006 confirmed already closed
+
+Supersedes nothing; extends the entries below.
+
+**SEC-003 (fixed).** Raw control bytes sat in three files on the signing path, which made git treat
+them as binary, so the code that decides what gets signed could not be diff-reviewed — a change to a
+regex or to the audit separator would have rendered as `Bin … bytes` in every review. Twelve bytes in
+`packages/purse/src/statement.ts` (lines 51, 56, 57, 68), three in `packages/purse/src/publish.ts`
+(line 55) and one NUL in `packages/signer/src/audit.ts` (line 97) are now written as the source
+escapes `\x00`, `\x1f`, `\x7f`. The compiled `packages/signer/dist/audit.js` is rebuilt so the shipped
+artefact matches; `packages/purse/dist` is not tracked.
+
+This is a source-encoding change only, and it was proved so before it was committed rather than
+asserted. The raw side of the proof was reconstructed from the pre-change blobs in git, not retyped:
+the five character classes were extracted from both versions and run against 300,917 inputs — every
+codepoint U+0000–U+02FF, DEL, tab, CR, LF, U+2028/2029, the bidirectional controls, non-ASCII and
+astral characters, and 300,000 random strings — giving 1,504,585 paired comparisons and **zero**
+differing verdicts. The raw class is the codepoints [0, 45, 31, 127], which is exactly `\x00-\x1f\x7f`.
+For the audit chain, the on-disk separator and the escaped separator are byte-equal, and the preimage
+— each part rendered as its own length, a colon, then the part, joined on that separator — produces
+byte-identical output and an identical SHA-256 over seven samples, including empty parts and values
+that themselves contain colons. **The audit hash chains already on disk and on the hosts stay valid;
+nothing needs re-signing or re-hashing.**
+
+**SEC-006 (already closed, verified).** Bidirectional and line-separator characters on the declare
+path were fixed by 565da7d and the claim was re-checked here rather than taken on trust. The `REFUSED`
+table was parsed straight out of `packages/web/lib/agent-screen.ts` and every claimed codepoint tested:
+C0 and DEL, C1, U+00AD, U+200B, U+2028/2029, U+202A–E, U+2060–4, U+2066–9, U+061C, U+200E/F and U+FEFF
+are all refused, and U+200C/U+200D, Arabic, Hebrew, CJK, accented Latin and emoji are all still
+permitted, so the screen costs the register nothing in the languages it must be able to say. Ordering confirmed at the
+door: `app/api/agents/declare/route.ts` calls `validateDeclaration` — which runs `screenAgentText` over
+`model` and `purpose` — before the first `verifyAction`, so a caller learns the shape of what is wrong
+without spending a signature. No screening code was changed.
+
+Gate: purse build, signer build, purse 176/176, signer 144/144.
+
 ## 2026-09-05 · The brake drill passed: the second member sweeps Heron alone
 
 `packages/purse/bin/brake-sweep.ts` (1ee7464, a6ee441): `prepare` builds and simulates one transfer out of Heron's 1-of-2 address with no key; `send` reads the bytes back and refuses anything but that sweep, takes the brake key at a raw-mode terminal prompt (never argv, env, file or pipe), signs, wraps the partial signature in the multisig envelope, verifies it against the multisig public key, and sends. On mainnet, digest `8kcAmLF5KN5xQXKYo98LrnLbXCY65Rt4M9nhtYgEeBAL`: the brake alone moved 0.01 SUI from Heron's address balance to the operator wallet; the hot key took no part.
