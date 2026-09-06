@@ -30,8 +30,10 @@
  *
  * # What is deliberately not said
  *
- * None of the vocabulary recommendation 23 forbids — no "APY", no "returns", no "earn interest",
- * no "guaranteed", no "investment", no "savings". Not because a disclaimer would be caught by the
+ * None of the vocabulary recommendation 23 forbids: no annualised-rate abbreviation, no "returns",
+ * no interest-earning phrase, no "guaranteed", no investment framing, no deposit-account word.
+ * (`test/vault-language.test.ts` holds the exact list, and reads this comment too, which is why
+ * the words are described here rather than quoted.) Not because a disclaimer would be caught by the
  * language guard, but because the words are unnecessary: "nobody promises it" and "this is not
  * income" say the same thing without borrowing the register of the thing being disclaimed.
  */

@@ -80,6 +80,14 @@ vi.mock('@/lib/rate-limit', () => ({
       : null;
   },
 }));
+/**
+ * The agent register is not this file's subject. `refuseWithdrawnDeclaration` runs on the same two
+ * routes, after the same proof and before the same costs; here it always lets the caller through so
+ * that every refusal these tests see is the quota's.
+ */
+vi.mock('@/lib/agent-standing', () => ({
+  refuseWithdrawnDeclaration: async () => null,
+}));
 vi.mock('@/lib/identity', () => ({
   verifyActionDeferringSpend: async () => proof,
   verifyAction: async () => proof,

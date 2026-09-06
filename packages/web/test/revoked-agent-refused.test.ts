@@ -79,6 +79,9 @@ const FRIEND = new Ed25519Keypair().getPublicKey().toSuiAddress();
 vi.mock('@/lib/rate-limit', () => ({
   rateLimit: () => null,
   simulateLimit: async () => null,
+  // The publish and message quotas share these routes with the register guard. They are not this
+  // file's subject, so every caller is under quota here and every refusal below is the register's.
+  quotaLimit: async () => null,
 }));
 
 vi.mock('@/lib/chain', () => ({
