@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
 import { NextResponse } from 'next/server';
 import { newId } from '@/lib/ids';
-import { rateLimit } from '@/lib/rate-limit';
+import { quotaLimit, rateLimit } from '@/lib/rate-limit';
 import {
   addMessage,
   findProfile,
@@ -159,6 +159,16 @@ async function sendOnce(request: Request) {
   });
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
+  /*
+    The message quota, spent on the address the signature just proved rather than on `from` as it
+    arrived. The distinction is the whole guard: keyed on an unproven body field, anybody could
+    empty any sender's budget by posting unsigned messages in their name, so the control against
+    spam would double as a way to silence a person. `rateLimit` above is per process and therefore
+    per instance; this is the ceiling that is the same number wherever the request lands.
+  */
+  const overQuota = await quotaLimit(from, 'message');
+  if (overQuota !== null) return overQuota;
+
   let access: { kind: 'open' } | { kind: 'paid'; price: string; contentKey: string; vaultId: string } = {
     kind: 'open',
   };
@@ -313,6 +323,16 @@ async function sendEncrypted(input: {
     action: { kind: 'send-encrypted', to, ciphertextSha256: ciphertextDigest(ciphertext) },
   });
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
+
+  /*
+    The same bucket as the unencrypted path, spent after the same proof.
+
+    One bucket rather than two, deliberately: the recipient's attention is the thing being spent and
+    it does not care which of the two shapes arrived, so a sender who could send sixty of each would
+    have twice the ceiling this file says they have. An encrypted flood is a flood.
+  */
+  const overQuota = await quotaLimit(from, 'message');
+  if (overQuota !== null) return overQuota;
 
   const message = {
     id: newId('m'),

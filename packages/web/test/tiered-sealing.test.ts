@@ -37,7 +37,7 @@ const TIERS = [
   { index: 2, name: 'Retired', price: 9_000_000n, periodMs: 2_592_000_000n, active: false },
 ];
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null, quotaLimit: async () => null }));
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({
     ok: true,
