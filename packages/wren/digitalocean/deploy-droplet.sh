@@ -115,6 +115,15 @@ TARBALL_SCRIPT="$RUNTIME_DIR/scripts/make-source-tarball.sh"
 # picoclaw/workspace before docker build. Nothing in packages/agent-runtime is edited for it.
 WORKSPACE_DIR="$PKG_DIR/workspace"
 AGENT_NAME="wren"
+# Where the policy documents ship from. This package's policy/ in every real run. WREN_POLICY_DIR
+# is a TEST SEAM and nothing else: it is read only under WREN_NO_NETWORK=1, the same gate every
+# stubbed network call sits behind, so a fixture can stand in for documents that do not exist until
+# Wren's keys and vault are born (her members document, her values with the vault id). A real run
+# cannot be pointed at a fixture by setting it.
+POLICY_DIR="$PKG_DIR/policy"
+if [ "${WREN_NO_NETWORK:-}" = "1" ] && [ -n "${WREN_POLICY_DIR:-}" ]; then
+  POLICY_DIR="$WREN_POLICY_DIR"
+fi
 
 REGION="${REGION:-fra1}"
 SIZE="${SIZE:-s-1vcpu-512mb-10gb}"
@@ -1246,9 +1255,9 @@ cmd_install_purse() {
   local commit
   commit="$(git -C "$PURSE_DIR" rev-parse HEAD)"
 
-  for f in policy/wren-multisig.json policy/wren-chain.mainnet.json policy/wren-values.json systemd/wren-purse.service; do
-    if [ ! -f "$PKG_DIR/$f" ]; then
-      echo "deploy-droplet.sh --install-purse: refused - $PKG_DIR/$f is missing" >&2
+  for f in "$POLICY_DIR/wren-multisig.json" "$POLICY_DIR/wren-chain.mainnet.json" "$POLICY_DIR/wren-values.json" "$PKG_DIR/systemd/wren-purse.service"; do
+    if [ ! -f "$f" ]; then
+      echo "deploy-droplet.sh --install-purse: refused - $f is missing" >&2
       return 1
     fi
   done
@@ -1266,16 +1275,16 @@ cmd_install_purse() {
   # committed document under packages/wren/policy. Wren has no pre-soul phase: her vault is born
   # before her purse is installed, so the purse starts with statements on.
   local policy_file="${WREN_POLICY_FILE:-wren-content.mainnet.json}"
-  if ! [[ "$policy_file" =~ ^[a-z][a-z0-9.-]*\.json$ ]] || [ ! -f "$PKG_DIR/policy/$policy_file" ]; then
+  if ! [[ "$policy_file" =~ ^[a-z][a-z0-9.-]*\.json$ ]] || [ ! -f "$POLICY_DIR/$policy_file" ]; then
     echo "deploy-droplet.sh --install-purse: refused - WREN_POLICY_FILE '$policy_file' is not a committed document under packages/wren/policy" >&2
     return 1
   fi
-  cp "$PKG_DIR/policy/$policy_file" "$stage/wren-policy.json"
-  cp "$PKG_DIR/policy/wren-multisig.json" "$stage/wren-multisig.json"
-  cp "$PKG_DIR/policy/wren-chain.mainnet.json" "$stage/chain.json"
+  cp "$POLICY_DIR/$policy_file" "$stage/wren-policy.json"
+  cp "$POLICY_DIR/wren-multisig.json" "$stage/wren-multisig.json"
+  cp "$POLICY_DIR/wren-chain.mainnet.json" "$stage/chain.json"
   # The vault the purse names statements for, read from the committed values document, never typed.
   local vault_id
-  vault_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("WREN_VAULT_ID",""))' "$PKG_DIR/policy/wren-values.json")"
+  vault_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("WREN_VAULT_ID",""))' "$POLICY_DIR/wren-values.json")"
   if ! [[ "$vault_id" =~ ^0x[0-9a-f]{64}$ ]]; then
     echo "deploy-droplet.sh --install-purse: refused - policy/wren-values.json carries no WREN_VAULT_ID; birth the vault first (packages/purse/bin/birth-vault.ts --values-prefix WREN) and commit the values" >&2
     return 1

@@ -1526,21 +1526,46 @@ function installStubs({ failAt } = {}) {
   stub('ship_purse_files', 'echo "shipped $3 $4 $5"');
   stub('start_purse', failAt === 'start_purse' ? 'echo "host: refused - not active" >&2; exit 1' : 'echo "active"');
   stub('probe_purse', 'echo "refused and recorded"');
+  // The documents that exist only once Wren's keys and vault are born, as a fixture: the members
+  // document, the values with a vault id, and a rendered policy. Read by the deploy only because
+  // WREN_NO_NETWORK=1 is set (see POLICY_DIR in the script); obviously fake ids, never real ones.
+  const policyDir = path.join(dir, 'policy');
+  mkdirSync(policyDir);
+  writeFileSync(path.join(policyDir, 'wren-multisig.json'), JSON.stringify({ version: 1, threshold: 1, members: [] }), 'utf8');
+  writeFileSync(path.join(policyDir, 'wren-chain.mainnet.json'), readFileSync(path.join(PKG_DIR, 'policy', 'wren-chain.mainnet.json'), 'utf8'), 'utf8');
+  writeFileSync(path.join(policyDir, 'wren-values.json'), JSON.stringify({ WREN_VAULT_ID: `0x${'c'.repeat(64)}` }), 'utf8');
+  writeFileSync(path.join(policyDir, 'wren-content.mainnet.json'), readFileSync(path.join(PKG_DIR, 'policy', 'wren-content.json'), 'utf8'), 'utf8');
   return {
     dir,
     orderFile,
+    policyDir,
     records: path.join(dir, 'records'),
     env: {
       ...process.env,
       WREN_DEPLOY_CONFIRMED: '1',
       WREN_NO_NETWORK: '1',
       WREN_STUB_DIR: stubs,
+      WREN_POLICY_DIR: policyDir,
       WREN_TEST_ORDER: orderFile,
       WREN_RUN_RECORD_DIR: path.join(dir, 'records'),
       WREN_HOST: 'ops@203.0.113.9',
     },
   };
 }
+
+test('--install-purse refuses until the values document carries the vault, and ignores WREN_POLICY_DIR outside the test seam', () => {
+  const fixture = installStubs();
+  writeFileSync(path.join(fixture.policyDir, 'wren-values.json'), JSON.stringify({ OPERATOR_ADDRESS: '0x1' }), 'utf8');
+  const noVault = installRun(fixture);
+  assert.notEqual(noVault.status, 0, 'no vault id, no purse');
+  assert.match(noVault.stderr, /carries no WREN_VAULT_ID; birth the vault first/);
+  assert.deepEqual(installOrder(fixture), [], 'nothing may run before the refusal');
+  // Without the seam's gate the fixture directory is not read at all: the committed policy/ is,
+  // and it has no members document yet, so the refusal names that file under packages/wren.
+  const real = spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...fixture.env, WREN_NO_NETWORK: '' } });
+  assert.notEqual(real.status, 0);
+  assert.match(real.stderr, /packages\/wren\/policy\/wren-multisig\.json is missing/);
+});
 
 function installRun(fixture, extraEnv = {}) {
   return spawnSync('bash', [DEPLOY_SCRIPT, '--install-purse'], { encoding: 'utf8', env: { ...fixture.env, ...extraEnv } });
