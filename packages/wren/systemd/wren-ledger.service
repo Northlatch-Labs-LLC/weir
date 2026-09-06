@@ -21,9 +21,9 @@ Type=oneshot
 # nothing the socket mode does not already give.
 SuccessExitStatus=4
 
-ExecStart=/opt/node22/bin/node /srv/wren/purse/dist/ledger-tick.js \
+ExecStart=/opt/node22/bin/node /srv/wren-ledger/dist/ledger-tick.js \
   --agent wren \
-  --chain /srv/wren/chain.json \
+  --chain /srv/wren-ledger/chain.json \
   --socket /run/wren-ledger/purse.sock \
   --graphql https://graphql.mainnet.sui.io/graphql \
   --package <SOUL_PACKAGE_ID> \

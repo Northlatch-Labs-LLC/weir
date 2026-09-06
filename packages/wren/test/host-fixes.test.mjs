@@ -186,9 +186,13 @@ const NOT_CLOUD_INIT = new Map([
   // directory cloud-init did create, and the two audit files the signer itself writes.
   ['/run/wren-ledger', 'RuntimeDirectory=wren-ledger creates it at unit start; /run is a tmpfs cloud-init cannot pre-create'],
   ['/run/wren-ledger/purse.sock', 'the settlement purse creates and chmods its own socket at 0660 ledger:ledger'],
-  ['/srv/wren/purse/dist/ledger-tick.js', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root'],
-  ['/srv/wren/policy/wren-ledger.mainnet.json', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root, sha256 pinned as --policy-sha256'],
-  ['/srv/wren/policy/wren-ledger-multisig.json', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root, sha256 pinned in the unit'],
+  // The settlement signer's own tree, created by --install-ledger rather than cloud-init: Wren's
+  // host was built before this account existed. Its own copies, because /srv/wren/purse is
+  // 0750 purse:purse and ledger is deliberately not in the purse group.
+  ['/srv/wren-ledger/dist/server.js', 'installed by deploy-droplet.sh --install-ledger, 0640 ledger:ledger, sha256 pinned in the unit'],
+  ['/srv/wren-ledger/dist/ledger-tick.js', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root'],
+  ['/srv/wren-ledger/policy/wren-ledger.mainnet.json', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root, sha256 pinned as --policy-sha256'],
+  ['/srv/wren-ledger/chain.json', 'installed by deploy-droplet.sh --install-ledger, 0600 ledger:ledger; /srv/wren/chain.json is 0600 purse:purse and unreadable here'],
   ['/var/lib/wren-ledger/audit/audit.jsonl', 'written by the settlement purse; its directory is created by cloud-init'],
   ['/var/lib/wren-ledger/audit/spend.jsonl', 'written by the settlement purse; its directory is created by cloud-init'],
   ['/var/lib/wren-ledger/state/ledger.json', 'written by ledger-tick after a settlement is signed; its directory is created by cloud-init'],

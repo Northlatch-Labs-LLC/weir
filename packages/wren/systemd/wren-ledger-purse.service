@@ -36,6 +36,18 @@ NotifyAccess=all
 User=ledger
 Group=ledger
 
+# WHY THIS UNIT READS NOTHING UNDER /srv/wren.
+#
+# Everything it needs lives under /srv/wren-ledger, owned by ledger: its own copy of the compiled
+# server, its own policy, its own chain document. /srv/wren/purse is 0750 purse:purse and the
+# settlement account is not in the purse group, so the first real install of this unit died at its
+# own ExecStartPre with "Permission denied" on the content purse's server.js.
+#
+# The fix was a second copy, not a second group membership. Adding ledger to purse would have
+# started the unit and handed the settlement arm read access to the content purse's policy, its
+# members document and its key-holding binary — the exact separation this account exists to make.
+# Two copies of one file is the cheap half of that trade.
+
 # WHY THERE IS NO --multisig AND NO --vault HERE.
 #
 # The content purse signs AS Wren's 1-of-2 multisig address, because that is the address that owns
@@ -55,13 +67,13 @@ LoadCredentialEncrypted=wren-ledger:/etc/wren/creds/wren-ledger.cred
 # See the note in wren-purse.service for why there is no --jitless and no MemoryDenyWriteExecute:
 # this process simulates every transaction against a fullnode, so it needs the HTTP stack, and on
 # node 22 that stack needs WebAssembly.
-ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/wren/purse/dist/server.js" | sha256sum --check --status'
-ExecStart=/opt/node22/bin/node /srv/wren/purse/dist/server.js \
+ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/wren-ledger/dist/server.js" | sha256sum --check --status'
+ExecStart=/opt/node22/bin/node /srv/wren-ledger/dist/server.js \
   --agent wren-ledger \
   --socket /run/wren-ledger/purse.sock \
-  --policy /srv/wren/policy/wren-ledger.mainnet.json \
+  --policy /srv/wren-ledger/policy/wren-ledger.mainnet.json \
   --policy-sha256 <LEDGER_POLICY_SHA256> \
-  --chain /srv/wren/chain.json \
+  --chain /srv/wren-ledger/chain.json \
   --audit /var/lib/wren-ledger/audit/audit.jsonl \
   --spend /var/lib/wren-ledger/audit/spend.jsonl
 

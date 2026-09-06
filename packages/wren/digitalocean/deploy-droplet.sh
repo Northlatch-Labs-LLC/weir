@@ -1399,6 +1399,7 @@ cmd_install_ledger() {
   build_ledger_tick_bundle "$stage/ledger-tick.js"
   cp "$POLICY_DIR/wren-ledger.mainnet.json" "$stage/wren-ledger.mainnet.json"
   cp "$PKG_DIR/systemd/wren-ledger.timer" "$stage/wren-ledger.timer"
+  cp "$POLICY_DIR/wren-chain.mainnet.json" "$stage/chain.json"
 
   local dist_sha tick_sha policy_sha
   dist_sha="$(file_sha256 "$stage/server.js")"
@@ -1416,9 +1417,10 @@ cmd_install_ledger() {
   done
 
   echo "deploy-droplet.sh --install-ledger: shipping from commit $commit"
-  echo "  server.js                  sha256 $dist_sha  -> /srv/wren/purse/dist/server.js      0640 purse:purse (pinned in the unit)"
-  echo "  ledger-tick.js             sha256 $tick_sha  -> /srv/wren/purse/dist/ledger-tick.js 0644 root:root"
-  echo "  wren-ledger.mainnet.json   sha256 $policy_sha  -> /srv/wren/policy/wren-ledger.mainnet.json 0644 root:root (--policy-sha256)"
+  echo "  server.js                  sha256 $dist_sha  -> /srv/wren-ledger/dist/server.js      0640 ledger:ledger (pinned in the unit)"
+  echo "  ledger-tick.js             sha256 $tick_sha  -> /srv/wren-ledger/dist/ledger-tick.js 0644 root:root"
+  echo "  wren-ledger.mainnet.json   sha256 $policy_sha  -> /srv/wren-ledger/policy/wren-ledger.mainnet.json 0644 root:root (--policy-sha256)"
+  echo "  chain.json                 mainnet, v5 package                  -> /srv/wren-ledger/chain.json 0600 ledger:ledger"
   echo "  wren-ledger-purse.service  rendered, no substitution left        -> /etc/systemd/system/ 0644 root:root"
   echo "  wren-ledger.service        rendered, no substitution left        -> /etc/systemd/system/ 0644 root:root"
   echo "  wren-ledger.timer          daily, no substitutions               -> /etc/systemd/system/ 0644 root:root"
@@ -1440,7 +1442,7 @@ ship_ledger_files() {
   if is_stubbed; then "$WREN_STUB_DIR/ship_ledger_files" "$@"; return; fi
   local ssh_target="$1" stage="$2" dist_sha="$3" tick_sha="$4" policy_sha="$5"
   ssh -- "$ssh_target" 'rm -rf /tmp/wren-ledger-stage && mkdir -m 0700 /tmp/wren-ledger-stage'
-  scp -q -- "$stage/server.js" "$stage/ledger-tick.js" "$stage/wren-ledger.mainnet.json" \
+  scp -q -- "$stage/server.js" "$stage/ledger-tick.js" "$stage/wren-ledger.mainnet.json" "$stage/chain.json" \
       "$stage/wren-ledger-purse.service" "$stage/wren-ledger.service" "$stage/wren-ledger.timer" \
       "$ssh_target:/tmp/wren-ledger-stage/"
   ssh -- "$ssh_target" sudo bash -s -- "$dist_sha" "$tick_sha" "$policy_sha" <<'REMOTE'
@@ -1461,9 +1463,16 @@ fi
 install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger
 install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger/audit
 install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger/state
-install -m 0640 -o purse -g purse "$S/server.js" /srv/wren/purse/dist/server.js
-install -m 0644 -o root -g root "$S/ledger-tick.js" /srv/wren/purse/dist/ledger-tick.js
-install -m 0644 -o root -g root "$S/wren-ledger.mainnet.json" /srv/wren/policy/wren-ledger.mainnet.json
+# The settlement signer's own tree. 0750 ledger:ledger, and the content purse cannot read into
+# it any more than this account can read into /srv/wren/purse.
+install -d -m 0750 -o ledger -g ledger /srv/wren-ledger
+install -d -m 0750 -o ledger -g ledger /srv/wren-ledger/dist
+install -d -m 0755 -o root -g root /srv/wren-ledger/policy
+install -m 0640 -o ledger -g ledger "$S/server.js" /srv/wren-ledger/dist/server.js
+install -m 0644 -o root -g root "$S/ledger-tick.js" /srv/wren-ledger/dist/ledger-tick.js
+install -m 0644 -o root -g root "$S/wren-ledger.mainnet.json" /srv/wren-ledger/policy/wren-ledger.mainnet.json
+# Its own chain document: /srv/wren/chain.json is 0600 purse:purse and unreadable here.
+install -m 0600 -o ledger -g ledger "$S/chain.json" /srv/wren-ledger/chain.json
 install -m 0644 -o root -g root "$S/wren-ledger-purse.service" /etc/systemd/system/wren-ledger-purse.service
 install -m 0644 -o root -g root "$S/wren-ledger.service" /etc/systemd/system/wren-ledger.service
 install -m 0644 -o root -g root "$S/wren-ledger.timer" /etc/systemd/system/wren-ledger.timer
