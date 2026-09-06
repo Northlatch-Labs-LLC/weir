@@ -5,6 +5,7 @@ import { titleFor } from '@/lib/site-map';
 import { PageHead } from '@/components/design/PageHead';
 import { MIN_STAKE_MIST, RUNGS, ladderHealth } from '@/lib/ladder';
 import { VaultActions } from '@/components/VaultActions';
+import { VaultDisclosure } from '@/components/VaultDisclosure';
 import { explorerUrl, readVaults, shortId } from '@/lib/chain';
 import { reverseName } from '@/lib/names';
 import { readVault } from '@/lib/stake';
@@ -208,18 +209,16 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
           ),
         )}
 
-        <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
-          <span className="lbl">What you are agreeing to</span>
-          <p>
-            Your SUI is delegated to a validator and the rewards go to the creator. You are lending
-            your money&rsquo;s <em>earning power</em>, not the money. There is no lock-up, no notice
-            period and no approval step. <span className="mono">withdraw</span> unwinds delegated
-            stake in the same transaction if it has to.
-          </p>
-          <p>
-            This is a way to support someone at no cost to you, not a substitute for paying them.
-          </p>
-        </div>
+        {/*
+          The clauses, rendered from `lib/vault-disclosure.ts`.
+
+          What stood here said the mechanics correctly — delegated to a validator, no lock-up,
+          lending the money's earning power rather than the money — and said nothing about how much
+          that earning power is worth or what could go wrong. Both facts were already written down
+          in the terms, at 1.3, 9.1 and 9.3, where nobody reads them at the moment they deposit.
+          Every sentence of the old note survives inside the `principal` and `magnitude` clauses.
+        */}
+        <VaultDisclosure />
           </>
   );
 }
