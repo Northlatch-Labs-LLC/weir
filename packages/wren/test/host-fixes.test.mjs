@@ -126,10 +126,20 @@ test('B1: cloud-init creates gid/uid 10002 purse, asserting both are free first 
 
   // The shape must match 10001's exactly: it is the pair that catches the collision class that
   // scrapped v1, and half of it catches nothing.
-  const freeChecks = yaml.match(/if getent (passwd|group) 1000[12] >\/dev\/null 2>&1; then/g) ?? [];
-  assert.equal(freeChecks.length, 4, 'both accounts need both a passwd and a group free-check');
+  const freeChecks = yaml.match(/if getent (passwd|group) 1000[123] >\/dev\/null 2>&1; then/g) ?? [];
+  assert.equal(freeChecks.length, 6, 'all three accounts need both a passwd and a group free-check');
   const nologin = yaml.match(/--shell, \/usr\/sbin\/nologin/g) ?? [];
-  assert.equal(nologin.length, 2, 'both accounts are nologin');
+  assert.equal(nologin.length, 3, 'all three accounts are nologin');
+
+  // The third: ledger, uid/gid 10003, the settlement signer. Same shape as the other two, and
+  // asserted here so a fourth account cannot be added without the free-then-resolved pair.
+  assert.match(yaml, /- \[ groupadd, --gid, "10003", ledger \]/, 'the ledger group is never created');
+  assert.match(
+    yaml,
+    /- \[ useradd, --uid, "10003", --gid, "10003", --system, --no-create-home, --home-dir, \/nonexistent, --shell, \/usr\/sbin\/nologin, ledger \]/,
+    'the ledger user is never created, or is created without a fixed uid',
+  );
+  assert.match(yaml, /not ledger:ledger/, 'no "resolved to ledger:ledger" assertion after creation');
 });
 
 test('B1: --plan prints the purse row so the Master reads the account before it exists', () => {
@@ -171,6 +181,17 @@ const NOT_CLOUD_INIT = new Map([
   ['/srv/wren/policy/wren-policy.json', 'installed by deploy-droplet.sh --install-purse, 0644 root:root, sha256 pinned as --policy-sha256'],
   ['/var/lib/wren/audit/audit.jsonl', 'written by the purse; its directory is created by cloud-init'],
   ['/var/lib/wren/audit/spend.jsonl', 'written by the purse; its directory is created by cloud-init'],
+  // The settlement signer, build order step 9. Same three classes as the content purse above:
+  // a tmpfs runtime directory systemd makes at unit start, files the installer places under a
+  // directory cloud-init did create, and the two audit files the signer itself writes.
+  ['/run/wren-ledger', 'RuntimeDirectory=wren-ledger creates it at unit start; /run is a tmpfs cloud-init cannot pre-create'],
+  ['/run/wren-ledger/purse.sock', 'the settlement purse creates and chmods its own socket at 0660 ledger:ledger'],
+  ['/srv/wren/purse/dist/ledger-tick.js', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root'],
+  ['/srv/wren/policy/wren-ledger.mainnet.json', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root, sha256 pinned as --policy-sha256'],
+  ['/srv/wren/policy/wren-ledger-multisig.json', 'installed by deploy-droplet.sh --install-ledger, 0644 root:root, sha256 pinned in the unit'],
+  ['/var/lib/wren-ledger/audit/audit.jsonl', 'written by the settlement purse; its directory is created by cloud-init'],
+  ['/var/lib/wren-ledger/audit/spend.jsonl', 'written by the settlement purse; its directory is created by cloud-init'],
+  ['/var/lib/wren-ledger/state/ledger.json', 'written by ledger-tick after a settlement is signed; its directory is created by cloud-init'],
 ]);
 
 test('B2: every path any unit names is created by cloud-init, or its parent directory is', () => {

@@ -16,11 +16,12 @@ Requires=wren-ledger-purse.service
 
 [Service]
 Type=oneshot
-User=wren-ledger-run
-Group=ledger
+# Root, exactly as wren-beat.service runs: the socket is chmod 0660 ledger:ledger by the
+# signer itself, and this process holds no key of its own. A fourth account would buy
+# nothing the socket mode does not already give.
 SuccessExitStatus=4
 
-ExecStart=/opt/node22/bin/node /srv/wren/purse/dist/bin/ledger-tick.js \
+ExecStart=/opt/node22/bin/node /srv/wren/purse/dist/ledger-tick.js \
   --agent wren \
   --chain /srv/wren/chain.json \
   --socket /run/wren-ledger/purse.sock \

@@ -409,6 +409,12 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
                                                         a rule nobody can read is not a rule)
   /var/lib/wren                      0700 purse:purse (the hash-chained audit log's home)
   /var/lib/wren/audit                0700 purse:purse
+  /var/lib/wren-ledger               0700 ledger:ledger (the settlement signer's own audit chain,
+                                                        unreadable by the content purse)
+  /var/lib/wren-ledger/audit         0700 ledger:ledger
+  /var/lib/wren-ledger/state         0700 ledger:ledger (the vault balance seen at the last
+                                                        settlement. Read as zero it would book the
+                                                        whole vault as one epoch's earnings)
   /var/lib/wren/watchdog             0700 root:root   (the dead man's own memory: alerts.jsonl and
                                                         the degraded marker. Root's alone, outside
                                                         every mount the container is given)
@@ -451,6 +457,16 @@ deploy-droplet.sh --plan: everything --create would do. No API call is made. Not
                                                     a hand-made account lands on whatever id is
                                                     free -- the uid collision that scrapped v1,
                                                     this time on the key's own account.
+  ledger  gid 10003 / uid 10003  nologin, no home   wren-ledger-purse.service's User=/Group=. The
+                                                    settlement signer, and a separate account
+                                                    rather than a second policy on 10002: two
+                                                    policies under one uid share a credential
+                                                    directory, and "one signer per money path"
+                                                    would then be a claim about argv rather than
+                                                    about the kernel. The settlement key closes
+                                                    epochs and books the books and can price
+                                                    nothing; the content key prices content and
+                                                    records spends and can settle nothing.
   purse is NOT in the wren group and wren is NOT in the purse group; the post-boot check asserts it.
   ops     a login account with NOPASSWD:ALL, said plainly: the desk's SSH key is root on this host.
           disable_root:true bounds the direct-root path only; the bound that matters is the

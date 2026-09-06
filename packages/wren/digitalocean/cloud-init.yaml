@@ -175,6 +175,33 @@ runcmd:
       exit 1
     fi
     echo "wren cloud-init: uid/gid 10002 confirmed to be purse:purse"
+  # The THIRD account: ledger, uid/gid 10003. wren-ledger-purse.service is the settlement signer
+  # and holds a different key from the content purse. It is a separate account rather than a
+  # second policy on 10002 because two policies under one uid share a credential directory, and
+  # "one signer per money path" would then be a claim about argv rather than about the kernel.
+  # The settlement key can close an epoch and book the books; it can price nothing. The content
+  # key can price content and record a spend; it can settle nothing. Same free-then-resolved pair
+  # as 10001 and 10002.
+  - |
+    if getent passwd 10003 >/dev/null 2>&1; then
+      echo "wren cloud-init: refused - uid 10003 already exists before the ledger group/user is created" >&2
+      exit 1
+    fi
+    if getent group 10003 >/dev/null 2>&1; then
+      echo "wren cloud-init: refused - gid 10003 already exists before the ledger group/user is created" >&2
+      exit 1
+    fi
+  - [ groupadd, --gid, "10003", ledger ]
+  - [ useradd, --uid, "10003", --gid, "10003", --system, --no-create-home, --home-dir, /nonexistent, --shell, /usr/sbin/nologin, ledger ]
+  - |
+    RESOLVED_USER="$(getent passwd 10003 | cut -d: -f1)"
+    RESOLVED_GROUP="$(getent group 10003 | cut -d: -f1)"
+    if [ "$RESOLVED_USER" != "ledger" ] || [ "$RESOLVED_GROUP" != "ledger" ]; then
+      echo "wren cloud-init: refused - uid/gid 10003 resolved to '$RESOLVED_USER:$RESOLVED_GROUP', not ledger:ledger" >&2
+      exit 1
+    fi
+    echo "wren cloud-init: uid/gid 10003 confirmed to be ledger:ledger"
+
   # The purse must be able to speak to the beat over its socket and no further: the socket is
   # chmod 0660 by the purse itself and the beat runs as root, so no group membership is added
   # here. purse is NOT in the wren group and wren is NOT in the purse group -- the model's
@@ -210,6 +237,13 @@ runcmd:
   - [ install, -d, -m, "0750", -o, purse, -g, purse, /srv/wren/purse/dist ]
   - [ install, -d, -m, "0700", -o, purse, -g, purse, /var/lib/wren ]
   - [ install, -d, -m, "0700", -o, purse, -g, purse, /var/lib/wren/audit ]
+  # The settlement signer's own audit chain and its watermark, owned by ledger and unreadable by
+  # the content purse. The watermark is the vault balance seen at the last settlement; reading it
+  # as zero would book the whole vault as one epoch's earnings, so it lives where only the
+  # settlement account can write it.
+  - [ install, -d, -m, "0700", -o, ledger, -g, ledger, /var/lib/wren-ledger ]
+  - [ install, -d, -m, "0700", -o, ledger, -g, ledger, /var/lib/wren-ledger/audit ]
+  - [ install, -d, -m, "0700", -o, ledger, -g, ledger, /var/lib/wren-ledger/state ]
   # The dead man's own memory, and it is root's alone. wren-watchdog writes alerts.jsonl and the
   # `degraded` marker here, and wren-alert reads them here and nowhere else. They used to live in
   # /srv/wren/state, which is 2770 root:wren and bind-mounted read-write into the model's
