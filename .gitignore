@@ -138,3 +138,7 @@ __pycache__/
 # artifact of the analysis, regenerated on demand, and internal review material that must not reach
 # a publication path.
 graphify-out/
+
+# security/eyes-only, 2026-09-04: desk material never enters this repository.
+/work/
+/operations/
