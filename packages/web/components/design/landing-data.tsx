@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
 import { createClient, fold, readPlatform } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
-import { formatUnits } from '@/lib/units';
+import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { Icon } from '@/components/design/icons';
 import { funnelSides } from '@/components/design/explore-funnel-data';
 import {
@@ -348,7 +348,7 @@ export async function LandingData({
             ? early('Protocol treasury')
             : measured(
                 'Protocol treasury',
-                `${formatUnits(platform.treasuryMist, 9)} SUI`,
+                `${formatUnits(platform.treasuryMist, SUI_DECIMALS)} SUI`,
                 'read from the Platform object',
                 readAtMs,
               ),

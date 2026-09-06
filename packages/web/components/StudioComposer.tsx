@@ -520,10 +520,20 @@ export function StudioComposer() {
     the vault, then the form field. They genuinely differ — the field holds its default while the
     key carries a price set weeks ago — and the contract charges whatever the table says. Sending
     the form's number would advertise a price on the feed that the buy button does not honour.
+
+    No vault, no price. This used to read `target?.decimals ?? 6`, which turned a typed figure into
+    minor units at native USDC's scale for a coin nobody had read yet. It could not reach a buyer —
+    `canPublish` requires a target and the composer returns before rendering without one — but it is
+    the same literal the five shipped scale bugs were, wearing the shared formatter's clothes, and
+    it sat where the next person copies from. A missing vault is not a six-decimal vault.
   */
   const onChainPrice = keyPrice.name === 'known' ? keyPrice.price : null;
   const effectivePrice =
-    stage.name === 'priced' ? toMinor(price, target?.decimals ?? 6) : (onChainPrice ?? toMinor(price, target?.decimals ?? 6));
+    target === null
+      ? null
+      : stage.name === 'priced'
+        ? toMinor(price, target.decimals)
+        : (onChainPrice ?? toMinor(price, target.decimals));
 
   /*
     A paid post is publishable only once its price is on chain. Anything else would ship a buy
@@ -775,7 +785,7 @@ export function StudioComposer() {
               {keyPrice.name === 'known' && keyPrice.price !== null && (
                 <p className="enc-status" style={{ marginTop: 6 }}>
                   <span className="enc-tag">in use</span> already sells at{' '}
-                  {formatUnits(keyPrice.price, target?.decimals ?? 6)} {target?.symbol ?? ''}. Everyone who bought it reads this
+                  {formatUnits(keyPrice.price, target.decimals)} {target.symbol}. Everyone who bought it reads this
                   post too, at no extra charge
                 </p>
               )}
@@ -831,7 +841,7 @@ export function StudioComposer() {
             {machineKeyPrice.name === 'known' && machineOnChainPrice !== null && (
               <p className="enc-status">
                 <span className="enc-tag">on sale</span> machines already pay{' '}
-                {formatUnits(machineOnChainPrice, target?.decimals ?? 6)} {target?.symbol ?? ''} for this key. Pricing it again replaces
+                {formatUnits(machineOnChainPrice, target.decimals)} {target.symbol} for this key. Pricing it again replaces
                 that; every Unlock already sold stays valid
               </p>
             )}
