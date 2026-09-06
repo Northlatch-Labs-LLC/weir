@@ -16,9 +16,22 @@ Requires=wren-ledger-purse.service
 
 [Service]
 Type=oneshot
-# Root, exactly as wren-beat.service runs: the socket is chmod 0660 ledger:ledger by the
-# signer itself, and this process holds no key of its own. A fourth account would buy
-# nothing the socket mode does not already give.
+# Runs AS ledger, not as root.
+#
+# It was root, on the reasoning that wren-beat.service runs as root and the socket is 0660
+# ledger:ledger. That reasoning was wrong here, and the host said so: this unit sets
+# CapabilityBoundingSet= (empty), so its root has no CAP_DAC_OVERRIDE and no CAP_DAC_READ_SEARCH.
+# Root by name, with none of the powers that let root ignore file modes. /srv/wren-ledger is
+# 0750 ledger:ledger, so the process could not traverse into its own program and node reported
+# MODULE_NOT_FOUND on a file that was plainly there and readable to a root shell.
+#
+# The fix is the owner, not a capability. This process needs exactly three things — read
+# /srv/wren-ledger, write /var/lib/wren-ledger/state, speak to a socket that is 0660
+# ledger:ledger — and the ledger account has all three by ownership. Granting CAP_DAC_OVERRIDE
+# back would have worked and would have handed a settlement run the power to read every file on
+# the host, to fix a permission it already had by another name.
+User=ledger
+Group=ledger
 SuccessExitStatus=4
 
 ExecStart=/opt/node22/bin/node /srv/wren-ledger/dist/ledger-tick.js \
