@@ -121,7 +121,8 @@ test('wren-purse.service runs the shared server with --agent wren, Wren\'s crede
   assert.match(unit, /^\s+--agent wren \\$/m);
   assert.match(unit, /^\s+--vault <VAULT_ID> \\$/m, 'the vault is rendered from the values document, never typed into the unit');
   assert.match(unit, /^ExecStart=\/opt\/node22\/bin\/node \/srv\/wren\/purse\/dist\/server\.js \\$/m);
-  assert.doesNotMatch(unit, /--jitless|MemoryDenyWriteExecute=yes/, 'the pair is gone together; see the unit for why');
+  const directives = unit.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.doesNotMatch(directives, /--jitless|MemoryDenyWriteExecute=yes/, 'the pair is gone together; the unit says why in its comments');
   assert.match(unit, /^User=purse$/m);
 });
 
