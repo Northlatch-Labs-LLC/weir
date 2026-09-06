@@ -123,3 +123,43 @@ export async function readVaultEarnings(endpoint: string, vaultId: string): Prom
   if (!json) return refuse('chain-unreadable', `${vaultId} is not a Move object with contents.`);
   return u64(json.earnings, 'earnings');
 }
+
+/**
+ * What one transaction actually cost, in MIST.
+ *
+ * `computationCost + storageCost - storageRebate`, which is the number the sender's balance
+ * actually moved by. The rebate is subtracted rather than ignored because Sui refunds storage when
+ * objects are consumed, and a transaction that freed more than it wrote costs less than nothing —
+ * `null` is returned for that case rather than a negative, since a spend is a u64 on chain and
+ * "this beat cost nothing" is a true and unremarkable answer.
+ *
+ * Read AFTER submission, from the chain, never estimated. An estimate booked against an allowance
+ * is a number the operator cannot check against anything.
+ */
+export async function readTransactionGasMist(
+  endpoint: string,
+  digest: string,
+): Promise<Outcome<bigint | null>> {
+  const read = await graphql(
+    endpoint,
+    `query { transactionBlock(digest: "${digest}") { effects { gasEffects { gasSummary { computationCost storageCost storageRebate } } } } }`,
+  );
+  if (!read.ok) return read;
+  const summary = (
+    read.value as {
+      transactionBlock?: { effects?: { gasEffects?: { gasSummary?: Record<string, unknown> } } };
+    }
+  ).transactionBlock?.effects?.gasEffects?.gasSummary;
+  if (!summary) {
+    return refuse('chain-unreadable', `${digest} has no gas summary yet; it may not be indexed.`);
+  }
+  const computation = u64(summary['computationCost'], 'computationCost');
+  if (!computation.ok) return computation;
+  const storage = u64(summary['storageCost'], 'storageCost');
+  if (!storage.ok) return storage;
+  const rebate = u64(summary['storageRebate'], 'storageRebate');
+  if (!rebate.ok) return rebate;
+
+  const net = computation.value + storage.value - rebate.value;
+  return allow(net > 0n ? net : null);
+}

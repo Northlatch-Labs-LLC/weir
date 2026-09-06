@@ -129,3 +129,63 @@ describe('--pre-soul drops any agent\'s soul marker', () => {
     if (!rendered.ok) expect(rendered.reason).toContain('<WREN_SOUL_ID>');
   });
 });
+
+/*
+  The soul flags on phase two.
+
+  All four or none. Three of four is the failure that would otherwise be silent: the beat would
+  start, publish, book nothing, and report nothing missing — so the allowance would look untouched
+  while real money was being spent against it.
+*/
+describe('the soul flags travel together or not at all', () => {
+  const base = ['--runs', 'r', '--state', 's', '--socket', 'k', '--chain', 'c', '--beat-id', '20260906T000000Z'];
+  const four = [
+    '--soul-package', '0x000000000000000000000000000000000000000000000000000000000000005e',
+    '--soul', '0x00000000000000000000000000000000000000000000000000000000000000a1',
+    '--soul-version', '978614373',
+    '--graphql', 'https://graphql.mainnet.sui.io/graphql',
+  ];
+
+  it('none of them is a real deployment that books nothing', () => {
+    const parsed = parseBeatArgs(base);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.soul).toBeNull();
+  });
+
+  it('all four carry the soul through', () => {
+    const parsed = parseBeatArgs([...base, ...four]);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.value.soul?.soulId).toBe('0x00000000000000000000000000000000000000000000000000000000000000a1');
+      expect(parsed.value.soul?.soulVersion).toBe('978614373');
+      expect(parsed.value.soul?.graphql).toBe('https://graphql.mainnet.sui.io/graphql');
+    }
+  });
+
+  it('three of four is refused, and the refusal names what is missing', () => {
+    for (let drop = 0; drop < 4; drop += 1) {
+      const partial = four.filter((_, i) => Math.floor(i / 2) !== drop);
+      const parsed = parseBeatArgs([...base, ...partial]);
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) expect(parsed.refused.reason).toContain('together or not at all');
+    }
+  });
+
+  it('a soul id that is not a lower-case Sui id is refused', () => {
+    const bad = [...four];
+    bad[bad.indexOf('--soul') + 1] = '0xNOTHEX';
+    expect(parseBeatArgs([...base, ...bad]).ok).toBe(false);
+  });
+
+  it('a version that is not a u64 is refused', () => {
+    const bad = [...four];
+    bad[bad.indexOf('--soul-version') + 1] = '9786.14373';
+    expect(parseBeatArgs([...base, ...bad]).ok).toBe(false);
+  });
+
+  it('a graphql endpoint that is not https is refused', () => {
+    const bad = [...four];
+    bad[bad.indexOf('--graphql') + 1] = 'http://graphql.mainnet.sui.io/graphql';
+    expect(parseBeatArgs([...base, ...bad]).ok).toBe(false);
+  });
+});

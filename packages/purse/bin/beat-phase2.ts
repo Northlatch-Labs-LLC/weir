@@ -22,6 +22,7 @@ import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 import { loadChainConfig } from '../src/chain.js';
 import { askPurse } from '../src/client.js';
 import { runPhaseTwo, type SubmitPort } from '../src/beat.js';
+import { readTransactionGasMist } from '../src/soul-read.js';
 import { parseBeatArgs, parseProfile, DEFAULT_AGENT, DEFAULT_PROFILE, type Profile } from '../src/beat-args.js';
 
 /**
@@ -141,6 +142,15 @@ const { state, statePath } = await runPhaseTwo({
   ask: { ask: (intent) => askPurse({ socketPath: args.socket, intent }) },
   ...(args.dryRun ? {} : { submit: chainSubmit(chain.value) }),
   ...(args.dryRun ? {} : publish),
+  ...(args.soul === null
+    ? {}
+    : {
+        recordSpend: {
+          packageId: args.soul.packageId,
+          soul: { objectId: args.soul.soulId, initialSharedVersion: args.soul.soulVersion },
+          gasOf: (digest: string) => readTransactionGasMist(args.soul!.graphql, digest),
+        },
+      }),
 });
 
 process.stderr.write(
@@ -149,6 +159,8 @@ process.stderr.write(
     (state.digest === undefined ? '' : ` digest=${state.digest}`) +
     (state.submittedDigest === undefined ? '' : ` submitted=${state.submittedDigest}`) +
     (state.postId === undefined ? '' : ` post=${state.postId}`) +
+    (state.spentMist === undefined ? '' : ` spent=${state.spentMist}`) +
+    (state.spendError === undefined ? '' : ` spend-unbooked=${state.spendError}`) +
     ` state=${statePath}\n`,
 );
 

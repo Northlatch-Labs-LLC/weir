@@ -34,6 +34,20 @@ SOCKET=/run/wren/purse.sock
 PHASE2="$SRV/purse/dist/beat-phase2.js"
 PHASE2_SHA256="<PHASE2_SHA256>"
 NODE=/opt/node22/bin/node
+# The soul this beat books its spending against, and the endpoint the cost is read from.
+#
+# Phase two reads what the submitted transaction ACTUALLY cost, off the chain, after the fact, and
+# records that against the soul's allowance. It is never estimated: an allowance is a bound on real
+# spending, and a figure nobody can check against a transaction digest measures nothing.
+#
+# All four are substituted from the committed values document. Phase two refuses three of four
+# rather than starting and booking nothing, which would leave the allowance looking untouched while
+# real money was spent against it.
+SOUL_PACKAGE_ID="<SOUL_PACKAGE_ID>"
+SOUL_ID="<WREN_SOUL_ID>"
+SOUL_VERSION="<WREN_SOUL_VERSION>"
+GRAPHQL="https://graphql.mainnet.sui.io/graphql"
+
 # The one origin statements are issued for; the purse unit carries the same value (--api-origin).
 API_ORIGIN="https://weir.social"
 AGENT_NAME="wren"
@@ -162,7 +176,8 @@ AGENT_ADDRESS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))
 [[ "$AGENT_ADDRESS" =~ ^0x[0-9a-f]{64}$ ]] || refuse "the policy's agentAddress is not a full address"
 set +e
 "$NODE" "$PHASE2" --runs "$RUNS" --state "$STATE" --socket "$SOCKET" --chain "$CHAIN" --beat-id "$BEAT_ID" \
-  --api-origin "$API_ORIGIN" --address "$AGENT_ADDRESS" --agent "$AGENT_NAME" --profile-file "$PROFILE" 2> "$BEAT_DIR/phase2.log"
+  --api-origin "$API_ORIGIN" --address "$AGENT_ADDRESS" --agent "$AGENT_NAME" --profile-file "$PROFILE" \
+  --soul-package "$SOUL_PACKAGE_ID" --soul "$SOUL_ID" --soul-version "$SOUL_VERSION" --graphql "$GRAPHQL" 2> "$BEAT_DIR/phase2.log"
 PHASE2_EXIT=$?
 set -e
 cat "$BEAT_DIR/phase2.log" >&2 || true

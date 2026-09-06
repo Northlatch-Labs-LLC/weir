@@ -22,10 +22,22 @@ export interface BeatArgs {
   readonly agent: string;
   /** A JSON file `{ "name", "bio" }` phase two publishes under; Heron's literal when not given. */
   readonly profileFile: string | null;
+  /** All four together, or null. See the note where they are parsed. */
+  readonly soul: {
+    readonly packageId: string;
+    readonly soulId: string;
+    readonly soulVersion: string;
+    readonly graphql: string;
+  } | null;
 }
 
-const FLAGS = ['--runs', '--state', '--socket', '--chain', '--beat-id', '--api-origin', '--address', '--agent', '--profile-file'] as const;
-const OPTIONAL = new Set<string>(['--api-origin', '--address', '--agent', '--profile-file']);
+const FLAGS = ['--runs', '--state', '--socket', '--chain', '--beat-id', '--api-origin', '--address', '--agent', '--profile-file', '--soul', '--soul-version', '--soul-package', '--graphql'] as const;
+// The soul flags are optional together: a deployment without a soul books no spend and is a real
+// deployment, not a broken one. Their all-or-nothing rule is enforced below, not here.
+const OPTIONAL = new Set<string>([
+  '--api-origin', '--address', '--agent', '--profile-file',
+  '--soul', '--soul-version', '--soul-package', '--graphql',
+]);
 export const DEFAULT_AGENT = 'heron';
 const AGENT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 /** Heron's, unchanged: the profile the first citizen has always published under. */
@@ -103,6 +115,36 @@ export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
   if (!AGENT_NAME.test(agent)) return refuse('request-malformed', '--agent is a name matching ^[a-z][a-z0-9-]{0,31}$.');
   const profileFile = values.get('--profile-file') ?? null;
 
+  /*
+    The soul, or none of it. Booking a spend needs four facts — the package, the soul's id and its
+    shared version, and a chain endpoint to read the gas from. Three of the four is a deployment
+    that would book nothing and report nothing, so it is refused here where somebody is reading the
+    error, rather than at 03:00 in a journal nobody opens.
+  */
+  const soulFlags = ['--soul', '--soul-version', '--soul-package', '--graphql'] as const;
+  const present = soulFlags.filter((flag) => values.has(flag));
+  if (present.length !== 0 && present.length !== soulFlags.length) {
+    return refuse(
+      'request-malformed',
+      `${soulFlags.join(', ')} are given together or not at all; ${present.join(', ')} alone books nothing.`,
+    );
+  }
+  const soul =
+    present.length === 0
+      ? null
+      : {
+          packageId: values.get('--soul-package')!,
+          soulId: values.get('--soul')!,
+          soulVersion: values.get('--soul-version')!,
+          graphql: values.get('--graphql')!,
+        };
+  if (soul !== null) {
+    if (!/^0x[0-9a-f]{1,64}$/.test(soul.packageId)) return refuse('request-malformed', '--soul-package is a lower-case Sui id.');
+    if (!/^0x[0-9a-f]{1,64}$/.test(soul.soulId)) return refuse('request-malformed', '--soul is a lower-case Sui id.');
+    if (!/^(0|[1-9][0-9]{0,19})$/.test(soul.soulVersion)) return refuse('request-malformed', '--soul-version is a u64 decimal string.');
+    if (!/^https:\/\/[a-z0-9.-]+\/[a-z]*$/.test(soul.graphql)) return refuse('request-malformed', '--graphql is an https endpoint.');
+  }
+
   return allow({
     runs: values.get('--runs')!,
     state: values.get('--state')!,
@@ -114,6 +156,7 @@ export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
     address,
     agent,
     profileFile,
+    soul,
   });
 }
 

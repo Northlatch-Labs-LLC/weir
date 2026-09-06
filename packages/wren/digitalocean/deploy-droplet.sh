@@ -1744,12 +1744,33 @@ REMOTE
 # ---------------------------------------------------------------------------
 render_wren_beat() {
   # $1 phase-two bundle sha256. Prints the launcher.
+  #
+  # The soul is substituted here from the committed values document, never typed: the beat books
+  # what it spends against THAT soul, and a wrong id would either abort on chain or, worse, book
+  # one citizen's spending against another's allowance.
   local sha="$1"
   if ! [[ "$sha" =~ ^[0-9a-f]{64}$ ]]; then
     echo "deploy-droplet.sh: refused - '$sha' is not a sha256; the launcher is not rendered" >&2
     return 1
   fi
-  sed -e "s/<PHASE2_SHA256>/$sha/g" "$HERE/bin/wren-beat"
+  local v="$POLICY_DIR/wren-values.json"
+  local pkg soul soul_v
+  pkg="$(values_get "$v" SOUL_PACKAGE_ID)"
+  soul="$(values_get "$v" WREN_SOUL_ID)"
+  soul_v="$(values_get "$v" WREN_SOUL_VERSION)"
+  for pair in "SOUL_PACKAGE_ID:$pkg" "WREN_SOUL_ID:$soul"; do
+    if ! [[ "${pair#*:}" =~ ^0x[0-9a-f]{64}$ ]]; then
+      echo "deploy-droplet.sh: refused - policy/wren-values.json carries no ${pair%%:*}; the beat would book nothing" >&2
+      return 1
+    fi
+  done
+  if ! [[ "$soul_v" =~ ^(0|[1-9][0-9]{0,19})$ ]]; then
+    echo "deploy-droplet.sh: refused - policy/wren-values.json carries no WREN_SOUL_VERSION as a u64" >&2
+    return 1
+  fi
+  sed -e "s/<PHASE2_SHA256>/$sha/g" -e "s/<SOUL_PACKAGE_ID>/$pkg/g" \
+      -e "s/<WREN_SOUL_ID>/$soul/g" -e "s/<WREN_SOUL_VERSION>/$soul_v/g" \
+    "$HERE/bin/wren-beat"
 }
 
 cmd_install_beat() {
