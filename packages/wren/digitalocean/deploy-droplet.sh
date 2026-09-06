@@ -1262,6 +1262,14 @@ cmd_install_purse() {
     fi
   done
 
+  # The vault the purse names statements for, read from the committed values document, never typed.
+  local vault_id
+  vault_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("WREN_VAULT_ID",""))' "$POLICY_DIR/wren-values.json")"
+  if ! [[ "$vault_id" =~ ^0x[0-9a-f]{64}$ ]]; then
+    echo "deploy-droplet.sh --install-purse: refused - policy/wren-values.json carries no WREN_VAULT_ID; birth the vault first (packages/purse/bin/birth-vault.ts --values-prefix WREN) and commit the values" >&2
+    return 1
+  fi
+
   trap install_purse_on_exit EXIT
   record_run "install-purse-begin" "commit=$commit"
 
@@ -1282,13 +1290,6 @@ cmd_install_purse() {
   cp "$POLICY_DIR/$policy_file" "$stage/wren-policy.json"
   cp "$POLICY_DIR/wren-multisig.json" "$stage/wren-multisig.json"
   cp "$POLICY_DIR/wren-chain.mainnet.json" "$stage/chain.json"
-  # The vault the purse names statements for, read from the committed values document, never typed.
-  local vault_id
-  vault_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("WREN_VAULT_ID",""))' "$POLICY_DIR/wren-values.json")"
-  if ! [[ "$vault_id" =~ ^0x[0-9a-f]{64}$ ]]; then
-    echo "deploy-droplet.sh --install-purse: refused - policy/wren-values.json carries no WREN_VAULT_ID; birth the vault first (packages/purse/bin/birth-vault.ts --values-prefix WREN) and commit the values" >&2
-    return 1
-  fi
 
   local dist_sha multisig_sha policy_sha
   dist_sha="$(file_sha256 "$stage/server.js")"
