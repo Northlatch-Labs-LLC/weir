@@ -15,6 +15,15 @@
  *
  * A `<button>` with `aria-expanded` rather than `<details>`: the disclosure widget a screen reader
  * announces promised a section, and the earlier version of this component learned that lesson.
+ *
+ * # No `aria-controls`
+ *
+ * `aria-controls` has to name an element that exists in the DOM, and the body div above is
+ * deliberately absent while closed — see the comment below. Pointing it at an id that only shows up
+ * after the click is WCAG 4.1.2 Name, Role, Value: the reference is broken for every screen reader
+ * user until the moment it stops mattering. `aria-expanded` alone already tells assistive tech
+ * everything it needs — this control expands, and it is currently open or closed — so it carries the
+ * state and `aria-controls` is simply dropped rather than made to always resolve.
  */
 import { useId, useState } from 'react';
 
@@ -38,7 +47,6 @@ export function PostBody({ body, preview }: { body: string; preview: string }) {
         type="button"
         className="post-body-toggle"
         aria-expanded={open}
-        aria-controls={id}
         onClick={() => setOpen((was) => !was)}
       >
         <span aria-hidden="true" className="post-body-toggle__mark">

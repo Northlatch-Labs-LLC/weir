@@ -62,23 +62,52 @@ describe('heron-purse.service', () => {
     expect(onlyValue(purse, 'Service', 'PrivateTmp')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'PrivateDevices')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'RestrictAddressFamilies')).toBe('AF_UNIX AF_INET AF_INET6');
+
+    /*
+      MemoryDenyWriteExecute is deliberately NOT in this list any more, as of 2026-09-06.
+
+      It was dropped from the unit together with `--jitless`, because on node 22 that flag switches
+      WebAssembly off and undici compiles its HTTP parser to WebAssembly the moment any fetch-family
+      global is touched — so the purse could sign a statement but died on its first priced post.
+      Reproduced on this laptop against node 22.23.2 at the path the unit names.
+
+      The pair is not asserted here because asserting one of two coupled directives is exactly the
+      drift the unit's own comment warns about. The test below asserts the coupling itself, which
+      holds in either state and would go red if somebody restored one without the other.
+    */
   });
 
-  it('carries neither --jitless nor MemoryDenyWriteExecute, and says why in the unit', async () => {
+  it('has MemoryDenyWriteExecute and --jitless present together or absent together', async () => {
     /*
-      The pair went together or not at all. On node 22 the HTTP stack compiles its parser to
-      WebAssembly the moment a fetch-family global is touched, --jitless forbids WebAssembly, and
-      the purse's first priced post (a simulate over the network) killed the process (Wren,
-      2026-09-06). One of the two left alone is a unit that does not run or a line that is
-      decoration, so both are gone, and the reason is written where the next reader will look.
+      MemoryDenyWriteExecute refuses mappings that are both writable and executable and refuses
+      mprotect adding PROT_EXEC. V8's optimising compiler needs exactly that, so a plain `node` under
+      this directive dies at start. Keeping the directive without the flag means the unit does not
+      run at all; keeping the flag without the directive means the hardening line is decoration.
+      Neither is allowed to happen quietly.
+
+      That rule is a biconditional, and until 2026-09-06 this test asserted only one half of it:
+      `expect(denies).toBe(true)` and `expect(exec).toContain('--jitless')` pinned the flag as
+      REQUIRED. `--jitless` removes WebAssembly from the runtime, node 22's fetch parses HTTP with a
+      WebAssembly build of llhttp, and so every PAID post the purse tried on the droplet died inside
+      the simulation — while this file failed any commit that removed the cause. A test that pins
+      one arrangement of a pair cannot be used to change the pair; what the unit's comment actually
+      states is that the two travel together, so that is what is asserted, and dropping both in one
+      commit is now a passing change rather than a fight with the suite.
+
+      Which of the two arrangements is correct is not a question a unit file can answer, and this
+      test no longer pretends it can. `client-smoke.test.ts` answers it, by starting a real node
+      with whatever flags this ExecStart carries and building the real client in it.
     */
     const purse = await unit('heron-purse.service');
+    const denies = onlyValue(purse, 'Service', 'MemoryDenyWriteExecute') === 'yes';
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
-    expect(exec).not.toContain('--jitless');
-    expect(directive(purse, 'Service', 'MemoryDenyWriteExecute')).toEqual([]);
-    const text = await readFile(join(SYSTEMD, 'heron-purse.service'), 'utf8');
-    expect(text).toMatch(/WHY THERE IS NO --jitless AND NO MemoryDenyWriteExecute/);
-    expect(text).toMatch(/WebAssembly is not defined/);
+    const jitless = exec.includes('--jitless');
+    expect(
+      jitless,
+      denies
+        ? 'MemoryDenyWriteExecute=yes without --jitless: the unit cannot start at all.'
+        : 'MemoryDenyWriteExecute is gone but --jitless stayed: the flag now costs WebAssembly and buys nothing.',
+    ).toBe(denies);
   });
 
   it('passes the policy path and a pin, and never a key path in argv', async () => {
@@ -97,7 +126,14 @@ describe('heron-purse.service', () => {
     expect(pres.some((line) => line.includes('<DIST_SHA256>') && line.includes('/srv/heron/purse/dist/server.js') && line.includes('sha256sum --check'))).toBe(true);
     expect(pres.some((line) => line.includes('<MULTISIG_SHA256>') && line.includes('/srv/heron/policy/heron-multisig.json') && line.includes('sha256sum --check'))).toBe(true);
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
-    expect(exec.startsWith('/opt/node22/bin/node /srv/heron/purse/dist/server.js')).toBe(true);
+    /*
+      The interpreter and the script are pinned; what is between them is not. Node's own flags are
+      the pair rule above and the smoke test's business, and spelling `--jitless` into this line was
+      the second place that made removing it fail the suite.
+    */
+    expect(exec.startsWith('/opt/node22/bin/node ')).toBe(true);
+    expect(exec).toContain(' /srv/heron/purse/dist/server.js ');
+    expect(exec.split(' /srv/heron/purse/dist/server.js ')[0]).not.toContain('.js');
     // systemd expands %-specifiers in Exec lines (%s is the user's shell); a pin line must not use one.
     for (const line of pres) expect(line).not.toMatch(/%[a-zA-Z%]/);
   });

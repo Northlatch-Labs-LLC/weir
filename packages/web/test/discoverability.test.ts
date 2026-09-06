@@ -44,7 +44,9 @@ vi.mock('../lib/agent-manifest', async (importOriginal) => {
   };
 });
 
-const { AI_CRAWLERS, CONTENT_SIGNAL, privatePaths, robotsText } = await import('../app/robots.txt/route');
+const { AGENT_READABLE_API_PATHS, AI_CRAWLERS, CONTENT_SIGNAL, privatePaths, robotsText } = await import(
+  '../app/robots.txt/route'
+);
 const { openPages, default: sitemap } = await import('../app/sitemap');
 const { REGISTRATION_TYPE, registrationFor } = await import('../app/.well-known/agent-registration.json/route');
 const { GET: securityTxtGET, SECURITY_TXT } = await import('../app/.well-known/security.txt/route');
@@ -133,6 +135,36 @@ describe('robots.txt', () => {
     expect(mirror).toContain('Sitemap: https://mirror.example/sitemap.xml');
     expect(mirror).not.toContain(ORIGIN);
   });
+
+  it('carries exactly one `User-agent: *` group', () => {
+    /*
+      A second `User-agent: *` block used to hold the discovery-document `Allow` lines further down
+      the file. Parsers do not agree on what two groups for the same agent mean — some merge them,
+      some keep only the first and drop the second — so `llms.txt` was unreachable to whichever kind
+      it was serving. Found and merged into one group 2026-09-06.
+    */
+    expect(lines.filter((line) => line === 'User-agent: *')).toHaveLength(1);
+  });
+
+  it('allows the exact reads `llms.txt` sends an agent to, ahead of `Disallow: /api/`', () => {
+    /*
+      `llms.txt` tells every agent to call `GET /api/agents/sponsor` and `GET
+      /api/posts/{id}/authorship` (and, by the same reasoning two paragraphs later,
+      `GET /api/comments/{id}/authorship`) before trusting what it reads. `Disallow: /api/` used to
+      tell a robots-respecting agent not to fetch any of them — told to verify and told not to fetch
+      the endpoint that verifies. Found 2026-09-06.
+    */
+    for (const path of AGENT_READABLE_API_PATHS) {
+      const allowAt = lines.indexOf(`Allow: ${path}`);
+      const disallowApi = lines.indexOf('Disallow: /api/');
+      expect(allowAt, `Allow: ${path} must be present`).toBeGreaterThan(-1);
+      // Ahead of the broad disallow, for a first-match parser; a most-specific-match parser
+      // (this file's stated target) would pick the longer `Allow` regardless of order.
+      expect(allowAt).toBeLessThan(disallowApi);
+    }
+    // The rest of `/api/` stays disallowed — this is an exception, not an opening of the prefix.
+    expect(text).toContain('Disallow: /api/');
+  });
 });
 
 describe('sitemap.xml', () => {
@@ -162,6 +194,21 @@ describe('sitemap.xml', () => {
 
   it('includes the page an operator reads before pointing an agent here', () => {
     expect(openPages()).toContain('/agents');
+  });
+
+  it('lists the homepage, and only once', () => {
+    // `/` isn't in `ALWAYS_OPEN` — it's added in `sitemap()` directly, since the default site mode
+    // is open and the root answers 200 without an account. Found missing 2026-09-06.
+    const urls = sitemap().map((entry) => entry.url);
+    expect(urls.filter((u) => u === 'https://weir.social/')).toHaveLength(1);
+  });
+
+  it('never lists the same page twice', () => {
+    // `/disclosure` was in `ALWAYS_OPEN` under two separate comments and so appeared twice here.
+    // Found and fixed at the source (`lib/front-door.ts`) 2026-09-06; `openPages()` also dedupes
+    // defensively now, the same way `privatePaths()` in `robots.txt/route.ts` always has.
+    const urls = sitemap().map((entry) => entry.url);
+    expect(new Set(urls).size).toBe(urls.length);
   });
 });
 

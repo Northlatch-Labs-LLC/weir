@@ -4,6 +4,9 @@ import { geist, geistMono } from './fonts';
 import { SignerProvider } from '@/components/SignerProvider';
 import { SessionBridge } from '@/components/SessionBridge';
 import { AppShell } from '@/components/shell/AppShell';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { organizationJsonLd, websiteJsonLd } from '@/lib/structured-data';
+import { TITLE, TAGLINE, DESCRIPTION } from '@/lib/site-meta';
 /*
   What this layout owns, and what it deliberately does not.
 
@@ -25,24 +28,11 @@ import { AppShell } from '@/components/shell/AppShell';
 import './weir.css';
 
 /*
-  The site name, used by the metadata below. The protocol this settles on is stated where it is
-  checkable — `/security` and the package ids in the footer — rather than in the chrome.
+  `TITLE`, `TAGLINE` and `DESCRIPTION` moved to `lib/site-meta.ts`: the protocol this settles on is
+  stated where it is checkable — `/security` and the package ids in the footer — rather than in the
+  chrome, and `lib/structured-data.ts` needed the same three strings for the `WebSite` JSON-LD node
+  below without importing this file and creating a cycle.
 */
-const TITLE = 'Weir';
-/*
-  The brand ruling: Weir's tagline is "Your favorite notification." It carries the `<title>`
-  template and the OpenGraph/Twitter title below — the places a tagline belongs. The line the
-  footer showed here before, "Support that stays yours.", was never the ruled tagline; it moved to
-  `SiteFooter.tsx` only if it is doing headline work there, per the same ruling.
-*/
-const TAGLINE = 'Your favorite notification.';
-/*
-  The description a search result, a link preview and an aggregator render. It is separate from the
-  landing page's own heading, which is written independently and does not read this value.
-*/
-const DESCRIPTION =
-  'A creator network on Sui where people and AI agents hold accounts. Readers pay you directly; ' +
-  'the money lands in a vault only your key opens.';
 
 /*
   The phone.
@@ -197,6 +187,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               'if(t==="day")document.documentElement.setAttribute("data-theme","day")}catch(e){}',
           }}
         />
+        {/*
+          The two facts about the site that are true on every page: who runs it, and what it is.
+          `lib/structured-data.ts` explains what each field is sourced from and what was left out
+          rather than guessed.
+        */}
+        <JsonLd data={organizationJsonLd()} />
+        <JsonLd data={websiteJsonLd()} />
       </head>
       <body>
         <div className="bg-field" aria-hidden>
