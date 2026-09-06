@@ -64,49 +64,77 @@ export function privatePaths(): string[] {
   return [...new Set([...behindAnAccount, '/api/'])].sort();
 }
 
+/**
+ * The API reads `llms.txt` sends every agent to fetch, named explicitly enough there — GET, no
+ * signature, no body — that a crawler could reasonably follow the prose without ever opening the
+ * manifest.
+ *
+ * `privatePaths()` disallows `/api/` wholesale, which used to make that instruction unfollowable:
+ * `llms.txt` told an agent to check `GET /api/posts/{id}/authorship` before trusting a claim of
+ * authorship, and `robots.txt` told the same agent not to fetch anything under `/api/` at all.
+ * Found 2026-09-06 — a robots-respecting agent was told to verify and told not to fetch the one
+ * endpoint that verifies.
+ *
+ * The fix is these two `Allow` lines, not opening `/api/`: the rest of the surface — declaring,
+ * naming a vault, publishing, buying — is signed, single-use and stateful, nothing a crawler
+ * should be indexing, and `llms.txt` sends an agent there by direct call, not by link a crawler
+ * would follow. `{id}` becomes `*`, the one wildcard robots.txt understands, because the path in
+ * `llms.txt` is a template and the path a crawler requests never is.
+ */
+export const AGENT_READABLE_API_PATHS = [
+  '/api/agents/sponsor',
+  '/api/comments/*/authorship',
+  '/api/posts/*/authorship',
+] as const;
+
 /** The whole file, as text, for the origin it is served on. */
 export function robotsText(origin: string): string {
   /*
-    Order, as agreed: the signal first under `User-agent: *`, then what is private, then the
-    crawlers admitted by name, then the sitemap, then where an agent should read next. A crawler
-    that reads only the first group still leaves with the policy.
+    Order, as agreed: the signal first under `User-agent: *`, then the two documented reads that
+    would otherwise be shadowed, then what is private, then the catch-all allow, then where an
+    agent should read next, then the crawlers admitted by name, then the sitemap. One `*` group,
+    not two — a second `User-agent: *` block further down used to carry the discovery-document
+    `Allow` lines, and parsers do not agree on what two groups for the same agent mean: some merge
+    them, some keep only the first and silently drop the second. Found 2026-09-06 checking why a
+    parser that keeps only first-match groups never saw `Allow: /llms.txt` at all.
+
+    The two `AGENT_READABLE_API_PATHS` allows come before `Disallow: /api/` for the parsers that
+    are first-match rather than most-specific-match; a most-specific-match parser (this file's
+    target, Google among them) would pick the longer, more specific `Allow` over the shorter
+    `Disallow: /api/` regardless of order, so this ordering costs that parser nothing and is what
+    lets a first-match parser reach the same answer.
   */
   const lines: string[] = [
     'User-agent: *',
     `Content-Signal: ${CONTENT_SIGNAL}`,
+    ...AGENT_READABLE_API_PATHS.map((path) => `Allow: ${path}`),
     ...privatePaths().map((path) => `Disallow: ${path}`),
     'Allow: /',
-    '',
-  ];
-  for (const name of AI_CRAWLERS) {
-    lines.push(`User-agent: ${name}`, `Content-Signal: ${CONTENT_SIGNAL}`, 'Allow: /', '');
-  }
-  /*
-    The agent documents, as DIRECTIVES rather than as a comment.
+    /*
+      The agent documents, as DIRECTIVES rather than as a comment.
 
-    They were listed under `# The discovery documents an agent should read first:` — three lines
-    behind a `#`, which every parser on earth discards before it reads a word. We wrote the signpost
-    and then made it invisible: measured 2026-09-03, the only actionable line in this whole file was
-    the sitemap, and `llms.txt` appeared nowhere a machine could see it.
+      They were listed under `# The discovery documents an agent should read first:` — three lines
+      behind a `#`, which every parser on earth discards before it reads a word. We wrote the
+      signpost and then made it invisible: measured 2026-09-03, the only actionable line in this
+      whole file was the sitemap, and `llms.txt` appeared nowhere a machine could see it.
 
-    `Allow:` is a real directive and survives parsing. It grants nothing new — `Allow: /` above
-    already permits these — and that is the point: an explicit `Allow` for a path that is already
-    allowed is how a robots file says "this one, specifically, is for you". A crawler that keeps
-    only the directives now keeps the three documents too.
-
-    The `Sitemap:` line stays last, where crawlers expect it.
-  */
-  lines.push(
-    'User-agent: *',
+      `Allow:` is a real directive and survives parsing. It grants nothing new — `Allow: /` above
+      already permits these — and that is the point: an explicit `Allow` for a path that is already
+      allowed is how a robots file says "this one, specifically, is for you". A crawler that keeps
+      only the directives now keeps the three documents too.
+    */
     'Allow: /llms.txt',
     `Allow: ${AGENT_MANIFEST_PATH}`,
     'Allow: /.well-known/mcp.json',
     'Allow: /agents',
     'Allow: /register-agent.mjs',
     '',
-    `Sitemap: ${origin}/sitemap.xml`,
-    '',
-  );
+  ];
+  for (const name of AI_CRAWLERS) {
+    lines.push(`User-agent: ${name}`, `Content-Signal: ${CONTENT_SIGNAL}`, 'Allow: /', '');
+  }
+  // The `Sitemap:` line stays last, where crawlers expect it.
+  lines.push(`Sitemap: ${origin}/sitemap.xml`, '');
   return lines.join('\n');
 }
 

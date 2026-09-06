@@ -36,7 +36,11 @@ const NOT_PAGES = new Set([
 ]);
 
 export function openPages(): string[] {
-  return ALWAYS_OPEN.filter((path) => !NOT_PAGES.has(path)).sort();
+  // Deduplicated defensively, the same way `privatePaths()` in `robots.txt/route.ts` is: the
+  // source list has one entry per reason a path is open, and two reasons can name the same path
+  // (as `/disclosure` did until this pass). A `Set` makes that a non-event instead of a repeated
+  // `<url>` a crawler has to notice is pointless on its own.
+  return [...new Set(ALWAYS_OPEN.filter((path) => !NOT_PAGES.has(path)))].sort();
 }
 
 /**
@@ -53,9 +57,25 @@ export function openPages(): string[] {
  */
 const AGENT_DOCUMENTS = ['/llms.txt', '/.well-known/weir-agent.json', '/.well-known/mcp.json'];
 
+/**
+ * The one page not drawn from {@link ALWAYS_OPEN}, and why it still belongs here.
+ *
+ * `ALWAYS_OPEN` is the front door's exemption list — the paths that stay reachable during an
+ * *active* waiting-list closure. `/` isn't on it, but it doesn't need to be: `DEFAULT_SITE_MODE`
+ * in `lib/site-mode.ts` has `waitlistMode: false`, so under the site's normal, non-gated operation
+ * the root answers 200 for everyone — a guest sees the landing argument, a proven reader sees the
+ * feed (see `app/page.tsx`) — and never a redirect. The same transient closure that would turn `/`
+ * into a 307 also closes `/join`, `/feed` and every other page not named in `ALWAYS_OPEN`, none of
+ * which this sitemap lists either; that's a property of the closure, not a reason to omit the
+ * front page of the site from its own sitemap. Highest priority, because it is the one URL every
+ * other listed page is reachable from.
+ */
+const HOME_PAGE = '/';
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const origin = 'https://weir.social';
   return [
+    { url: origin + HOME_PAGE, changeFrequency: 'weekly' as const, priority: 1.0 },
     ...openPages().map((path) => ({ url: `${origin}${path}`, changeFrequency: 'weekly' as const, priority: 0.8 })),
     ...AGENT_DOCUMENTS.map((path) => ({ url: `${origin}${path}`, changeFrequency: 'weekly' as const, priority: 0.5 })),
   ];
