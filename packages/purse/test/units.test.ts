@@ -61,8 +61,20 @@ describe('heron-purse.service', () => {
     expect(onlyValue(purse, 'Service', 'ProtectHome')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'PrivateTmp')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'PrivateDevices')).toBe('yes');
-    expect(onlyValue(purse, 'Service', 'MemoryDenyWriteExecute')).toBe('yes');
     expect(onlyValue(purse, 'Service', 'RestrictAddressFamilies')).toBe('AF_UNIX AF_INET AF_INET6');
+
+    /*
+      MemoryDenyWriteExecute is deliberately NOT in this list any more, as of 2026-09-06.
+
+      It was dropped from the unit together with `--jitless`, because on node 22 that flag switches
+      WebAssembly off and undici compiles its HTTP parser to WebAssembly the moment any fetch-family
+      global is touched — so the purse could sign a statement but died on its first priced post.
+      Reproduced on this laptop against node 22.23.2 at the path the unit names.
+
+      The pair is not asserted here because asserting one of two coupled directives is exactly the
+      drift the unit's own comment warns about. The test below asserts the coupling itself, which
+      holds in either state and would go red if somebody restored one without the other.
+    */
   });
 
   it('has MemoryDenyWriteExecute and --jitless present together or absent together', async () => {
