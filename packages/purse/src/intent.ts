@@ -132,7 +132,8 @@ export const priceIntent = z.strictObject({
  *
  * There is no TypeScript client for the soul package anywhere in the estate — the CTO's finding F1,
  * verified again on this branch. The move call is therefore assembled here from the Move signature
- * (`northlatch/contracts/soul/sources/soul.move:1182-1190`), and `test/build.test.ts` pins the
+ * (`sui-contracts-soul/sources/soul.move`, this repository, verified against mainnet by
+ * `sui-contracts-soul/check-matches-mainnet.sh`), and `test/build.test.ts` pins the
  * argument order against that signature. When the soul client of F1 exists this builder is replaced
  * by it and the test moves with it.
  */

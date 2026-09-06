@@ -1,0 +1,22 @@
+[package]
+name = "northlatch_soul_specs"
+edition = "2024.beta"
+version = "0.0.1"
+
+# Northlatch Labs LLC — company infrastructure. Classified repository, no remote.
+#
+# A SEPARATE package, never a dependency of `northlatch_soul`. The soul package depends on the Sui
+# framework and on nothing else, by its charter; a prover dependency inside it would break that
+# and would ship the prover's code in the published bytecode. This package depends on the soul and
+# on the prover, is never published, and exists only to be run by `sui-prover`.
+#
+# The prover dependency is DELIBERATELY NOT DECLARED HERE. `sui-prover` injects it implicitly, and
+# declaring it explicitly — at any rev — conflicts with the `main` its own SuiSpecs package pins,
+# and the resolver refuses the build outright. The toolchain warns about explicit prover
+# dependencies for exactly this reason. Declare only the package under proof.
+
+[dependencies]
+northlatch_soul = { local = ".." }
+
+[addresses]
+northlatch_soul_specs = "0x0"
