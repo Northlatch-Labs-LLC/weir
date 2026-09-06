@@ -32,14 +32,33 @@
  * is the entire distance between "the purse can sign" and what the droplet did; the fullnode's
  * answer adds nothing to it and would add a dependency on somebody else's uptime.
  *
- * # Which node runs the child
+ * # Which node runs the child, and why that is its own test
  *
  * The unit names `/opt/node22/bin/node`, and node 22 is the runtime this defect is fatal on: from
  * node 24 the built-in HTTP parser is native rather than a WebAssembly module, so `--jitless` no
- * longer takes fetch down with it and the crash hides on a modern laptop. So the child runs under
- * the unit's own interpreter when this host has one — the droplet does — and falls back to the node
- * running the tests when it does not. `runtime` in the failure message says which one it was, so a
- * green run on a machine that cannot reproduce the droplet is never mistaken for a green droplet.
+ * longer takes fetch down with it and the crash hides on a modern laptop. A host without that
+ * interpreter therefore cannot run this check at all; it can only run a differently-shaped check
+ * that happens to be green.
+ *
+ * The first pass of this file printed a stderr warning in that case and passed. That is the same
+ * mistake in a smaller font. `scripts/check-all.py` states the house rule for exactly this:
+ * "A declared gate whose tool is missing is a FAILURE, not a skip", and the rung it adds under
+ * everything else — "measured, versus assumed because nothing said otherwise". A warning next to a
+ * green tick is an assumption; nobody reads it, and CI reads it least of all.
+ *
+ * So the two claims are two tests, because they are two different facts and they fail for two
+ * different reasons:
+ *
+ *   1. `the real chain client ... is constructed and reaches the transport` — a claim about the
+ *      code, on whatever runtime was actually available. It is true and useful on any node.
+ *   2. `the interpreter the unit names is the one this ran on` — a claim about the measurement
+ *      itself. It is false on a host without `/opt/node22/bin/node`, and false is the honest
+ *      answer, because on such a host test 1's green says nothing whatever about the droplet.
+ *
+ * Splitting them means a laptop run reads "the client is fine; the droplet's runtime was not
+ * measured here" instead of one green tick that quietly means both. Merging them would have made
+ * test 1 red for a reason that is not a defect in the code, which is how a real gate gets deleted.
+ * Both are the same child process, run once and shared.
  *
  * # Why the flags are read out of the unit rather than written here
  *
@@ -151,7 +170,12 @@ interface Report {
 
 interface Run {
   readonly report: Report | null;
+  /** The interpreter that actually started the child. */
   readonly runtime: string;
+  /** The interpreter the unit's ExecStart names, whether or not this host has it. */
+  readonly named: string;
+  /** True only when `runtime` is `named` — i.e. when this run measured what the unit deploys. */
+  readonly measuredTheUnitsRuntime: boolean;
   readonly code: number | null;
   readonly stdout: string;
   readonly stderr: string;
@@ -168,7 +192,8 @@ async function exists(path: string): Promise<boolean> {
 
 async function runUnderUnitFlags(): Promise<Run> {
   const { interpreter, flags } = execStart(await readFile(UNIT, 'utf8'));
-  const runtime = (await exists(interpreter)) ? interpreter : process.execPath;
+  const present = await exists(interpreter);
+  const runtime = present ? interpreter : process.execPath;
 
   const dir = await temporaryDirectory('heron-purse-smoke-');
   const childPath = join(dir, 'construct-client.mjs');
@@ -197,16 +222,37 @@ async function runUnderUnitFlags(): Promise<Run> {
           // before it could answer leaves behind.
         }
         const code = error === null ? 0 : ((error as { code?: number }).code ?? null);
-        resolve({ report, runtime, code, stdout, stderr });
+        resolve({
+          report,
+          runtime,
+          named: interpreter,
+          measuredTheUnitsRuntime: present && runtime === interpreter,
+          code,
+          stdout,
+          stderr,
+        });
       },
     );
   });
+}
+
+/**
+ * One child process, shared by both tests below.
+ *
+ * They assert about the same run — the client's behaviour, and whether that run was on the runtime
+ * the unit deploys — so running the child twice would let the two answers disagree.
+ */
+let once: Promise<Run> | undefined;
+function theRun(): Promise<Run> {
+  once ??= runUnderUnitFlags();
+  return once;
 }
 
 /** Everything the child said, for a failure message that names the runtime it was said on. */
 function transcript(run: Run): string {
   return [
     `runtime: ${run.runtime}`,
+    `unit names: ${run.named}`,
     `node: ${run.report?.version ?? 'unknown'}`,
     `exit: ${String(run.code)}`,
     `WebAssembly: ${run.report?.webAssembly ?? 'unknown'}`,
@@ -219,7 +265,7 @@ const NAMES_WEBASSEMBLY = /WebAssembly|WASM/i;
 
 describe('the real chain client, under the unit\'s own node flags', () => {
   it('is constructed and reaches the transport, and never dies on a missing WebAssembly', async () => {
-    const run = await runUnderUnitFlags();
+    const run = await theRun();
     const detail = transcript(run);
 
     // The child answered at all. A process that dies under these flags has already failed the
@@ -240,25 +286,10 @@ describe('the real chain client, under the unit\'s own node flags', () => {
     expect(report.reachedTransport, `the client never attempted a request.\n${detail}`).toBe(true);
 
     /*
-      Say out loud when this host cannot reproduce the droplet.
-
-      `--jitless` removes `WebAssembly` on every node there has ever been, but only a node whose
-      HTTP parser is a WebAssembly module — 22, which is the one the unit names — dies of it. On a
-      newer node the flag is still there, `WebAssembly` is still gone, and this test still passes.
-      That is a true result about this runtime and a green one about no other, and it is exactly the
-      shape of comfort that let the defect ship: a suite that was green somewhere else.
-
-      It is a warning rather than a failure because failing here would only mean "you are not the
-      droplet", which is not a defect in the code under test. What it must never do is stay quiet.
+      Whether this runtime could have reproduced the droplet at all is NOT asserted here — it is
+      the second test in this file, so that "the client is fine" and "we measured the runtime the
+      unit ships" fail separately and say different things. See the header.
     */
-    if (report.webAssembly === 'undefined') {
-      process.stderr.write(
-        `[client-smoke] the unit's flags left this runtime with no WebAssembly ` +
-          `(${report.version} at ${run.runtime}), and it survived anyway because its HTTP parser is ` +
-          `native. The unit names /opt/node22/bin/node, whose parser is not. This pass does not ` +
-          `vouch for that runtime — run this test on it, or on the droplet, before believing it.\n`,
-      );
-    }
 
     // The one failure this test is about. A DNS or connection error is expected and is a pass;
     // a runtime that cannot compile WebAssembly is the droplet's crash and is not.
@@ -273,5 +304,59 @@ describe('the real chain client, under the unit\'s own node flags', () => {
       NAMES_WEBASSEMBLY.test(run.stderr),
       `the child printed a WebAssembly failure.\n${detail}`,
     ).toBe(false);
+  }, 90_000);
+
+  /*
+    The gate on the measurement itself.
+
+    The test above can be green on any node in existence. It means what it says about the droplet
+    only if the child ran on the interpreter the droplet runs, because `--jitless` is fatal to fetch
+    on node 22's WebAssembly HTTP parser and harmless on node 24+'s native one. On a host without
+    `/opt/node22/bin/node` the test above measured a different runtime and proved a different thing.
+
+    `scripts/check-all.py`: "A declared gate whose tool is missing is a FAILURE, not a skip." The
+    tool this gate declares is the unit's own interpreter. It is missing here, so this is red, and
+    red is the true answer — the previous pass printed this as a warning and stayed green, which is
+    the same silence that let `--jitless` ship.
+  */
+  it('ran on the interpreter the unit names, so this suite measured the droplet\'s runtime', async () => {
+    const run = await theRun();
+
+    expect(
+      run.measuredTheUnitsRuntime,
+      [
+        'NOT MEASURED: the crash this file exists for was not exercised on this host.',
+        '',
+        `The unit's ExecStart names ${run.named}; this host does not have it, so the child ran on`,
+        `${run.runtime} (${run.report?.version ?? 'unknown'}) instead.`,
+        '',
+        'What that leaves unmeasured: --jitless removes WebAssembly from every node, but only a node',
+        "whose HTTP parser is a WebAssembly module dies of it. That is node 22 — the version the unit",
+        'names. From node 24 the parser is native, so fetch survives the flag and the droplet crash of',
+        "2026-09-05 cannot reproduce here. The preceding test's green describes this laptop's runtime",
+        'and vouches for no other.',
+        '',
+        'How to measure it — either is sufficient:',
+        `  1. Install the runtime the unit names, at that exact path, and re-run:`,
+        `       curl -fsSLO https://nodejs.org/dist/v22.x.y/node-v22.x.y-<platform>.tar.xz`,
+        `       # verify against SHASUMS256.txt, then unpack so that ${run.named} exists`,
+        '       pnpm --filter @projectx-social/purse test',
+        '  2. Or run this suite on the droplet, where /opt/node22/bin/node is what systemd starts.',
+        '',
+        'Do not delete this assertion to get a green suite. A check that cannot fail is not a check.',
+      ].join('\n'),
+    ).toBe(true);
+
+    // Present is not enough: it must also be the node the unit's comment justifies. A /opt/node22
+    // that is secretly node 24 would satisfy the path and measure nothing, which is the same defect
+    // wearing the right filename.
+    const version = run.report?.version ?? '';
+    expect(
+      /^v22\./.test(version),
+      `${run.named} exists but reports ${version || 'no version'}. The unit installs node 22 there ` +
+        `because @mysten/sui requires it and because 22's HTTP parser is the WebAssembly one this ` +
+        `test is about. A different major at that path measures a different runtime under the ` +
+        `unit's own name.`,
+    ).toBe(true);
   }, 90_000);
 });
