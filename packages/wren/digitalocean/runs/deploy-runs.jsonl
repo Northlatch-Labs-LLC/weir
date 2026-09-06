@@ -3,3 +3,7 @@
 {"at": "2026-09-06T03:04:06Z", "detail": "", "droplet_id": "598149813", "event": "droplet-created", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}
 {"at": "2026-09-06T03:06:20Z", "detail": "exit 1", "droplet_id": "598149813", "event": "rollback-begin", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}
 {"at": "2026-09-06T03:06:22Z", "detail": "exit 1", "droplet_id": "598149813", "event": "rollback-done", "firewall_id": "d460c4ac-2707-49f0-9dfa-e8df466b1f95", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:07:50Z", "detail": "firewall first, then droplet", "droplet_id": "", "event": "create-begin", "firewall_id": "", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:07:51Z", "detail": "", "droplet_id": "", "event": "firewall-created", "firewall_id": "1f8bc5e8-0d1b-409c-a80c-bd32c32290e4", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:07:54Z", "detail": "", "droplet_id": "598150503", "event": "droplet-created", "firewall_id": "1f8bc5e8-0d1b-409c-a80c-bd32c32290e4", "name": "wren-first", "region": "fra1"}
+{"at": "2026-09-06T03:11:24Z", "detail": "165.232.75.81", "droplet_id": "598150503", "event": "create-succeeded", "firewall_id": "1f8bc5e8-0d1b-409c-a80c-bd32c32290e4", "name": "wren-first", "region": "fra1"}
