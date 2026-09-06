@@ -1347,6 +1347,241 @@ cmd_install_purse() {
   echo "deploy-droplet.sh --install-purse: wren-purse.service is active on $ssh_target, listening on /run/wren/purse.sock as Wren's address, under $policy_file (file sha256 $policy_sha). A malformed request was refused and recorded. wren-beat.service is NOT installed by this mode."
 }
 
+install_ledger_on_exit() {
+  [ -n "${WREN_INSTALL_SUCCEEDED:-}" ] && return 0
+  record_run "install-ledger-failed" "step=${WREN_INSTALL_STEP:-unknown}"
+  echo "deploy-droplet.sh --install-ledger: FAILED at ${WREN_INSTALL_STEP:-unknown}. Nothing was rolled back: the settlement units are additive and the content purse is untouched." >&2
+}
+
+cmd_install_ledger() {
+  local ssh_target="${WREN_HOST:-}"
+  if [ -z "$ssh_target" ]; then
+    echo "deploy-droplet.sh --install-ledger: refused - WREN_HOST is unset (ops@<droplet ip>)" >&2
+    return 1
+  fi
+  validate_ssh_target "$ssh_target" "WREN_HOST"
+  check_confirmed
+
+  if [ -n "$(git -C "$PURSE_DIR" status --porcelain -- .)" ] || [ -n "$(git -C "$PKG_DIR" status --porcelain -- .)" ]; then
+    echo "deploy-droplet.sh --install-ledger: refused - packages/purse or packages/wren has uncommitted changes; there is no committed sha to name as what shipped" >&2
+    return 1
+  fi
+  local commit
+  commit="$(git -C "$PURSE_DIR" rev-parse HEAD)"
+
+  for f in "$POLICY_DIR/wren-ledger.mainnet.json" "$POLICY_DIR/wren-chain.mainnet.json" "$POLICY_DIR/wren-values.json" \
+           "$PKG_DIR/systemd/wren-ledger-purse.service" "$PKG_DIR/systemd/wren-ledger.service" "$PKG_DIR/systemd/wren-ledger.timer"; do
+    if [ ! -f "$f" ]; then
+      echo "deploy-droplet.sh --install-ledger: refused - $f is missing" >&2
+      return 1
+    fi
+  done
+
+  # The credential has to be on the host already: --seal wren-ledger puts it there, and a unit
+  # that starts without its key would fail at the first settlement instead of here.
+  WREN_INSTALL_STEP="check_credential"
+  if ! is_stubbed; then
+    ssh -- "$ssh_target" 'sudo test -f /etc/wren/creds/wren-ledger.cred' || {
+      echo "deploy-droplet.sh --install-ledger: refused - /etc/wren/creds/wren-ledger.cred is not on the host. Seal it first: WREN_HOST=$ssh_target ./deploy-droplet.sh --seal wren-ledger" >&2
+      return 1
+    }
+  fi
+
+  trap install_ledger_on_exit EXIT
+  record_run "install-ledger-begin" "commit=$commit"
+
+  local stage
+  stage="$(mktemp -d "${TMPDIR:-/tmp}/wren-ledger-stage.XXXXXX")"
+
+  WREN_INSTALL_STEP="build_purse_bundle"
+  build_purse_bundle "$stage/server.js"
+  WREN_INSTALL_STEP="build_ledger_tick_bundle"
+  build_ledger_tick_bundle "$stage/ledger-tick.js"
+  cp "$POLICY_DIR/wren-ledger.mainnet.json" "$stage/wren-ledger.mainnet.json"
+  cp "$PKG_DIR/systemd/wren-ledger.timer" "$stage/wren-ledger.timer"
+
+  local dist_sha tick_sha policy_sha
+  dist_sha="$(file_sha256 "$stage/server.js")"
+  tick_sha="$(file_sha256 "$stage/ledger-tick.js")"
+  policy_sha="$(file_sha256 "$stage/wren-ledger.mainnet.json")"
+
+  WREN_INSTALL_STEP="render_ledger_units"
+  render_ledger_units "$dist_sha" "$policy_sha" > "$stage/units.txt"
+  csplit -sz -f "$stage/unit-" "$stage/units.txt" '/^\f$/' '{*}' 2>/dev/null || {
+    echo "deploy-droplet.sh --install-ledger: refused - the rendered units could not be split" >&2
+    return 1
+  }
+  grep -v '^\f$' "$stage/unit-00" > "$stage/wren-ledger-purse.service"
+  grep -v '^\f$' "$stage/unit-01" > "$stage/wren-ledger.service"
+  for u in "$stage/wren-ledger-purse.service" "$stage/wren-ledger.service"; do
+    if grep -v '^[[:space:]]*#' "$u" | grep -q '<[A-Z_]*>'; then
+      echo "deploy-droplet.sh --install-ledger: refused - $(basename "$u") still carries a substitution: $(grep -v '^[[:space:]]*#' "$u" | grep -o '<[A-Z_]*>' | sort -u | tr '\n' ' ')" >&2
+      return 1
+    fi
+  done
+
+  echo "deploy-droplet.sh --install-ledger: shipping from commit $commit"
+  echo "  server.js                  sha256 $dist_sha  -> /srv/wren/purse/dist/server.js      0640 purse:purse (pinned in the unit)"
+  echo "  ledger-tick.js             sha256 $tick_sha  -> /srv/wren/purse/dist/ledger-tick.js 0644 root:root"
+  echo "  wren-ledger.mainnet.json   sha256 $policy_sha  -> /srv/wren/policy/wren-ledger.mainnet.json 0644 root:root (--policy-sha256)"
+  echo "  wren-ledger-purse.service  rendered, no substitution left        -> /etc/systemd/system/ 0644 root:root"
+  echo "  wren-ledger.service        rendered, no substitution left        -> /etc/systemd/system/ 0644 root:root"
+  echo "  wren-ledger.timer          daily, no substitutions               -> /etc/systemd/system/ 0644 root:root"
+  echo "  the timer is NOT enabled by this mode: one settlement is run by hand and read on chain first."
+
+  WREN_INSTALL_STEP="ship_ledger_files"
+  ship_ledger_files "$ssh_target" "$stage" "$dist_sha" "$tick_sha" "$policy_sha"
+  WREN_INSTALL_STEP="start_ledger_purse"
+  start_ledger_purse "$ssh_target" "$policy_sha"
+
+  WREN_INSTALL_SUCCEEDED=1
+  trap - EXIT
+  record_run "install-ledger-succeeded" "commit=$commit dist=$dist_sha tick=$tick_sha policy=$policy_sha"
+  rm -rf "$stage"
+  echo "deploy-droplet.sh --install-ledger: wren-ledger-purse.service is active on $ssh_target, listening on /run/wren-ledger/purse.sock as the settlement key, under wren-ledger.mainnet.json (file sha256 $policy_sha). wren-ledger.timer is installed and NOT enabled: run one settlement by hand (systemctl start wren-ledger.service), read the transaction on chain, then enable the timer."
+}
+
+ship_ledger_files() {
+  if is_stubbed; then "$WREN_STUB_DIR/ship_ledger_files" "$@"; return; fi
+  local ssh_target="$1" stage="$2" dist_sha="$3" tick_sha="$4" policy_sha="$5"
+  ssh -- "$ssh_target" 'rm -rf /tmp/wren-ledger-stage && mkdir -m 0700 /tmp/wren-ledger-stage'
+  scp -q -- "$stage/server.js" "$stage/ledger-tick.js" "$stage/wren-ledger.mainnet.json" \
+      "$stage/wren-ledger-purse.service" "$stage/wren-ledger.service" "$stage/wren-ledger.timer" \
+      "$ssh_target:/tmp/wren-ledger-stage/"
+  ssh -- "$ssh_target" sudo bash -s -- "$dist_sha" "$tick_sha" "$policy_sha" <<'REMOTE'
+set -euo pipefail
+S=/tmp/wren-ledger-stage
+check() { local actual; actual="$(sha256sum "$1" | cut -d' ' -f1)"; [ "$actual" = "$2" ] || { echo "host: refused - $1 hashes $actual, not $2 as shipped" >&2; exit 1; }; }
+check "$S/server.js" "$1"
+check "$S/ledger-tick.js" "$2"
+check "$S/wren-ledger.mainnet.json" "$3"
+echo "host: the three shipped files hash as the laptop said"
+# The settlement account, uid/gid 10003, created by cloud-init on a fresh droplet. Wren's host was
+# built before it existed, so it is created here the same way and asserted the same way.
+if ! getent passwd 10003 >/dev/null 2>&1; then
+  getent group 10003 >/dev/null 2>&1 || groupadd --gid 10003 --system ledger
+  useradd --uid 10003 --gid 10003 --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin ledger
+fi
+[ "$(getent passwd 10003 | cut -d: -f1)" = "ledger" ] || { echo "host: refused - uid 10003 is not ledger" >&2; exit 1; }
+install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger
+install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger/audit
+install -d -m 0700 -o ledger -g ledger /var/lib/wren-ledger/state
+install -m 0640 -o purse -g purse "$S/server.js" /srv/wren/purse/dist/server.js
+install -m 0644 -o root -g root "$S/ledger-tick.js" /srv/wren/purse/dist/ledger-tick.js
+install -m 0644 -o root -g root "$S/wren-ledger.mainnet.json" /srv/wren/policy/wren-ledger.mainnet.json
+install -m 0644 -o root -g root "$S/wren-ledger-purse.service" /etc/systemd/system/wren-ledger-purse.service
+install -m 0644 -o root -g root "$S/wren-ledger.service" /etc/systemd/system/wren-ledger.service
+install -m 0644 -o root -g root "$S/wren-ledger.timer" /etc/systemd/system/wren-ledger.timer
+rm -rf "$S"
+echo "host: ledger files installed with their modes, uid 10003 confirmed to be ledger"
+REMOTE
+}
+
+start_ledger_purse() {
+  if is_stubbed; then "$WREN_STUB_DIR/start_ledger_purse" "$@"; return; fi
+  local ssh_target="$1" policy_hash="${2:-}"
+  ssh -- "$ssh_target" sudo bash -s -- "$policy_hash" <<'REMOTE'
+set -euo pipefail
+POLICY_HASH_EXPECTED="${1:-}"
+systemctl daemon-reload
+systemctl enable wren-ledger-purse.service >/dev/null 2>&1 || true
+systemctl restart wren-ledger-purse.service >/dev/null 2>&1 || true
+for i in $(seq 1 30); do
+  [ "$(systemctl is-active wren-ledger-purse.service)" = "active" ] && break
+  sleep 1
+done
+if [ "$(systemctl is-active wren-ledger-purse.service)" != "active" ]; then
+  echo "host: refused - wren-ledger-purse.service is $(systemctl is-active wren-ledger-purse.service), not active. The journal:" >&2
+  journalctl -u wren-ledger-purse.service -n 40 --no-pager >&2 || true
+  exit 1
+fi
+SOCK="$(stat -c '%a %U %G' /run/wren-ledger/purse.sock)"
+[ "$SOCK" = "660 ledger ledger" ] || { echo "host: refused - /run/wren-ledger/purse.sock is '$SOCK', not '660 ledger ledger'" >&2; exit 1; }
+LINE="$(journalctl -u wren-ledger-purse.service -n 30 --no-pager -o cat | grep 'wren-ledger-purse: listening on /run/wren-ledger/purse.sock for 0x' | tail -1 || true)"
+case "$LINE" in
+  *"file $POLICY_HASH_EXPECTED"*) ;;
+  *) [ -z "$POLICY_HASH_EXPECTED" ] || { echo "host: refused - the settlement purse is listening under a policy file other than the one just shipped" >&2; echo "host: $LINE" >&2; exit 1; } ;;
+esac
+[ -n "$LINE" ] || { echo "host: refused - the settlement purse is active but never printed its listening line" >&2; journalctl -u wren-ledger-purse.service -n 40 --no-pager >&2; exit 1; }
+echo "host: $LINE"
+echo "host: wren-ledger-purse.service active, enabled at boot, socket 660 ledger:ledger"
+REMOTE
+}
+
+render_ledger_units() {
+  # $1 dist sha256, $2 ledger policy sha256. Prints the settlement signer's unit, then a form feed,
+  # then the settlement run's unit. Everything the second one names is read from the committed
+  # values document, never typed here: the cap is an object REFERENCE (id, version and digest)
+  # because the purse is handed fully-resolved references and never resolves an id against a
+  # fullnode itself.
+  local dist="$1" policy="$2"
+  for value in "$dist" "$policy"; do
+    if ! [[ "$value" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "deploy-droplet.sh: refused - '$value' is not a sha256; the units are not rendered" >&2
+      return 1
+    fi
+  done
+
+  local v="$POLICY_DIR/wren-values.json"
+  local pkg registry registry_v soul soul_v vault cap cap_v cap_d burn
+  pkg="$(values_get "$v" SOUL_PACKAGE_ID)"
+  registry="$(values_get "$v" SOUL_REGISTRY_ID)"
+  registry_v="$(values_get "$v" SOUL_REGISTRY_VERSION)"
+  soul="$(values_get "$v" WREN_SOUL_ID)"
+  soul_v="$(values_get "$v" WREN_SOUL_VERSION)"
+  vault="$(values_get "$v" WREN_VAULT_ID)"
+  cap="$(values_get "$v" LEDGER_CAP_ID)"
+  cap_v="$(values_get "$v" LEDGER_CAP_VERSION)"
+  cap_d="$(values_get "$v" LEDGER_CAP_DIGEST)"
+  burn="$(values_get "$v" WREN_BURN_PER_EPOCH_MIST)"
+
+  for pair in "SOUL_PACKAGE_ID:$pkg" "SOUL_REGISTRY_ID:$registry" "WREN_SOUL_ID:$soul" "WREN_VAULT_ID:$vault" "LEDGER_CAP_ID:$cap"; do
+    if ! [[ "${pair#*:}" =~ ^0x[0-9a-f]{64}$ ]]; then
+      echo "deploy-droplet.sh: refused - policy/wren-values.json carries no ${pair%%:*}" >&2
+      return 1
+    fi
+  done
+  for pair in "SOUL_REGISTRY_VERSION:$registry_v" "WREN_SOUL_VERSION:$soul_v" "LEDGER_CAP_VERSION:$cap_v" "WREN_BURN_PER_EPOCH_MIST:$burn"; do
+    if ! [[ "${pair#*:}" =~ ^(0|[1-9][0-9]{0,19})$ ]]; then
+      echo "deploy-droplet.sh: refused - policy/wren-values.json carries no ${pair%%:*} as a u64" >&2
+      return 1
+    fi
+  done
+  if ! [[ "$cap_d" =~ ^[1-9A-HJ-NP-Za-km-z]{32,64}$ ]]; then
+    echo "deploy-droplet.sh: refused - policy/wren-values.json carries no LEDGER_CAP_DIGEST as base58" >&2
+    return 1
+  fi
+  # A burn of zero would make every settlement report a non-negative net whatever the citizen
+  # earned, which is the survival rule switched off while looking switched on.
+  if [ "$burn" = "0" ]; then
+    echo "deploy-droplet.sh: refused - WREN_BURN_PER_EPOCH_MIST is 0; the survival rule could never bite" >&2
+    return 1
+  fi
+
+  sed -e "s/<DIST_SHA256>/$dist/g" -e "s/<LEDGER_POLICY_SHA256>/$policy/g" \
+    "$PKG_DIR/systemd/wren-ledger-purse.service"
+  printf '\f\n'
+  sed -e "s/<SOUL_PACKAGE_ID>/$pkg/g" -e "s/<SOUL_REGISTRY_ID>/$registry/g" \
+      -e "s/<SOUL_REGISTRY_VERSION>/$registry_v/g" -e "s/<WREN_SOUL_ID>/$soul/g" \
+      -e "s/<WREN_SOUL_VERSION>/$soul_v/g" -e "s/<WREN_VAULT_ID>/$vault/g" \
+      -e "s/<LEDGER_CAP_ID>/$cap/g" -e "s/<LEDGER_CAP_VERSION>/$cap_v/g" \
+      -e "s/<LEDGER_CAP_DIGEST>/$cap_d/g" -e "s/<WREN_BURN_PER_EPOCH_MIST>/$burn/g" \
+    "$PKG_DIR/systemd/wren-ledger.service"
+}
+
+values_get() {
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$1" "$2"
+}
+
+build_ledger_tick_bundle() {
+  if is_stubbed; then "$WREN_STUB_DIR/build_ledger_tick_bundle" "$@"; return; fi
+  local out="$1"
+  (cd "$PURSE_DIR" && pnpm exec esbuild bin/ledger-tick.ts --bundle --platform=node --format=esm --target=node22 \
+      --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" \
+      --log-level=warning --outfile="$out")
+  [ -s "$out" ] || { echo "deploy-droplet.sh: the bundle at $out is empty or missing" >&2; return 1; }
+}
+
 build_purse_bundle() {
   if is_stubbed; then "$WREN_STUB_DIR/build_purse_bundle" "$@"; return; fi
   local out="$1"
@@ -1678,7 +1913,9 @@ main() {
     --smoke) cmd_smoke ;;
     --status) cmd_status ;;
     --install-purse) cmd_install_purse ;;
+    --install-ledger) cmd_install_ledger ;;
     --render-purse-unit) shift; render_purse_unit "$@" ;;
+    --render-ledger-units) shift; render_ledger_units "$@" ;;
     --install-beat) cmd_install_beat ;;
     --rebuild-image) cmd_rebuild_image ;;
     --render-wren-beat) shift; render_wren_beat "$@" ;;

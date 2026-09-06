@@ -36,6 +36,19 @@ NotifyAccess=all
 User=ledger
 Group=ledger
 
+# WHY THERE IS NO --multisig AND NO --vault HERE.
+#
+# The content purse signs AS Wren's 1-of-2 multisig address, because that is the address that owns
+# her vault and her CreatorCap, and the brake key is the second member. The settlement key owns
+# nothing of hers: issue_ledger_cap transferred the LedgerCap to this key's OWN plain address
+# (0xcaab139e…2b4a), so there is no members document to pin and nothing to wrap. It signs as
+# itself, which is what the cap's owner is.
+#
+# --vault and --api-origin are absent for the same kind of reason. They exist to let the purse
+# sign PUBLISH STATEMENTS for a vault, and a settlement signs no statements — its policy allows
+# three MoveCall targets and nothing else. Passing a vault here would hand the settlement arm a
+# power its policy already refuses, which is the sort of line nobody reads until it matters.
+
 # The ledger key, sealed to this host and worthless off it.
 LoadCredentialEncrypted=wren-ledger:/etc/wren/creds/wren-ledger.cred
 
@@ -43,14 +56,11 @@ LoadCredentialEncrypted=wren-ledger:/etc/wren/creds/wren-ledger.cred
 # this process simulates every transaction against a fullnode, so it needs the HTTP stack, and on
 # node 22 that stack needs WebAssembly.
 ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/wren/purse/dist/server.js" | sha256sum --check --status'
-ExecStartPre=/bin/sh -c 'echo "<LEDGER_MULTISIG_SHA256>  /srv/wren/policy/wren-ledger-multisig.json" | sha256sum --check --status'
 ExecStart=/opt/node22/bin/node /srv/wren/purse/dist/server.js \
   --agent wren-ledger \
   --socket /run/wren-ledger/purse.sock \
   --policy /srv/wren/policy/wren-ledger.mainnet.json \
   --policy-sha256 <LEDGER_POLICY_SHA256> \
-  --multisig /srv/wren/policy/wren-ledger-multisig.json \
-  --vault <WREN_VAULT_ID> \
   --chain /srv/wren/chain.json \
   --audit /var/lib/wren-ledger/audit/audit.jsonl \
   --spend /var/lib/wren-ledger/audit/spend.jsonl
