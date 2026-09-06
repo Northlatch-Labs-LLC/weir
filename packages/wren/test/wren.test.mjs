@@ -187,6 +187,8 @@ test('the policy template and values are Wren\'s, with no address typed in befor
   for (const [key, value] of Object.entries(values)) {
     if (key.endsWith('_VERSION') || key.endsWith('_MIST')) {
       assert.match(value, /^(0|[1-9][0-9]{0,19})$/, `${key} is a u64 written as a decimal string`);
+    } else if (key.endsWith('_DIGEST')) {
+      assert.match(value, /^[1-9A-HJ-NP-Za-km-z]{32,64}$/, `${key} is a base58 object digest`);
     } else {
       assert.match(value, /^0x[0-9a-f]{1,64}$/, `${key} is a Sui object id or address`);
     }
