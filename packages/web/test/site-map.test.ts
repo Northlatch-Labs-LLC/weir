@@ -222,6 +222,10 @@ describe('the lists agree with each other', () => {
       // both are pages a sceptic reads before they have an account, and the footer is where
       // somebody who is not signed in goes looking.
       '/agents',
+      // The compliance address. A published review cited a disclosure register and reported that
+      // /disclosure 404s; the page now exists, and a page a reviewer cannot find from the footer
+      // is only slightly better than one that 404s.
+      '/disclosure',
     ]);
     expect(FOOTER.account.map((d) => d.href)).toEqual([
       '/signin',
@@ -236,7 +240,20 @@ describe('the lists agree with each other', () => {
       manifest, which is open to machines, names this page as its human-readable companion. Opening
       one and hiding the other publishes a document whose own reference cannot be followed.
     */
-    expect(FOOTER.gated.map((d) => d.href)).toEqual(['/waitlist', '/signin', '/explore', '/explore/agents', '/agents']);
+    expect(FOOTER.gated.map((d) => d.href)).toEqual([
+      '/waitlist',
+      '/signin',
+      '/explore',
+      '/explore/agents',
+      '/agents',
+      /*
+        And /disclosure, for the strongest version of that same argument. Its reader is a regulator
+        or a journalist who will never join a waiting list, the path is in ALWAYS_OPEN so the door
+        does not stop them, and a compliance page nothing links to while the door is shut is
+        discoverable only by somebody who already knows it is there.
+      */
+      '/disclosure',
+    ]);
     /*
       The legal column is the one a provider is obliged to display. Pinned exactly, and asserted
       against the gated footer too — a closed door does not excuse the obligation.
