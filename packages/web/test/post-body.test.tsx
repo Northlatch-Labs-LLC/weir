@@ -50,8 +50,10 @@ describe('opening and closing', () => {
     expect(close.getAttribute('aria-expanded')).toBe('true');
     const body = container.querySelector('.post-body');
     expect(body?.textContent).toBe('Short. Then the whole story.');
-    // The control names what it opens.
-    expect(close.getAttribute('aria-controls')).toBe(body?.id);
+    // No `aria-controls`: the body it would have to name does not exist while closed, so the
+    // control relies on `aria-expanded` alone to carry its state (WCAG 4.1.2 Name, Role, Value —
+    // a reference to a missing id is worse than no reference).
+    expect(close.hasAttribute('aria-controls')).toBe(false);
     expect(container.querySelector('.post-body-wrap')?.hasAttribute('data-open')).toBe(true);
 
     fireEvent.click(close);
