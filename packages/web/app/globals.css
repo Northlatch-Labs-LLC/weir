@@ -514,6 +514,32 @@ h4 {
 }
 
 /*
+  The landing page's secondary call to action ("See who is here", "See the feed", …) is a real
+  variant, not `.ghost` wearing different inline styles: it is accent-tinted (a soft crest border
+  and wash) rather than `.ghost`'s neutral glass surface, because on marketing sections the
+  secondary action still reads as "this page's action," where the app chrome elsewhere wants
+  secondary actions to recede. The 0.45 / 0.06 alphas match the `rgba(var(--crest-rgb), …)` outline
+  treatment already used throughout `weir.css` and the `design/` components, so this modifier keeps
+  that exact look while pulling it out of inline styles and onto the shared `.btn` shape (pill
+  radius, `--text-body-sm`) that this class exists to guarantee.
+*/
+.btn.outline {
+  background: rgba(var(--crest-rgb), 0.06);
+  color: var(--text-primary);
+  border-color: rgba(var(--crest-rgb), 0.45);
+  box-shadow: none;
+}
+.btn.outline:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--border-accent);
+  color: var(--text-accent);
+  box-shadow: none;
+}
+.btn.outline::before {
+  display: none;
+}
+
+/*
   The dominant form control in this application — roughly twenty call sites against `.field`'s
   eight. Its boundary carried the same defect and for the same reason; see the note above `.field`
   for the measurements and why `--ink-400` rather than a semantic token.

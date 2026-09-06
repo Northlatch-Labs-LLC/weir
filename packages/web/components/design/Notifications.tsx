@@ -58,7 +58,7 @@ export function DesignNotifications({
           <Body {...bodyProps}>
             {!bare && (<>
             <p style={{ margin: '0 0 0.875rem', textAlign: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Notifications</p>
-            <h1 style={{ margin: '0 auto', textAlign: 'center', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', maxWidth: '36ch', textWrap: 'balance' }}>What happened <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>while you were away</span></h1>
+            <h1 style={{ margin: '0 auto', textAlign: 'center', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', maxWidth: '36ch', textWrap: 'balance' }}>What happened <span className="weir-owned">while you were away</span></h1>
             <div style={{ height: '1px', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px)', marginBlock: '2.5rem' }}></div>
             </>)}
             {isGuest && (<>

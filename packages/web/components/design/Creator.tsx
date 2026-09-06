@@ -188,7 +188,7 @@ export function DesignCreator({
                 {tab === 'membership' && (<>
                 <section aria-label="Membership">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
-                    <h2 className="sr-only" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}><span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>Membership</span></h2>
+                    <h2 className="sr-only" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}><span className="weir-owned">Membership</span></h2>
                     <a href={tiersHref} style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem' }}>{tiersLabel}</a>
                   </div>
                   <ul style={{ margin: '1.5rem 0 0', padding: '0', listStyle: 'none', display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,15rem),1fr))' }}>
@@ -264,7 +264,7 @@ export function DesignCreator({
                 {tab === 'posts' && (<>
                 <section aria-label="Posts">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem', paddingBottom: '1rem', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px) bottom left / 100% 1px no-repeat' }}>
-                    <h2 className="sr-only" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}><span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>Posts</span></h2>
+                    <h2 className="sr-only" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}><span className="weir-owned">Posts</span></h2>
                     <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.06em', color: 'var(--dim,#a3bcb8)' }}>{viewingLabel}</p>
                   </div>
                   <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
@@ -279,7 +279,7 @@ export function DesignCreator({
               <aside style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.92))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.55)', padding: '1.5rem' }}>
                 <div>
                   <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Below the waterline</p>
-                  <h2 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', lineHeight: '1.15', letterSpacing: '-0.03em' }}>Pool, <span style={{ background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd) 46%,var(--sand,#d9c9a3))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 26px rgba(var(--crest-rgb,139,227,198),0.35))' }}>don't pay</span></h2>
+                  <h2 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', lineHeight: '1.15', letterSpacing: '-0.03em' }}>Pool, <span className="weir-owned">don't pay</span></h2>
                   <p style={{ margin: '0.75rem 0 0', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)', fontSize: '0.9375rem', lineHeight: '1.6' }}>Park SUI in the vault of <strong style={{ color: 'var(--ink,#dce9e6)', fontWeight: '600' }}>{profile.sui}</strong>. It is delegated to a validator and the staking yield goes to them. Your principal stays yours, withdrawable in full at any time. The cost to you is the yield you would have earned yourself.</p>
                 </div>
                 <div>
