@@ -141,10 +141,19 @@ test('the policy template and values are Wren\'s, with no address typed in befor
   assert.ok(template.allowedObjects.includes('<WREN_SOUL_ID>'));
   assert.equal(template.outflowCeilings[0].maxPerPeriod, '400000000', 'the same daily ceiling as Heron');
   assert.equal(template.maxGasBudgetMist, '20000000', 'the same gas ceiling as Heron');
+  // Born 2026-09-06: account 4namDnQN…, vault 7sqXx82B…; the values are what the chain says.
   const values = JSON.parse(readFileSync(path.join(PKG_DIR, 'policy', 'wren-values.json'), 'utf8'));
-  assert.equal(values.WREN_ADDRESS, undefined, 'no address until the keys are born');
-  assert.equal(values.WREN_VAULT_ID, undefined, 'no vault until it is born');
+  assert.equal(values.WREN_ADDRESS, '0x1ad691c028dc59eb3eac09afa6dafe96c0d544dfd223b6071681007f777a4cbb');
+  assert.equal(values.WREN_VAULT_ID, '0x81a4edbb5545f67158dc5f5f760e01a8ad32ba45402774410822422157d38e2a');
+  assert.equal(values.WREN_CREATOR_CAP_ID, '0x5cd419da8c5f8e3e2b547de231cd2fcd6bcbc7d01348a7f323fbf07788d418f2');
   for (const value of Object.values(values)) assert.match(value, /^0x[0-9a-f]{1,64}$/);
+  // The rendered mainnet document is the template over these values, pre-soul, and names her vault.
+  const rendered = JSON.parse(readFileSync(path.join(PKG_DIR, 'policy', 'wren-content.mainnet.json'), 'utf8'));
+  assert.equal(rendered.agentAddress, values.WREN_ADDRESS);
+  assert.ok(rendered.allowedObjects.includes(values.WREN_VAULT_ID));
+  assert.ok(rendered.allowedObjects.includes(values.WREN_CREATOR_CAP_ID));
+  assert.ok(!JSON.stringify(rendered).includes('<'), 'no substitution left');
+  assert.ok(!rendered.allowedTargets.some((t) => t.includes('soul')), 'pre-soul: no soul row until her soul is minted');
 });
 
 test('the profile is one name and one bio, and the name is Wren', () => {
