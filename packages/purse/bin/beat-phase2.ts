@@ -18,7 +18,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
+import { createClient, readContentPrice, readCreatorVault, type ProjectXSocialConfig } from '@projectx-social/sdk';
 import { loadChainConfig } from '../src/chain.js';
 import { askPurse } from '../src/client.js';
 import { runPhaseTwo, type SubmitPort } from '../src/beat.js';
@@ -128,6 +128,25 @@ const publish =
               ownedRef: async (objectId: string) => {
                 const { object } = await client.core.getObject({ objectId });
                 return { objectId, version: object.version, digest: object.digest };
+              },
+              /*
+                What this key is already priced at, using the SDK's own reader rather than a second
+                implementation of the same derivation. `readContentPrice` derives the table entry's
+                child id from the table id and the BCS key, so it is one read whatever the vault
+                holds.
+
+                A read that fails answers null. The cost of a wrong null is one reprice to the price
+                the key already has; the cost of a throw would be the very failure this fix removes.
+              */
+              priceOf: async ({ vaultId, contentKey }: { vaultId: string; contentKey: string; coinType: string }) => {
+                try {
+                  const vaultRead = await readCreatorVault(client, vaultId);
+                  if (!vaultRead.ok) return null;
+                  const priced = await readContentPrice(client, vaultRead.value.contentPricesTableId, contentKey);
+                  return priced.ok && priced.value !== null ? priced.value.toString() : null;
+                } catch {
+                  return null;
+                }
               },
             },
             submit: async (signed: { txBytesB64: string; signature: string }) => chainSubmit(chain.value).submit(signed),

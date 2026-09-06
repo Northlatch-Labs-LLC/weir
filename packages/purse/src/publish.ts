@@ -96,6 +96,21 @@ export interface HttpPort {
 export interface ChainRefPort {
   readonly sharedRef: (objectId: string) => Promise<{ objectId: string; initialSharedVersion: string; mutable: true }>;
   readonly ownedRef: (objectId: string) => Promise<{ objectId: string; version: string; digest: string }>;
+  /**
+   * What this content key is already priced at on the vault, or null if it is not priced.
+   *
+   * This is what makes a paid post resumable. Pricing and publishing are two systems and the API
+   * refuses a paid post whose key is not already priced on chain (`app/api/posts/route.ts:50`), so
+   * the irreversible half MUST go first and cannot be reordered. The only thing that makes the gap
+   * between them survivable is that the second attempt costs nothing: the content key is the
+   * sha256 of the body, so the same plan always produces the same key, and a key already priced at
+   * the price being asked for needs no transaction at all.
+   *
+   * A read that fails returns null rather than throwing. The consequence of a wrong null is one
+   * reprice of a key to the price it already has — a no-op that costs gas. The consequence of a
+   * throw here would be the failure this whole port exists to remove.
+   */
+  readonly priceOf: (args: { vaultId: string; contentKey: string; coinType: string }) => Promise<string | null>;
 }
 
 export interface PublishPorts {
@@ -117,7 +132,7 @@ export interface PublishArgs {
 }
 
 export type PublishOutcome =
-  | { readonly outcome: 'published'; readonly postId: string; readonly handle: string; readonly priceDigest?: string; readonly named: boolean }
+  | { readonly outcome: 'published'; readonly postId: string; readonly handle: string; readonly priceDigest?: string; readonly named: boolean; readonly resumedPrice?: boolean }
   | { readonly outcome: 'refused'; readonly ruleId: string; readonly error: string; readonly priceDigest?: string }
   | { readonly outcome: 'error'; readonly error: string; readonly priceDigest?: string };
 
@@ -130,6 +145,8 @@ interface Setup {
 export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome> {
   const { plan, address, origin, ports } = args;
   let priceDigest: string | undefined;
+  /** True when the key was already priced at this price and no transaction was needed. */
+  let resumedPrice = false;
   const refusal = (ruleId: string, error: string): PublishOutcome => ({ outcome: 'refused', ruleId, error, ...(priceDigest === undefined ? {} : { priceDigest }) });
   const failure = (error: string): PublishOutcome => ({ outcome: 'error', error, ...(priceDigest === undefined ? {} : { priceDigest }) });
 
@@ -176,7 +193,21 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
   const digest = contentDigest(plan.preview, plan.text);
   const contentKey = plan.access === 'paid' ? digest : '';
   if (plan.access === 'paid') {
-    const [vaultRef, capRef] = await Promise.all([ports.chain.sharedRef(vault.vaultId), ports.chain.ownedRef(vault.capId)]);
+    /*
+      Already priced at this price? Then the chain half of this post is done, and doing it again
+      would be a second transaction to reach a state that already holds.
+
+      This is the resume. A beat that priced and then failed before publishing — a node that hung
+      up on the submit, a process killed between the two — leaves exactly this state: the key
+      priced, no post. Wren was in it from 18:35 UTC on 2026-09-06 (price 5Jg4S1zh…, beat
+      20260906T183348Z, phase two exit 1). Without this check the price is orphaned for ever,
+      because the next beat writes different content and therefore a different key.
+    */
+    const alreadyPriced = await ports.chain.priceOf({ vaultId: vault.vaultId, contentKey, coinType: vault.coinType });
+    if (alreadyPriced === plan.priceMist!) {
+      resumedPrice = true;
+    } else {
+      const [vaultRef, capRef] = await Promise.all([ports.chain.sharedRef(vault.vaultId), ports.chain.ownedRef(vault.capId)]);
     const priceIntent = {
       kind: 'post',
       coinType: vault.coinType,
@@ -191,7 +222,25 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
     const answer = asked.value;
     if (!answer.ok) return refusal(answer.refused.ruleId, answer.refused.reason);
     if (!('digest' in answer)) return failure('the purse answered a post intent with a statement');
-    priceDigest = await ports.submit({ txBytesB64: answer.txBytesB64, signature: answer.signature });
+      /*
+        The submit is the one call in this function that can leave money spent and the work
+        unfinished, so it is the one call that is caught. A throw here used to take the whole
+        function with it and step 4 never ran — the defect this fix removes. The price may well
+        have landed anyway; the next beat's `priceOf` above finds out and resumes rather than
+        guessing.
+      */
+      try {
+        priceDigest = await ports.submit({ txBytesB64: answer.txBytesB64, signature: answer.signature });
+      } catch (thrown) {
+        return {
+          outcome: 'error',
+          error:
+            `the price was signed and the submit threw: ${thrown instanceof Error ? thrown.message : String(thrown)}. ` +
+            `It may have landed. The next beat that writes this same body prices nothing and publishes it, ` +
+            `because the content key is the body's digest.`,
+        };
+      }
+    }
   }
 
   // 4. the publish
@@ -227,7 +276,7 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
   if (postResponse.status !== 200) return failure(`POST /api/posts answered ${String(postResponse.status)}: ${detailOf(postResponse.json)}`);
   const postId = (postResponse.json as { post?: { id?: unknown } } | null)?.post?.id;
   if (typeof postId !== 'string' || postId === '') return failure('the post was accepted but no post id came back');
-  return { outcome: 'published', postId, handle, named, ...(priceDigest === undefined ? {} : { priceDigest }) };
+  return { outcome: 'published', postId, handle, named, resumedPrice, ...(priceDigest === undefined ? {} : { priceDigest }) };
 }
 
 function detailOf(json: unknown): string {
