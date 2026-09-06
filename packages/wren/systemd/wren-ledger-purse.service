@@ -67,9 +67,15 @@ LoadCredentialEncrypted=wren-ledger:/etc/wren/creds/wren-ledger.cred
 # See the note in wren-purse.service for why there is no --jitless and no MemoryDenyWriteExecute:
 # this process simulates every transaction against a fullnode, so it needs the HTTP stack, and on
 # node 22 that stack needs WebAssembly.
+# --key-file, rather than letting the purse derive the name. The credential is named for the key
+# in the Master's pile (wren-ledger.key) while --agent names this SERVICE, and the purse's default
+# credential name is <agent>-hot — so a derived name would look for wren-ledger-hot and find
+# nothing. %d is systemd's own $CREDENTIALS_DIRECTORY, the per-unit tmpfs it decrypts into and
+# unmounts when the unit stops. The first install failed here with ENOENT on wren-ledger-hot.
 ExecStartPre=/bin/sh -c 'echo "<DIST_SHA256>  /srv/wren-ledger/dist/server.js" | sha256sum --check --status'
 ExecStart=/opt/node22/bin/node /srv/wren-ledger/dist/server.js \
   --agent wren-ledger \
+  --key-file %d/wren-ledger \
   --socket /run/wren-ledger/purse.sock \
   --policy /srv/wren-ledger/policy/wren-ledger.mainnet.json \
   --policy-sha256 <LEDGER_POLICY_SHA256> \
