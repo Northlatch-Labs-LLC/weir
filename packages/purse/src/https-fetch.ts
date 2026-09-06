@@ -51,7 +51,7 @@ function toHeaders(init: RequestInit | undefined): Record<string, string> {
     for (const entry of headers as Iterable<[string, string]>) out[entry[0]] = entry[1];
     return out;
   }
-  for (const [key, value] of Object.entries(headers)) out[key] = value;
+  for (const [key, value] of Object.entries(headers)) if (typeof value === 'string') out[key] = value;
   return out;
 }
 
