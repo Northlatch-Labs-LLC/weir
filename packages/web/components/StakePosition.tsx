@@ -4,7 +4,7 @@
 /**
  * A supporter's position in a vault: what they put in, what it has earned, and getting it back.
  *
- * # The withdraw button is what makes the deposit-stays-yours guarantee real
+ * # The withdraw button is what makes the no-loss guarantee real
  *
  * The contract's promise is that principal stays the depositor's and is redeemable in full at any
  * time; the creator earns only the yield it generates. That property is only as good as this
@@ -266,10 +266,11 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
 
       {rebate > 0n && accountId !== null && (
         <div className="card">
-          <span className="k">YOUR SHARE OF THE YIELD</span>
+          <span className="k">YOUR GIVE-BACK</span>
           <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-10) 0 var(--space-16)' }}>
-            This creator gives back {Number(vault.rebateBps) / 100}% of the yield to supporters.
-            You have <strong>{sui(position?.pendingRebateMist ?? '0')} SUI</strong> accrued.
+            This creator hands back {Number(vault.rebateBps) / 100}% of what their vault earns to
+            the people backing them. You have{' '}
+            <strong>{sui(position?.pendingRebateMist ?? '0')} SUI</strong> accrued.
           </p>
           {quote?.what === 'rebate' ? (
             <div className="note">

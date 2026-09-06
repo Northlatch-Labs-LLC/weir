@@ -533,7 +533,7 @@ export default async function CreatorPage({
       supportersFirst={supportersFirst}
       {...(rebateBps !== null && rebateBps > 0
         ? {
-            depositShare: `This creator gives back ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of their own yield to the people pooled behind them. Your part accrues in proportion to what you deposited, and you claim it yourself.`,
+            depositShare: `This creator hands back ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of what their vault earns to the people pooled behind them. Your part accrues in proportion to what you deposited, and you claim it yourself.`,
           }
         : {})}
     />

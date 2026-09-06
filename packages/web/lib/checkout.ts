@@ -226,8 +226,8 @@ export async function prepareClaimCreatorYield(input: {
  * Set the supporters' share of yield.
  *
  * Out of the creator's own share, not the platform's. 10000 bps — all of it — is a legitimate
- * choice rather than a mistake to guard against: a creator may run the vault purely as a savings
- * product for their audience.
+ * choice rather than a mistake to guard against: a creator may run the vault purely as a give-back
+ * to their audience.
  */
 export async function prepareSetRebate(input: {
   sender: string;
