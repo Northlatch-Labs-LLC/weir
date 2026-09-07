@@ -41,8 +41,20 @@ function chainSubmit(config: ProjectXSocialConfig): SubmitPort {
       const result = (await client.executeTransaction({
         transaction: Uint8Array.from(Buffer.from(txBytesB64, 'base64')),
         signatures: [signature],
-      })) as { transaction?: { digest?: string }; digest?: string };
-      const digest = result.transaction?.digest ?? result.digest;
+      })) as { Transaction?: { digest?: string }; transaction?: { digest?: string }; digest?: string };
+      /*
+        Three envelopes, not two.
+
+        `packages/agent/src/tx.ts` already read all three; this copy read two, and the one it did
+        not read — `Transaction` with a capital T — is the one the node actually returns. So on
+        2026-09-07 at 05:08 a `set_content_price` was signed, submitted, and landed on chain as
+        `9qE6uFVgzFcbAAsKAirjm8NAFmkG4g8AJ22fVSfBE4DY`, and this function threw "no digest in any
+        envelope this client knows" and stopped the run before it published the post the price was
+        for. The price is on chain with nothing behind it, for the second time.
+
+        Two copies of one piece of knowledge, and only one of them was ever corrected.
+      */
+      const digest = result.Transaction?.digest ?? result.transaction?.digest ?? result.digest;
       if (typeof digest !== 'string' || digest === '') {
         throw new Error(
           'the transaction was submitted and the node returned no digest in any envelope this ' +
