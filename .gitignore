@@ -142,3 +142,9 @@ graphify-out/
 # security/eyes-only, 2026-09-04: desk material never enters this repository.
 /work/
 /operations/
+
+# A local scratch area that holds a live agent key. `*.key` above already catches the key
+# itself, but this repository is public now and the directory sits in the working tree beside
+# tracked files. Ignoring the whole directory means no rule change, no new file dropped in it,
+# and no `git add -A` can ever stage any part of it.
+.weir-reg/
