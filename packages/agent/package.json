@@ -19,8 +19,8 @@
     "prepare": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@mysten/seal": "1.4.6",
-    "@mysten/sui": "2.27.1",
+    "@mysten/seal": "1.4.8",
+    "@mysten/sui": "2.29.0",
     "@projectx-social/sdk": "workspace:*"
   },
   "devDependencies": {
