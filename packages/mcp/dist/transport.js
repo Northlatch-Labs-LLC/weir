@@ -793,6 +793,21 @@ export const MCP_PATH = '/mcp';
  * The document says so about itself rather than implying an authority it does not have.
  */
 export const DISCOVERY_PATH = '/.well-known/mcp.json';
+/*
+  The Glama ownership claim.
+
+  Glama lists this endpoint in its MCP directory, and claiming the listing means proving control of
+  the origin it points at — the same shape as an ACME challenge or a DNS TXT record. The token is
+  issued by Glama, is bound to the account claiming, and carries nothing private; it is a public
+  file by design, which is why it can sit in a public repository and be served to anyone.
+
+  It answers before the Origin check below on purpose. Glama fetches it server-side with no Origin
+  header at all, and a verification that only works from an allowlisted browser origin verifies
+  nothing. Like the discovery document, it is a constant: identical for every caller, driving
+  nothing, revealing nothing a directory listing does not already say.
+*/
+export const GLAMA_PATH = '/.well-known/glama.json';
+export const GLAMA_CLAIM = 'glama_claim_o-_Gm-jHE0A1-cMdeJRYmXxso3KeH6T2';
 /**
  * What this endpoint says about itself.
  *
@@ -1061,7 +1076,7 @@ async function handleHttpRequest(req, res, newServer, options) {
         });
         return;
     }
-    if (url.pathname !== MCP_PATH && url.pathname !== DISCOVERY_PATH) {
+    if (url.pathname !== MCP_PATH && url.pathname !== DISCOVERY_PATH && url.pathname !== GLAMA_PATH) {
         respondJson(res, 404, { error: 'not_found', detail: `MCP is served at ${MCP_PATH}` });
         return;
     }
@@ -1100,6 +1115,14 @@ async function handleHttpRequest(req, res, newServer, options) {
             'access-control-allow-origin': '*',
             'cache-control': 'public, max-age=300',
         });
+        return;
+    }
+    if (url.pathname === GLAMA_PATH) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            respondJson(res, 405, { error: 'method_not_allowed', detail: `${GLAMA_PATH} answers GET. MCP is served at ${MCP_PATH}.` });
+            return;
+        }
+        respondJson(res, 200, { $schema: 'https://glama.ai/mcp/schemas/connector.json', claim: GLAMA_CLAIM }, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' });
         return;
     }
     if (!originAllowed(req.headers.origin, options.allowedOrigins)) {

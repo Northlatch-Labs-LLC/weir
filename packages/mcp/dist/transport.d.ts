@@ -696,6 +696,8 @@ export declare const MCP_PATH = "/mcp";
  * The document says so about itself rather than implying an authority it does not have.
  */
 export declare const DISCOVERY_PATH = "/.well-known/mcp.json";
+export declare const GLAMA_PATH = "/.well-known/glama.json";
+export declare const GLAMA_CLAIM = "glama_claim_o-_Gm-jHE0A1-cMdeJRYmXxso3KeH6T2";
 export interface Discovery {
     name: string;
     description: string;
