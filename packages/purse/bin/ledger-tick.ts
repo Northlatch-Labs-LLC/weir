@@ -26,7 +26,7 @@ import { dirname } from 'node:path';
 import { loadChainConfig } from '../src/chain.js';
 import { askPurse } from '../src/client.js';
 import { planLedgerTick } from '../src/ledger.js';
-import { readCurrentEpoch, readSoul, readVaultEarnings } from '../src/soul-read.js';
+import { readCurrentEpoch, readOwnedRef, readSoul, readVaultEarnings } from '../src/soul-read.js';
 import { createClient } from '@projectx-social/sdk';
 
 const FLAGS = [
@@ -173,49 +173,92 @@ if (plan.willRetire && !allowRetire) {
 }
 
 const packageId = values.get('--package')!;
-const ledgerCap = {
-  objectId: values.get('--ledger-cap')!,
-  version: values.get('--ledger-cap-version')!,
-  digest: values.get('--ledger-cap-digest')!,
-};
+/*
+  The cap's IDENTITY is pinned; its version is not, and must not be.
+
+  `--ledger-cap-version` and `--ledger-cap-digest` still arrive from the unit file, and they are
+  still checked below, because an operator declaring which capability this settlement may use is
+  the point. But an owned object's version and digest change every time it is used, so what the
+  unit file pins is only ever the state the cap was in when the unit was written.
+
+  Wren's was pinned at 978614786. `book_burned` landed and moved it to 978614793, and `book_earned`
+  in the same run was refused with "provided version doesn't match": the cost booked against her
+  soul and the income not. That is the worst possible half of a settlement to land.
+
+  So the ref is read from the chain immediately before each call, and the pinned pair is used to
+  assert the cap is the one the operator named, not to compose the transaction.
+*/
+const ledgerCapId = values.get('--ledger-cap')!;
+const pinnedCapVersion = values.get('--ledger-cap-version')!;
+
+async function liveLedgerCap(): Promise<{ objectId: string; version: string; digest: string }> {
+  const read = await readOwnedRef(values.get('--graphql')!, ledgerCapId);
+  if (!read.ok) {
+    console.error(`${prefix}: the settlement capability could not be read — ${read.refused.reason}`);
+    process.exit(1);
+  }
+  return { objectId: ledgerCapId, version: read.value.version, digest: read.value.digest };
+}
+
+const firstCap = await liveLedgerCap();
+if (BigInt(firstCap.version) < BigInt(pinnedCapVersion)) {
+  /*
+    Older than the unit file's pin means this is not the object the operator declared — a rollback,
+    a different network, or a wrong id. Newer is normal and expected: it means the cap has been
+    used since the unit was written, which is exactly what a working settlement does.
+  */
+  console.error(
+    `${prefix}: capability ${ledgerCapId} is at version ${firstCap.version}, older than the ` +
+      `${pinnedCapVersion} this unit was installed against. Refusing rather than composing ` +
+      `against an object that is not the one named.`,
+  );
+  process.exit(3);
+}
+const ledgerCap = firstCap;
 const soulRef = {
   objectId: values.get('--soul')!,
   initialSharedVersion: values.get('--soul-version')!,
   mutable: true,
 };
 
-/** Every ask in order. A refusal anywhere stops the rest: a half-booked epoch must not be settled. */
-const asks: { readonly what: string; readonly intent: unknown }[] = [];
+/*
+  Every ask in order. A refusal anywhere stops the rest: a half-booked epoch must not be settled.
+
+  The intent is composed by a function rather than held as a value, because each call moves the
+  capability and the next one has to see where it moved to.
+*/
+type Cap = { objectId: string; version: string; digest: string };
+const asks: { readonly what: string; readonly intent: (cap: Cap) => unknown }[] = [];
 if (plan.bookEarnedMist > 0n) {
   asks.push({
     what: 'book_earned',
-    intent: {
+    intent: (cap) => ({
       kind: 'book_earned',
       packageId,
-      ledgerCap,
+      ledgerCap: cap,
       soul: soulRef,
       amountMist: String(plan.bookEarnedMist),
-    },
+    }),
   });
 }
 if (plan.bookBurnedMist > 0n) {
   asks.push({
     what: 'book_burned',
-    intent: {
+    intent: (cap) => ({
       kind: 'book_burned',
       packageId,
-      ledgerCap,
+      ledgerCap: cap,
       soul: soulRef,
       amountMist: String(plan.bookBurnedMist),
-    },
+    }),
   });
 }
 asks.push({
   what: 'settle_epoch',
-  intent: {
+  intent: (cap) => ({
     kind: 'settle_epoch',
     packageId,
-    ledgerCap,
+    ledgerCap: cap,
     registry: {
       objectId: values.get('--registry')!,
       initialSharedVersion: values.get('--registry-version')!,
@@ -229,7 +272,7 @@ asks.push({
     },
     vaultSui: String(plan.vaultSui),
     epochNetNonneg: plan.epochNetNonneg,
-  },
+  }),
 });
 
 const socketPath = values.get('--socket')!;
@@ -265,7 +308,8 @@ async function submitSigned(txBytesB64: string, signature: string): Promise<stri
 
 const landed: string[] = [];
 for (const ask of asks) {
-  const answer = await askPurse({ socketPath, intent: ask.intent });
+  const cap = landed.length === 0 ? ledgerCap : await liveLedgerCap();
+  const answer = await askPurse({ socketPath, intent: ask.intent(cap) });
   if (!answer.ok) {
     console.error(`${prefix}: ${ask.what} — ${answer.refused.reason}`);
     process.exit(3);

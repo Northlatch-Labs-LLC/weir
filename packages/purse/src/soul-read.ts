@@ -136,6 +136,42 @@ export async function readVaultEarnings(endpoint: string, vaultId: string): Prom
  * Read AFTER submission, from the chain, never estimated. An estimate booked against an allowance
  * is a number the operator cannot check against anything.
  */
+/**
+ * The live version and digest of an OWNED object.
+ *
+ * A shared object is referenced by the version it was shared at, which never changes. An owned
+ * object is referenced by its current version and digest, and **both change every time it is
+ * used**. So a capability's version cannot be pinned in a policy or a unit file: it is correct for
+ * exactly one transaction and stale for every one after.
+ *
+ * That is not a hypothetical. Wren's `LEDGER_CAP_VERSION` was pinned at 978614786. The first
+ * settlement call that landed bumped the cap to 978614793, and the next call in the same run was
+ * refused with "provided version doesn't match" — a settlement half-booked: the cost written to
+ * her soul and the income not.
+ *
+ * The build stays fully resolved and offline, which is the property that matters: this read
+ * happens before the intent is composed, not inside `build()`.
+ */
+export async function readOwnedRef(
+  endpoint: string,
+  objectId: string,
+): Promise<Outcome<{ version: string; digest: string }>> {
+  const read = await graphql(endpoint, `query { object(address: "${objectId}") { version digest } }`);
+  if (!read.ok) return read;
+  const object = (read.value as { object?: { version?: unknown; digest?: unknown } }).object;
+  if (object === null || object === undefined) {
+    return refuse('chain-unreadable', `${endpoint}: object ${objectId} was not found. Nothing was composed.`);
+  }
+  const { version, digest } = object;
+  if (typeof version !== 'number' && typeof version !== 'string') {
+    return refuse('chain-unreadable', `${endpoint}: object ${objectId} returned no version. Nothing was composed.`);
+  }
+  if (typeof digest !== 'string' || digest === '') {
+    return refuse('chain-unreadable', `${endpoint}: object ${objectId} returned no digest. Nothing was composed.`);
+  }
+  return allow({ version: String(version), digest });
+}
+
 export async function readTransactionGasMist(
   endpoint: string,
   digest: string,
