@@ -56,6 +56,13 @@ export interface Post {
   title: string;
   preview: string;
   /**
+   * How many comments this post has, counted by the query that loaded the post.
+   *
+   * Here so a card can print the number without asking a server for it. A card that fetches its
+   * own count turns one page into one request per post — see the note on the query above.
+   */
+  commentCount: number;
+  /**
    * Withheld until the reader holds an entitlement — see `visiblePost`.
    *
    * Empty for a gated post published after bodies became sealed: there is no plaintext to
@@ -258,6 +265,7 @@ export interface PostRow {
   price: string | null;
   content_key: string | null;
   asset_ids: string[] | null;
+  comment_count: number;
 }
 
 /**
@@ -293,6 +301,7 @@ function toPost(row: PostRow): Post {
         : { kind: 'public' };
 
   const assetIds = row.asset_ids ?? [];
+  const commentCount = row.comment_count ?? 0;
   /*
     All five or none. A partial row cannot be verified and must not be presented as if it could:
     the route that serves this says "no proof was kept" for a post without it, and that sentence
@@ -369,6 +378,7 @@ function toPost(row: PostRow): Post {
         }
       : {}),
     access,
+    commentCount,
     ...(assetIds.length > 0 ? { assetIds } : {}),
   };
 }
@@ -402,7 +412,21 @@ const POST_SELECT = `
          COALESCE(
            (SELECT array_agg(a.id ORDER BY a.id) FROM assets a WHERE a.post_id = p.id),
            '{}'
-         ) AS asset_ids
+         ) AS asset_ids,
+         /*
+           The comment COUNT travels with the post, and the comment BODIES do not.
+
+           Before this, components/Comments.tsx ran a useEffect on mount in every card and fetched
+           the whole thread just to render the number in its heading. Measured on a page of twelve
+           posts: fourteen requests to /api/comments, twelve distinct ids and two fired twice, out
+           of seventy-four on the page. A thousand-post feed would issue a thousand.
+
+           The index comments_post_idx is (post_id, created_at_ms), so this counts through an index
+           rather than scanning the table.
+
+           No backticks in here: this comment lives inside a template literal.
+         */
+         (SELECT count(*) FROM comments c WHERE c.post_id = p.id)::int AS comment_count
   FROM posts p
 `;
 
@@ -1352,6 +1376,8 @@ export function visiblePost(
   const base = {
     id: post.id, vaultId: post.vaultId, authorHandle: post.authorHandle,
     createdAtMs: post.createdAtMs, title: post.title, preview: post.preview, access: post.access,
+    // Public: how many comments a post has is not withheld from a reader who cannot open it.
+    commentCount: post.commentCount,
   };
 
   if (post.access.kind === 'public' || entitled) {

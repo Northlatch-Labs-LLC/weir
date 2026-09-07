@@ -66,6 +66,7 @@ async function seedPosts(n: number, handle = 'alice', vaultId = VAULT_A): Promis
       createdAtMs: 1_756_700_000_000 + i * 1000,
       title: `Post ${i}`,
       preview: `preview ${i}`,
+      commentCount: 0,
       body: `the words of post ${i}`,
       access:
         kind === 'paid'

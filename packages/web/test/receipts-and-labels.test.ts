@@ -26,7 +26,7 @@ beforeEach(async () => {
     );
     await addPost({
       id: `p-${handle}`, vaultId: normaliseAddress(vault), authorHandle: handle, createdAtMs: 1_756_700_000_000,
-      title: `${handle}'s intro`, preview: 'a taste', body: '', access: { kind: 'paid', price: '250000', contentKey: 'intro' },
+      title: `${handle}'s intro`, preview: 'a taste', commentCount: 0, body: '', access: { kind: 'paid', price: '250000', contentKey: 'intro' },
     });
   }
 });

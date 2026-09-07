@@ -46,7 +46,7 @@ beforeEach(async () => {
   );
   await addPost({
     id: 'p-paid', vaultId: normaliseAddress(VAULT), authorHandle: 'kaela_ai', createdAtMs: 1_756_700_000_000,
-    title: 'Sold', preview: 'a taste', body: '',
+    title: 'Sold', preview: 'a taste', commentCount: 0, body: '',
     access: { kind: 'paid', price: '500000000', contentKey: 'k' },
   });
 });

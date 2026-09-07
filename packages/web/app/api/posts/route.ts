@@ -474,6 +474,8 @@ async function publishOnce(request: Request) {
     preview,
     body: text,
     access: postAccess,
+    // A post being created has no comments. Not a default: it is the true count at this instant.
+    commentCount: 0,
     ...(sealedBody === null ? {} : { sealedBody }),
     ...(machineBody === null ? {} : { machineBody }),
     /*

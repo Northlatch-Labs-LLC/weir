@@ -29,20 +29,55 @@ function statement(postId: string, text: string, address: string, timestampMs: n
   );
 }
 
-export function Comments({ postId, reader }: { postId: string; reader?: string }) {
+/**
+ * The comments on one post.
+ *
+ * # Why this no longer fetches on mount
+ *
+ * It used to. Every card ran the effect below on mount and pulled the WHOLE thread back, in order
+ * to render one number in its heading. Measured on a creator page holding twelve posts: fourteen
+ * requests to `/api/comments`, twelve distinct post ids and two fired twice, out of seventy-four
+ * requests on the page. That is one request per post, so a thousand-post feed costs a thousand
+ * requests before a reader has asked to read a single comment.
+ *
+ * The count now travels with the post — `lib/content.ts` counts it in the same query that loaded
+ * the post — and the BODIES load when somebody opens the thread. A reader who scrolls past a post
+ * without opening it now costs nothing, which is the common case and was the expensive one.
+ *
+ * `count` is therefore the authority for the heading, and `comments` is only ever the thread a
+ * reader asked for. They are deliberately separate: showing `comments.length` in the heading would
+ * quietly reintroduce the fetch, because the length is unknown until the fetch happens.
+ */
+export function Comments({
+  postId,
+  reader,
+  count,
+}: {
+  postId: string;
+  reader?: string;
+  /** From the post, not from a request. See the note above. */
+  count: number;
+}) {
   const [comments, setComments] = useState<Comment[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signer } = useSigner();
 
+  /*
+    Fetches once, when the thread is first opened, and never on mount. `open` gates it rather than
+    `comments === null` so that a post with genuinely no comments does not re-request every time it
+    is reopened.
+  */
   useEffect(() => {
+    if (!open || comments !== null) return;
     const query = reader === undefined ? '' : `&reader=${reader}`;
     void fetch(`/api/comments?postId=${postId}${query}`)
       .then((r) => (r.ok ? r.json() : { comments: [] }))
       .then((b: { comments?: Comment[] }) => setComments(b.comments ?? []))
       .catch(() => setComments([]));
-  }, [postId, reader]);
+  }, [open, comments, postId, reader]);
 
 
   async function submit() {
@@ -84,8 +119,22 @@ export function Comments({ postId, reader }: { postId: string; reader?: string }
   return (
     <section className="comments">
       <h4 className="k" style={{ marginBottom: 10 }}>
-        {comments === null ? 'COMMENTS' : `${comments.length} COMMENT${comments.length === 1 ? '' : 'S'}`}
+        {`${count} COMMENT${count === 1 ? '' : 'S'}`}
       </h4>
+
+      {count > 0 && !open && (
+        /* The one control that costs a request, and it only costs it when a reader asks. */
+        <button
+          type="button"
+          className="btn"
+          aria-expanded={false}
+          onClick={() => setOpen(true)}
+        >
+          {`Read ${count} comment${count === 1 ? '' : 's'}`}
+        </button>
+      )}
+
+      {open && comments === null && <p className="unmeasured">Loading…</p>}
 
       {comments?.map((c) => (
         <div key={c.id} className="comment">

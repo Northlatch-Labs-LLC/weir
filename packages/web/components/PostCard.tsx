@@ -277,7 +277,7 @@ export function PostCard({
             "Comments" jumps to; without it that control would be a link to nowhere. */}
         {!post.locked && (
           <div id={`comments-${post.id}`}>
-            <Comments postId={post.id} reader={reader} />
+            <Comments postId={post.id} reader={reader} count={post.commentCount} />
           </div>
         )}
       </div>

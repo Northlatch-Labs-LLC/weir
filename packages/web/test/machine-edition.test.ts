@@ -327,7 +327,7 @@ describe('the pricing guard', () => {
   async function pre034(contentKey: string): Promise<void> {
     await addPost({
       id: `p-${contentKey}`, vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1,
-      title: `Old ${contentKey}`, preview: 'p', body: '',
+      title: `Old ${contentKey}`, preview: 'p', commentCount: 0, body: '',
       access: { kind: 'paid', price: '250000', contentKey },
       sealedBody: { blobId: 'b', endEpoch: 1, nonce: 'n', sealWrappedKey: 'k', sha256: 's' },
     });

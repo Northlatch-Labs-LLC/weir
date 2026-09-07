@@ -65,7 +65,7 @@ function subscriberPost(sealed: { tier: string; period: string } | null): Post {
     authorHandle: 'atlas',
     createdAtMs: Number(START),
     title: 't',
-    preview: 'p',
+    preview: 'p', commentCount: 0,
     body: '',
     access: { kind: 'subscribers', tier: 0 },
     ...(sealed === null

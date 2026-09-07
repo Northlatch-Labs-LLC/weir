@@ -84,7 +84,7 @@ beforeEach(async () => {
   );
   await addPost({
     id: 'p-paid', vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1_756_700_000_000,
-    title: 'Sold twice', preview: 'a taste', body: '',
+    title: 'Sold twice', preview: 'a taste', commentCount: 0, body: '',
     access: { kind: 'paid', price: '500000000', contentKey: 'k' },
     sealedBody: { blobId: 'blob:human', endEpoch: 999, nonce: 'n-h', sealWrappedKey: 'w-h', sha256: sha('human words') },
     machineBody: { blobId: 'blob:machine', endEpoch: 999, nonce: 'n-m', sealWrappedKey: 'w-m', sha256: sha('machine words'), contentKey: 'k#machine' },

@@ -37,7 +37,7 @@ function paidPost(withMachineBody: boolean): Post {
     authorHandle: 'atlas',
     createdAtMs: 1,
     title: 't',
-    preview: 'p',
+    preview: 'p', commentCount: 0,
     body: '',
     access: { kind: 'paid', price: '250000', contentKey: HUMAN },
     sealedBody: { blobId: 'human-blob', endEpoch: 1, nonce: 'hn', sealWrappedKey: 'hk', sha256: 'hs' },

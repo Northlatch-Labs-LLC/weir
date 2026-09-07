@@ -3239,3 +3239,91 @@ html {
     color: var(--crest);
   }
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Thread groups on a creator page.
+
+   Deliberately written against the design tokens (`--space-*`, `--radius-*`, `--text-*`) rather
+   than the freehand rem values the rest of this file uses. The audit on 2026-09-06 found 165
+   freehand spacings and 68 hardcoded sizes here against zero token uses, while `globals.css` uses
+   the tokens exclusively — one scale, two vocabularies. Nothing new should be added in the old
+   vocabulary, so this block is the first in the new one.
+
+   It also lives in a stylesheet rather than inline on the component because an inline style cannot
+   carry a media query, and this has to change shape at three widths.
+--------------------------------------------------------------------------------------------- */
+
+.weir-thread {
+  border: 1px solid var(--line, #1c3d47);
+  border-left: 3px solid var(--crest, #8be3c6);
+  border-radius: var(--radius-md, 12px);
+  padding: var(--space-16, 16px);
+  background: rgba(var(--crest-rgb, 139, 227, 198), 0.03);
+  display: grid;
+  gap: var(--space-12, 12px);
+}
+
+.weir-thread-hd { display: grid; gap: var(--space-4, 4px); }
+
+.weir-thread-title {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-8, 8px);
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--text-caption, 13px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.weir-thread-count { color: var(--crest, #8be3c6); }
+.weir-thread-span { color: var(--dim, #a3bcb8); font-weight: 500; letter-spacing: 0.04em; }
+
+.weir-thread-label {
+  margin: 0;
+  font-size: var(--text-body, 16px);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink, #dce9e6);
+}
+
+/* The evidence for the grouping. Quiet, but never hidden and never hover-only. */
+.weir-thread-why {
+  margin: 0;
+  font-size: var(--text-caption, 13px);
+  line-height: 1.5;
+  color: var(--dim, #a3bcb8);
+}
+.weir-thread-why b { color: var(--ink-2, #b9cdc9); font-weight: 600; }
+
+.weir-thread-posts { display: grid; gap: var(--space-12, 12px); }
+
+/* 44px minimum target, met with padding rather than a fixed height so text can wrap and grow. */
+.weir-thread-more {
+  appearance: none;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-12, 12px) var(--space-16, 16px);
+  border: 1px solid var(--line, #1c3d47);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--crest, #8be3c6);
+  font: 600 var(--text-body-sm, 14px) 'Geist', system-ui, sans-serif;
+  cursor: pointer;
+  text-align: center;
+}
+.weir-thread-more:hover { border-color: var(--crest, #8be3c6); }
+
+/* Phone: the rail of colour costs width the titles need more. */
+@media (max-width: 559px) {
+  .weir-thread { padding: var(--space-12, 12px); border-left-width: 2px; }
+  .weir-thread-label { font-size: var(--text-body-sm, 14px); }
+}
+
+/* Desktop: the group earns more room around it so a long page reads as blocks, not stripes. */
+@media (min-width: 1024px) {
+  .weir-thread { padding: var(--space-20, 20px); gap: var(--space-16, 16px); }
+  .weir-thread-label { font-size: var(--text-body-lg, 18px); }
+}

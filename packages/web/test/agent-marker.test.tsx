@@ -65,7 +65,7 @@ function post(id: string, authorHandle: string): VisiblePost {
     authorHandle,
     createdAtMs: 1_756_700_000_000,
     title: `Post ${id}`,
-    preview: 'preview',
+    preview: 'preview', commentCount: 0,
     access: { kind: 'public' },
     body: 'words',
     locked: false,
@@ -105,7 +105,16 @@ describe('the pill on the card', () => {
   it('is wired on both surfaces that draw a card, from the register and not from anything else', () => {
     // The two callers hand the flag through; the two pages compute it from the register, once.
     expect(read('components/design/Home.tsx')).toContain('authorIsAgent={post.authorIsAgent}');
-    expect(read('components/design/Creator.tsx')).toContain('authorIsAgent={post.authorIsAgent}');
+    /*
+      Creator.tsx renders PostCard from two places now — a loose post and a post inside a thread
+      group — so a single string match would pass while one of the two call sites silently dropped
+      the flag. Assert instead that EVERY PostCard on this surface carries it, which is the thing
+      the marker actually depends on and is stronger than the line it replaced.
+    */
+    const creator = read('components/design/Creator.tsx');
+    const cardCalls = creator.match(/<PostCard[^>]*>/g) ?? [];
+    expect(cardCalls.length).toBeGreaterThan(0);
+    for (const call of cardCalls) expect(call).toContain('authorIsAgent=');
     expect(read('components/feed/FeedView.tsx')).toContain('declaredAgentsOrUnread(');
     // One register read per profile render (the spec's AT1.5), feeding both the line and the pill.
     const page = read('app/c/[handle]/page.tsx');

@@ -16,6 +16,8 @@ import { PageTabs } from '@/components/shell/PageTabs';
 import { Fragment, type ReactNode } from 'react';
 import { PostCard } from '@/components/PostCard';
 import type { DesignFeedPost } from '@/components/design/Home';
+import { groupPosts } from '@/lib/post-threads';
+import { PostThreadGroup } from '@/components/PostThreadGroup';
 
 export interface DesignTier {
   price: string;
@@ -268,8 +270,21 @@ export function DesignCreator({
                     <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.06em', color: 'var(--dim,#a3bcb8)' }}>{viewingLabel}</p>
                   </div>
                   <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
-                    {(profilePosts ?? []).map((post, i) => (<Fragment key={i}>
-                      <PostCard post={post.post} price={post.price} reader={post.reader} entities={post.entities} authorIsAgent={post.authorIsAgent} />
+                    {groupPosts(profilePosts ?? [], (p) => ({ title: p.post.title, createdAtMs: p.post.createdAtMs })).map((entry, i) => (<Fragment key={i}>
+                      {entry.kind === 'single' ? (
+                        <PostCard post={entry.post.post} price={entry.post.price} reader={entry.post.reader} entities={entry.post.entities} authorIsAgent={entry.post.authorIsAgent} />
+                      ) : (
+                        <PostThreadGroup
+                          label={entry.posts[0]?.post.title ?? ''}
+                          sharedTerms={entry.sharedTerms}
+                          fromMs={entry.fromMs}
+                          toMs={entry.toMs}
+                        >
+                          {entry.posts.map((p, j) => (
+                            <PostCard key={j} post={p.post} price={p.price} reader={p.reader} entities={p.entities} authorIsAgent={p.authorIsAgent} />
+                          ))}
+                        </PostThreadGroup>
+                      )}
                     </Fragment>))}
                   </div>
                 </section>

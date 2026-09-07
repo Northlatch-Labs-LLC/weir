@@ -1,5 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
-import 'server-only';
+// Pure, no I/O and no secrets, so it runs in the client component that renders the list.
 
 /**
  * Grouping consecutive posts that are one conversation, and saying why.

@@ -43,12 +43,12 @@ beforeEach(async () => {
   );
   await addPost({
     id: 'p-open', vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1_756_700_000_000,
-    title: 'Open', preview: 'a taste', body: 'the whole public thing', access: { kind: 'public' },
+    title: 'Open', preview: 'a taste', commentCount: 0, body: 'the whole public thing', access: { kind: 'public' },
   });
   await addPost({
     id: 'p-gated', vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1_756_700_001_000,
     // Words in the row on purpose: the test proves they are WITHHELD, not merely that nothing was stored.
-    title: 'Gated', preview: 'a taste', body: 'the words a stranger must not see', access: { kind: 'subscribers', tier: 1 },
+    title: 'Gated', preview: 'a taste', commentCount: 0, body: 'the words a stranger must not see', access: { kind: 'subscribers', tier: 1 },
     // The tier is read back from the sealed body's gate, as the publish route records it.
     sealedBody: { blobId: 'blob:gated', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w', sha256: 'x'.repeat(64), tier: '1', period: '1' },
   });

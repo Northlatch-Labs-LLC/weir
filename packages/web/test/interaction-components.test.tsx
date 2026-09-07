@@ -90,9 +90,20 @@ describe('Notifications', () => {
 });
 
 describe('Comments', () => {
-  it('shows comments it read', async () => {
+  it('shows the count without asking a server, and the words only when asked', async () => {
+    /*
+      The whole point of the change. A card used to fetch its entire thread on mount just to render
+      the number in its heading: fourteen requests for twelve posts, measured. The count now comes
+      down with the post, so a reader who scrolls past a post costs nothing.
+    */
     mockJson({ comments: [{ id: '1', author: '0xabc', text: 'Hello World!', createdAtMs: 1 }] });
-    render(<Comments postId="p1" />);
+    render(<Comments postId="p1" count={1} />);
+
+    expect(screen.getByText('1 COMMENT')).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByText('Hello World!')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /read 1 comment/i }));
     await waitFor(() => expect(screen.getByText('Hello World!')).toBeTruthy());
   });
 
@@ -101,7 +112,7 @@ describe('Comments', () => {
     // into until somebody is signed in.
     signer = null;
     mockJson({ comments: [] });
-    render(<Comments postId="p1" />);
+    render(<Comments postId="p1" count={0} />);
     // The prompt, not a comment box: commenting needs a signature, so there is nothing to type into.
     const link = await screen.findByRole('link', { name: /sign in/i });
     expect(link.getAttribute('href')).toBe('/signin?next=%2F');
