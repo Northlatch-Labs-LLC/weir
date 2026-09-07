@@ -6,10 +6,21 @@
 # the tree, so it scans EVERY TRACKED FILE rather than a diff: a secret that arrived before the
 # hooks existed is still a secret, and history is what a clone gets.
 #
-# The destination check is not a formality here. This repository holds key material by design — the
-# harvest signer is a bech32 `suiprivkey1...` (packages/daemon/.env.example) — and a repository can
-# be flipped to public in two clicks long after anyone wrote down that it was private. So the
-# question is asked of GitHub at push time and anything other than a definite yes fails closed.
+# The destination check asks GitHub, at push time, where these bytes are actually going.
+#
+# It used to require the destination be PRIVATE, because this repository was private by design.
+# That is no longer true: weir is public as of 2026-09-07, deliberately, so the network's SDK, MCP
+# server and contract can be read and built on. A guard whose premise is false is worse than no
+# guard — every push fails, `--no-verify` becomes habit, and the habit takes the SECRET SCAN below
+# with it. The scan is the half that was always doing the work.
+#
+# So the question changed rather than the strictness. It is no longer "is this private" but "is
+# this the repository I mean" — a push to an unexpected remote is the thing worth refusing, and it
+# still fails closed on anything other than a definite yes.
+#
+# Before the change: every tracked file was scanned for a real bech32 `suiprivkey1...`, and every
+# one of 684 commits of history, because a clone gets history. Neither holds one.
+# `packages/daemon/.env.example` names the variable and has never carried its value.
 set -e
 refs="$(cat)"
 root="$(git rev-parse --show-toplevel)"
@@ -44,11 +55,19 @@ repo_path="$(printf '%s' "$remote_url" | sed -e 's#^git@github.com:#github.com/#
 case "$repo_path" in
   github.com/*)
     name="${repo_path#github.com/}"
-    private="$(gh repo view "$name" --json isPrivate -q .isPrivate 2>/dev/null || echo unknown)"
-    if [ "$private" != "true" ]; then
-      printf '\n  PUSH REFUSED — destination is not verified private (%s)\n\n' "$private" >&2
-      printf '  This tree carries signing key material. Anything other than a definite yes\n' >&2
-      printf '  fails closed. If the answer is genuinely "false", that is not a hook to fix.\n\n' >&2
+    # The one repository these bytes belong to. A push anywhere else is a mistake or a mistake
+    # being made for someone, and either way it is not this.
+    if [ "$name" != "Northlatch-Labs-LLC/weir" ]; then
+      printf '\n  PUSH REFUSED — destination is %s, not Northlatch-Labs-LLC/weir\n\n' "$name" >&2
+      printf '  This is the public home of the network. A push to any other repository is\n' >&2
+      printf '  refused here rather than discovered later.\n\n' >&2
+      exit 1
+    fi
+    # It must still exist and be reachable as that name; "unknown" is not a yes.
+    seen="$(gh repo view "$name" --json name -q .name 2>/dev/null || echo unknown)"
+    if [ "$seen" = "unknown" ]; then
+      printf '\n  PUSH REFUSED — GitHub could not confirm %s exists\n\n' "$name" >&2
+      printf '  Anything other than a definite yes fails closed.\n\n' >&2
       exit 1
     fi ;;
   *)
