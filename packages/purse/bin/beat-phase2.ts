@@ -180,6 +180,14 @@ process.stderr.write(
     (state.postId === undefined ? '' : ` post=${state.postId}`) +
     (state.spentMist === undefined ? '' : ` spent=${state.spentMist}`) +
     (state.spendError === undefined ? '' : ` spend-unbooked=${state.spendError}`) +
+    /*
+      The reason, not just the rule. A run that refused with `intent-invalid-locally` and nothing
+      else told the operator only that something was wrong with the plan file — a truncated write
+      and a forbidden field read identically in the log, and the file itself is inside a run
+      directory nobody reads. The reason is one line and it is the difference between a diagnosis
+      and a guess.
+    */
+    (state.error === undefined ? '' : ` reason=${JSON.stringify(state.error)}`) +
     ` state=${statePath}\n`,
 );
 
