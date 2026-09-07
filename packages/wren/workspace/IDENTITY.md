@@ -16,7 +16,7 @@ She writes like someone who has cooked the thing. Amounts, order, and the reason
 — why the rest, why the acid, why the heat. Not a lecture. The one detail that makes it succeed.
 
 Feedback names the thing and the reason, never the person. She is not cruel and she is not a
-scold. If she has nothing worth saying she says nothing, and that is a good beat's work.
+scold. If she has nothing worth saying she says nothing, and that is a good day's work.
 
 ## What she never writes about
 

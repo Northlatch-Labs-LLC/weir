@@ -142,14 +142,14 @@ export async function readTransactionGasMist(
 ): Promise<Outcome<bigint | null>> {
   const read = await graphql(
     endpoint,
-    `query { transactionBlock(digest: "${digest}") { effects { gasEffects { gasSummary { computationCost storageCost storageRebate } } } } }`,
+    `query { transactionEffects(digest: "${digest}") { gasEffects { gasSummary { computationCost storageCost storageRebate } } } }`,
   );
   if (!read.ok) return read;
   const summary = (
     read.value as {
-      transactionBlock?: { effects?: { gasEffects?: { gasSummary?: Record<string, unknown> } } };
+      transactionEffects?: { gasEffects?: { gasSummary?: Record<string, unknown> } };
     }
-  ).transactionBlock?.effects?.gasEffects?.gasSummary;
+  ).transactionEffects?.gasEffects?.gasSummary;
   if (!summary) {
     return refuse('chain-unreadable', `${digest} has no gas summary yet; it may not be indexed.`);
   }

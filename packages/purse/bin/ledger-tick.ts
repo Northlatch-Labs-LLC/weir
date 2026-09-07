@@ -27,6 +27,7 @@ import { loadChainConfig } from '../src/chain.js';
 import { askPurse } from '../src/client.js';
 import { planLedgerTick } from '../src/ledger.js';
 import { readCurrentEpoch, readSoul, readVaultEarnings } from '../src/soul-read.js';
+import { createClient } from '@projectx-social/sdk';
 
 const FLAGS = [
   '--agent',
@@ -232,6 +233,37 @@ asks.push({
 });
 
 const socketPath = values.get('--socket')!;
+
+/*
+  Signed is not settled.
+
+  This loop used to ask the purse for a signature, print "<what> signed.", and move on. Nothing
+  submitted the signed bytes to anything. On 2026-09-07 at 03:34 it signed `book_earned`,
+  `book_burned` and `settle_epoch`, printed "epoch settled", wrote its watermark and exited 0 —
+  and the chain recorded none of it. The settlement account had never sent a transaction in its
+  life. `bin/beat-phase2.ts` had a submit port from the day it was written; this file never did.
+
+  So: submit, read the effects, and treat anything but SUCCESS as a failure. The three envelope
+  shapes are the same three `packages/agent/src/tx.ts` reads, for the same reason it reads them.
+*/
+const client = createClient(chain.value);
+
+async function submitSigned(txBytesB64: string, signature: string): Promise<string> {
+  const result = (await client.executeTransaction({
+    transaction: Uint8Array.from(Buffer.from(txBytesB64, 'base64')),
+    signatures: [signature],
+  })) as { Transaction?: { digest?: string }; transaction?: { digest?: string }; digest?: string };
+  const digest = result.Transaction?.digest ?? result.transaction?.digest ?? result.digest;
+  if (typeof digest !== 'string' || digest === '') {
+    throw new Error(
+      'the transaction was submitted and the node returned no digest in any envelope this client ' +
+        'knows. Check the chain before retrying — it may well have succeeded.',
+    );
+  }
+  return digest;
+}
+
+const landed: string[] = [];
 for (const ask of asks) {
   const answer = await askPurse({ socketPath, intent: ask.intent });
   if (!answer.ok) {
@@ -242,12 +274,34 @@ for (const ask of asks) {
     console.error(`${prefix}: ${ask.what} refused — ${JSON.stringify(answer.value)}`);
     process.exit(3);
   }
-  console.log(`${prefix}: ${ask.what} signed.`);
+  const signed = answer.value as { ok: true; txBytesB64: string; signature: string };
+  let digest: string;
+  try {
+    digest = await submitSigned(signed.txBytesB64, signed.signature);
+  } catch (thrown) {
+    /*
+      Exit 1, not 3. A refusal is the policy saying no and nothing being sent; this is a
+      transaction that may well be on chain. The watermark below is not written, so the next run
+      recomputes the whole settlement from the chain rather than skipping it.
+    */
+    console.error(
+      `${prefix}: ${ask.what} was signed and the submit threw: ` +
+        `${thrown instanceof Error ? thrown.message : String(thrown)} ` +
+        `Nothing has been recorded as settled. Check the chain before running this again.`,
+    );
+    process.exit(1);
+  }
+  landed.push(`${ask.what}=${digest}`);
+  console.log(`${prefix}: ${ask.what} landed ${digest}`);
 }
 
 /*
-  Written only after the settlement was signed. Writing it before would mean a settlement that
-  failed on chain still moved the watermark, and that epoch's earnings would never be booked at all.
+  Written only after all three transactions LANDED, not merely after they were signed.
+
+  The earlier version wrote it after signing. On 2026-09-07 that moved the watermark to 0.9697 SUI
+  for a settlement that never reached the chain, so the next run would have seen a zero delta and
+  booked nothing — the first day's earnings marked counted while the soul still read zero. Signing
+  is not landing, and a watermark is a claim about the chain, so only the chain may move it.
 */
 await mkdir(dirname(statePath), { recursive: true });
 await writeFile(
@@ -255,5 +309,5 @@ await writeFile(
   `${JSON.stringify({ lastSeenEarningsMist: String(plan.vaultSui), settledAtEpoch: String(epoch.value) }, null, 2)}\n`,
   'utf8',
 );
-console.log(`${prefix}: epoch settled.`);
+console.log(`${prefix}: epoch settled — ${landed.join(' ')}`);
 process.exit(0);
