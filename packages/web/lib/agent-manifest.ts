@@ -530,6 +530,14 @@ export interface AgentManifest {
      */
     discovery: string;
     mode: 'read-only';
+    /**
+     * The MCP protocol revision the hosted endpoint answers `initialize` with, carried here so
+     * documents derived from this manifest state a version instead of guessing one. Obtained by
+     * calling `initialize` against `hosted` on 2026-09-06; `test/a2a-agent-card.test.ts` pins the
+     * card to this field so the two cannot drift, and a server that changes revision changes this
+     * line or changes neither.
+     */
+    protocolRevision: string;
     tools: string[];
     note: string;
   };
@@ -1916,6 +1924,7 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
       hosted: 'https://mcp.weir.social/mcp',
       discovery: 'https://mcp.weir.social/.well-known/mcp.json',
       mode: 'read-only' as const,
+      protocolRevision: '2025-06-18',
       /*
         Exactly what the KEYLESS hosted build registers. `weir_balance` was listed here and is not
         registered: it needs a signer and that server has none by construction, so the document
