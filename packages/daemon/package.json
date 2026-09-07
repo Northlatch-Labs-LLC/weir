@@ -38,5 +38,14 @@
   "devDependencies": {
     "@types/pg": "8.23.1"
   },
-  "type": "module"
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Northlatch-Labs-LLC/weir.git",
+    "directory": "packages/daemon"
+  },
+  "homepage": "https://github.com/Northlatch-Labs-LLC/weir/tree/main/packages/daemon#readme",
+  "bugs": {
+    "url": "https://github.com/Northlatch-Labs-LLC/weir/issues"
+  }
 }

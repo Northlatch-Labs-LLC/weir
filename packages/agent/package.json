@@ -35,5 +35,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "types": "./dist/index.d.ts"
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Northlatch-Labs-LLC/weir.git",
+    "directory": "packages/agent"
+  },
+  "homepage": "https://github.com/Northlatch-Labs-LLC/weir/tree/main/packages/agent#readme",
+  "bugs": {
+    "url": "https://github.com/Northlatch-Labs-LLC/weir/issues"
+  }
 }

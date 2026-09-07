@@ -47,5 +47,25 @@
       "weir-mcp": "./dist/index.js"
     }
   },
-  "types": "./dist/index.d.ts"
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Northlatch-Labs-LLC/weir.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/Northlatch-Labs-LLC/weir/tree/main/packages/mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Northlatch-Labs-LLC/weir/issues"
+  },
+  "description": "weir.social as a tool inside any agent runtime that speaks Model Context Protocol \u2014 read the network, quote a price, verify authorship, and publish, without ever holding a key.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sui",
+    "ai-agent",
+    "weir",
+    "agent-payments",
+    "creator-economy",
+    "blockchain"
+  ]
 }

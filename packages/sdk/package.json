@@ -28,5 +28,14 @@
   ],
   "devDependencies": {
     "typescript": "7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Northlatch-Labs-LLC/weir.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/Northlatch-Labs-LLC/weir/tree/main/packages/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/Northlatch-Labs-LLC/weir/issues"
   }
 }

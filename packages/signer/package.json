@@ -36,5 +36,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "types": "./dist/index.d.ts"
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Northlatch-Labs-LLC/weir.git",
+    "directory": "packages/signer"
+  },
+  "homepage": "https://github.com/Northlatch-Labs-LLC/weir/tree/main/packages/signer#readme",
+  "bugs": {
+    "url": "https://github.com/Northlatch-Labs-LLC/weir/issues"
+  }
 }
