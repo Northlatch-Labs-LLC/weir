@@ -191,13 +191,38 @@ const packageId = values.get('--package')!;
 const ledgerCapId = values.get('--ledger-cap')!;
 const pinnedCapVersion = values.get('--ledger-cap-version')!;
 
-async function liveLedgerCap(): Promise<{ objectId: string; version: string; digest: string }> {
-  const read = await readOwnedRef(values.get('--graphql')!, ledgerCapId);
-  if (!read.ok) {
-    console.error(`${prefix}: the settlement capability could not be read — ${read.refused.reason}`);
-    process.exit(1);
+/*
+  Read the capability, and when a previous call has just moved it, WAIT for the move to be visible.
+
+  The GraphQL endpoint is an indexer, not the fullnode: it trails the chain by a moment. Asking it
+  for the cap immediately after a transaction lands returns the version from before that
+  transaction, and the next call is then refused against a version that is already spent. That is
+  not a hypothetical either — it is what happened at 16:42, one second after `book_earned` landed:
+  provided 978614793, actual 978614794.
+
+  So `after` is the version this settlement has just consumed, and the read retries until it sees
+  something newer. Bounded: sixteen tries at 750ms is twelve seconds, far longer than the indexer
+  needs, and a settlement that cannot see its own last transaction after twelve seconds is a
+  settlement that should stop rather than compose against a stale reference.
+*/
+async function liveLedgerCap(after?: string): Promise<{ objectId: string; version: string; digest: string }> {
+  const endpoint = values.get('--graphql')!;
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const read = await readOwnedRef(endpoint, ledgerCapId);
+    if (!read.ok) {
+      console.error(`${prefix}: the settlement capability could not be read — ${read.refused.reason}`);
+      process.exit(1);
+    }
+    if (after === undefined || BigInt(read.value.version) > BigInt(after)) {
+      return { objectId: ledgerCapId, version: read.value.version, digest: read.value.digest };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 750));
   }
-  return { objectId: ledgerCapId, version: read.value.version, digest: read.value.digest };
+  console.error(
+    `${prefix}: the settlement capability is still at version ${after} twelve seconds after the ` +
+      `transaction that moved it. Nothing further has been composed; the epoch is not settled.`,
+  );
+  process.exit(1);
 }
 
 const firstCap = await liveLedgerCap();
@@ -307,8 +332,10 @@ async function submitSigned(txBytesB64: string, signature: string): Promise<stri
 }
 
 const landed: string[] = [];
+/** The cap version this settlement has already spent. Null until the first call lands. */
+let usedVersion: string | null = null;
 for (const ask of asks) {
-  const cap = landed.length === 0 ? ledgerCap : await liveLedgerCap();
+  const cap: Cap = usedVersion === null ? ledgerCap : await liveLedgerCap(usedVersion);
   const answer = await askPurse({ socketPath, intent: ask.intent(cap) });
   if (!answer.ok) {
     console.error(`${prefix}: ${ask.what} — ${answer.refused.reason}`);
@@ -335,6 +362,7 @@ for (const ask of asks) {
     );
     process.exit(1);
   }
+  usedVersion = cap.version;
   landed.push(`${ask.what}=${digest}`);
   console.log(`${prefix}: ${ask.what} landed ${digest}`);
 }
