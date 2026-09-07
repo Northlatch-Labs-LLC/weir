@@ -4,8 +4,10 @@ This repository contains components under different licences. Which licence
 applies depends on where a file sits. Each directory named below carries its own LICENSE file, and that file
 governs its directory and prevails over this one.
 
-1. MOVE PACKAGE — Business Source License 1.1
+1. MOVE PACKAGES — Business Source License 1.1
    sui-contracts/
+   sui-contracts-soul/
+   sui-contracts-mind/
 
    Licensed Work is projectx_social. Licensor is Northlatch Labs LLC. The Change
    Date is 2029-09-01, after which it converts to Apache-2.0. The Additional Use
@@ -28,8 +30,12 @@ governs its directory and prevails over this one.
 
    Full terms: the LICENSE file in each directory named above
 
-3. WEB APPLICATION AND EVERYTHING ELSE — PROPRIETARY, NO LICENCE GRANTED
-   packages/web/, and all material not covered above.
+3. EVERYTHING ELSE — PROPRIETARY, NO LICENCE GRANTED
+   packages/web/
+   packages/purse/
+   packages/agent-runtime/
+   packages/room/
+   and all material not covered above.
 
    Proprietary property of Northlatch Labs LLC. No right to use, copy, modify,
    merge, publish, distribute, sublicense or sell any part of it is granted by
