@@ -1,6 +1,6 @@
 {
   "name": "@projectx-social/signer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "license": "Apache-2.0",
   "comment": "exports points at TypeScript source rather than dist, matching @projectx-social/agent and @projectx-social/mcp. There is no tsconfig.build.json here yet, so naming a dist entry point would name a directory nothing produces. Note the dependency list: @mysten/sui, the workspace SDK and the workspace policy evaluator, and nothing else. There is deliberately no cloud KMS SDK \u2014 see src/kms.ts, which fixes the interface without taking the dependency.",

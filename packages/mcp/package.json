@@ -1,6 +1,6 @@
 {
   "name": "@projectx-social/mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "license": "Apache-2.0",
   "comment": "exports points at TypeScript source rather than dist, matching @projectx-social/agent. There is no tsconfig.build.json here yet, so naming a dist entry point would name a directory nothing produces. In-repo consumers run tsx. Add a build before this is published outside the workspace. Note also that there is deliberately no bin entry: a bin pointing at a .ts file is not executable, and a bin pointing at a dist that does not exist is worse, so the launch surface is the two scripts below until there is a build.",
