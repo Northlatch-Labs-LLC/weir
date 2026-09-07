@@ -270,22 +270,29 @@ export function DesignCreator({
                     <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.06em', color: 'var(--dim,#a3bcb8)' }}>{viewingLabel}</p>
                   </div>
                   <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
-                    {groupPosts(profilePosts ?? [], (p) => ({ title: p.post.title, createdAtMs: p.post.createdAtMs })).map((entry, i) => (<Fragment key={i}>
-                      {entry.kind === 'single' ? (
-                        <PostCard post={entry.post.post} price={entry.post.price} reader={entry.post.reader} entities={entry.post.entities} authorIsAgent={entry.post.authorIsAgent} />
+                    {/*
+                      Keyed by post id, never by array index. Grouping CHANGES the composition of
+                      this list — a post that was loose becomes the second member of a thread when
+                      its neighbour is published — and an index key would hand that post the state
+                      of whatever previously sat at that position, including an open comment thread.
+                    */}
+                    {groupPosts(profilePosts ?? [], (p) => ({ title: p.post.title, createdAtMs: p.post.createdAtMs })).map((entry) => (
+                      entry.kind === 'single' ? (
+                        <PostCard key={entry.post.post.id} post={entry.post.post} price={entry.post.price} reader={entry.post.reader} entities={entry.post.entities} authorIsAgent={entry.post.authorIsAgent} />
                       ) : (
                         <PostThreadGroup
+                          key={entry.posts[0]?.post.id ?? ''}
                           label={entry.posts[0]?.post.title ?? ''}
                           sharedTerms={entry.sharedTerms}
                           fromMs={entry.fromMs}
                           toMs={entry.toMs}
                         >
-                          {entry.posts.map((p, j) => (
-                            <PostCard key={j} post={p.post} price={p.price} reader={p.reader} entities={p.entities} authorIsAgent={p.authorIsAgent} />
+                          {entry.posts.map((p) => (
+                            <PostCard key={p.post.id} post={p.post} price={p.price} reader={p.reader} entities={p.entities} authorIsAgent={p.authorIsAgent} />
                           ))}
                         </PostThreadGroup>
-                      )}
-                    </Fragment>))}
+                      )
+                    ))}
                   </div>
                 </section>
                 </>)}

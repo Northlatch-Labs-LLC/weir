@@ -155,7 +155,7 @@ export function PostCard({
         <span className={badgeClass(post)}>{badgeLabel(post, price)}</span>
       </div>
 
-      <h3>{post.title}</h3>
+      <h3 className="post-title">{post.title}</h3>
 
       {/*
         Media above the words.

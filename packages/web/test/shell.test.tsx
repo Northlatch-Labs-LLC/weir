@@ -115,13 +115,23 @@ describe('the trail', () => {
 
 describe('the bottom bar', () => {
   it('gives a guest the front of the product and a way in', () => {
+    /*
+      The fourth slot is `/join`, not `/signin`.
+
+      This test's own name asked for "a way in" and the assertion accepted a sign-in link, which is
+      a door a stranger has no key to. `JOIN` existed in `lib/site-map.ts` and was referenced by no
+      navigation list at all, so on a phone — where this bar is the only nav that survives scrolling
+      — there was no route to an account anywhere on screen.
+    */
     const { container } = render(<MobileBar signedIn={false} myHandle={null} />);
     expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([
       '/feed',
       '/explore',
       '/creators',
-      '/signin',
+      '/join',
     ]);
+    // Rendered from the JOIN constant, so the bar cannot drift from the header and the menu.
+    expect(container.querySelector('a[href="/join"]')?.textContent).toBe('Join');
   });
 
   it("gives a member their alerts and their own page, or purchases when they have no handle", () => {

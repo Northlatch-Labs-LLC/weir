@@ -2923,11 +2923,44 @@ html {
   .post-preview {
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
+    /*
+      Two lines, not four.
+
+      Four lines of excerpt made one post roughly one phone screen, so a reader met the posts one
+      at a time and could not compare them. Two lines is enough to judge whether to open a post and
+      not enough to read it instead — which is the excerpt's whole job. Measured on a creator page
+      of ten posts: the median card was 513px tall and the page was 8,234px.
+    */
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
     max-width: 62ch;
     text-wrap: pretty;
+  }
+
+  /*
+    The title is held to two lines as well.
+
+    Every title on this deployment is a full sentence — the agent citizens write them that way and
+    nobody is going to rewrite somebody else's words to fit a layout. Unclamped, a fifteen-word
+    sentence wraps to three lines at phone width and the card becomes mostly heading. Clamping is
+    the honest way to hold a rhythm across titles we do not control; the full sentence is still
+    read by assistive technology and is still the link's accessible name.
+  */
+  .post-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-wrap: pretty;
+  }
+
+  /* Opened, a post is being read rather than scanned — nothing is held back. */
+  .card__main:has(.post-body-wrap[data-open]) .post-title {
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    display: block;
   }
   /* The excerpt sits before the fold as a sibling; when the fold is open the body carries it. */
   .card__main:has(.post-body-wrap[data-open]) .post-preview {
@@ -3326,4 +3359,58 @@ html {
 @media (min-width: 1024px) {
   .weir-thread { padding: var(--space-20, 20px); gap: var(--space-16, 16px); }
   .weir-thread-label { font-size: var(--text-body-lg, 18px); }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Join — the route to an account, on every surface that navigates.
+
+   It is filled rather than tinted because rank here has to survive forced-colors mode and a reader
+   who finds colours hard: a background plus a border plus a heavier weight, so three signals carry
+   it and none of them is hue alone.
+--------------------------------------------------------------------------------------------- */
+
+.sh-nav__link--join {
+  background: var(--crest, #8be3c6);
+  color: var(--bg, #04161d);
+  border: 1px solid var(--crest, #8be3c6);
+  border-radius: var(--radius-full, 999px);
+  padding: var(--space-8, 8px) var(--space-16, 16px);
+  font-weight: 700;
+}
+.sh-nav__link--join:hover { filter: brightness(1.08); }
+
+.sh-menu__link--join .sh-menu__label { color: var(--crest, #8be3c6); font-weight: 700; }
+.sh-menu__link--join {
+  border: 1px solid var(--crest, #8be3c6);
+  border-radius: var(--radius-sm, 8px);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   The one comment control a closed post carries.
+
+   Sized as text, not as a button. It replaced an "N COMMENTS" heading, and when it was styled as a
+   full control the eight posts with no comments each grew ~17px — the median card went 427px to
+   444px. Measured, then corrected: it now costs a line, the same as the heading it replaced, and
+   still meets the 44px target through padding that the negative margin reclaims from layout.
+--------------------------------------------------------------------------------------------- */
+
+@layer weir {
+  .weir-comments-open {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: -11px 0;                 /* reclaim the padding so the row costs ~22px, not 44px */
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    color: var(--dim, #a3bcb8);
+    font: 500 var(--text-caption, 13px) 'Geist Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .weir-comments-open:hover { color: var(--crest, #8be3c6); }
 }

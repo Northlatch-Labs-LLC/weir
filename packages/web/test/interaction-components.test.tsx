@@ -99,12 +99,28 @@ describe('Comments', () => {
     mockJson({ comments: [{ id: '1', author: '0xabc', text: 'Hello World!', createdAtMs: 1 }] });
     render(<Comments postId="p1" count={1} />);
 
-    expect(screen.getByText('1 COMMENT')).toBeTruthy();
+    /*
+      Closed, the section is ONE control that states its own count — not a heading and a button
+      repeating the same number. That pair was 80px on a card whose whole body was 329px.
+    */
+    const control = screen.getByRole('button', { name: /read 1 comment/i });
+    expect(control).toBeTruthy();
+    expect(screen.queryByText('1 COMMENT')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
     expect(screen.queryByText('Hello World!')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /read 1 comment/i }));
+    fireEvent.click(control);
     await waitFor(() => expect(screen.getByText('Hello World!')).toBeTruthy());
+    // Open, the heading returns: the count is no longer the only thing on screen.
+    expect(screen.getByText('1 COMMENT')).toBeTruthy();
+  });
+
+  it('offers a way to comment on a post nobody has commented on', () => {
+    // At zero there is no thread to read, but the post's Comment action still anchors here.
+    mockJson({ comments: [] });
+    render(<Comments postId="p1" count={0} />);
+    expect(screen.getByRole('button', { name: /^comment$/i })).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('offers sign-in rather than a comment box to a signed-out reader', async () => {
@@ -113,6 +129,15 @@ describe('Comments', () => {
     signer = null;
     mockJson({ comments: [] });
     render(<Comments postId="p1" count={0} />);
+
+    /*
+      The prompt lives INSIDE an opened thread now. It used to render under every post: a creator
+      page holding ten posts printed "Sign in to comment" ten times, to a reader who had not asked
+      to comment on any of them. Opening the thread is the moment the question exists.
+    */
+    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^comment$/i }));
+
     // The prompt, not a comment box: commenting needs a signature, so there is nothing to type into.
     const link = await screen.findByRole('link', { name: /sign in/i });
     expect(link.getAttribute('href')).toBe('/signin?next=%2F');

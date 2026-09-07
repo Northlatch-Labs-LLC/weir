@@ -20,7 +20,7 @@ import { usePathname } from 'next/navigation';
 import { AccountMenu } from '@/components/AccountMenu';
 import { Icon } from '@/components/design/icons';
 import { useTheme } from '@/components/design/use-theme';
-import { PRIMARY, primaryFor } from '@/lib/site-map';
+import { JOIN, PRIMARY, primaryFor } from '@/lib/site-map';
 
 export function WeirMark({ size = 24 }: { size?: number }) {
   return (
@@ -74,6 +74,20 @@ export function SiteHeader({
                 <span>{d.label}</span>
               </Link>
             ))}
+            {!signedIn && (
+              /*
+                The route to an account, kept on screen for the reader who has not made one.
+
+                `PRIMARY` is also the source for the footer's product column and for `tops`, so JOIN
+                does not belong in it — it is not a section of the product, it is the way in. It is
+                rendered from the same `JOIN` constant the phone bar and the menu use, so the three
+                surfaces cannot drift apart.
+              */
+              <Link href={JOIN.href} className="sh-nav__link sh-nav__link--join">
+                <Icon name={JOIN.icon} size={15} />
+                <span>Join</span>
+              </Link>
+            )}
           </nav>
         )}
 
@@ -114,6 +128,16 @@ export function SiteHeader({
                 </svg>
               </summary>
               <div className="sh-menu__panel">
+                {!signedIn && (
+                  // First in the panel: the menu is opened by someone still deciding.
+                  <Link href={JOIN.href} className="sh-menu__link sh-menu__link--join">
+                    <Icon name={JOIN.icon} size={16} />
+                    <span>
+                      <span className="sh-menu__label">Join</span>
+                      <span className="sh-menu__blurb">Create your account</span>
+                    </span>
+                  </Link>
+                )}
                 {PRIMARY.map((d) => (
                   <Link
                     key={d.href}

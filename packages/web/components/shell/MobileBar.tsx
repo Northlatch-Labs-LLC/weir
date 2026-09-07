@@ -14,7 +14,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/design/icons';
-import { isHere, type Destination } from '@/lib/site-map';
+import { JOIN, isHere, type Destination } from '@/lib/site-map';
 
 export function MobileBar({
   signedIn,
@@ -47,7 +47,16 @@ export function MobileBar({
         { href: '/feed', label: 'Feed', icon: 'waves' },
         { href: '/explore', label: 'Explore', icon: 'compass' },
         { href: '/creators', label: 'Creators', icon: 'users' },
-        { href: '/signin', label: 'Sign in', icon: 'key' },
+        /*
+          JOIN, not "Sign in".
+
+          This slot addressed a reader who already had an account, which is precisely the reader who
+          does not need a persistent link to say so. A stranger arriving from a post found the only
+          always-visible route to be a door they had no key to; `JOIN` existed in `lib/site-map.ts`
+          and was referenced by no navigation list at all. Signed in, the slot is `me` — a different
+          destination rendered from a different branch, never one control whose label swaps.
+        */
+        { ...JOIN, label: 'Join' },
       ];
   return (
     <nav aria-label="Quick" className="mbar" data-gated={gated ? '' : undefined}>
