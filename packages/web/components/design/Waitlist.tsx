@@ -300,7 +300,7 @@ export function DesignWaitlist({
               the block move.
             */}
             <div style={{ textAlign: 'left', maxWidth: '52rem' }}>
-              <p style={{ margin: '0 0 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.7)', boxShadow: '0 0 22px -10px rgba(var(--crest-rgb,139,227,198),0.7)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
+              <p style={{ margin: '0 0 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.7)', boxShadow: '0 0 22px -10px rgba(var(--crest-rgb,139,227,198),0.7)', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                 <span aria-hidden="true" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--crest,#8be3c6)', boxShadow: '0 0 10px rgba(var(--crest-rgb,139,227,198),0.9)', animation: 'pulseRing 2.6s ease-out infinite' }}></span>
                 {gated ? 'Closed alpha · by invitation' : 'Open'}
               </p>
@@ -325,7 +325,7 @@ export function DesignWaitlist({
                 at.
               */}
               {total !== null && total > 0 && (
-                <p style={{ margin: '1rem 0 0', textAlign: 'left', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
+                <p style={{ margin: '1rem 0 0', textAlign: 'left', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                   <span style={{ color: CREST }}>{total.toLocaleString()}</span>
                   {total === 1 ? ' person on the list' : ' people on the list'}
                 </p>
@@ -340,7 +340,7 @@ export function DesignWaitlist({
               {showCode && (
                 <form id="wl-access-code" onSubmit={(e) => { e.preventDefault(); void redeem(); }} style={{ maxWidth: '52rem', margin: '0.75rem 0 0', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', textAlign: 'left' }}>
                   <label style={{ flex: '1 1 16rem', display: 'grid', gap: '0.35rem' }}>
-                    <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Access code</span>
+                    <span style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Access code</span>
                     <input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} autoCapitalize="characters" autoComplete="off" spellCheck={false} placeholder="XXXX-XXXX-XXXX" disabled={redeeming} style={{ font: '500 1rem \'Geist Mono\',monospace', letterSpacing: '0.08em', padding: '0.65rem 0.85rem', borderRadius: '10px', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', background: 'rgba(var(--pd,11,37,48),0.7)', color: 'var(--ink,#dce9e6)' }} />
                   </label>
                   <button className="dh-b46baf10" type="submit" disabled={redeeming || accessCode.trim() === ''} style={{ flex: '0 0 auto', padding: '0.6rem 1.1rem', borderRadius: '10px', font: '600 0.875rem \'Geist\',sans-serif', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', cursor: 'pointer', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease' }}>{redeeming ? 'Checking…' : 'Enter'}</button>
@@ -406,21 +406,21 @@ export function DesignWaitlist({
                   */}
                 <div style={{ marginTop: '1.75rem', display: 'grid', gap: '1.25rem', gridTemplateColumns: 'minmax(0, 1fr)' }}>
                   <div>
-                    <label htmlFor="wlmail" style={{ display: 'block', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Email</label>
+                    <label htmlFor="wlmail" style={{ display: 'block', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Email</label>
                     <input id="wlmail" type="email" value={wlEmail} onChange={onWlEmail} placeholder="you@domain.com" style={{ marginTop: '0.5rem', width: '100%', background: 'var(--bg,#04161d)', border: `1px solid ${wlEmailBorder}`, borderRadius: '10px', padding: '0.7rem 0.95rem', color: 'var(--ink,#dce9e6)', fontFamily: '\'Geist\',sans-serif', fontSize: '0.9375rem', outline: 'none', transition: 'border-color 0.15s ease' }}/>
                   </div>
 
                   <div>
-                    <label htmlFor="wlhandle" style={{ display: 'block', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Handle you want <span style={{ textTransform: 'none', letterSpacing: '0' }}>(optional)</span></label>
+                    <label htmlFor="wlhandle" style={{ display: 'block', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Handle you want <span style={{ textTransform: 'none', letterSpacing: '0' }}>(optional)</span></label>
                     <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'var(--bg,#04161d)', border: '1px solid rgba(var(--line-rgb,28,61,71),0.9)', borderRadius: '10px', padding: '0.7rem 0.95rem' }}>
-                      <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)' }}>weir.social/c/</span>
-                      <input id="wlhandle" type="text" value={wlHandle} onChange={onWlHandle} placeholder="yourname" style={{ flex: '1', minWidth: '0', background: 'transparent', border: '0', outline: 'none', color: 'var(--ink,#dce9e6)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.9375rem' }}/>
+                      <span style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)' }}>weir.social/c/</span>
+                      <input id="wlhandle" type="text" value={wlHandle} onChange={onWlHandle} placeholder="yourname" style={{ flex: '1', minWidth: '0', background: 'transparent', border: '0', outline: 'none', color: 'var(--ink,#dce9e6)', fontFamily: 'var(--weir-mono)', fontSize: '0.9375rem' }}/>
                     </div>
                     <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: `${wlHandleColor}` }}>{wlHandleNote}</p>
                   </div>
 
                   <div>
-                    <span style={{ display: 'block', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>You are</span>
+                    <span style={{ display: 'block', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>You are</span>
                     <div role="radiogroup" aria-label="You are" style={{ marginTop: '0.625rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                       {(wlRoles ?? []).map((r, i) => (<Fragment key={i}>
                         <button type="button" role="radio" aria-checked={r.checked} onClick={r.onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 1rem', borderRadius: '99px', cursor: 'pointer', font: '600 0.875rem \'Geist\',sans-serif', background: `${r.bg}`, color: `${r.color}`, border: `1px solid ${r.border}`, transition: 'border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>{r.icon}{r.label}</button>
@@ -432,16 +432,16 @@ export function DesignWaitlist({
 
                   {wlHasResult && (<>
                     <div role="status" style={{ border: `1px solid ${wlResultBorder}`, borderLeft: `3px solid ${wlResultAccent}`, borderRadius: '10px', padding: '1.25rem 1.5rem', background: 'rgba(var(--pe,4,22,29),0.6)' }}>
-                      <p style={{ margin: '0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: `${wlResultAccent}` }}>{wlResultIcon}{wlResultTitle}</p>
+                      <p style={{ margin: '0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: `${wlResultAccent}` }}>{wlResultIcon}{wlResultTitle}</p>
                       <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>{wlResultBody}</p>
-                      <p style={{ margin: '0.625rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{wlResultDetail}</p>
+                      <p style={{ margin: '0.625rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{wlResultDetail}</p>
                     </div>
                   </>)}
 
                   {standing !== null && (
                     <div style={{ border: `1px solid ${LINE}`, borderLeft: `3px solid ${CREST}`, borderRadius: '10px', padding: '1.25rem 1.5rem', background: 'rgba(var(--pe,4,22,29),0.6)', display: 'grid', gap: '1rem' }}>
                       <div>
-                        <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: CREST }}>Your place</p>
+                        <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: CREST }}>Your place</p>
                         {/*
                           Stated as arrival order, never as a queue. `db/016_waitlist_growth.sql`
                           spells out why: this product is live, nobody is being served in turn, and
@@ -464,7 +464,7 @@ export function DesignWaitlist({
                           {Number.isFinite(standing.position) ? (
                             <>
                               You are number{' '}
-                              <span style={{ fontFamily: '\'Geist Mono\',monospace', color: CREST }}>{standing.position.toLocaleString()}</span>
+                              <span style={{ fontFamily: 'var(--weir-mono)', color: CREST }}>{standing.position.toLocaleString()}</span>
                               {' '}on the list.
                             </>
                           ) : (
@@ -479,7 +479,7 @@ export function DesignWaitlist({
                           that had turned them away. Every other sentence here already reads
                           `gated`; this one now does too.
                         */}
-                        <p style={{ margin: '0.4rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
+                        <p style={{ margin: '0.4rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
                           {gated
                             ? 'Arrival order, not a queue. Nothing is served in turn; the doors have not opened yet.'
                             : 'Arrival order, not a queue. Nothing is served in turn; Weir is already live and open to read.'}
@@ -487,14 +487,14 @@ export function DesignWaitlist({
                       </div>
 
                       <div>
-                        <label htmlFor="wl-ref" style={{ display: 'block', marginBottom: '0.4rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: SAND }}>Invite a friend</label>
+                        <label htmlFor="wl-ref" style={{ display: 'block', marginBottom: '0.4rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: SAND }}>Invite a friend</label>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                           <input
                             id="wl-ref"
                             readOnly
                             value={refLink}
                             onFocus={(e) => e.currentTarget.select()}
-                            style={{ flex: '1 1 14rem', minWidth: '0', padding: '0.7rem 0.85rem', borderRadius: '8px', border: `1px solid ${LINE}`, background: 'rgba(var(--pb,9,32,42),0.7)', color: 'var(--ink,#dce9e6)', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem' }}
+                            style={{ flex: '1 1 14rem', minWidth: '0', padding: '0.7rem 0.85rem', borderRadius: '8px', border: `1px solid ${LINE}`, background: 'rgba(var(--pb,9,32,42),0.7)', color: 'var(--ink,#dce9e6)', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem' }}
                           />
                           <button type="button" onClick={onCopyRef} style={{ flex: '0 0 auto', minHeight: '2.75rem', padding: '0.7rem 1.1rem', borderRadius: '8px', border: `1px solid ${CREST}`, background: 'rgba(var(--crest-rgb,139,227,198),0.08)', color: 'var(--ink,#dce9e6)', font: '600 0.9375rem \'Geist\',sans-serif', cursor: 'pointer' }}>{copied ? 'Copied' : 'Copy'}</button>
                         </div>
@@ -544,7 +544,7 @@ export function DesignWaitlist({
                 </section>
 
                 <section aria-label="How the list works" style={{ border: '1px solid rgba(var(--sand-rgb,217,201,163),0.3)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1.5rem' }}>
-                  <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>How the list works</p>
+                  <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>How the list works</p>
                   {/* One paragraph, one claim per sentence, and nothing it says is contradicted elsewhere on the page. */}
                   <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>No points, no tiers, no queue-jumping. Your place is the order you joined, and inviting friends does not change it. Your email is used to tell you when {gated ? 'the doors open' : 'something new ships'} and for nothing else. One click unsubscribes.</p>
                 </section>

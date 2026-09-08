@@ -168,7 +168,7 @@ const H2: React.CSSProperties = {
 };
 
 const MONO: React.CSSProperties = {
-  fontFamily: "'Geist Mono',ui-monospace,monospace",
+  fontFamily: 'var(--weir-mono)',
   fontSize: '0.8125rem',
   wordBreak: 'break-all',
 };
@@ -229,7 +229,7 @@ function Fact({ label, fact, mono }: { label: string; fact: AgentFact; mono?: bo
     <div style={{ display: 'grid', gap: '0.35rem' }}>
       <div
         style={{
-          fontFamily: "'Geist Mono',ui-monospace,monospace",
+          fontFamily: 'var(--weir-mono)',
           fontSize: '0.6875rem',
           letterSpacing: '0.12em',
           textTransform: 'uppercase',
@@ -800,7 +800,7 @@ export function DesignAgents(props: AgentsProps) {
                   <td
                     style={{
                       padding: '0.45rem 1.25rem 0.45rem 0',
-                      font: "500 0.9rem 'Geist Mono',ui-monospace,monospace",
+                      font: "500 0.9rem var(--weir-mono)",
                       whiteSpace: 'nowrap',
                       verticalAlign: 'top',
                     }}
@@ -1192,7 +1192,7 @@ export function DesignAgents(props: AgentsProps) {
                       style={{
                         padding: '0.7rem 0.9rem',
                         borderBottom: '1px solid rgba(var(--line-rgb,28,61,71),0.9)',
-                        font: "600 0.6875rem 'Geist Mono',monospace",
+                        font: "600 0.6875rem var(--weir-mono)",
                         letterSpacing: '0.12em',
                         textTransform: 'uppercase',
                         ...MUTED,

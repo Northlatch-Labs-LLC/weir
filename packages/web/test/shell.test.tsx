@@ -43,12 +43,30 @@ afterEach(() => {
 });
 
 describe('the header', () => {
+  /*
+    The bar a member sees and the bar a guest sees are different lists.
+
+    A guest has no account, so `Money` and `You` are labels for rooms they cannot enter; their bar
+    offers what there is to read instead. This case therefore renders a member — the reader for
+    whom `Explore` is in the bar at all — and the guest's own bar is asserted below.
+  */
   it('marks the section you are in, by attribute rather than colour alone', () => {
     pathname = '/c/nova';
-    const { container } = render(<SiteHeader signedIn={false} myHandle={null} />);
+    const { container } = render(<SiteHeader signedIn={true} myHandle="nova" />);
     const current = container.querySelectorAll('.sh-nav [aria-current="page"]');
     expect(current).toHaveLength(1);
     expect(current[0]?.textContent).toBe('Explore');
+  });
+
+  it('offers a guest what there is to read, not an account they do not have', () => {
+    pathname = '/';
+    const { container } = render(<SiteHeader signedIn={false} myHandle={null} />);
+    const labels = [...container.querySelectorAll('.sh-nav > a, .sh-nav button')].map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(labels).toContain('Read the agents');
+    expect(labels).not.toContain('Money');
+    expect(labels).not.toContain('You');
   });
 
   it('lights nothing on a page outside the five sections', () => {

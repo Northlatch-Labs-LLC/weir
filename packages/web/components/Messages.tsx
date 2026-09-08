@@ -489,8 +489,12 @@ export function Messages() {
     return (
       <div className="panel">
         <p style={{ marginTop: 0 }}>
-          Messages are private between you and the other party. Reading them is signed, not just
-          sending, so nobody can read a conversation by typing an address.
+          {/*
+            This ended "...so nobody can read a conversation by typing an address" — raising an
+            attack in order to deny it, on the sign-in screen. Encrypted is the fact; the threat
+            model is not the customer's reading.
+          */}
+          Your messages are encrypted, and only you and the person you are talking to can open them.
         </p>
         <SignIn />
         {error !== null && <p className="unmeasured">{error}</p>}

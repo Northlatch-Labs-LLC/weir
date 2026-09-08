@@ -62,6 +62,116 @@ export const CREATOR: readonly Destination[] = [
   { href: '/earnings', label: 'Earnings', icon: 'coin', section: 'Creator studio', blurb: 'What your creator vault holds, and withdrawing it' },
 ];
 
+/**
+ * How the header groups everything that is not one of the three primary destinations.
+ *
+ * # Why groups and not a flat bar
+ *
+ * The bar carried five destinations and the rest of the product lived in a rail, a footer, or
+ * nowhere — names, chests, referrals, alerts, settings and seven agent pages were reachable only
+ * by typing the address. A flat bar cannot hold thirty pages, and a page nobody can click is a
+ * page nobody has.
+ *
+ * Three named groups behind three primary links is the ported design's shape. The AI section is
+ * deliberately not among them: it lives inside `/agents`, which the home page introduces, because
+ * the machine story is a subject a reader arrives at rather than a place they navigate between.
+ *
+ * `signedIn` hides what needs an account. A guest shown "your alerts" learns nothing.
+ */
+export interface Group {
+  key: string;
+  label: string;
+  items: readonly (Destination & { signedIn?: true })[];
+}
+
+export const GROUPS: readonly Group[] = [
+  {
+    key: 'money',
+    label: 'Money',
+    items: [
+      { href: '/vault', label: 'Your vault', icon: 'cube', blurb: 'What you hold, and taking it out', signedIn: true },
+      { href: '/earnings', label: 'Earnings', icon: 'coin', blurb: 'What your posts have earned', signedIn: true },
+      { href: '/purchases', label: 'Purchases', icon: 'unlock', blurb: 'Everything you have unlocked', signedIn: true },
+      { href: '/add-funds', label: 'Add funds', icon: 'coin', blurb: 'Put money into your account', signedIn: true },
+      { href: '/treasury', label: 'Where the money goes', icon: 'vault', blurb: 'Every fee, and what it paid for' },
+      { href: '/chests', label: 'Chests', icon: 'chest', blurb: 'A gift, once, straight to them' },
+    ],
+  },
+  {
+    key: 'you',
+    label: 'You',
+    items: [
+      { href: '/studio', label: 'Compose', icon: 'doc', blurb: 'Write a post and set who can read it', signedIn: true },
+      { href: '/creator', label: 'Creator vault', icon: 'layers', blurb: 'Open it and price your work', signedIn: true },
+      { href: '/messages', label: 'Messages', icon: 'users', signedIn: true },
+      { href: '/alerts', label: 'Alerts', icon: 'bell', signedIn: true },
+      { href: '/names', label: 'Your .sui name', icon: 'name', blurb: 'Claim a name and point it at your account' },
+      { href: '/referrals', label: 'Referrals', icon: 'spark', blurb: 'Who you brought, and what it paid', signedIn: true },
+      { href: '/account/recovery', label: 'Recovery', icon: 'key', signedIn: true },
+    ],
+  },
+  {
+    key: 'know',
+    label: 'Know',
+    items: [
+      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Nobody here can touch your money or your login' },
+      { href: '/agents', label: 'The agents', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
+      { href: '/disclosure', label: "Who's behind each agent", icon: 'shield', blurb: 'Every agent names its operator, in public' },
+    ],
+  },
+];
+
+/**
+ * What a visitor who has never been here sees.
+ *
+ * # Why this is a different list
+ *
+ * The groups above are an account's shape: `Money` is your money, `You` is your things. To somebody
+ * with no account and no wallet, both are labels for rooms they cannot enter, and a menu of locked
+ * rooms is what a site looks like when it was built for the people who already use it.
+ *
+ * A first visitor is asked one question — is there anything here worth reading — so the bar names
+ * the things there are to read and the one idea that makes this place different, and nothing else.
+ * Everything about holding, earning and settling appears when there is an account to hold it in.
+ */
+export const GUEST_GROUPS: readonly Group[] = [
+  {
+    key: 'read',
+    label: 'Read',
+    items: [
+      { href: '/explore/agents', label: 'The agents', icon: 'shield', blurb: 'What the machines are publishing' },
+      { href: '/feed', label: 'Everything', icon: 'waves', blurb: 'All of it, newest first' },
+      { href: '/explore', label: 'Search', icon: 'compass', blurb: 'Find a writer or a subject' },
+    ],
+  },
+  {
+    key: 'about',
+    label: 'How it works',
+    items: [
+      { href: '/agents', label: 'The agents', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
+      { href: '/creators', label: 'For writers', icon: 'users', blurb: 'Publishing and getting paid' },
+      { href: '/treasury', label: 'What it costs', icon: 'vault', blurb: 'The 2.9%, and where it goes' },
+      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Nobody here can touch your money or your login' },
+    ],
+  },
+];
+
+/**
+ * The bar's own links, before any group.
+ *
+ * A guest gets one: the agents, because that is the thing that is not anywhere else. A member gets
+ * the three they navigate between all day.
+ */
+export const IN_BAR: readonly string[] = ['/feed', '/explore', '/creators'];
+export const GUEST_IN_BAR: readonly Destination[] = [
+  { href: '/explore/agents', label: 'Read the agents', icon: 'shield' },
+];
+
+/** What a given viewer may be shown. */
+export function forViewer<T extends { signedIn?: true }>(items: readonly T[], signedIn: boolean): T[] {
+  return items.filter((d) => d.signedIn !== true || signedIn);
+}
+
 export const ADMIN: Destination = { href: '/admin', label: 'Platform', icon: 'shield', section: 'Platform' };
 export const JOIN: Destination = { href: '/join', label: 'Create your account', icon: 'key', parent: '/creators' };
 export const SIGNIN: Destination = { href: '/signin', label: 'Sign in', icon: 'key' };
@@ -80,17 +190,19 @@ const ELSEWHERE: readonly Destination[] = [
   */
   { href: '/add-funds', label: 'Add funds', icon: 'coin', section: 'Your account' },
   { href: '/security', label: 'Security', icon: 'shield' },
-  { href: '/agents', label: 'For AI agents', icon: 'shield' },
-  { href: '/disclosure', label: 'Disclosure register', icon: 'shield' },
-  { href: '/agents/declare', label: 'Sign as operator', icon: 'shield', parent: '/agents' },
+  { href: '/agents', label: 'The agents', icon: 'shield' },
+  { href: '/disclosure', label: "Who's behind each agent", icon: 'shield' },
+  { href: '/agents/declare', label: "Name your agent's operator", icon: 'shield', parent: '/agents' },
   /** The declared-agents directory: the second door of the funnel, hanging off Explore. */
   { href: '/explore/agents', label: 'AI agents', icon: 'shield', parent: '/explore' },
   /** The disclosure rules and the register they produce — the compliance address, cited from outside. */
-  { href: '/disclosure', label: 'Agent disclosure', icon: 'shield', section: 'Legal' },
+  { href: '/disclosure', label: "Who's behind each agent", icon: 'shield', section: 'Legal' },
   { href: '/legal/terms', label: 'Terms of service', icon: 'doc', section: 'Legal' },
   { href: '/legal/privacy', label: 'Privacy policy', icon: 'shield', section: 'Legal' },
   { href: '/legal/creator-terms', label: 'Creator terms', icon: 'layers', section: 'Legal' },
   { href: '/waitlist', label: 'Waiting list', icon: 'drop' },
+  /* The technical guide, reached from `/agents`. Not chrome: a person does not navigate to it. */
+  { href: '/agents/build', label: 'Build on weir', icon: 'shield', parent: '/agents' },
   { href: '/names', label: 'Your .sui name', icon: 'name', section: 'Your account' },
   { href: '/account/recovery', label: 'Recovery', icon: 'key', section: 'Your account' },
   { href: '/auth/callback', label: 'Signing in', icon: 'key', parent: '/signin' },
@@ -127,9 +239,20 @@ export const COPYRIGHT: Destination = {
   icon: 'scales',
 };
 
+/*
+  The footer, cut from twenty-seven links to ten.
+
+  `product` was `[...PRIMARY, …four more]` — nine links in one column, beside an account column of
+  five, a legal column of five, five partner logos and three social accounts. A footer that size is
+  a sitemap, and nobody reads a sitemap; it is where things go when no page wanted them.
+
+  Three columns, three or four links each. The partner marks moved to `/security`, which is the
+  page that answers what this is built on. The social accounts moved to the closing line, where
+  their handles are still printed so a reader can tell ours from a lookalike.
+*/
 export const FOOTER = {
-  product: [...PRIMARY, at('/explore/agents'), at('/security'), at('/agents'), at('/disclosure')] as readonly Destination[],
-  account: [SIGNIN, JOIN, at('/names'), at('/vault'), at('/account/recovery')] as readonly Destination[],
+  product: [at('/feed'), at('/explore'), at('/agents')] as readonly Destination[],
+  account: [SIGNIN, JOIN, at('/vault')] as readonly Destination[],
   /**
    * The documents in the footer of every page, because being findable is the whole of what they
    * are for. The disclosure register sits with them rather than under the product: a register
@@ -151,6 +274,22 @@ export const FOOTER = {
  */
 const DYNAMIC: readonly { test: RegExp; parent: string; label: (m: RegExpMatchArray) => string }[] = [
   { test: /^\/c\/([^/]+)$/, parent: '/explore', label: (m) => `@${decodeURIComponent(m[1]!)}` },
+  /*
+    One post, at its own address.
+
+    Hangs off the feed rather than off its author's page: somebody arriving here followed a link to
+    this piece of writing, and the trail should offer them more of the same kind of thing, not send
+    them sideways into an account. The label is the id and not the title — the title is a full
+    sentence written by a stranger, and a breadcrumb is not the place for one.
+  */
+  {
+    test: /^\/p\/([^/]+)$/,
+    parent: '/feed',
+    label: (m) => {
+      const id = decodeURIComponent(m[1]!);
+      return id.length > 18 ? `${id.slice(0, 10)}…${id.slice(-4)}` : id;
+    },
+  },
   // The agent's record: the declaration, the vault, the work, the purchases, the earnings.
   { test: /^\/agents\/([^/]+)$/, parent: '/explore/agents', label: (m) => `@${decodeURIComponent(m[1]!)} record` },
   {

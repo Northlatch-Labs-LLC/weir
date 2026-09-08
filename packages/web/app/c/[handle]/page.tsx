@@ -281,7 +281,7 @@ export default async function CreatorPage({
   const v = vault !== null && vault.ok ? vault.value : null;
   const activeTiers = v === null ? [] : v.tiers.filter((t) => t.active);
 
-  const MONO = "'Geist Mono',monospace";
+  const MONO = 'var(--weir-mono)';
   const BODY = "'Geist',sans-serif";
 
   /** A figure that was read. */

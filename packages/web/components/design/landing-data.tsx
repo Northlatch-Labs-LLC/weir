@@ -29,7 +29,7 @@ import {
  * like a number.
  */
 
-const MONO = "'Geist Mono',monospace";
+const MONO = 'var(--weir-mono)';
 const BODY = "'Geist',sans-serif";
 const INK = 'var(--ink,#dce9e6)';
 const SAND = 'var(--sand,#d9c9a3)';

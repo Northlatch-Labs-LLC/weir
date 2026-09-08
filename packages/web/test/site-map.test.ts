@@ -9,6 +9,8 @@ import {
   DESTINATIONS,
   FOOTER,
   JOIN,
+  GROUPS,
+  GUEST_GROUPS,
   MEMBER,
   PRIMARY,
   SIGNIN,
@@ -94,11 +96,32 @@ describe('the site map knows every page', () => {
     '/agents/declare': 'reached from an agent\'s request and the /agents guide, by operator',
     '/vault/[id]': 'reached from Treasury and a creator page, by vault',
     '/add-funds': 'the card-purchase flow it led to is removed; kept because links to it exist',
+    '/p/[id]': 'reached from any card in the feed, a creator page or a shared link, by post',
+    '/agents/build': 'the technical guide, reached from /agents; a person does not navigate to it',
   };
+  /*
+    The header's grouped menus count as menus.
+
+    The bar carries three destinations and everything else sits behind `Money`, `You` and `Know` —
+    or, for somebody with no account, behind `Read` and `How it works`. Leaving those out of this
+    set made the test claim that `/names` and `/account/recovery` were unreachable while they were
+    two clicks from every page.
+  */
   const inAMenu = new Set(
-    [...PRIMARY, ...MEMBER, ...CREATOR, ADMIN, JOIN, SIGNIN, ...FOOTER.product, ...FOOTER.account, ...FOOTER.gated, ...FOOTER.legal].map(
-      (d) => d.href,
-    ),
+    [
+      ...PRIMARY,
+      ...MEMBER,
+      ...CREATOR,
+      ADMIN,
+      JOIN,
+      SIGNIN,
+      ...GROUPS.flatMap((g) => g.items),
+      ...GUEST_GROUPS.flatMap((g) => g.items),
+      ...FOOTER.product,
+      ...FOOTER.account,
+      ...FOOTER.gated,
+      ...FOOTER.legal,
+    ].map((d) => d.href),
   );
   for (const route of routes) {
     if (route in NOT_IN_A_MENU || REDIRECTS.includes(route)) continue;
@@ -208,32 +231,19 @@ describe('the lists agree with each other', () => {
   });
   it('builds the footer by address, and these are the addresses', () => {
     // Exact, so an insertion elsewhere in the map cannot silently re-point a footer link.
-    expect(FOOTER.product.map((d) => d.href)).toEqual([
-      '/feed',
-      '/explore',
-      '/creators',
-      '/treasury',
-      '/chests',
-      // The declared-agents directory, beside Explore's other pages: the second door of the
-      // waiting-list funnel, and the one place a visitor can see who has declared.
-      '/explore/agents',
-      '/security',
-      // Added with the agent page. It sits after /security for the same reason /security is here:
-      // both are pages a sceptic reads before they have an account, and the footer is where
-      // somebody who is not signed in goes looking.
-      '/agents',
-      // The compliance address. A published review cited a disclosure register and reported that
-      // /disclosure 404s; the page now exists, and a page a reviewer cannot find from the footer
-      // is only slightly better than one that 404s.
-      '/disclosure',
-    ]);
-    expect(FOOTER.account.map((d) => d.href)).toEqual([
-      '/signin',
-      '/join',
-      '/names',
-      '/vault',
-      '/account/recovery',
-    ]);
+    /*
+      Three, not nine.
+
+      This column was `[...PRIMARY, …four more]`, and the footer around it held twenty-seven links
+      across six columns — a sitemap, which nobody reads. Everything dropped from here is still
+      reachable: `/creators`, `/treasury` and `/chests` are in the header's own menus, `/security`
+      and `/disclosure` are in the legal column below, and `/explore/agents` is one click from
+      `/agents`. Nothing lost a home; the footer stopped being the home of last resort.
+    */
+    expect(FOOTER.product.map((d) => d.href)).toEqual(['/feed', '/explore', '/agents']);
+    // `/names` and `/account/recovery` moved to the header's "You" menu, which is where somebody
+    // with an account looks for their own things.
+    expect(FOOTER.account.map((d) => d.href)).toEqual(['/signin', '/join', '/vault']);
     /*
       The gated footer gained /agents deliberately. While the door is shut the only readers are a
       waiting-list signup and an operator evaluating whether to point a program at us — and the

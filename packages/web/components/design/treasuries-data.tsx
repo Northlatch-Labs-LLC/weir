@@ -25,7 +25,7 @@ const DIM = 'var(--dim,#a3bcb8)';
 const ALERT = 'var(--alert,#f2a29b)';
 const BODY = "'Geist',sans-serif";
 const INK = 'var(--ink,#dce9e6)';
-const MONO = "'Geist Mono',monospace";
+const MONO = 'var(--weir-mono)';
 
 export async function TreasuriesData({
   signedIn,

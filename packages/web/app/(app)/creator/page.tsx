@@ -123,7 +123,7 @@ export default async function CreatorPage() {
             ),
             (failure) => (
               <div data-reveal className="note crit">
-                <span className="lbl">Could not read this: {failure.kind}</span>
+                <span className="lbl">This did not load</span>
                 <p>
                   The platform&rsquo;s live terms could not be read, so this page will not tell you
                   what a vault costs. {failure.detail} A fee quoted from a stale constant is how

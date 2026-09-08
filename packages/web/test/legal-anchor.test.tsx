@@ -52,7 +52,7 @@ describe('the footer carries it', () => {
       'Creator terms',
       // The disclosure register belongs in this group and not under the product: it is a document
       // whose only job is to be found, and it answered 404 while the posture cited it.
-      'Disclosure register',
+      "Who's behind each agent",
       'Copyright',
     ]);
   });

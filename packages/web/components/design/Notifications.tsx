@@ -57,13 +57,13 @@ export function DesignNotifications({
     <>
           <Body {...bodyProps}>
             {!bare && (<>
-            <p style={{ margin: '0 0 0.875rem', textAlign: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Notifications</p>
+            <p style={{ margin: '0 0 0.875rem', textAlign: 'center', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Notifications</p>
             <h1 style={{ margin: '0 auto', textAlign: 'center', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', maxWidth: '36ch', textWrap: 'balance' }}>What happened <span className="weir-owned">while you were away</span></h1>
             <div style={{ height: '1px', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px)', marginBlock: '2.5rem' }}></div>
             </>)}
             {isGuest && (<>
               <div style={{ border: '1px solid var(--line,#1c3d47)', borderLeft: '3px solid var(--alert,#f2a29b)', borderRadius: '10px', padding: '1.25rem 1.5rem', maxWidth: '62ch' }}>
-                <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--alert,#f2a29b)' }}>Sign in to see your alerts</p>
+                <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--alert,#f2a29b)' }}>Sign in to see your alerts</p>
                 <p style={{ margin: '0.5rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Alerts are built from payments and unlocks that settled to your address on chain, so we need to know which address is yours. If you were signed in and see this, sign in again.</p>
                 <button className="dh-f10f4630" type="button" onClick={() => { window.location.href = '/signin'; }} style={{ marginTop: '1.25rem', padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', color: 'var(--ink,#dce9e6)', cursor: 'pointer', transition: 'transform 0.12s ease,border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>Sign in</button>
               </div>
@@ -75,11 +75,11 @@ export function DesignNotifications({
                     <span aria-hidden="true" style={{ display: 'inline-flex', paddingTop: '0.15rem', color: `${n.markColor}` }}>{n.icon}</span>
                     <div style={{ minWidth: '0' }}>
                       <p style={{ margin: '0', color: 'var(--ink,#dce9e6)', fontSize: '0.9375rem' }}>{n.text}</p>
-                      <p style={{ margin: '0.375rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{n.meta}</p>
+                      <p style={{ margin: '0.375rem 0 0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{n.meta}</p>
                     </div>
                   </div>
                 </Fragment>))}
-                <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>Older alerts are not shown here.</p>
+                <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>Older alerts are not shown here.</p>
               </div>
             </>)}
           </Body>

@@ -189,7 +189,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                   ),
                   (failure) => (
                     <div data-reveal className="note crit">
-                      <span className="lbl">Could not read this: {failure.kind}</span>
+                      <span className="lbl">This did not load</span>
                       <p>
                         The vault list could not be read, so this page cannot confirm the object was
                         created here. No deposit form is offered on an unverified vault.
@@ -203,7 +203,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
           ),
           (failure) => (
             <div data-reveal className="note crit" style={{ marginTop: 'var(--space-24)' }}>
-              <span className="lbl">Could not read this: {failure.kind}</span>
+              <span className="lbl">This did not load</span>
               <p>This vault could not be read. {failure.detail}</p>
             </div>
           ),

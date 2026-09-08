@@ -24,18 +24,25 @@ const LISTS = {
   feed: join(ROOT, 'components', 'feed', 'FeedView.tsx'),
   rail: join(ROOT, 'components', 'shell', 'RightRail.tsx'),
   /*
-    The footer is the list a VISITOR sees. The feed and the rail sit behind the waiting-list gate,
-    so for hours after the marks shipped the published site showed letters to everyone who was not
-    signed in. The footer is on every page, gated or not, and it is where the marks are actually
-    seen.
+    The canonical list, and the page that renders it at full size.
+
+    This used to point at the footer, where the marks were one column of six on every page — the
+    place a partner's mark goes to be ignored. The list moved to `lib/built-on.ts` so no rendering
+    owns the data, and `/security` renders it: that page exists to answer what this is built on,
+    and there the one-line notes can actually be read.
   */
-  footer: join(ROOT, 'components', 'shell', 'SiteFooter.tsx'),
+  canonical: join(ROOT, 'lib', 'built-on.ts'),
+  security: join(ROOT, 'components', 'design', 'Security.tsx'),
 };
 
 /** Every `{ name, logo }` pair in a source file's BUILT_ON list. */
 function partnersIn(path: string): Array<{ name: string; logo: string }> {
   const source = readFileSync(path, 'utf8');
-  const block = source.slice(source.indexOf('BUILT_ON = ['), source.indexOf('];', source.indexOf('BUILT_ON = [')));
+  // Tolerant of the declaration's shape: the canonical list is a typed export, the two renderings
+  // are plain consts, and all three are the same data.
+  const start = source.indexOf('BUILT_ON');
+  const open = source.indexOf('[', start);
+  const block = source.slice(open, source.indexOf('];', open));
   return Array.from(block.matchAll(/name: '([^']+)'[^\n]*?logo: '([^']+)'/g)).map((m) => ({
     name: m[1] as string,
     logo: m[2] as string,
@@ -43,7 +50,7 @@ function partnersIn(path: string): Array<{ name: string; logo: string }> {
 }
 
 describe('the partner marks', () => {
-  for (const [where, path] of Object.entries(LISTS)) {
+  for (const [where, path] of [['feed', LISTS.feed], ['rail', LISTS.rail], ['canonical', LISTS.canonical]] as const) {
     it(`in the ${where} list are files that are actually served`, () => {
       const partners = partnersIn(path);
       // A list with no logos would pass every existence check below by having nothing to check.
@@ -60,36 +67,49 @@ describe('the partner marks', () => {
     // The footer also lists USDC, with a letter and no logo; the logo-bearing set is the same four.
     const feed = partnersIn(LISTS.feed).map((p) => p.name).sort();
     const rail = partnersIn(LISTS.rail).map((p) => p.name).sort();
-    const footer = partnersIn(LISTS.footer).map((p) => p.name).sort();
+    const canonical = partnersIn(LISTS.canonical).map((p) => p.name).sort();
     expect(feed).toEqual(rail);
-    expect(footer).toEqual(feed);
+    expect(canonical).toEqual(feed);
     expect(feed).toEqual(['Seal', 'Sui', 'Walrus', 'zkLogin']);
   });
 
   it('use the same file for the same partner in all three places', () => {
     const feed = new Map(partnersIn(LISTS.feed).map((p) => [p.name, p.logo]));
-    for (const path of [LISTS.rail, LISTS.footer]) {
+    for (const path of [LISTS.rail, LISTS.canonical]) {
       for (const { name, logo } of partnersIn(path)) {
         expect(feed.get(name), `${name} points at a different file in ${path}`).toBe(logo);
       }
     }
   });
 
-  it('reach every visitor: the footer that carries them is in the app shell every page renders through', () => {
-    const shell = readFileSync(join(ROOT, 'components', 'shell', 'AppShell.tsx'), 'utf8');
-    expect(shell).toContain('<SiteFooter');
-    const layout = readFileSync(join(ROOT, 'app', 'layout.tsx'), 'utf8');
-    expect(layout).toContain('AppShell');
-    const footer = readFileSync(LISTS.footer, 'utf8');
-    expect(footer).toContain("'logo' in b ? (");
+  it('are rendered on /security, which is the page that answers what this is built on', () => {
+    /*
+      They used to be checked into the footer, on every page. That guaranteed they were *seen* and
+      guaranteed nobody read them: five logos beside the legal links. The claim this now holds is
+      the one worth holding — that the page a reader goes to for this question actually renders the
+      list, from the shared file, rather than naming the partners in prose.
+    */
+    const security = readFileSync(LISTS.security, 'utf8');
+    expect(security, 'the page does not import the shared list').toContain("from '@/lib/built-on'");
+    expect(security, 'the page imports the list and never renders it').toContain('BUILT_ON.map');
   });
 });
 
 describe('the image is decorative', () => {
+  /*
+    The feed's own copy of this list is gone.
+
+    It stood in the rail beside the posts, a second rendering of what the footer already carries on
+    every page including the shut door — and the test above is what guarantees that. Five partner
+    logos next to a feed answer a question nobody reading posts is asking, so the rail is now the
+    creators and nothing else.
+
+    The case is removed rather than the assertion weakened: there is no image in `Home.tsx` to have
+    an alt attribute, which is a different fact from an image whose alt went unchecked.
+  */
   for (const [where, path] of [
-    ['home list', join(ROOT, 'components', 'design', 'Home.tsx')],
     ['right rail', LISTS.rail],
-    ['site footer', LISTS.footer],
+    ['security page', LISTS.security],
   ] as const) {
     it(`carries an empty alt in the ${where}, so the name is read once`, () => {
       const source = readFileSync(path, 'utf8')

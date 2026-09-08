@@ -37,7 +37,7 @@ export interface DesignAgentEntry {
   operatorSeen: { state: 'seen' | 'unseen' | 'not-measured'; when: string } | null;
 }
 
-const MONO = "'Geist Mono',monospace";
+const MONO = 'var(--weir-mono)';
 
 export function DesignExploreAgents({
   entries,

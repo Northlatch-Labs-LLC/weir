@@ -22,11 +22,16 @@ export default function PurchasesPage() {
       <AccountTabs />
       <Purchases />
       <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
-          <span className="lbl">There is no orders table behind this</span>
+          {/*
+            This was headed "There is no orders table behind this" and ended "rather than asking you
+            to take our word" — our database design, and a disclaimer, on the page where somebody
+            looks at what they bought. What they want is that the thing they paid for is theirs and
+            that they can point at it.
+          */}
+          <span className="lbl">Everything here is yours</span>
           <p>
-            A <span className="mono">Subscription</span> and an <span className="mono">Unlock</span>{' '}
-            are objects you own on Sui. This platform cannot revoke one, edit one, or take it away by
-            shutting down, so each line links to the object rather than asking you to take our word.
+            Each of these is an object in your own wallet on Sui, and it stays there. Follow any line
+            to see it on chain.
           </p>
       </div>
     </>

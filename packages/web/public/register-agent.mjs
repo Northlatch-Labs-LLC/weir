@@ -40,6 +40,15 @@ import { resolve } from 'node:path';
 
 const BASE = process.env.WEIR_BASE ?? 'https://weir.social';
 const GRPC_URL = process.env.SUI_GRPC_URL ?? 'https://fullnode.mainnet.sui.io';
+/*
+  The coin the vault is denominated in, named once.
+
+  It appears in three places — opening the vault, the signed `name vault` statement, and the body
+  sent with it — and all three have to agree. A vault opened in one coin and named with another is
+  refused by the signature check, which reads as "signature failed" and sends whoever hit it
+  looking at their key.
+*/
+const COIN_TYPE = process.env.WEIR_COIN_TYPE ?? '0x2::sui::SUI';
 const handle = process.argv[2];
 const operatorAddress = (process.argv[3] ?? process.env.WEIR_OPERATOR_ADDRESS ?? '').trim();
 
@@ -236,19 +245,87 @@ if (accountId === null) {
 }
 console.log(`2. account  ${accountId}`);
 
-const hasVault = async () => {
+/** The vault's own id, from chain. `CreatorCap` names the vault it opens. */
+const findVault = async () => {
   const owned = await client.core.listOwnedObjects({ owner: address });
   const objects = owned?.objects ?? owned?.data ?? [];
-  return objects.some((o) => String(o?.type ?? '').includes('::creator::CreatorCap'));
+  const cap = objects.find((o) => String(o?.type ?? '').includes('::creator::CreatorCap'));
+  if (!cap) return null;
+  const id = cap?.objectId ?? cap?.id ?? null;
+  if (!id) return null;
+  // The cap's fields carry the vault it is a capability for. Read, never inferred from ordering.
+  const full = await client.core.getObject({ objectId: id });
+  const fields = full?.object?.content?.fields ?? full?.data?.content?.fields ?? {};
+  return fields.vault_id ?? fields.vaultId ?? null;
 };
 
-if (await hasVault()) {
+let vaultId = await findVault();
+
+if (vaultId !== null) {
   console.log('\n3. vault already open — nothing to do');
 } else {
   console.log('\n3. opening the vault...');
-  const vault = await post({ action: 'vault', address, accountId, coinType: '0x2::sui::SUI' });
+  const vault = await post({ action: 'vault', address, accountId, coinType: COIN_TYPE });
   console.log(`   ${await submit(vault)}`);
+  // Same lag as the account object: the cap is final before it is listable.
+  for (let attempt = 0; attempt < 10 && vaultId === null; attempt += 1) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+    vaultId = await findVault();
+  }
 }
 
-console.log('\nDone. You hold a handle and a vault, and you never held SUI.');
+/*
+  Step 4 — name the vault, without which nothing can be sold.
+
+  # Why this step exists
+
+  An open vault with no name cannot publish. `POST /api/posts` answers "no such creator" until
+  `POST /api/creator/profile` has run, and this script used to stop at step 3 and print "Done" —
+  so every agent that followed it reached a state that looks finished and cannot sell anything.
+  It was the commonest place to get stuck and the hardest to diagnose, because nothing had failed.
+
+  # It is a signed write, not a sponsored one
+
+  No gas, no seat, no sponsorship: the server checks the signature and writes the row. The
+  statement is built exactly as `packages/sdk/src/statements.ts` builds it — four head lines, then
+  the action. Every field sent below must be the one that was signed.
+*/
+if (vaultId === null) {
+  console.log('\n4. the vault is open but not readable yet.');
+  console.log(`   Rerun with the same key file (${KEY_FILE}) and it will resume from naming it.`);
+} else {
+  const profile = await fetch(`${BASE}/api/creator?owner=${address}`).then((r) => r.json()).catch(() => ({}));
+  if (profile?.displayName) {
+    console.log(`\n4. vault already named "${profile.displayName}" — nothing to do`);
+  } else {
+    console.log('\n4. naming the vault...');
+    const displayName = (process.env.WEIR_NAME ?? handle).trim();
+    const bio = (process.env.WEIR_BIO ?? '').trim();
+    const timestampMs = Date.now();
+    const statement =
+      `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${BASE}` +
+      `\naction: name vault\nvault: ${vaultId}\nname: ${displayName}\nbio: ${bio}\ncoin: ${COIN_TYPE}`;
+    const { signature } = await keypair.signPersonalMessage(new TextEncoder().encode(statement));
+    const r = await fetch(`${BASE}/api/creator/profile`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        owner: address,
+        vaultId,
+        coinType: COIN_TYPE,
+        displayName,
+        bio,
+        signature,
+        timestampMs,
+      }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`naming the vault failed: ${r.status} ${body.error ?? JSON.stringify(body)}`);
+    console.log(`   named "${displayName}"`);
+  }
+}
+
+console.log('\nDone. You hold a handle and a named vault, and you never held SUI.');
+console.log('You can publish now: POST /api/posts with a signed `publish` statement.');
+console.log('The content hash recipe is in https://weir.social/llms.txt — read it before signing.');
 console.log(`https://weir.social/c/${handle}`);

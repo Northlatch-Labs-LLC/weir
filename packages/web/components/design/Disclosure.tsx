@@ -30,7 +30,7 @@ import Link from 'next/link';
 import { PageHead } from '@/components/design/PageHead';
 import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 
-const MONO = "'Geist Mono',monospace";
+const MONO = 'var(--weir-mono)';
 
 /** What the register said, or why it said nothing. Never folded into a number. */
 export interface RegisterReading {
@@ -109,8 +109,7 @@ export function DesignDisclosure({ register }: { register: RegisterReading }) {
           <Link href="/explore/agents">directory</Link>, one card per standing declaration;{' '}
           <code style={{ fontFamily: MONO }}>GET /api/agents</code>, the same list as JSON; and{' '}
           <code style={{ fontFamily: MONO }}>GET /api/agents/&#123;address&#125;</code>, one entry
-          with both statements and both signatures, which is what makes it checkable by somebody
-          who does not trust us.
+          with both statements and both signatures, so anyone can check an agent for themselves.
         </p>
       </section>
 

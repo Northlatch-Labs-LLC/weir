@@ -17,18 +17,6 @@ import { Icon } from '@/components/design/icons';
 import { FOOTER } from '@/lib/site-map';
 import { WeirMark } from '@/components/shell/SiteHeader';
 
-/**
- * The partners' own marks, from `public/brand/built-on/` — the same files the feed and the rail
- * show. This footer is on every page a visitor can reach, including the waiting list, so it is
- * where the marks are actually seen; the letter `mark` is the fallback when no file is supplied.
- */
-const BUILT_ON = [
-  { name: 'Sui', mark: 'S', note: 'Settlement', href: 'https://sui.io', logo: '/brand/built-on/sui-icon.png' },
-  { name: 'Walrus', mark: 'W', note: 'Post bodies and media', href: 'https://www.walrus.xyz', logo: '/brand/built-on/walrus-icon.png' },
-  { name: 'Seal', mark: 'SL', note: 'Releases the key to paid media', href: 'https://seal-docs.wal.app', logo: '/brand/built-on/seal-icon.png' },
-  { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin', logo: '/brand/built-on/zklogin-icon.png' },
-  { name: 'USDC', mark: '$', note: 'One of two denominations', href: 'https://www.circle.com/usdc' },
-] as const;
 
 /**
  * Where to follow the work, off site.
@@ -128,32 +116,7 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
             </Link>
           ))}
         </nav>
-        <nav aria-label="Built on" className="sf__col">
-          <p className="sf__k">Built on</p>
-          {BUILT_ON.map((b) => (
-            <a key={b.name} href={b.href} className="sf__link" rel="noreferrer" target="_blank">
-              <span className="sf__mark" aria-hidden>
-                {'logo' in b ? (
-                  <img src={b.logo} alt="" width={18} height={18} style={{ width: '1.125rem', height: '1.125rem', objectFit: 'contain', display: 'block' }} />
-                ) : (
-                  b.mark
-                )}
-              </span>
-              {b.name}
-              <span className="sf__note">{b.note}</span>
-            </a>
-          ))}
-        </nav>
-        <nav aria-label="Follow" className="sf__col">
-          <p className="sf__k">Follow</p>
-          {SOCIAL.map((s) => (
-            <a key={s.href} href={s.href} className="sf__link" rel="noreferrer" target="_blank">
-              <span className="sf__mark" aria-hidden>{s.mark}</span>
-              {s.name}
-              <span className="sf__note">{s.handle}</span>
-            </a>
-          ))}
-        </nav>
+        {/* The partner marks moved to /security, where the notes can be read. */}
       </div>
       <div className="sf__foot">
         <p className="sf__verify">
@@ -178,12 +141,21 @@ export function SiteFooter({ gated = false }: { gated?: boolean }) {
           )}
         </p>
         {/*
-          The operating entity, and an on-site link. It used to link off-site; what the contracts
-          are is answered one link along, by `/security` and by the package ids above.
+          The company, and where to find us off site.
+
+          The accounts were a sixth footer column. They are three links and they belong on one line
+          — but each one still prints its handle, because that is what lets a reader tell our
+          account from a lookalike before they click. Losing the handle would lose the only part of
+          that column that was doing work.
         */}
-        <p className="sf__family">
-          © Northlatch Labs LLC · <Link href="/security">Security</Link>
-        </p>
+        <nav aria-label="Follow" className="sf__family">
+          {SOCIAL.map((s) => (
+            <a key={s.href} href={s.href} rel="noreferrer" target="_blank">
+              {s.name} <span className="sf__note">{s.handle}</span>
+            </a>
+          ))}
+          <span>© Northlatch Labs LLC</span>
+        </nav>
       </div>
     </footer>
   );

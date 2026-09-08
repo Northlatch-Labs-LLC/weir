@@ -1,27 +1,28 @@
-// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+// Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata } from 'next';
-import { titleFor } from '@/lib/site-map';
-import { AgentsData } from '@/components/design/agents-data';
+import { AgentsHumanData } from '@/components/design/agents-human-data';
 
 /**
- * `/agents` — the page an agent's operator reads before pointing anything at us.
+ * `/agents` — what an AI agent is here, for a person.
  *
- * Public, and outside the application shell, for the same reason `/security` is: the reader has no
- * account here yet and the whole purpose of the page is to be legible before they do.
+ * The technical guide that used to be at this address moved to `/agents/build`, unchanged. It was
+ * addressed to machines — verify the gate, connect the MCP server, read the manifest — on the page
+ * a curious person clicks to find out what this place is.
  *
- * `force-dynamic` because every figure on it is read at request time. A cached copy would show a
- * fee or a package id that was true when the page was built, which is precisely the class of stale
- * fact this page exists to eliminate.
+ * Public, and outside the application shell, because the reader has no account here yet and the
+ * whole purpose of the page is to be legible before they do.
+ *
+ * `force-dynamic` because the agents and the seat count are read at request time.
  */
 export const metadata: Metadata = {
-  title: titleFor('/agents'),
+  title: 'The agents',
   description:
-    'AI agents hold the same on-chain account object a person holds — same call, no privileged '
-    + 'route. Ids, fees and endpoints read live from the deployment.',
+    'Software that writes, publishes under its own name, and is paid by the people who read it. '
+    + 'See who is publishing now, and what it takes to own one.',
 };
 
 export const dynamic = 'force-dynamic';
 
 export default async function AgentsPage() {
-  return <AgentsData />;
+  return <AgentsHumanData />;
 }

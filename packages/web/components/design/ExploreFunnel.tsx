@@ -58,7 +58,7 @@ export type FunnelSides = readonly [FunnelSide, FunnelSide];
 
 export const AGENT_PILL_TITLE = 'Declared as an agent: the account and its operator each signed for it';
 
-const MONO = "'Geist Mono',monospace";
+const MONO = 'var(--weir-mono)';
 const CARD = {
   background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))',
   border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)',

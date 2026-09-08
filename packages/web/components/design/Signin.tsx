@@ -86,13 +86,13 @@ export function DesignSignin({ nextPath = '/' }: { nextPath?: string }) {
                     <button className="dh-05de5f5a" type="button" onClick={w.onClick} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', textAlign: 'left', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', borderRadius: '10px', padding: '0.7rem 1rem', color: 'var(--ink,#dce9e6)', font: '500 0.9375rem \'Geist\',sans-serif', cursor: 'pointer', transition: 'border-color 0.12s ease,transform 0.12s ease' }}>
                       <span aria-hidden="true" style={{ width: '1.75rem', height: '1.75rem', borderRadius: '6px', flexShrink: '0', background: 'var(--bg,#04161d)', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--crest,#8be3c6)' }}>{w.icon}</span>
                       <span>{w.name}</span>
-                      <span style={{ marginLeft: 'auto', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{w.state}</span>
+                      <span style={{ marginLeft: 'auto', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{w.state}</span>
                     </button>
                   </Fragment>))}
                 </div>
               </div>
             </div>
-            <p style={{ margin: '2rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>After signing in you return to {nextPath === '/' ? 'the home page' : <span style={{ fontFamily: '\'Geist Mono\',monospace', color: 'var(--crest,#8be3c6)' }}>{nextPath}</span>}.</p>
+            <p style={{ margin: '2rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>After signing in you return to {nextPath === '/' ? 'the home page' : <span style={{ fontFamily: 'var(--weir-mono)', color: 'var(--crest,#8be3c6)' }}>{nextPath}</span>}.</p>
             {/*
               The second reader of this page.
 

@@ -9,7 +9,7 @@ import { fold } from '@projectx-social/sdk';
 export const metadata: Metadata = {
   title: titleFor('/join'),
   description:
-    'Pick a handle and claim it on chain. Gas only, no password, no email; nobody can take the account away.',
+    'Pick a handle and claim it on chain. No password, no email, and it is free.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -41,9 +41,8 @@ export default async function Join({
       */}
       <PageHead
         kicker="Join"
-        title="An account is an object you"
-        accent="hold."
-        lede="Pick a handle and claim it on chain. No password and no email: your account is an object only your address holds, so it cannot be sold, lent or taken."
+        title="Pick your name"
+        lede="Pick a handle and claim it on chain. No password, no email, and it is yours."
       />
 
 
@@ -61,18 +60,25 @@ export default async function Join({
         <div data-reveal className="card" style={{ marginTop: 'var(--space-20)' }}>
           <h2 style={{ marginTop: 0 }}>What you get, and what it costs</h2>
           <p style={{ color: 'var(--text-secondary)' }}>
-            A handle is a <span className="mono">SocialAccount</span> object on Sui that your address
-            owns. It is your name here, <span className="mono">@yourname</span>, and the thing the
-            contracts check before anyone can subscribe to you, tip you or unlock what you publish.
+            Your handle is your name here &mdash; <span className="mono">@yourname</span>. You own it
+            outright, and it is what people subscribe to, tip, and unlock.
           </p>
           <div style={{ display: 'grid', gap: 'var(--space-16)', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+            {/*
+              These read "What it costs / Gas only" and "Who can take it away / Nobody".
+
+              The first is jargon: somebody outside crypto cannot tell whether gas is a cent or
+              fifty dollars, and the paragraph below already explains it properly. The second raises
+              a threat in order to deny it — a question the reader had not asked, answered in the
+              defensive register, on the page where they are deciding to sign up.
+            */}
             <div className="stat">
-              <span className="k">What it costs</span>
-              <span className="v" style={{ fontSize: 'var(--text-h4)' }}>Gas only</span>
+              <span className="k">Price</span>
+              <span className="v" style={{ fontSize: 'var(--text-h4)' }}>Free</span>
             </div>
             <div className="stat">
-              <span className="k">Who can take it away</span>
-              <span className="v" style={{ fontSize: 'var(--text-h4)' }}>Nobody</span>
+              <span className="k">Yours to keep</span>
+              <span className="v" style={{ fontSize: 'var(--text-h4)' }}>Always</span>
             </div>
             {/*
               This said "A wallet", and it was not true.
@@ -124,16 +130,14 @@ export default async function Join({
             <div data-reveal className="note crit" style={{ marginTop: 20 }}>
               <span className="lbl">Registration is paused on chain</span>
               <p>
-                The platform has <span className="mono">creation_paused</span> set, so{' '}
-                <span className="mono">account::open</span> will abort. This is read from the
-                Platform object, not from a setting here — nothing in this application can override
-                it.
+                New handles are paused right now. This is set on chain, so nothing on this site
+                can override it. It lifts when the platform reopens.
               </p>
             </div>
           ) : null,
         (failure) => (
           <div data-reveal className="note crit" style={{ marginTop: 20 }}>
-            <span className="lbl">Could not read this: {failure.kind}</span>
+            <span className="lbl">This did not load</span>
             <p>
               The platform&rsquo;s terms could not be read, so this page cannot tell you whether
               registration is currently open. {failure.detail}
@@ -152,10 +156,13 @@ export default async function Join({
         </p>
       </div>
 
-      <footer>
-        Registration is free. The protocol&rsquo;s creation fee applies to creator vaults, not to
-        identities. A signup paywall on a social product leaves nobody to sell to.
-      </footer>
+      {/*
+        The sentence that followed this said "a signup paywall on a social product leaves nobody to
+        sell to" — our reasoning about our own pricing, printed on the page where somebody is
+        deciding to join. Nobody explains their business model to a customer mid-signup. What they
+        need is the price, which is nothing.
+      */}
+      <footer>Creating an account is free.</footer>
         </>
   );
 }

@@ -41,6 +41,8 @@
 */
 @import './globals.css' layer(estate);
 @import 'tailwindcss/theme.css' layer(theme);
+/* The ported design's delta — only what this file has no rule for. */
+@import './ported.css' layer(weir);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
 /*
@@ -49,15 +51,46 @@
 :root {
   color-scheme: dark;
 
-  /* ---- night: the default ------------------------------------------------- */
-  --crest: #8be3c6;
-  --crest-hi: #a5ecd4;
-  --teal: #7fd8dd;
-  --sand: #d9c9a3;
-  --alert: #f2a29b;
+  /* ============================================================================
+     The palette is the ported design's, not this file's original.
 
-  --ink: #dce9e6;
-  --ink-2: #b9cdc9;
+     # What changed and why
+
+     The product's front end was rebuilt to a design produced outside this repo, and the decision
+     was to adopt that design whole rather than blend it with what was here. Blending produced a
+     third thing that was neither — a teal ground under cards drawn for a blue-black one.
+
+     So the *semantic* tokens below are repointed to the ported design's values. Nothing in
+     `globals.css` is edited: every card, button, note and rail resolves through `--bg`, `--panel`,
+     `--ink` and `--crest`, so re-aiming eleven declarations re-dresses 2,800 lines at once.
+
+     # The mapping, so it can be checked
+
+       ink-0  #03050a → --bg        the page ground
+       ink-1  #070a12 → --bg-2      one step up
+       ink-2  #0b1018 → --panel     cards
+       ink-3  #515b73 → --line-2    the header rule
+       ink-4  #59637c → --line      card borders, measured at 3.3:1
+       ink-7  #8f99b4 → --dim       secondary text
+       ink-9  #cdd4e4 → --ink-2
+       ink-10 #f4f7fc → --ink       primary text
+       mint   #8cf7c6 → --crest     money, and the one filled control
+       violet #a98bfa → --teal      a machine
+       rose   #ff8aa0 → --alert     loss
+
+     `--sand` has no counterpart in the ported design; it keeps a neutral value so the handful of
+     components naming it do not fall back to nothing.
+     ========================================================================== */
+
+  /* ---- night: the default ------------------------------------------------- */
+  --crest: #8cf7c6;
+  --crest-hi: #5fd6a4;
+  --teal: #a98bfa;
+  --sand: #cdd4e4;
+  --alert: #ff8aa0;
+
+  --ink: #f4f7fc;
+  --ink-2: #cdd4e4;
   /*
     Secondary text, lifted.
 
@@ -69,13 +102,13 @@
     Raised on the token rather than per component: 187 places name this colour, about half of them
     inline in the ported design, and a rule cannot reach an inline style.
   */
-  --dim: #a3bcb8;
+  --dim: #8f99b4;
 
-  --bg: #04161d;
-  --bg-2: #061c25;
-  --panel: #0b2530;
-  --line: #1c3d47;
-  --line-2: #123039;
+  --bg: #03050a;
+  --bg-2: #070a12;
+  --panel: #0b1018;
+  --line: #59637c;
+  --line-2: #515b73;
   --aurora: #4a9ec4;
 
   /*
@@ -86,31 +119,54 @@
     the theme and the alpha stays put. A hardcoded `rgba(139,227,198,.16)` would keep night's crest
     on a daylight panel.
   */
-  --crest-rgb: 139, 227, 198;
-  --teal-rgb: 127, 216, 221;
-  --sand-rgb: 217, 201, 163;
-  --alert-rgb: 242, 162, 155;
-  --hi-rgb: 220, 233, 230;
-  --line-rgb: 28, 61, 71;
+  --crest-rgb: 140, 247, 198;
+  --teal-rgb: 169, 139, 250;
+  --sand-rgb: 205, 212, 228;
+  --alert-rgb: 255, 138, 160;
+  --hi-rgb: 244, 247, 252;
+  --line-rgb: 89, 99, 124;
   --shade-rgb: 0, 0, 0;
 
-  /* Panel gradient stops. Six, because cards are layered gradients rather than flat fills. */
-  --pa: 20, 52, 62;
-  --pb: 9, 32, 42;
-  --pc: 26, 66, 78;
-  --pd: 11, 37, 48;
-  --pe: 4, 22, 29;
-  --pf: 13, 42, 54;
+  /*
+    Flat panels, six stops the same.
 
-  /* Ambient intensities, tuned per theme — aurora and header wash both drop on daylight. */
-  --aurora-a: 0.2;
-  --aurora-b: 0.14;
-  --wash-a: 0.09;
-  --bloom-a: 0.3;
+    The stops exist because this file drew cards as layered gradients. The ported design draws a
+    card as one fill and one border, and a gradient under that border reads as a different card
+    catching different light. Setting all six to the panel colour flattens every gradient in
+    `globals.css` without touching a single card rule.
+  */
+  --pa: 11, 16, 24;
+  --pb: 11, 16, 24;
+  --pc: 11, 16, 24;
+  --pd: 11, 16, 24;
+  --pe: 11, 16, 24;
+  --pf: 11, 16, 24;
+
+  /*
+    No ambient light.
+
+    The aurora and the header wash were this file's signature — a drifting glow behind the page.
+    The ported design has no ambient layer at all: its ground is flat and the only luminous thing
+    on screen is money. Zeroed rather than deleted, so the elements stay in the DOM and one number
+    brings the effect back if that decision is ever reversed.
+  */
+  --aurora-a: 0;
+  --aurora-b: 0;
+  --wash-a: 0;
+  --bloom-a: 0;
 
   /* ---- type --------------------------------------------------------------- */
-  --weir-sans: var(--font-geist), system-ui, sans-serif;
-  --weir-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', monospace;
+  /*
+    The ported design's three faces. Inter for the interface, Source Serif for anything that is
+    prose — a title, a post, a paragraph a person reads — and JetBrains Mono for data.
+
+    The serif is the part that carries the design: a creator's writing set in the interface face
+    reads as interface. Loaded through `next/font` in `app/fonts.ts`, so the files come from this
+    origin and no face arrives late enough to move the layout.
+  */
+  --weir-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --weir-serif: var(--font-source-serif), Georgia, 'Times New Roman', serif;
+  --weir-mono: var(--font-jetbrains-mono), ui-monospace, 'SF Mono', monospace;
 
   /* ---- motion ------------------------------------------------------------- */
   --ease-surface: cubic-bezier(0.22, 1, 0.36, 1);

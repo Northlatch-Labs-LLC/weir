@@ -102,7 +102,7 @@ export async function ChestsData({
    * face in sand, and a failure is italic and alert-coloured, shaped nothing like a number.
    */
   const potOf = (profile: (typeof profiles)[number]) => {
-    const MONO = "'Geist Mono',monospace";
+    const MONO = 'var(--weir-mono)';
     const measured = (value: string, note: string) => ({
       pot: value,
       potFont: MONO,

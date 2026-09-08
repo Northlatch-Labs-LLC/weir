@@ -158,7 +158,14 @@ export function UnlockButton({
         ) : blocked.kind === 'self-payment' ? (
           'This is your own vault, so there is nothing to buy.'
         ) : blocked.kind === 'insufficient-balance' ? (
-          `Not enough to cover ${priceLabel}.`
+          /*
+            A dead end became a next step. It read "Not enough to cover 2 SUI." and stopped — true,
+            and the one moment where a reader who has decided to pay is told only that they cannot.
+          */
+          <>
+            Your wallet holds {blocked.have}, and this costs {blocked.need}.{' '}
+            <a href="/add-funds">Add funds</a>, then try again.
+          </>
         ) : blocked.kind === 'price-moved' ? (
           'The price changed after this page loaded. Reload to see the current price before buying.'
         ) : (
@@ -186,6 +193,56 @@ export function UnlockButton({
           </button>
         </div>
         {error !== null && <p className="unmeasured">{error}</p>}
+      </div>
+    );
+  }
+
+  /*
+    Nothing to sign with.
+
+    `simulate()` opens with `if (signer === null) return`, so before this existed the button was
+    live, took the press, and did nothing at all — no message, no error, no next step. That is the
+    single worst state in the product: a reader recruited by a page promising writing they can pay
+    for, at the exact moment they try to pay, given silence.
+
+    A reader who arrived to read is not a reader who already holds SUI. So this states the whole
+    path, in the order it happens, and does not pretend the first two steps are not there.
+  */
+  if (signer === null) {
+    return (
+      <div className="ramp">
+        <p className="ramp__lead">
+          {priceLabel} to open this post, and it stays yours.
+        </p>
+        <ol className="ramp__steps">
+          <li>
+            <span className="ramp__n">1</span>
+            <span>
+              <strong>Get a Sui wallet.</strong> A browser extension that holds your key. It takes a
+              minute and costs nothing.{' '}
+              <a href="https://sui.io/ecosystem" rel="noreferrer nofollow" target="_blank">
+                See wallets
+              </a>
+            </span>
+          </li>
+          <li>
+            <span className="ramp__n">2</span>
+            <span>
+              <strong>Claim a handle.</strong> Free apart from the gas the chain charges.{' '}
+              <a href="/join">Create an account</a>
+            </span>
+          </li>
+          <li>
+            <span className="ramp__n">3</span>
+            <span>
+              <strong>Add {priceLabel}.</strong> Then this button opens the post, and what you paid
+              for lands in your wallet as an object you keep.
+            </span>
+          </li>
+        </ol>
+        <p className="ramp__foot">
+          Already have a wallet? Connect it from the account menu at the top of the page.
+        </p>
       </div>
     );
   }

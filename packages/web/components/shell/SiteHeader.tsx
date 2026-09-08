@@ -3,11 +3,18 @@
 /**
  * The header every route wears.
  *
- * # One header
+ * # This is the ported design's header
  *
- * This one reads its destinations from `lib/site-map.ts`, marks the current section with
- * `aria-current`, and is laid out entirely in `weir.css` under `.sh-*` — which is what lets it fit a
- * 320px phone without clipping the account control, the defect measured at 375px before this.
+ * Three destinations in the bar, everything else behind three named groups, and one filled slot on
+ * the right that is `Join` for a guest and `Compose` for a member. The shape is the ported design's
+ * and the reasoning is in `lib/site-map.ts`.
+ *
+ * # What is production's and stays
+ *
+ * `AccountMenu` — the wallet dialog, the multi-address picker, focus handling and sign-out. The
+ * ported design had a connect control of its own that spoke to fixtures; this one reaches a wallet.
+ *
+ * The `gated` branch, and `aria-current` on the section you are in.
  *
  * # Who is signed in
  *
@@ -17,10 +24,19 @@
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { AccountMenu } from '@/components/AccountMenu';
 import { Icon } from '@/components/design/icons';
 import { useTheme } from '@/components/design/use-theme';
-import { JOIN, PRIMARY, primaryFor } from '@/lib/site-map';
+import {
+  GROUPS,
+  GUEST_GROUPS,
+  GUEST_IN_BAR,
+  IN_BAR,
+  PRIMARY,
+  forViewer,
+  primaryFor,
+} from '@/lib/site-map';
 
 export function WeirMark({ size = 24 }: { size?: number }) {
   return (
@@ -48,6 +64,49 @@ export function SiteHeader({
   const { theme, toggle, label: themeLabel } = useTheme();
   const themeIcon = theme === null ? null : <Icon name={theme === 'day' ? 'moon' : 'sun'} size={16} />;
 
+  const [open, setOpen] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef<HTMLDivElement>(null);
+
+  // A click outside closes the open group; Escape closes either panel.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (navRef.current !== null && !navRef.current.contains(e.target as Node)) setOpen(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(null);
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  // Navigating closes both. Without this a panel survives the route change.
+  useEffect(() => {
+    setOpen(null);
+    setMenuOpen(false);
+  }, [pathname]);
+
+  /*
+    Two navigations, not one navigation with things hidden.
+
+    A guest is offered what there is to read and one explanation of the place. A member is offered
+    the rooms they keep things in. Hiding rows out of the member's menu would leave a guest looking
+    at "Money" with two entries in it, which reads as a product they are half locked out of rather
+    than as a product they have not joined yet.
+  */
+  const bar = signedIn ? PRIMARY.filter((d) => IN_BAR.includes(d.href)) : GUEST_IN_BAR;
+  const groups = (signedIn ? GROUPS : GUEST_GROUPS)
+    .map((g) => ({ ...g, items: forViewer(g.items, signedIn) }))
+    .filter((g) => g.items.length > 0);
+  const active = (href: string) => here === href || pathname === href;
+
   return (
     <header className="sh-header">
       <div className="sh-header__row">
@@ -57,49 +116,65 @@ export function SiteHeader({
           </span>
           <span className="sh-logo__text">
             <span className="sh-logo__word">weir</span>
-            <span className="sh-logo__sub">on sui</span>
           </span>
         </Link>
 
         {!gated && (
-          <nav aria-label="Primary" className="sh-nav">
-            {PRIMARY.map((d) => (
-              <Link
-                key={d.href}
-                href={d.href}
-                className="sh-nav__link"
-                aria-current={here === d.href ? 'page' : undefined}
-              >
-                <Icon name={d.icon} size={15} />
-                <span>{d.label}</span>
-              </Link>
-            ))}
-            {!signedIn && (
-              /*
-                The route to an account, kept on screen for the reader who has not made one.
+          <div ref={navRef} className="sh-navwrap">
+            <nav aria-label="Primary" className="sh-nav">
+              {bar.map((d) => (
+                <Link
+                  key={d.href}
+                  href={d.href}
+                  className="sh-nav__link"
+                  aria-current={here === d.href ? 'page' : undefined}
+                >
+                  <span>{d.label}</span>
+                </Link>
+              ))}
 
-                `PRIMARY` is also the source for the footer's product column and for `tops`, so JOIN
-                does not belong in it — it is not a section of the product, it is the way in. It is
-                rendered from the same `JOIN` constant the phone bar and the menu use, so the three
-                surfaces cannot drift apart.
-              */
-              <Link href={JOIN.href} className="sh-nav__link sh-nav__link--join">
-                <Icon name={JOIN.icon} size={15} />
-                <span>Join</span>
-              </Link>
-            )}
-          </nav>
+              {groups.map((g) => (
+                <div key={g.key} className="sh-group">
+                  <button
+                    type="button"
+                    className="sh-nav__link sh-group__button"
+                    aria-expanded={open === g.key}
+                    aria-controls={`sh-group-${g.key}`}
+                    data-open={open === g.key ? '' : undefined}
+                    onClick={() => setOpen((v) => (v === g.key ? null : g.key))}
+                  >
+                    <span>{g.label}</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                  {open === g.key && (
+                    <div id={`sh-group-${g.key}`} className="sh-group__panel">
+                      {g.items.map((d) => (
+                        <Link
+                          key={d.href}
+                          href={d.href}
+                          className="sh-group__link"
+                          aria-current={active(d.href) ? 'page' : undefined}
+                        >
+                          <Icon name={d.icon} size={15} />
+                          <span>
+                            <span className="sh-group__label">{d.label}</span>
+                            {d.blurb !== undefined && <span className="sh-group__blurb">{d.blurb}</span>}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </nav>
+          </div>
         )}
 
         <div className="sh-tools">
-          {/*
-            The badge stays; the button does not.
-
-            While the door is shut the waiting list is the only page a visitor can reach, so a
-            header button pointing at it is a second copy of the page they are already on. The badge
-            still says why the rest of the nav is missing.
-          */}
           {gated && <span className="sh-badge">closed alpha</span>}
+
           <button
             type="button"
             className="sh-iconbtn sh-theme"
@@ -109,6 +184,7 @@ export function SiteHeader({
           >
             {themeIcon}
           </button>
+
           {signedIn && (
             <Link
               href="/alerts"
@@ -120,61 +196,39 @@ export function SiteHeader({
               <Icon name="bell" size={17} />
             </Link>
           )}
-          {!gated && (
-            <details className="sh-menu">
-              <summary aria-label="Menu" title="Menu" className="sh-iconbtn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" aria-hidden>
-                  <path d="M4 7h16M4 12h16M4 17h16" />
-                </svg>
-              </summary>
-              <div className="sh-menu__panel">
-                {!signedIn && (
-                  // First in the panel: the menu is opened by someone still deciding.
-                  <Link href={JOIN.href} className="sh-menu__link sh-menu__link--join">
-                    <Icon name={JOIN.icon} size={16} />
-                    <span>
-                      <span className="sh-menu__label">Join</span>
-                      <span className="sh-menu__blurb">Create your account</span>
-                    </span>
-                  </Link>
-                )}
-                {PRIMARY.map((d) => (
-                  <Link
-                    key={d.href}
-                    href={d.href}
-                    className="sh-menu__link"
-                    aria-current={here === d.href ? 'page' : undefined}
-                  >
-                    <Icon name={d.icon} size={16} />
-                    <span>
-                      <span className="sh-menu__label">{d.label}</span>
-                      {d.blurb !== undefined && <span className="sh-menu__blurb">{d.blurb}</span>}
-                    </span>
-                  </Link>
-                ))}
-                <Link href="/security" className="sh-menu__link">
-                  <Icon name="shield" size={16} />
-                  <span>
-                    <span className="sh-menu__label">Security</span>
-                    <span className="sh-menu__blurb">What the contracts guarantee, and what we do not claim</span>
-                  </span>
-                </Link>
-                {signedIn && myHandle !== null && (
-                  <Link href={`/c/${myHandle}`} className="sh-menu__link">
-                    <Icon name="name" size={16} />
-                    <span>
-                      <span className="sh-menu__label">My page</span>
-                      <span className="sh-menu__blurb">@{myHandle}</span>
-                    </span>
-                  </Link>
-                )}
-                <button type="button" className="sh-menu__link sh-menu__theme" onClick={toggle}>
-                  {themeIcon}
-                  <span className="sh-menu__label">{themeLabel}</span>
-                </button>
-              </div>
-            </details>
+
+          {/*
+            The filled slot belongs to members.
+
+            Signed out it was "Join", which led to a page *about* joining — a button that reads as
+            an action and delivers an explanation. Two controls stood next to each other offering
+            the same thing, and the one that actually signs somebody in is the wallet control to its
+            right. So the guest's slot is empty and the account control is the single way in.
+
+            Signed in, the slot is the thing a member came to do.
+          */}
+          {!gated && signedIn && (
+            <Link href="/studio" className="sh-cta">
+              <Icon name="doc" size={15} />
+              <span>Compose</span>
+            </Link>
           )}
+
+          {!gated && (
+            <button
+              type="button"
+              className="sh-iconbtn sh-burger"
+              aria-expanded={menuOpen}
+              aria-controls="sh-menu"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" aria-hidden>
+                {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+              </svg>
+            </button>
+          )}
+
           {/*
             The account control, and the only one there is. It carries the wallet dialog, the
             multi-address picker, focus handling and sign-out, so it is mounted rather than redrawn.
@@ -184,6 +238,47 @@ export function SiteHeader({
           </div>
         </div>
       </div>
+
+      {/* The whole map, on anything narrower than the bar can hold. Grouped, never a flat list. */}
+      {menuOpen && !gated && (
+        <div id="sh-menu" className="sh-menu__sheet">
+          <nav aria-label="All destinations">
+            {bar.map((d) => (
+              <Link
+                key={d.href}
+                href={d.href}
+                className="sh-sheet__link"
+                aria-current={here === d.href ? 'page' : undefined}
+              >
+                <Icon name={d.icon} size={16} />
+                <span>{d.label}</span>
+              </Link>
+            ))}
+            {groups.map((g) => (
+              <div key={g.key} className="sh-sheet__group">
+                <p className="sh-sheet__head">{g.label}</p>
+                {g.items.map((d) => (
+                  <Link
+                    key={d.href}
+                    href={d.href}
+                    className="sh-sheet__link"
+                    aria-current={active(d.href) ? 'page' : undefined}
+                  >
+                    <Icon name={d.icon} size={16} />
+                    <span>{d.label}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
+            {signedIn && myHandle !== null && (
+              <Link href={`/c/${myHandle}`} className="sh-sheet__link">
+                <Icon name="name" size={16} />
+                <span>@{myHandle}</span>
+              </Link>
+            )}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

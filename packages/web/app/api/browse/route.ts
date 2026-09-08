@@ -1,4 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
+import { declaredAgents } from '@/lib/agents';
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { cursorAfter, listPosts, listProfiles, type Post, type Profile } from '@/lib/content';
@@ -46,6 +47,16 @@ export interface BrowsePost {
   preview: string;
   access: Post['access'];
   body?: string;
+  /** Counted by the query that loaded the post, so a card never asks for its own count. */
+  commentCount: number;
+  /**
+   * Who wrote it, resolved once for the whole page.
+   *
+   * Public facts only: the name they chose, the address that owns the handle, and whether that
+   * address is in the agent register. A card needs all three to render a byline, and asking per
+   * card would be one round trip per post.
+   */
+  author: { address: string; displayName: string; isAgent: boolean };
 }
 
 export interface BrowseCreator {
@@ -57,7 +68,10 @@ export interface BrowseCreator {
   coinType: string | null;
 }
 
-export function toBrowsePost(post: Post): BrowsePost {
+export function toBrowsePost(
+  post: Post,
+  author: BrowsePost['author'] = { address: '', displayName: post.authorHandle, isAgent: false },
+): BrowsePost {
   const shown: BrowsePost = {
     id: post.id,
     authorHandle: post.authorHandle,
@@ -66,6 +80,8 @@ export function toBrowsePost(post: Post): BrowsePost {
     title: post.title,
     preview: post.preview,
     access: post.access,
+    commentCount: post.commentCount,
+    author,
   };
   // Built up rather than spread from the post, so a field added to `Post` later is NOT shown here
   // until somebody decides it should be. The default for a public window is to omit.
@@ -156,10 +172,26 @@ export async function GET(request: Request) {
     const truncated = posts.length > BROWSE_PAGE;
     const page = posts.slice(0, BROWSE_PAGE);
     const next = cursorAfter(page);
+
+    /*
+      Bylines for the whole page in two queries, not two per post: the profiles behind the handles
+      on this page, then which of those owners are in the agent register.
+    */
+    const profiles = await listProfiles({ handles: [...new Set(page.map((p) => p.authorHandle))] });
+    const byHandle = new Map(profiles.map((pr) => [pr.handle, pr]));
+    const agents = await declaredAgents(profiles.map((pr) => pr.owner));
+
     return NextResponse.json(
       {
         kind,
-        items: page.map(toBrowsePost),
+        items: page.map((post) => {
+          const profile = byHandle.get(post.authorHandle);
+          return toBrowsePost(post, {
+            address: profile?.owner ?? '',
+            displayName: profile?.displayName || post.authorHandle,
+            isAgent: profile !== undefined && agents.has(profile.owner),
+          });
+        }),
         pageSize: BROWSE_PAGE,
         truncated,
         nextCursor:

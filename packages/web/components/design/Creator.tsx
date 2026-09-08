@@ -137,10 +137,10 @@ export function DesignCreator({
     <>
           <div className="weir-page" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '3rem 1.5rem 4rem' }}>
             <section className="weir-identity">
-              <span aria-hidden="true" style={{ width: '4rem', height: '4rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: '\'Geist Mono\',monospace', fontSize: '1.125rem', color: 'var(--crest,#8be3c6)', flexShrink: '0', marginTop: '0.3rem' }}>{profile.initials}</span>
+              <span aria-hidden="true" style={{ width: '4rem', height: '4rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--weir-mono)', fontSize: '1.125rem', color: 'var(--crest,#8be3c6)', flexShrink: '0', marginTop: '0.3rem' }}>{profile.initials}</span>
               <div className="weir-identity__text">
                 <h1 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', maxWidth: '36ch', textWrap: 'balance' }}>{profile.displayName}</h1>
-                <p style={{ margin: '0.25rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontWeight: '500', fontSize: '0.9375rem', color: 'var(--crest,#8be3c6)' }}>{profile.meta}</p>
+                <p style={{ margin: '0.25rem 0 0', fontFamily: 'var(--weir-mono)', fontWeight: '500', fontSize: '0.9375rem', color: 'var(--crest,#8be3c6)' }}>{profile.meta}</p>
                 {/*
                   The declaration register's answer, in the register's three states. `declared`
                   carries the same pill every post by this account carries, and the record a
@@ -157,7 +157,7 @@ export function DesignCreator({
                     <details style={{ margin: '0.375rem 0 0', fontSize: '0.875rem', color: 'var(--dim,#a3bcb8)' }}>
                       <summary style={{ cursor: 'pointer', color: 'var(--dim,#a3bcb8)' }}>What it declared</summary>
                       <p style={{ margin: '0.375rem 0 0', lineHeight: '1.6', textWrap: 'pretty' }}>
-                        Model: {profile.agent.model}. Purpose: {profile.agent.purpose}. {profile.agent.declared}. The two statements and signatures are at <a href={profile.agent.recordPath} style={{ color: 'var(--crest,#8be3c6)' }}>{profile.agent.recordPath}</a>; anyone can verify them without trusting this site.
+                        Model: {profile.agent.model}. Purpose: {profile.agent.purpose}. {profile.agent.declared}. The two statements and signatures are at <a href={profile.agent.recordPath} style={{ color: 'var(--crest,#8be3c6)' }}>{profile.agent.recordPath}</a>; anyone can check them.
                       </p>
                     </details>
                   </div>
@@ -191,13 +191,13 @@ export function DesignCreator({
                 <section aria-label="Membership">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
                     <h2 className="sr-only" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}><span className="weir-owned">Membership</span></h2>
-                    <a href={tiersHref} style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem' }}>{tiersLabel}</a>
+                    <a href={tiersHref} style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem' }}>{tiersLabel}</a>
                   </div>
                   <ul style={{ margin: '1.5rem 0 0', padding: '0', listStyle: 'none', display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,15rem),1fr))' }}>
                     {(tiers ?? []).map((t, i) => (<Fragment key={i}>
                       <li style={{ background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.07),0 14px 34px -26px rgba(var(--shade-rgb,0,0,0),0.85)', padding: '1.5rem' }}>
-                        <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontVariantNumeric: 'tabular-nums', fontSize: '1.5rem', fontWeight: '500', color: 'var(--ink,#dce9e6)' }}>{t.price}</p>
-                        <p style={{ margin: '0.25rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>{t.cadence}</p>
+                        <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '1.5rem', fontWeight: '500', color: 'var(--ink,#dce9e6)' }}>{t.price}</p>
+                        <p style={{ margin: '0.25rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>{t.cadence}</p>
                         <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', maxWidth: '62ch' }}>{t.net}</p>
                         {/* The control that buys THIS tier, beside the price it buys. */}
                         <div style={{ marginTop: '1rem' }}>{t.action}</div>
@@ -213,9 +213,9 @@ export function DesignCreator({
                     <div className="weir-tip" style={{ marginTop: '1rem' }}>{tipSlot}</div>
                   {perks !== undefined && perks.length > 0 && (
                       <div style={{ marginTop: '1.25rem' }}>
-                        <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.75rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>What a tip also brings</p>
+                        <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.75rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>What a tip also brings</p>
                         {perksGiven !== undefined && (
-                          <p style={{ margin: '0.5rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)' }}>You have given {perksGiven}{perksPartial ? ' that we can see' : ''}</p>
+                          <p style={{ margin: '0.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)' }}>You have given {perksGiven}{perksPartial ? ' that we can see' : ''}</p>
                         )}
                         <ul style={{ margin: '0.875rem 0 0', padding: '0', listStyle: 'none', display: 'grid', gap: '0.625rem' }}>
                           {perks.map((perk, i) => (
@@ -223,7 +223,7 @@ export function DesignCreator({
                               <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
                                 <span style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{perk.title}</span>
                                 {/* The state is named in words, never by colour alone. */}
-                                <span style={{ flex: '0 0 auto', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.6875rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: perk.met === true ? 'var(--crest,#8be3c6)' : 'var(--dim,#a3bcb8)' }}>{perk.met === true ? 'Yours' : `From ${perk.threshold}`}</span>
+                                <span style={{ flex: '0 0 auto', fontFamily: 'var(--weir-mono)', fontSize: '0.6875rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: perk.met === true ? 'var(--crest,#8be3c6)' : 'var(--dim,#a3bcb8)' }}>{perk.met === true ? 'Yours' : `From ${perk.threshold}`}</span>
                               </span>
                               {perk.detail !== '' && (
                                 <span style={{ fontSize: '0.875rem', lineHeight: '1.5', color: 'var(--ink-2,#b9cdc9)' }}>{perk.detail}</span>
@@ -250,13 +250,13 @@ export function DesignCreator({
                 </section>
 
                 <section aria-label="Settlement">
-                  <p style={{ margin: '0 0 1rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Settled on chain</p>
+                  <p style={{ margin: '0 0 1rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Settled on chain</p>
                   <dl style={{ margin: '0', display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,10rem),1fr))' }}>
                     {(stats ?? []).map((s, i) => (<Fragment key={i}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <dt style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>{s.label}</dt>
+                        <dt style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>{s.label}</dt>
                         <dd style={{ margin: '0', fontFamily: `${s.font}`, fontSize: `${s.size}`, fontWeight: '500', fontStyle: `${s.style}`, color: `${s.color}`, fontVariantNumeric: 'tabular-nums' }}>{s.value}</dd>
-                        <span style={{ fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{s.note}</span>
+                        <span style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{s.note}</span>
                       </div>
                     </Fragment>))}
                   </dl>
@@ -267,7 +267,7 @@ export function DesignCreator({
                 <section aria-label="Posts">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem', paddingBottom: '1rem', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px) bottom left / 100% 1px no-repeat' }}>
                     <h2 className="sr-only" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}><span className="weir-owned">Posts</span></h2>
-                    <p style={{ margin: '0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', letterSpacing: '0.06em', color: 'var(--dim,#a3bcb8)' }}>{viewingLabel}</p>
+                    <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.06em', color: 'var(--dim,#a3bcb8)' }}>{viewingLabel}</p>
                   </div>
                   <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
                     {/*
@@ -300,14 +300,14 @@ export function DesignCreator({
 
               <aside style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.92))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.55)', padding: '1.5rem' }}>
                 <div>
-                  <p style={{ margin: '0 0 0.75rem', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Below the waterline</p>
+                  <p style={{ margin: '0 0 0.75rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Below the waterline</p>
                   <h2 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', lineHeight: '1.15', letterSpacing: '-0.03em' }}>Pool, <span className="weir-owned">don't pay</span></h2>
                   <p style={{ margin: '0.75rem 0 0', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)', fontSize: '0.9375rem', lineHeight: '1.6' }}>Park SUI in the vault of <strong style={{ color: 'var(--ink,#dce9e6)', fontWeight: '600' }}>{profile.sui}</strong>. It is delegated to a validator and the staking yield goes to them. Your principal stays yours, withdrawable in full at any time. The cost to you is the yield you would have earned yourself.</p>
                 </div>
                 <div>
                   <div className="weir-pool-deposit">{depositSlot}</div>
                   <p style={{ margin: '0.75rem 0 0', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)' }}>{depositLine}</p>
-                  {depositNote !== '' && (<p style={{ margin: '0.5rem 0 0', fontFamily: '\'Geist Mono\',monospace', fontSize: '0.8125rem', lineHeight: '1.55', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)' }}>{depositNote}</p>)}
+                  {depositNote !== '' && (<p style={{ margin: '0.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', lineHeight: '1.55', color: 'var(--ink-2,#b9cdc9)', textShadow: '0 0 18px rgba(var(--crest-rgb,139,227,198),0.18)' }}>{depositNote}</p>)}
                   {depositShare !== undefined && (
                     <p style={{ margin: '0.75rem 0 0', padding: '0.75rem 0.875rem', borderRadius: '8px', background: 'rgba(var(--crest-rgb,139,227,198),0.06)', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', fontSize: '0.9375rem', lineHeight: '1.6', color: 'var(--ink-2,#b9cdc9)' }}>{depositShare}</p>
                   )}

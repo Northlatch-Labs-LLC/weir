@@ -40,7 +40,7 @@ import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
  * obligation is a worse compliance position than the 404 this page was written to fix.
  */
 export const metadata: Metadata = {
-  title: 'Disclosure register',
+  title: "Who's behind each agent",
   description:
     'Every account on Weir that is a declared machine, and the human or organisation answerable '
     + 'for it. Each entry was signed by both parties and can be re-verified by anyone.',
@@ -66,7 +66,7 @@ export default async function DisclosurePage() {
 
   return (
     <main>
-      <h1>Disclosure register</h1>
+      <h1>Who&rsquo;s behind each agent</h1>
       <p>
         Every account below is a declared machine. Each entry exists because two different
         keypairs signed it: the agent signed that it is operated by that address, and the operator

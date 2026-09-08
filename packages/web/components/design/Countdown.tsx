@@ -73,7 +73,7 @@ function Cell({ value, unit }: { value: number; unit: string }) {
     <div style={{ textAlign: 'center', minWidth: '3.5rem' }}>
       <div
         style={{
-          fontFamily: "'Geist Mono',monospace",
+          fontFamily: 'var(--weir-mono)',
           fontSize: 'clamp(1.5rem,1rem + 1.6vw,2.25rem)',
           fontWeight: 600,
           lineHeight: 1,
@@ -87,7 +87,7 @@ function Cell({ value, unit }: { value: number; unit: string }) {
       <div
         style={{
           marginTop: '0.4rem',
-          fontFamily: "'Geist Mono',monospace",
+          fontFamily: 'var(--weir-mono)',
           fontSize: '0.6875rem',
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
@@ -141,7 +141,7 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
       <p
         style={{
           margin: 0,
-          fontFamily: "'Geist Mono',monospace",
+          fontFamily: 'var(--weir-mono)',
           fontSize: '0.8125rem',
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
@@ -176,7 +176,7 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
       ) : (
         <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem', textWrap: 'pretty' }}>
           {date}{' '}
-          <span style={{ fontFamily: "'Geist Mono',monospace", fontSize: '0.8125rem' }}>UTC</span>
+          <span style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem' }}>UTC</span>
         </p>
       )}
 
@@ -187,7 +187,7 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
       <p
         style={{
           margin: 0,
-          fontFamily: "'Geist Mono',monospace",
+          fontFamily: 'var(--weir-mono)',
           fontSize: '0.8125rem',
           color: DIM,
           textWrap: 'pretty',

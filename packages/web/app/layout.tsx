@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata, Viewport } from 'next';
-import { geist, geistMono } from './fonts';
+import { geist, geistMono, inter, jetbrainsMono, sourceSerif } from './fonts';
 import { SignerProvider } from '@/components/SignerProvider';
 import { SessionBridge } from '@/components/SessionBridge';
 import { AppShell } from '@/components/shell/AppShell';
@@ -60,7 +60,9 @@ import './weir.css';
 export const dynamic = 'force-dynamic';
 
 export const viewport: Viewport = {
-  themeColor: '#04161d',
+  // The ported design's ground. Must match `--bg` in `weir.css` or the phone's chrome paints a
+  // different colour directly above the page.
+  themeColor: '#03050a',
   colorScheme: 'dark',
   viewportFit: 'cover',
 };
@@ -139,7 +141,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${geist.variable} ${geistMono.variable}`}
+      className={`${geist.variable} ${geistMono.variable} ${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable}`}
       /*
         The `data-js` script below writes an attribute onto this element before React hydrates, so
         the DOM legitimately differs from the server HTML here. Without this, React reports it as a
