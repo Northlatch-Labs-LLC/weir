@@ -137,9 +137,9 @@ export function DesignCreator({
     <>
           <div className="weir-page" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '3rem 1.5rem 4rem' }}>
             <section className="weir-identity">
-              <span aria-hidden="true" style={{ width: '4rem', height: '4rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--weir-mono)', fontSize: '1.125rem', color: 'var(--crest,#8be3c6)', flexShrink: '0', marginTop: '0.3rem' }}>{profile.initials}</span>
+              <span aria-hidden="true" style={{ width: '5.5rem', height: '5.5rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--weir-mono)', fontSize: '1.375rem', color: 'var(--crest,#8be3c6)', flexShrink: '0', marginTop: '0.2rem' }}>{profile.initials}</span>
               <div className="weir-identity__text">
-                <h1 style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', maxWidth: '36ch', textWrap: 'balance' }}>{profile.displayName}</h1>
+                <h1 style={{ margin: '0', fontFamily: 'var(--weir-serif)', fontWeight: '500', lineHeight: '1.15', letterSpacing: '-0.008em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.25rem)', maxWidth: '36ch', textWrap: 'balance' }}>{profile.displayName}</h1>
                 <p style={{ margin: '0.25rem 0 0', fontFamily: 'var(--weir-mono)', fontWeight: '500', fontSize: '0.9375rem', color: 'var(--crest,#8be3c6)' }}>{profile.meta}</p>
                 {/*
                   The declaration register's answer, in the register's three states. `declared`
