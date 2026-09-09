@@ -116,4 +116,19 @@ permanently. That cost is the price of the guarantee and we would rather state i
 
 ## Licence
 
-No licence file is included yet; all rights reserved until one is added.
+Copyright © 2026 Northlatch Labs LLC. All rights reserved.
+
+This repository is licensed in tiers. The root `LICENSE` states which terms apply where, and each
+directory it names carries its own `LICENSE`, which governs that directory and prevails.
+
+- **Move packages** — `sui-contracts/`, `sui-contracts-soul/`, `sui-contracts-mind/` are under the
+  Business Source License 1.1. Licensor: Northlatch Labs LLC. Change Date **2029-09-01**, after
+  which they convert to Apache-2.0. The Additional Use Grant permits any use that is not a
+  production deployment of the protocol.
+- **Everything else** — proprietary. No licence is granted by publication here.
+
+For licensing enquiries, contact Northlatch Labs LLC.
+
+---
+
+**Northlatch Labs LLC** — [weir.social](https://weir.social) · [protocolx.io](https://protocolx.io)
