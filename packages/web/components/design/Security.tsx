@@ -88,7 +88,7 @@ export function DesignSecurity({
               kicker="Security"
               title="A policy can be revised."
               accent="A contract cannot."
-              lede="Every platform promises it will treat you fairly. We are making a narrower claim: for the things that matter here, there is no function that would let us treat you otherwise. Below is each guarantee and the mechanism that enforces it. Not a padlock icon."
+              lede="Each guarantee below is a property of the contracts, with the mechanism that enforces it beside it. Not a padlock icon."
             />
 
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,19rem),1fr))' }}>
@@ -105,7 +105,7 @@ export function DesignSecurity({
 
             <section data-reveal aria-labelledby="only-title" style={{ marginTop: '4rem', textAlign: 'center' }}>
               <p style={{ margin: '0 0 0.875rem', textAlign: 'center', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Why this cannot be copied</p>
-              <h2 id="only-title" style={{ margin: '0 auto 2rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', textWrap: 'balance' }}>Three things <span className="weir-owned">only a chain can do</span></h2>
+              <h2 id="only-title" style={{ margin: '0 auto 2rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.16', letterSpacing: '-0.022em', fontSize: 'clamp(1.4375rem,1.1rem + 1vw,1.8125rem)', textWrap: 'balance' }}>Three things <span className="weir-owned">only a chain can do</span></h2>
               <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,18rem),1fr))', textAlign: 'left' }}>
                 {(onlyChain ?? []).map((o, i) => (<Fragment key={i}>
                   <div style={{ background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.92))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.55)', padding: '1.75rem' }}>
@@ -120,7 +120,7 @@ export function DesignSecurity({
             <section data-reveal aria-labelledby="cmp-title" style={{ marginTop: '4rem' }}>
               <div style={{ textAlign: 'center' }}>
                 <p style={{ margin: '0 0 0.75rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Side by side</p>
-                <h2 id="cmp-title" style={{ margin: '0 auto 0.75rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', textWrap: 'balance' }}>The same questions, <span className="weir-owned">asked of everyone</span></h2>
+                <h2 id="cmp-title" style={{ margin: '0 auto 0.75rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.16', letterSpacing: '-0.022em', fontSize: 'clamp(1.4375rem,1.1rem + 1vw,1.8125rem)', textWrap: 'balance' }}>The same questions, <span className="weir-owned">asked of everyone</span></h2>
                 <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', marginBottom: '2.5rem' }}>Figures for the other platforms are their own published rates, dated at the foot of this section. Where a number is a range we print the range, not the flattering end of it.</p>
               </div>
 
@@ -170,7 +170,7 @@ export function DesignSecurity({
             <section data-reveal aria-labelledby="pub-title" style={{ marginTop: '4rem' }}>
               <div style={{ textAlign: 'center' }}>
                 <p style={{ margin: '0 0 0.75rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Published on chain</p>
-                <h2 id="pub-title" style={{ margin: '0 auto 0.75rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.032em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.5rem)', textWrap: 'balance' }}>Read the <span className="weir-owned">contracts yourself</span></h2>
+                <h2 id="pub-title" style={{ margin: '0 auto 0.75rem', maxWidth: '36ch', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.16', letterSpacing: '-0.022em', fontSize: 'clamp(1.4375rem,1.1rem + 1vw,1.8125rem)', textWrap: 'balance' }}>Read the <span className="weir-owned">contracts yourself</span></h2>
                 <p style={{ margin: '1.125rem auto 0', maxWidth: '58ch', textAlign: 'center', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', marginBottom: '2.5rem' }}>Every claim on this page is enforced by code at one of these addresses. Copy an id, open it in an explorer, and check us. A slot reading <span style={{ color: 'var(--alert,#f2a29b)', fontStyle: 'italic' }}>not published</span> is one we have not deployed yet, never a placeholder dressed as a live address.</p>
               </div>
 

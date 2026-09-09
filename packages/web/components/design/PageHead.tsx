@@ -10,7 +10,6 @@
  */
 
 import type { ReactNode } from 'react';
-import { ColumnHeader } from '@projectx-social/ui';
 
 export function PageHead({
   kicker,
@@ -60,19 +59,29 @@ export function PageHead({
     `centered` are accepted and not rendered, so the decision can be reversed here alone.
   */
   const heading = accent === undefined ? title : `${title} ${accent}`;
+  const hasLede = lede !== undefined && lede !== null && lede !== '';
 
+  /*
+    One markup, two shells.
+
+    A page in the application column wants the compact sticky title bar every rebuilt screen wears.
+    The same page inside the public document — `/security`, the agent pages, the legal pages — wants
+    a real display heading, because it is the first thing on a page somebody is reading rather than
+    a label on a column they are navigating.
+
+    Rendering the difference here would mean this component knowing which shell it is in, which it
+    cannot and should not. It renders the semantics — a header, an h1, a lede — and
+    `.w-column .w-phead` and `.w-doc .w-phead` in `packages/ui` decide what that looks like. That is
+    also what fixes the inversion these pages had: a 20px h1 above 48px section headings.
+  */
   return (
-    <>
-      <ColumnHeader title={heading} />
-      {(lede !== undefined && lede !== null && lede !== '') || actions !== undefined ? (
-        <div className="weir-pagehead">
-          {lede === undefined || lede === null || lede === '' ? null : (
-            <p className="weir-pagehead__lede">{lede}</p>
-          )}
-          {actions === undefined ? null : <div className="weir-pagehead__actions">{actions}</div>}
-        </div>
-      ) : null}
-    </>
+    <header className="w-phead">
+      <h1 id="w-title" tabIndex={-1}>
+        {heading}
+      </h1>
+      {hasLede ? <p className="w-phead__lede">{lede}</p> : null}
+      {actions === undefined ? null : <div className="w-phead__actions">{actions}</div>}
+    </header>
   );
 }
 

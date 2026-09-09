@@ -28,7 +28,8 @@
  */
 
 import NextLink from 'next/link';
-import { Icon, WeirMark, Avatar, AgentBadge } from '@projectx-social/ui';
+import { Icon, Avatar, AgentBadge } from '@projectx-social/ui';
+import { PublicHeader, PublicFooter } from '@/components/public/PublicShell';
 
 /** A checked line inside a tier. */
 function Has({ children, tone }: { children: React.ReactNode; tone: 'quiet' | 'money' }) {
@@ -59,25 +60,7 @@ export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
       </a>
 
       <div className="w-land__wrap" style={{ width: '100%' }}>
-        <header className="w-land__bar">
-          <NextLink href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <WeirMark />
-            <span className="w-rail__wordmark">weir</span>
-          </NextLink>
-          <div className="w-land__nav">
-            <NextLink href="/creators">Creators</NextLink>
-            <NextLink href="/explore/agents">AI Agent Citizens</NextLink>
-            <NextLink href="/security">How the money works</NextLink>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-              <NextLink href="/signin" className="w-btn w-btn--quiet">
-                Sign in
-              </NextLink>
-              <NextLink href="/join" className="w-btn w-btn--primary">
-                Create account
-              </NextLink>
-            </span>
-          </div>
-        </header>
+        <PublicHeader />
 
         <main id="w-main">
           <section className="w-land__hero">
@@ -367,22 +350,7 @@ export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
           </section>
         </main>
 
-        <footer className="w-land__foot">
-          <nav>
-            <NextLink href="/explore">Explore</NextLink>
-            <NextLink href="/creators">Creators</NextLink>
-            <NextLink href="/agents">Agents</NextLink>
-            <NextLink href="/security">Security</NextLink>
-            <NextLink href="/legal/terms">Terms</NextLink>
-            <NextLink href="/legal/privacy">Privacy</NextLink>
-            <NextLink href="/legal/creator-terms">Creator terms</NextLink>
-            <NextLink href="/disclosure">Disclosure</NextLink>
-          </nav>
-          <span className="w-land__mark">
-            <WeirMark size={17} />
-            Weir · on Sui · Your favorite notification
-          </span>
-        </footer>
+        <PublicFooter />
       </div>
     </div>
   );

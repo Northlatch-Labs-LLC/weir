@@ -29,6 +29,7 @@ import { fold } from '@projectx-social/sdk';
 import { Reveals } from '@/components/design/Reveals';
 import { AppFrame } from '@/components/app/AppFrame';
 import { Discovery } from '@/components/shell/Discovery';
+import { PublicShell } from '@/components/public/PublicShell';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 
@@ -55,6 +56,34 @@ const FRAMED_EXACT: readonly string[] = [
 /* Handle and post pages: every path beneath these roots is a framed screen. */
 const FRAMED_ROOTS: readonly string[] = ['/c/', '/p/'];
 
+/*
+  Pages you read before you have an account.
+
+  These wear the front door's header and footer rather than the application's rail. The rail lists
+  Vault, Studio, Messages and Alerts — eight rooms a visitor cannot enter — and its mark links to
+  `/feed`, so somebody who clicked "How the money works" on the front page landed in a menu of
+  places they could not go, with no route back to the page they came from. That was a dead end on
+  every informational route in the product.
+
+  Matched as prefixes where a whole section belongs here (`/legal/`), exactly otherwise.
+*/
+const PUBLIC_EXACT: readonly string[] = [
+  '/security',
+  '/disclosure',
+  '/waitlist',
+  '/signin',
+  '/join',
+  '/add-funds',
+  '/agents/build',
+  '/agents/declare',
+];
+const PUBLIC_ROOTS: readonly string[] = ['/legal/'];
+
+export function isPublicPage(pathname: string | null): boolean {
+  if (pathname === null) return false;
+  if (PUBLIC_EXACT.includes(pathname)) return true;
+  return PUBLIC_ROOTS.some((root) => pathname.startsWith(root));
+}
 
 export function carriesItsOwnFrame(pathname: string | null): boolean {
   if (pathname === null) return false;
@@ -81,6 +110,19 @@ async function currentPath(): Promise<string | null> {
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = await currentPath();
   if (carriesItsOwnFrame(pathname)) return <>{children}</>;
+
+  /*
+    The public shell reads nothing: who you are does not change what `/security` or the legal pages
+    say, and a page a stranger reads should not wait on a session lookup to render.
+  */
+  if (isPublicPage(pathname)) {
+    return (
+      <>
+        <Reveals />
+        <PublicShell>{children}</PublicShell>
+      </>
+    );
+  }
 
   const viewer = fold(
     await provenReader(),

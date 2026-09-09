@@ -877,7 +877,16 @@
     height: 74px;
     border-bottom: 1px solid var(--w-line);
   }
+  .w-land__brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .w-land__wordmark {
+    font-family: var(--w-sans);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--w-ink-10);
+  }
   .w-land__nav { display: flex; align-items: center; gap: 26px; }
+  .w-land__nav a[aria-current='page'] { color: var(--w-ink-10); }
   /*
     The plain links only. `:not(.w-btn)` is load-bearing: this rule is more specific than
     `.w-btn--primary`, so without it the "Create account" button took this colour and rendered
@@ -1156,6 +1165,386 @@
   }
 
   /* =========================================================================
+     Pages you read before you have an account
+
+     The product wears the rail. These do not: `/security`, the agent pages,
+     the legal pages, sign in and join are read by somebody deciding whether
+     to be here at all, and a navigation rail listing Vault, Studio, Messages
+     and Alerts answers "where am I" with eight rooms they cannot enter — and
+     offers no way back to the page they arrived from.
+
+     They wear the front door's header and footer, and a type scale of their
+     own. Forcing them into a 640px column with a 20px title bar left every
+     one of them with a heading smaller than its own subheadings.
+     ====================================================================== */
+  .w-doc {
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 40px 72px;
+  }
+  .w-doc__lede {
+    margin: 18px 0 0;
+    max-width: 62ch;
+    font-family: var(--w-serif);
+    font-size: 19.5px;
+    line-height: 1.6;
+    color: var(--w-ink-9);
+  }
+
+  /* The scale. One h1, section h2s beneath it, and nothing inside a section
+     larger than the section's own heading. */
+  .w-doc h1 {
+    margin: 46px 0 0;
+    font-family: var(--w-sans);
+    font-size: clamp(34px, 3.6vw, 50px);
+    line-height: 1.06;
+    letter-spacing: -0.032em;
+    font-weight: 700;
+    color: var(--w-ink-10);
+    text-wrap: balance;
+  }
+  .w-doc h2 {
+    margin: 52px 0 0;
+    font-family: var(--w-sans);
+    font-size: clamp(23px, 2.1vw, 29px);
+    line-height: 1.16;
+    letter-spacing: -0.022em;
+    font-weight: 700;
+    color: var(--w-ink-10);
+    text-wrap: balance;
+  }
+  .w-doc h3 {
+    margin: 30px 0 0;
+    font-family: var(--w-sans);
+    font-size: 18px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: var(--w-ink-10);
+  }
+  .w-doc p,
+  .w-doc li {
+    font-family: var(--w-sans);
+    font-size: 16.5px;
+    line-height: 1.68;
+    color: var(--w-ink-9);
+  }
+  .w-doc p { margin: 14px 0 0; max-width: 68ch; }
+  .w-doc ul,
+  .w-doc ol { margin: 14px 0 0; padding-left: 22px; max-width: 68ch; }
+  .w-doc li { margin-top: 7px; }
+  .w-doc a { color: var(--w-mint-dim); }
+  .w-doc a:hover { color: var(--w-mint); }
+  .w-doc code {
+    font-family: var(--w-mono);
+    font-size: 0.88em;
+    color: var(--w-ink-10);
+    background: var(--w-panel);
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xs);
+    padding: 1px 5px;
+  }
+  /* A table wider than the measure scrolls inside itself rather than taking the
+     document sideways. The register on `/disclosure` has six columns. */
+  .w-doc table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+  .w-doc pre { max-width: 100%; overflow-x: auto; }
+  .w-doc img,
+  .w-doc svg { max-width: 100%; }
+
+  .w-doc hr {
+    margin: 52px 0 0;
+    border: 0;
+    border-top: 1px solid var(--w-line);
+  }
+
+  /* A band of cards inside a document. */
+  .w-doc__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+  }
+  .w-doc__grid .w-card h3 { margin-top: 0; }
+
+  @media (max-width: 833px) {
+    .w-doc { padding: 0 20px 56px; }
+    .w-doc h1 { margin-top: 32px; }
+    .w-doc h2 { margin-top: 40px; }
+  }
+
+  /* ---- one page head, two shells ----------------------------------------
+     `components/design/PageHead` renders a header, an h1 and a lede and knows
+     nothing about where it is. Inside the application column that has to be
+     the compact sticky bar every rebuilt screen wears; inside a public
+     document it has to be the display heading a reader meets first.
+
+     Getting this wrong is what left `/agents/build` with a 20px title above a
+     48px subheading — a page whose h2 was more than twice its h1.
+     -------------------------------------------------------------------- */
+  .w-column .w-phead {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: rgba(3, 5, 10, 0.86);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--w-line);
+    padding: 15px 20px 14px;
+    margin: 0 -22px 14px;
+  }
+  .w-column .w-phead h1 {
+    margin: 0;
+    font-family: var(--w-sans);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--w-ink-10);
+  }
+  .w-column .w-phead__lede {
+    margin: 5px 0 0;
+    max-width: 62ch;
+    font-family: var(--w-sans);
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+  }
+  .w-column .w-phead__actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .w-doc .w-phead { display: block; }
+  .w-doc .w-phead h1 {
+    margin: 46px 0 0;
+    font-family: var(--w-sans);
+    font-size: clamp(34px, 3.6vw, 50px);
+    line-height: 1.06;
+    letter-spacing: -0.032em;
+    font-weight: 700;
+    color: var(--w-ink-10);
+    text-wrap: balance;
+  }
+  .w-doc .w-phead__lede {
+    margin: 18px 0 0;
+    max-width: 62ch;
+    font-family: var(--w-serif);
+    font-size: 19.5px;
+    line-height: 1.6;
+    color: var(--w-ink-9);
+  }
+  .w-doc .w-phead__actions { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /*
+    The gradient goes, inside a document.
+
+    Section headings on these pages rendered "gets" in a purple-to-mint gradient with the rest of
+    the sentence in white — the old site's device, firing on one word in the middle of a heading.
+  */
+  .w-doc .weir-grad,
+  .w-doc .weir-owned {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: inherit;
+  }
+  .w-doc .weir-section__title {
+    font-size: clamp(23px, 2.1vw, 29px);
+    line-height: 1.16;
+    letter-spacing: -0.022em;
+  }
+
+  /* ---- a drawing in the flow of a document ------------------------------
+     Full bleed of the measure, because a diagram is read across rather than
+     down and 68ch is the wrong width for one.
+     -------------------------------------------------------------------- */
+  .w-figurine {
+    margin: 30px 0 0;
+    padding: 22px 22px 16px;
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xl);
+    background: var(--w-panel);
+  }
+  .w-figurine > svg { display: block; }
+  /* The stacked form is for a phone; the drawing is for everything else. */
+  .w-figurine__stack { display: none; }
+  .w-figurine__stack li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--w-line);
+  }
+  .w-figurine__stack li:first-child { border-top: 0; padding-top: 2px; }
+  .w-figurine__mark {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: var(--w-r-md);
+    border: 1px solid var(--w-line-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--w-ink-7);
+  }
+  .w-figurine__mark[data-tone='money'] { border-color: rgba(140, 247, 198, 0.45); color: var(--w-mint); }
+  .w-figurine__mark[data-tone='machine'] { border-color: rgba(169, 139, 250, 0.45); color: var(--w-violet); }
+  .w-figurine__stack strong {
+    display: block;
+    font-family: var(--w-sans);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--w-ink-10);
+  }
+  .w-figurine__stack em {
+    font-family: var(--w-mono);
+    font-size: 12px;
+    font-style: normal;
+    color: var(--w-ink-7);
+  }
+  .w-figurine figcaption {
+    margin-top: 14px;
+    padding-top: 13px;
+    border-top: 1px solid var(--w-line);
+    font-family: var(--w-sans);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--w-ink-7);
+  }
+
+  /* ---- an icon-led card, one line of copy -------------------------------- */
+  .w-brief {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 20px;
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xl);
+    background: var(--w-panel);
+  }
+  .w-brief__mark {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--w-r-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--w-line-strong);
+    color: var(--w-ink-9);
+  }
+  .w-brief--money .w-brief__mark { border-color: rgba(140, 247, 198, 0.45); color: var(--w-mint); }
+  .w-brief--machine .w-brief__mark { border-color: rgba(169, 139, 250, 0.45); color: var(--w-violet); }
+  .w-brief h3 {
+    margin: 0;
+    font-family: var(--w-sans);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--w-ink-10);
+  }
+  .w-brief p {
+    margin: 0;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+    max-width: none;
+  }
+
+  /* ---- four steps, read across --------------------------------------- */
+  .w-steps4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin-top: 26px;
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xl);
+    overflow: hidden;
+  }
+  .w-steps4 > div {
+    padding: 18px 18px 20px;
+    border-right: 1px solid var(--w-line);
+  }
+  .w-steps4 > div:last-child { border-right: 0; }
+  .w-steps4 b {
+    display: block;
+    font-family: var(--w-mono);
+    font-size: 12px;
+    color: var(--w-mint);
+    margin-bottom: 9px;
+  }
+  .w-steps4 strong {
+    display: block;
+    font-family: var(--w-sans);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--w-ink-10);
+    margin-bottom: 5px;
+  }
+  .w-steps4 span {
+    font-family: var(--w-sans);
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+  }
+  @media (max-width: 833px) {
+    .w-steps4 { grid-template-columns: minmax(0, 1fr); }
+    .w-steps4 > div { border-right: 0; border-bottom: 1px solid var(--w-line); }
+    .w-steps4 > div:last-child { border-bottom: 0; }
+    .w-figurine { padding: 14px 14px 12px; }
+    .w-figurine > svg { display: none; }
+    .w-figurine__stack { display: block; list-style: none; margin: 0; padding: 0; }
+  }
+
+  /* A page written as its own website page, inside the document. Its wrapper
+     carries a 72rem width and its own padding, which fought the document's. */
+  .w-doc .weir-page {
+    max-width: none;
+    margin-inline: 0;
+    padding: 0;
+  }
+
+  /* ---- the front door's header, on those pages too ----------------------- */
+  .w-land__menu {
+    display: none;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--w-line-strong);
+    border-radius: var(--w-r-full);
+    background: transparent;
+    color: var(--w-ink-10);
+    cursor: pointer;
+  }
+  .w-land__sheet {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 0 18px;
+    border-bottom: 1px solid var(--w-line);
+  }
+  .w-land__sheet[data-open] { display: flex; }
+  .w-land__sheet a {
+    padding: 13px 4px;
+    font-family: var(--w-sans);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--w-ink-9);
+    text-decoration: none;
+  }
+  .w-land__sheet a:hover { color: var(--w-ink-10); }
+  .w-land__sheet .w-btn { margin-top: 10px; }
+
+  @media (max-width: 833px) {
+    /*
+      A menu, rather than nothing. Hiding the links left a phone visitor with a
+      wordmark and two buttons and no route to anything the site says about
+      itself.
+    */
+    .w-land__menu { display: inline-flex; }
+    .w-land__nav .w-btn--quiet { display: none; }
+  }
+
+  /* =========================================================================
      Four widths, and every screen is verified at all of them
 
      There were three, and the gap between them was a defect on every single
@@ -1215,6 +1604,8 @@
     .w-post { padding: 14px 16px 12px; }
     .w-head__row { padding: 12px 16px 12px; }
     .w-legacy { padding: 14px 16px 8px; }
+    /* The bar bleeds to the column edge, and the column's padding is 16 here, not 22. */
+    .w-column .w-phead { margin-left: -16px; margin-right: -16px; padding: 12px 16px; }
     .w-foot { padding: 20px 16px 28px; }
     .w-actions { gap: 0; justify-content: space-between; }
   }

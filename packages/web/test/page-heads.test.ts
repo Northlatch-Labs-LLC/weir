@@ -89,27 +89,36 @@ describe('the page head itself', () => {
   const head = readFileSync(resolve(process.cwd(), 'components/design/PageHead.tsx'), 'utf8');
 
   /*
-    `PageHead` no longer draws a heading of its own: it renders `ColumnHeader` from `packages/ui`,
-    which is the same header every rebuilt screen wears. That is the point of the change — the two
-    halves of the product stopped disagreeing about what a page title looks like — so what is
-    pinned here follows the delegation rather than the markup that used to be in this file.
+    `PageHead` renders semantics and no shell: a header, an h1 and a lede, under one class.
+
+    There are two shells now. A page inside the application column wants the compact sticky title
+    bar; the same page inside the public document — `/security`, the agent pages, the legal pages —
+    wants a display heading, because it is the first thing on something being read rather than a
+    label on a column being navigated. Rendering the difference here would mean this component
+    knowing which shell it is in, which it cannot; `.w-column .w-phead` and `.w-doc .w-phead` decide.
   */
-  it('renders the application\u2019s column header', () => {
-    expect(head).toContain('<ColumnHeader');
-    expect(head).toContain("from '@projectx-social/ui'");
+  it('renders a real h1, and lets the shell decide what it looks like', () => {
+    expect(head).toMatch(/<h1[\s>]/);
+    expect(head).toContain('className="w-phead"');
   });
 
-  it('still produces a real h1, one level down', () => {
+  it('carries no shell of its own', () => {
     /*
-      The whole point, and it survives the move. A `div` with heading-sized type looks identical and
-      carries none of the document structure — which is the state these pages were already in, by
-      accident. The element now lives in `ColumnHeader`, so that is where it is checked.
+      The regression this guards: a component that draws its own chrome renders two headers on one
+      of the two shells. It draws a header element and nothing around it.
     */
-    const column = readFileSync(
-      resolve(process.cwd(), '../ui/src/layout/AppShell.tsx'),
-      'utf8',
-    );
-    expect(column).toMatch(/<h1[\s>]/);
+    expect(head).not.toContain('<ColumnHeader');
+    expect(head).not.toContain('w-rail');
+  });
+
+  it('is styled for both shells', () => {
+    /*
+      Half of this change lives in CSS, and a missing half is exactly the inversion that made
+      `/agents/build` unreadable — a 20px page title above 48px section headings.
+    */
+    const sheet = readFileSync(resolve(process.cwd(), '../ui/src/theme/weir-ui.css'), 'utf8');
+    expect(sheet).toContain('.w-column .w-phead');
+    expect(sheet).toContain('.w-doc .w-phead');
   });
 
   it('keeps the whole heading, accent included', () => {
@@ -133,5 +142,8 @@ describe('the page head itself', () => {
     const body = head.slice(head.indexOf('export function PageHead'), head.indexOf('export function PageSection'));
     expect(body).not.toContain('weir-pagehead__title');
     expect(body).not.toContain('weir-grad');
+    // And the h1 is not sized in this file: the shell decides, so a page cannot carry one size into
+    // a shell built for the other.
+    expect(body).not.toMatch(/fontSize|font-size/);
   });
 });
