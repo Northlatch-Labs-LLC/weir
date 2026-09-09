@@ -30,7 +30,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { generateKeyPairSync, sign as nodeSign, type KeyObject } from 'node:crypto';
 import { createLocalJWKSet, exportJWK } from 'jose';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   computeZkLoginAddressFromSeed,
@@ -47,7 +47,7 @@ import {
   readIdTokenFromFragment,
   readUnverifiedClaims,
 } from '../lib/zklogin';
-import { deriveUserSalt, nonceFor, verifyGoogleIdToken } from '../lib/zklogin-server';
+import { deriveUserSalt, forgetProverProbe, nonceFor, proverReachable, verifyGoogleIdToken } from '../lib/zklogin-server';
 
 const CLIENT_ID = '1234567890-testclient.apps.googleusercontent.com';
 const ISSUER = 'https://accounts.google.com';
@@ -468,5 +468,73 @@ describe('the nonce must be derived, never accepted', () => {
     // `publicKeyFromSuiBytes`. The round trip is what lets the server derive at all.
     const { ephemeral, commitment } = commitmentFor();
     expect(commitment.extendedEphemeralPublicKey).toBe(ephemeral.getPublicKey().toSuiPublicKey());
+  });
+});
+
+/**
+ * Whether the Google button is offered at all.
+ *
+ * `zkLoginConfig` proves the prover URL is https and a key is set; it cannot prove the machine
+ * exists. This deployment has been in exactly that state — the button live, every press ending at a
+ * host that had been torn down, discovered only AFTER the round trip to Google with the user's
+ * identity token already spent. So availability is measured.
+ */
+describe('the proving service is asked whether it is there', () => {
+  const config = {
+    googleClientId: 'x', redirectUri: 'https://weir.social/auth/callback',
+    proverUrl: 'https://prover.example/v1', proverKey: 'k', seed: new Uint8Array(32),
+  };
+  beforeEach(() => { forgetProverProbe(); });
+  afterEach(() => { vi.unstubAllGlobals(); forgetProverProbe(); });
+
+  it('counts any HTTP answer as reachable, including a refusal of the empty probe body', async () => {
+    /*
+      The probe sends `{}`, which is not a valid proof request. A prover that answers 400 has still
+      proved it is running, and that is the whole question. Requiring a 200 would demand a real
+      proof — seconds of computation — on every page that offers sign-in.
+    */
+    for (const status of [200, 400, 404, 405, 500]) {
+      forgetProverProbe();
+      vi.stubGlobal('fetch', async () => new Response('', { status }));
+      expect((await proverReachable(config)).ok, `status ${status}`).toBe(true);
+    }
+  });
+
+  it('reports a 403 as the edge refusing the key, not as a working prover', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 403 }));
+    const result = await proverReachable(config);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.detail).toContain('PROJECTX_SOCIAL_ZKLOGIN_PROVER_KEY');
+  });
+
+  it('reports a host that is not there', async () => {
+    vi.stubGlobal('fetch', async () => { throw new TypeError('fetch failed'); });
+    const result = await proverReachable(config);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.detail).toContain('could not be reached');
+  });
+
+  it('names a timeout as a timeout', async () => {
+    vi.stubGlobal('fetch', async () => {
+      const e = new Error('aborted'); e.name = 'AbortError'; throw e;
+    });
+    const result = await proverReachable(config);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.detail).toContain('four seconds');
+  });
+
+  it('probes once a minute, not once a page view', async () => {
+    /*
+      `/api/zklogin/session` is called by every page that offers sign-in. An unbounded probe would
+      put a request against the most expensive machine in the deployment on each one.
+    */
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => { calls += 1; return new Response('', { status: 200 }); });
+    const t = 1_000_000;
+    await proverReachable(config, t);
+    await proverReachable(config, t + 59_000);
+    expect(calls).toBe(1);
+    await proverReachable(config, t + 61_000);
+    expect(calls).toBe(2);
   });
 });

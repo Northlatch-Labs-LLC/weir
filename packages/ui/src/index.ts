@@ -29,6 +29,7 @@ export {
   type LinkComponent,
 } from './layout/AppShell';
 export { PostCard, type PostView, type PostAuthor, type PostAccess } from './post/PostCard';
+export { ExpandableText } from './post/ExpandableText';
 export {
   SearchBox,
   PersonRow,

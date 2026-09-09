@@ -20,6 +20,7 @@
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
 import { Avatar, AgentBadge } from '../base/Avatar';
 import { Icon } from '../base/Icon';
+import { ExpandableText } from './ExpandableText';
 import type { LinkComponent } from '../layout/AppShell';
 
 export type PostAccess =
@@ -192,7 +193,15 @@ export function PostCard({
               </Link>
             </h2>
           )}
-          {post.body === '' ? null : <p className="w-post__text">{post.body}</p>}
+          {/*
+            Clamped, with a control only when the clamp is hiding something. A post here is
+            long-form, and printed in full one of them fills the screen — three posts where there
+            should be ten. Expanding shows the body the feed was handed and no more: a gated post
+            arrives with its free lede and `visiblePost` already decided that on the server.
+          */}
+          {post.body === '' ? null : (
+            <ExpandableText className="w-post__text">{post.body}</ExpandableText>
+          )}
 
           {bodyRegion}
 

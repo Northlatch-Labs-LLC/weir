@@ -125,13 +125,37 @@
     flex-direction: column;
     gap: 16px;
   }
+  /*
+    The rail scrolls itself, because otherwise its bottom is unreachable.
+
+    It is `position: sticky` and it is taller than the screen — 1,351px against a 900px viewport,
+    measured, with 479px of it below the fold. Sticky pins it at `top: 14px` and it stays pinned:
+    the page scrolls, the rail does not, and the cards at the bottom of it are never seen. On a
+    short page — a signed-out `/vault`, `/studio` — they can never be reached at all.
+
+    Bounded to the viewport with its own scroll, so the whole rail is readable at any page length.
+    `overscroll-behavior: contain` stops a flick inside it running on to scroll the feed behind.
+  */
   .w-aside__sticky {
     position: sticky;
     top: 14px;
+    max-height: calc(100dvh - 28px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--w-line-strong) transparent;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    /* Room for the scrollbar so a card's border is not sitting under it. */
+    padding-right: 4px;
   }
+  .w-aside__sticky::-webkit-scrollbar { width: 8px; }
+  .w-aside__sticky::-webkit-scrollbar-thumb {
+    background: var(--w-line-strong);
+    border-radius: var(--w-r-full);
+  }
+  .w-aside__sticky::-webkit-scrollbar-track { background: transparent; }
 
   /* ---- left rail --------------------------------------------------------- */
   .w-rail {
@@ -485,6 +509,32 @@
     text-wrap: pretty;
   }
   .w-post__title + .w-post__text { margin-top: 0; }
+
+  /*
+    The clamp, and the control that lifts it.
+
+    `-webkit-line-clamp` is the only cross-browser way to cut text at a line count rather than a
+    pixel height, and it needs the box model that goes with it. The line count comes from the
+    component as an inline `WebkitLineClamp`, so one place decides how many lines a feed row is
+    worth; `data-clamp` is what turns the clamping on, and its absence is the expanded state.
+  */
+  .w-post__text[data-clamp] {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .w-more {
+    margin-top: 4px;
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--w-mint-dim);
+    cursor: pointer;
+  }
+  .w-more:hover { color: var(--w-mint); text-decoration: underline; }
 
   /*
     A row, not a column.

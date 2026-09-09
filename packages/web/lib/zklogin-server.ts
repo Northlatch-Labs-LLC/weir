@@ -407,6 +407,90 @@ export function deriveUserSalt(input: {
  * short-lived — retrying spends the user's remaining validity window on a request that has already
  * been answered.
  */
+/**
+ * Whether the proving service is answering at all, cached for a minute.
+ *
+ * # Why this exists
+ *
+ * `zkLoginConfig` proves the prover URL is https and that a key is set. It cannot prove the machine
+ * is there. This deployment has been in exactly that state before — the comment on the off switch
+ * above records it: "the button was live and every press ended at a host we had already torn down."
+ * `available: true` meant "configured", the browser offered Google, and the failure arrived after
+ * the round trip to Google with the user's identity token already spent.
+ *
+ * So availability is measured rather than assumed. A button that is offered is a button that works.
+ *
+ * # What counts as reachable
+ *
+ * Any HTTP answer, including 400, 404 and 405. The probe sends an empty body, which is not a valid
+ * proof request — a prover that rejects it has still proved it is running, and that is the whole
+ * question here. Only a refused connection, a DNS failure or a timeout is "not reachable".
+ *
+ * 403 is the exception and is reported separately: the edge rule in front of the prover refused the
+ * key, so the machine is up and this deployment cannot use it. That is a broken sign-in, not a
+ * working one, and it is the fault a person can actually fix.
+ *
+ * # Why it is cached
+ *
+ * `/api/zklogin/session` is called on every page that offers sign-in. An unbounded probe would put
+ * a request against the proving service on every one of those, which is a self-inflicted load
+ * against the most expensive machine in the deployment. Sixty seconds is short enough that a prover
+ * coming back is noticed within a minute and long enough that a busy page costs one probe.
+ */
+let proverProbe: { atMs: number; result: Reading<'reachable'> } | null = null;
+
+export async function proverReachable(
+  config: ZkLoginServerConfig,
+  nowMs: number = Date.now(),
+): Promise<Reading<'reachable'>> {
+  const source = 'the proving service';
+  const CACHE_MS = 60_000;
+  if (proverProbe !== null && nowMs - proverProbe.atMs < CACHE_MS) return proverProbe.result;
+
+  const abort = new AbortController();
+  /* Short. This runs while somebody is waiting for a sign-in page to decide what to offer them. */
+  const timer = setTimeout(() => abort.abort(), 4_000);
+  let result: Reading<'reachable'>;
+  try {
+    const key = config.proverKey.trim();
+    const response = await fetch(config.proverUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(key === '' ? {} : { [PROVER_KEY_HEADER]: key }),
+      },
+      body: '{}',
+      signal: abort.signal,
+    });
+    result =
+      response.status === 403
+        ? fail(
+            'transport',
+            source,
+            "refused at the edge — PROJECTX_SOCIAL_ZKLOGIN_PROVER_KEY does not match the rule guarding the proving service's hostname",
+          )
+        : ok('reachable' as const, nowMs);
+  } catch (cause) {
+    result = fail(
+      'transport',
+      source,
+      cause instanceof Error && cause.name === 'AbortError'
+        ? 'did not answer within four seconds'
+        : 'could not be reached',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  proverProbe = { atMs: nowMs, result };
+  return result;
+}
+
+/** Clears the probe cache. For tests, and for a deployment that has just been reconfigured. */
+export function forgetProverProbe(): void {
+  proverProbe = null;
+}
+
 export async function requestProof(input: {
   proverUrl: string;
   /** Sent as {@link PROVER_KEY_HEADER}. Omitted when empty, which is the localhost case. */

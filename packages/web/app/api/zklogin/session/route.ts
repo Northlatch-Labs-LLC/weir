@@ -4,7 +4,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { createClient, readCurrentEpoch } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { maxEpochFrom } from '@/lib/zklogin';
-import { zkLoginConfig } from '@/lib/zklogin-server';
+import { proverReachable, zkLoginConfig } from '@/lib/zklogin-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +49,28 @@ export async function GET(request: Request) {
       network,
       available: false,
       reason: 'Signing in with Google is not enabled on this deployment.',
+    });
+  }
+
+  /*
+    The prover is asked whether it is there before the button is offered.
+
+    Configuration proves the URL is https and a key is set; it cannot prove the machine exists. This
+    deployment has been in exactly that state before — see the off switch in `zkLoginConfig`: the
+    button was live and every press ended at a host that had been torn down, after the round trip to
+    Google, with the identity token already spent. `available` means "this will work" now.
+
+    A prover that is gone is reported the same calm way as a deployment with no zkLogin at all: the
+    Google button is not offered and the wallet paths stay. The reason is logged for whoever runs
+    this, not printed for the reader — "the proving service is down" is our problem, not theirs.
+  */
+  const prover = await proverReachable(zk.value);
+  if (!prover.ok) {
+    console.warn(`zkLogin unavailable: ${prover.failure.kind} — ${prover.failure.detail}`);
+    return NextResponse.json({
+      network,
+      available: false,
+      reason: 'Signing in with Google is not available right now.',
     });
   }
 

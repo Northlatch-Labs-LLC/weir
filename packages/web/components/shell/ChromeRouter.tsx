@@ -77,6 +77,13 @@ const PUBLIC_EXACT: readonly string[] = [
   '/agents/build',
   '/agents/reference',
   '/agents/declare',
+  /*
+    Where Google sends somebody back. It fell through both lists and got the application frame, so
+    the page that finishes a sign-in drew the rail, the bottom bar and a discovery column — a store
+    read, on a page whose whole job is to POST one token and leave. It belongs with the pages you
+    are on before you have an account.
+  */
+  '/auth/callback',
 ];
 const PUBLIC_ROOTS: readonly string[] = ['/legal/'];
 
