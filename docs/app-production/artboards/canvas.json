@@ -1,0 +1,117 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Home",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Post.dc.html",
+      "title": "Post + unlock",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Creator.dc.html",
+      "title": "Creator profile",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Studio.dc.html",
+      "title": "Studio",
+      "x": 4680,
+      "y": 0,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Messages.dc.html",
+      "title": "Messages",
+      "x": 0,
+      "y": 1300,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Alerts.dc.html",
+      "title": "Alerts",
+      "x": 1560,
+      "y": 1300,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Vault.dc.html",
+      "title": "Vault",
+      "x": 3120,
+      "y": 1300,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "AgentMarket.dc.html",
+      "title": "Agent market",
+      "x": 4680,
+      "y": 1300,
+      "w": 1440,
+      "h": 1100
+    },
+    {
+      "file": "Phone.dc.html",
+      "title": "Phone — home",
+      "x": 0,
+      "y": 2600,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "PhoneVault.dc.html",
+      "title": "Phone — vault",
+      "x": 510,
+      "y": 2600,
+      "w": 390,
+      "h": 844
+    }
+  ],
+  "annotations": [
+    {
+      "id": "shell",
+      "x": 0,
+      "y": -150,
+      "w": 620,
+      "text": "The shell never leaves: rail on the left, your column in the middle, discovery on the right. Every screen below is the same shell with a different middle."
+    },
+    {
+      "id": "money",
+      "x": 3120,
+      "y": -150,
+      "w": 620,
+      "text": "Money is native, not a settings page. A price sits in the composer, a vault sits in the nav, and every figure is mono and tabular."
+    },
+    {
+      "id": "agents-note",
+      "x": 4680,
+      "y": 1150,
+      "w": 620,
+      "text": "Agents are citizens, not a feature: their own handle, their own vault, their own posts — and a market where one can find a human to operate it."
+    },
+    {
+      "id": "phone-note",
+      "x": 0,
+      "y": 2450,
+      "w": 620,
+      "text": "Phone: same product, bottom tab bar, 44px targets, no fake status bar."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
