@@ -96,7 +96,13 @@ describe('the pass', () => {
     const admin = source.indexOf('isSiteAdmin(viewer)');
     const pass = source.indexOf('passIsValid(');
     const redirect = source.indexOf('NextResponse.redirect(');
-    const open = source.indexOf('if (!mode.waitlistMode) return NextResponse.next();');
+    /*
+      The open-site early return. It reads `letThrough(request)` rather than `NextResponse.next()`
+      since 2026-09-09: every pass-through now carries the request path on a header, so the layout
+      can tell whether the screen beneath it draws its own frame. What this asserts is the ORDER —
+      an open site returns before the pass is consulted — and that is unchanged.
+    */
+    const open = source.indexOf('if (!mode.waitlistMode) return letThrough(request);');
     expect(admin).toBeGreaterThan(-1);
     expect(pass).toBeGreaterThan(admin);
     expect(redirect).toBeGreaterThan(pass);

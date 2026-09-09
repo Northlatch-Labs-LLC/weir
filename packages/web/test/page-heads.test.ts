@@ -58,10 +58,29 @@ describe('every application page names itself', () => {
     const relative = page.slice(APP.length + 1).replace(/\/page\.tsx$/, '') || '(index)';
     if (NO_HEAD.some((skip) => relative.startsWith(skip))) continue;
 
-    it(`/${relative} mounts a page head`, () => {
+    it(`/${relative} names itself`, () => {
       const source = readFileSync(page, 'utf8');
-      expect(source).toContain('<PageHead');
-      expect(source).toContain("from '@/components/design/PageHead'");
+
+      /*
+        Two mechanisms, one guarantee.
+
+        `PageHead` is the legacy one. A page rebuilt onto the application frame hands its content to
+        a screen in `components/app/`, and that screen mounts `ColumnHeader`, which renders the
+        `h1`. Following the import keeps this assertion about the thing it has always been about —
+        does this route produce a heading — rather than about which component produced it.
+
+        Accepting only `PageHead` would have failed three rebuilt routes that DO have headings, and
+        the cure for that would have been to skip them, which is how a guard quietly stops guarding.
+      */
+      if (source.includes('<PageHead')) {
+        expect(source).toContain("from '@/components/design/PageHead'");
+        return;
+      }
+
+      const screen = /from '@\/(components\/app\/[A-Za-z]+)'/.exec(source)?.[1];
+      expect(screen, `${relative} mounts neither a PageHead nor a screen from components/app`).toBeDefined();
+      const screenSource = readFileSync(resolve(process.cwd(), `${screen}.tsx`), 'utf8');
+      expect(screenSource, `${screen} renders no ColumnHeader, so /${relative} has no heading`).toContain('<ColumnHeader');
     });
   }
 });

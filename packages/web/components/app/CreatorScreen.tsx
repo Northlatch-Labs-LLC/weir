@@ -49,6 +49,7 @@ export function CreatorScreen({
   tipSlot,
   depositSlot,
   depositLine,
+  accountName,
   tab,
   tabHref,
   viewerAddress,
@@ -73,6 +74,15 @@ export function CreatorScreen({
   tipSlot?: ReactNode;
   depositSlot?: ReactNode;
   depositLine?: string | undefined;
+  /**
+   * The ACCOUNT behind this page — its reverse-resolved name, or its address.
+   *
+   * The support vault belongs to the account, not to the page, and one account can publish several
+   * pages. Attributing the vault to `profile.displayName` makes each of those pages claim the same
+   * on-chain object under a different name, which is the confusion `test/creator-page.test.ts`
+   * exists to stop.
+   */
+  accountName?: string | undefined;
   tab: 'posts' | 'membership';
   tabHref: Record<'posts' | 'membership', string>;
   viewerAddress: string | null;
@@ -89,10 +99,15 @@ export function CreatorScreen({
     <>
       {depositSlot === undefined ? null : (
         <section className="w-card w-card--money">
-          <h3 style={{ color: 'var(--w-mint)' }}>Back {profile.displayName}</h3>
+          <h3 style={{ color: 'var(--w-mint)' }}>Back this account</h3>
+          {accountName === undefined ? null : (
+            <p className="w-mono" style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--w-ink-7)' }}>
+              {accountName}
+            </p>
+          )}
           <p style={{ color: 'var(--w-ink-9)' }}>
             {depositLine ??
-              `Your SUI stays yours. It earns while it sits behind ${profile.displayName}, and the earnings are theirs. Take it back whenever you like.`}
+              'Your SUI stays yours and comes back whenever you ask. It earns while it sits there and the earnings go to the account behind this page. The vault belongs to that account rather than to this page, so it backs every page they publish.'}
           </p>
           {depositSlot}
         </section>

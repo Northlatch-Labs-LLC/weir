@@ -53,23 +53,48 @@ export const config = {
 */
 export { ALWAYS_OPEN } from '@/lib/front-door';
 
+/**
+ * The path, carried to the layout that renders it.
+ *
+ * A layout renders above the page and Next hands it no pathname, so `components/shell/AppShell.tsx`
+ * cannot tell whether the screen beneath it already carries its own frame. It has to know: a
+ * rebuilt screen draws its own rail, header and footer, and wrapping it in the legacy shell as well
+ * puts two navigations on one page — which is two different answers to "where am I", not a
+ * cosmetic defect.
+ *
+ * This is the only place that knows, so it writes it down. The header is namespaced so it cannot
+ * collide with a platform one, and it is set on the REQUEST rather than the response, which is what
+ * makes it readable from a server component.
+ *
+ * Nothing else about it is load-bearing: no redirect, no auth, no cookie. When every route carries
+ * its own frame, the shell and this header are deleted together.
+ */
+export const PATHNAME_HEADER = 'x-weir-pathname';
+
+/** Let the request through, with the path attached. Replaces a bare `NextResponse.next()`. */
+function letThrough(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.set(PATHNAME_HEADER, request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isAlwaysOpen(pathname)) return NextResponse.next();
+  if (isAlwaysOpen(pathname)) return letThrough(request);
 
   const mode = await readSiteMode();
-  if (!mode.waitlistMode) return NextResponse.next();
+  if (!mode.waitlistMode) return letThrough(request);
 
   const viewer = fold(
     await provenReaderFor(request),
     (value) => value,
     () => null,
   );
-  if (await isSiteAdmin(viewer)) return NextResponse.next();
+  if (await isSiteAdmin(viewer)) return letThrough(request);
 
   // A pass from a redeemed code. `passIsValid` fails closed on any error — see its header.
-  if (await passIsValid(passTokenFrom(request.headers.get('cookie')))) return NextResponse.next();
+  if (await passIsValid(passTokenFrom(request.headers.get('cookie')))) return letThrough(request);
 
   const to = request.nextUrl.clone();
   to.pathname = '/waitlist';

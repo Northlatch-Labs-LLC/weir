@@ -5,7 +5,7 @@ import { createClient, fold, readPlatform } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
-import { DesignJoin } from '@/components/design/Join';
+import { CreatorsScreen } from '@/components/app/CreatorsScreen';
 
 export const metadata: Metadata = { title: titleFor('/creators') };
 
@@ -38,9 +38,9 @@ export default async function CreatorsPage() {
         );
 
   return (
-    <DesignJoin
-      signedIn={viewer !== null}
-      myHandle={handle}
+    <CreatorsScreen
+      viewerAddress={viewer}
+      viewerHandle={handle}
       feeBps={platform === null ? null : Number(platform.feeBps)}
     />
   );

@@ -72,7 +72,7 @@ export function VaultScreen({
           yours — take any of it back whenever you like. Some creators hand a share of the yield
           back to the people pooled behind them.
         </p>
-        <NextLink href="/creators" className="w-btn w-btn--quiet" style={{ width: '100%' }}>
+        <NextLink href="/explore" className="w-btn w-btn--quiet" style={{ width: '100%' }}>
           Find someone to back
         </NextLink>
       </section>
@@ -166,7 +166,7 @@ export function VaultScreen({
               fact="You have not backed anyone yet."
               narrowedBy="Backing costs nothing but the time your money spends there."
               action={
-                <NextLink href="/creators" className="w-btn w-btn--primary">
+                <NextLink href="/explore" className="w-btn w-btn--primary">
                   Find someone to back
                 </NextLink>
               }

@@ -554,10 +554,20 @@ export default async function CreatorPage({
         followSlot={subscribeSlot}
         tipSlot={tipSlot}
         depositSlot={depositSlot}
+        /*
+          The account, never this page.
+
+          A support vault is opened against a SocialAccount, so it belongs to the address behind a
+          page and not to the page. Naming it after `profile.displayName` is the defect
+          `test/creator-page.test.ts` pins: a creator with two pages would see one vault presented
+          twice under two different names, and somebody backing the second would believe it was
+          separate from the first.
+        */
+        accountName={ownerName ?? shortId(profile.owner)}
         depositLine={
           rebateBps !== null && rebateBps > 0
-            ? `Your SUI stays yours and comes back whenever you ask. It earns while it sits behind ${profile.displayName}, and they hand back ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of what it earns to the people pooled behind them.`
-            : `Your SUI stays yours and comes back whenever you ask. It earns while it sits behind ${profile.displayName}, and the earnings are theirs.`
+            ? `Your SUI stays yours and comes back whenever you ask. It earns while it sits there, and ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of what it earns comes back to the people pooled behind this account. The vault belongs to that account rather than to this page, so it backs every page they publish.`
+            : 'Your SUI stays yours and comes back whenever you ask. It earns while it sits there and the earnings go to the account behind this page. The vault belongs to that account rather than to this page, so it backs every page they publish.'
         }
         tab={tab}
         tabHref={{ posts: tabHref('posts'), membership: tabHref('membership') }}

@@ -25,11 +25,24 @@ import { describe, expect, it } from 'vitest';
 
 const PAGE = readFileSync(new URL('../app/c/[handle]/page.tsx', import.meta.url), 'utf8');
 
+/*
+  The window this asserts over: the backing card's attribution, and nothing else.
+
+  It used to run from `sui: ownerName` to the old `depositNote` prop. The page was rebuilt onto the
+  application frame on 2026-09-09 and those props are gone, so the slice ran to the end of the file
+  and swept in `profile.displayName` from the `profile` prop — which is the page's own name, used
+  correctly, and not an attribution of the vault at all.
+
+  The assertions below are unchanged. Only the boundaries moved, to the two props that actually
+  attribute the vault: `accountName` names whose it is, `depositLine` says what backing it does.
+*/
 const CARD = (() => {
-  const start = PAGE.indexOf('sui: ownerName');
-  const end = PAGE.indexOf('onDeposit', start) === -1 ? PAGE.length : PAGE.indexOf('/>', PAGE.indexOf('depositNote', start));
+  const start = PAGE.indexOf('accountName=');
   if (start === -1) throw new Error('the support vault attribution was not found');
-  return PAGE.slice(start, end);
+  const after = PAGE.indexOf('depositLine=', start);
+  if (after === -1) throw new Error('the deposit line was not found');
+  const end = PAGE.indexOf('tab={tab}', after);
+  return PAGE.slice(start, end === -1 ? PAGE.length : end);
 })();
 
 describe('attributing the support vault', () => {

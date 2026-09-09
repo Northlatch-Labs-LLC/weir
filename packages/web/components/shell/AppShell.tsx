@@ -19,6 +19,8 @@
  * resolves its own entitlement regardless of what the frame drew.
  */
 import { Suspense } from 'react';
+import { headers } from 'next/headers';
+import { PATHNAME_HEADER } from '@/proxy';
 import { fold } from '@projectx-social/sdk';
 import { AppNav } from '@/components/design/AppNav';
 import { Reveals } from '@/components/design/Reveals';
@@ -32,7 +34,57 @@ import { provenReader } from '@/lib/read-session';
 import { readSiteMode } from '@/lib/site-mode';
 import { Loading } from '@/components/ui/primitives';
 
+/*
+  Routes that already carry their own frame.
+
+  A rebuilt screen renders `components/app/AppFrame` — rail, column, discovery, bottom bar — and
+  wrapping it in this shell as well puts two headers, two navigations and two footers on one page.
+  Two navigations is not a cosmetic defect: it is two different answers to "where am I".
+
+  This list GROWS as the rebuild proceeds and the shell shrinks to nothing. When every route is on
+  it, this gate and the header in `proxy.ts` are both deleted, which is the intended end.
+
+  Matched as a prefix, so `/c/wren` and `/p/abc` are covered by their roots. `/` is matched exactly
+  because a prefix of "/" is every path there is.
+*/
+const PORTED_PREFIXES = ['/feed', '/c/', '/p/', '/vault', '/explore', '/creators', '/agents', '/alerts', '/messages', '/studio'] as const;
+
+function carriesItsOwnFrame(pathname: string | null): boolean {
+  if (pathname === null) return false;
+  if (pathname === '/') return true;
+  return PORTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix));
+}
+
+/**
+ * The path this render is for, or `null` when there is no request to ask.
+ *
+ * `headers()` THROWS outside a request — a test renderer, a build-time evaluation — rather than
+ * answering empty, so this cannot be a plain read. A throw is not an error here: it means nobody
+ * set the header, and the honest answer to "does this route carry its own frame" is then "assume
+ * not", which draws the legacy chrome. That is the safe direction. A page with too much chrome is
+ * ugly; a page with none has no way out of itself.
+ */
+async function currentPath(): Promise<string | null> {
+  try {
+    return (await headers()).get(PATHNAME_HEADER);
+  } catch {
+    return null;
+  }
+}
+
 export async function AppShell({ children }: { children: React.ReactNode }) {
+  /*
+    Which path this is, from the header `proxy.ts` set. A layout is rendered above the page and
+    Next hands it no pathname, so this is the only place the answer exists.
+
+    A missing header means the middleware did not run — a build step, a test renderer, an unusual
+    deployment — and the honest answer to "does this route have its own frame" is then "assume not",
+    which draws the legacy chrome. That is the safe direction: a page with too much chrome is ugly,
+    a page with none has no way out of itself.
+  */
+  const pathname = await currentPath();
+  if (carriesItsOwnFrame(pathname)) return <>{children}</>;
+
   const viewer = fold(
     await provenReader(),
     (value) => value,
