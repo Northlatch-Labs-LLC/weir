@@ -121,12 +121,26 @@ export function Avatar({
   const pair = PAIRS[next() % PAIRS.length] ?? PAIRS[0]!;
   const [ground, figure] = pair;
 
-  // A symmetric half, mirrored — three columns decided, five drawn.
-  const cells: React.ReactElement[] = [];
+  /*
+    A symmetric half, mirrored — three columns decided, five drawn.
+
+    A row with all three half-cells on mirrors into a solid bar across the face, and a picture made
+    of bars reads as a flag rather than as a person. When that happens the middle cell is dropped,
+    which keeps the symmetry and the determinism and costs one cell.
+  */
+  const on: boolean[][] = [];
   const half = Math.ceil(GRID / 2);
   for (let row = 0; row < GRID; row += 1) {
+    const cols: boolean[] = [];
+    for (let col = 0; col < half; col += 1) cols.push(next() % 100 < 46);
+    if (cols.every(Boolean)) cols[half - 1] = false;
+    on.push(cols);
+  }
+
+  const cells: React.ReactElement[] = [];
+  for (let row = 0; row < GRID; row += 1) {
     for (let col = 0; col < half; col += 1) {
-      if (next() % 100 < 46) {
+      if (on[row]?.[col] === true) {
         const y = row * CELL;
         const x = col * CELL;
         const mx = (GRID - 1 - col) * CELL;

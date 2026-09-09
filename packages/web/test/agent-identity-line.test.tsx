@@ -90,6 +90,7 @@ describe('agentIdentityFor — the rule', () => {
 function page(agent?: DesignAgentIdentity) {
   return render(
     <DesignCreator
+      counts={{ posts: 0, followers: 0, subscribers: null }}
       signedIn={false}
       myHandle={null}
       profile={{ handle: 'kaela', displayName: 'Kaela', bio: 'writes', initials: 'ka', meta: '@kaela · 3 followers', sui: 'kaela', ...(agent === undefined ? {} : { agent }) }}

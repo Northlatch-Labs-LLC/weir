@@ -26,6 +26,14 @@ import { TITLE, TAGLINE, DESCRIPTION } from '@/lib/site-meta';
   layer and the brand would lose to the sheet it is meant to re-dress.
 */
 import './weir.css';
+/*
+  The application's own layer, last.
+
+  `weir.css` declares `estate → theme → weir → utilities`; this sheet declares `weir-ui` of its own
+  and is imported after, so it wins over the legacy layers without editing one of them. As screens
+  move onto it those layers shrink, and when they are empty this is the only stylesheet left.
+*/
+import '@projectx-social/ui/weir-ui.css';
 
 /*
   `TITLE`, `TAGLINE` and `DESCRIPTION` moved to `lib/site-meta.ts`: the protocol this settles on is

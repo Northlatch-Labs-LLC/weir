@@ -40,7 +40,6 @@ function post(overrides: Partial<PostView>): PostView {
     body: 'Everyone tells you to use the pasta water.',
     access: { kind: 'free' },
     comments: 41,
-    supporters: 27,
     ...overrides,
   };
 }

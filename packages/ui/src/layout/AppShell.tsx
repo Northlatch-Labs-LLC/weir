@@ -263,6 +263,11 @@ export function AppShell({
           </aside>
         )}
       </div>
+      {viewer.signedIn ? (
+        <Link href="/studio" className="w-fab" aria-label="Publish something">
+          <Icon name="plus" size={24} strokeWidth={2.2} />
+        </Link>
+      ) : null}
       <BottomBar pathname={pathname} Link={Link} viewer={viewer} />
     </div>
   );

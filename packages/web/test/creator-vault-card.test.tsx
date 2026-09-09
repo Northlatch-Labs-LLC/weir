@@ -65,6 +65,7 @@ const PROFILE = {
 function card(overrides: { tipSlot?: ReactNode } = {}) {
   return render(
     <DesignCreator
+      counts={{ posts: 0, followers: 0, subscribers: null }}
       signedIn
       myHandle="nova"
       profile={PROFILE}

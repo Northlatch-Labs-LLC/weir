@@ -69,16 +69,27 @@
   /* =========================================================================
      Shell
      ====================================================================== */
+  /*
+    A column, not a row.
+
+    The bottom bar is a child of this element and appears only under 834px. When this was a row it
+    became a flex ITEM beside the content at exactly that width — the phone layout was pushed off
+    the left edge of the screen by the width of its own navigation. A column stacks them, which is
+    what "the bar is under the content" means in the first place.
+  */
   .w-app {
     min-height: 100dvh;
     background: var(--w-ground);
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
   }
   .w-app__inner {
     display: flex;
     width: var(--w-app);
+    max-width: 100%;
     align-items: stretch;
+    flex: 1;
   }
   .w-column {
     width: var(--w-column);
@@ -574,6 +585,7 @@
     position: sticky;
     bottom: 0;
     z-index: 6;
+    width: 100%;
     display: none;
     background: rgba(3, 5, 10, 0.94);
     backdrop-filter: blur(12px);

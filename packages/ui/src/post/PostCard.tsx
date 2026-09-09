@@ -50,7 +50,14 @@ export type PostView = {
   lockedAssets?: number;
   media?: ReadonlyArray<{ url: string; alt: string; width: number; height: number }>;
   comments: number;
-  supporters: number;
+  /**
+   * How many people have supported this post.
+   *
+   * Optional because the store does not count it yet, and a control that prints `0` for something
+   * nobody counted is the same defect as a zero standing in for an unread figure. Absent means the
+   * action carries no number — never that the number is zero.
+   */
+  supporters?: number | undefined;
   /** Why this post is in front of this reader, when there is a reason worth stating. */
   context?: string | null;
 };
@@ -193,7 +200,9 @@ export function PostCard({
               onClick={onSupport === undefined ? undefined : () => onSupport(post)}
             >
               <Icon name="support" size={18} />
-              <span className="w-action__count">{post.supporters}</span>
+              {post.supporters === undefined ? null : (
+                <span className="w-action__count">{post.supporters}</span>
+              )}
               <span className="w-vh">Support this post</span>
             </button>
             <button

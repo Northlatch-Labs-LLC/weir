@@ -24,6 +24,9 @@ import { accountHandle } from '@/lib/accounts';
 import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
 import { DesignHome, type DesignFeedPost } from '@/components/design/Home';
+import type { PostView } from '@projectx-social/ui';
+import { FeedApp, type FeedCreator } from '@/components/app/FeedApp';
+import { ago } from '@/lib/freshness';
 import { readEntityTypes } from '@/components/EntityType';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
@@ -329,26 +332,75 @@ export async function FeedView({
         ? 'Viewing as a guest'
         : 'Connected, not yet confirmed. What you have paid for stays locked until this browser proves the account is yours.';
 
+  /*
+    The feed, as the application draws it.
+
+    `visiblePost` has already decided what each post may contain, so nothing here can release a
+    body: a gated post arrives with no `body` field at all and this maps its `preview`, which is
+    the free lede every reader is meant to see.
+
+    Two figures the design shows are deliberately absent rather than invented. There is no
+    supporter count in the store, so the control carries no number; and a locked post's asset ids
+    are withheld from an unentitled reader by design, so the lock panel does not claim a count it
+    was not given.
+  */
+  const nameOf = new Map(profiles.map((p) => [p.handle, p.displayName]));
+  const now = Date.now();
+  const appPosts: PostView[] = posts.map((post) => {
+    const visible = visiblePost(post, canRead(post, entitlements), sealApprover(post, entitlements));
+    const coin = coinOf.get(post.authorHandle);
+    const access: PostView['access'] =
+      post.access.kind === 'paid'
+        ? { kind: 'paid', price: priceOf(post.access.price, coin?.decimals ?? null, coin?.symbol ?? '') ?? null }
+        : post.access.kind === 'subscribers'
+          ? { kind: 'subscribers', tier: null }
+          : { kind: 'free' };
+
+    return {
+      id: post.id,
+      author: {
+        address: ownerOf.get(post.authorHandle) ?? '',
+        handle: post.authorHandle,
+        displayName: nameOf.get(post.authorHandle) ?? post.authorHandle,
+        // `agentFlag` answers undefined when the register could not be read. Unknown is not
+        // "human": nobody is marked, and nobody is asserted to be a person either.
+        isAgent: agentFlag(agents, ownerOf.get(post.authorHandle)) === true,
+      },
+      when: ago(now, post.createdAtMs),
+      whenISO: new Date(post.createdAtMs).toISOString(),
+      title: post.title === '' ? null : post.title,
+      body: visible.body ?? post.preview,
+      access,
+      unlocked: !visible.locked && post.access.kind !== 'public',
+      comments: post.commentCount,
+    };
+  });
+
+  const appCreators: FeedCreator[] = profiles.map((profile, index) => ({
+    handle: profile.handle,
+    address: profile.owner,
+    displayName: profile.displayName,
+    followers: `${followerCounts[index]} follower${followerCounts[index] === 1 ? '' : 's'}`,
+    isAgent: agentFlag(agents, profile.owner) === true,
+  }));
+
   return (
-    <DesignHome
-      signedIn={viewer !== null}
-      myHandle={handleOfViewer}
-      feed={designFeed}
-      feedTabs={feedTabs}
-      feedEmptyMessage={feedEmptyMessage}
-      creators={designCreators}
+    <FeedApp
+      viewerAddress={viewer}
+      viewerHandle={handleOfViewer}
+      viewerName={handleOfViewer}
+      reader={reader}
+      posts={appPosts}
+      tabs={feedTabs.map((tab) => ({ label: tab.label, href: tab.href, current: tab.current, note: tab.note }))}
+      emptyMessage={feedEmptyMessage}
+      creators={appCreators}
       creatorCount={
         profiles.length === 0
-          ? 'No creators yet.'
-          : `${profiles.length} creator${profiles.length === 1 ? '' : 's'} with a vault on chain`
+          ? 'Nobody has opened a page yet.'
+          : `${profiles.length} account${profiles.length === 1 ? '' : 's'} with a page here`
       }
-      sessionLabel={sessionLabel}
-      guestWall={
-        isGuest && hasMore
-          ? `Showing ${posts.length} posts. Sign in to read the rest.`
-          : undefined
-      }
-      builtOn={BUILT_ON}
+      sessionNote={sessionLabel}
+      guestWall={isGuest && hasMore ? `Showing ${posts.length} posts. Sign in to read the rest.` : undefined}
     />
   );
 }
