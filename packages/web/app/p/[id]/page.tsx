@@ -33,8 +33,9 @@ import { findProfile } from '@/lib/content';
 import { siteConfig } from '@/lib/chain';
 import { formatUnits } from '@/lib/units';
 import { createClient, fold, readDecimals } from '@projectx-social/sdk';
-import { PostCard } from '@/components/PostCard';
-import { Breadcrumbs } from '@/components/shell/Breadcrumbs';
+import { PostScreen } from '@/components/app/PostScreen';
+import { accountHandle } from '@/lib/accounts';
+import { ago } from '@/lib/freshness';
 
 export const dynamic = 'force-dynamic';
 
@@ -150,30 +151,46 @@ export default async function PostPage({
   const shown = visiblePost(found, canRead(found, entitlements), sealApprover(found, entitlements));
   const comments = await listComments(found.id);
 
+  const viewerHandle =
+    viewer === null
+      ? null
+      : fold(
+          await accountHandle(viewer),
+          (v) => v,
+          () => null,
+        );
+
   return (
-    <div className="weir-page pd">
-      <Breadcrumbs />
-      <article className="pd__post">
-        <PostCard
-          post={shown}
-          {...(price === undefined ? {} : { price })}
-          {...(reader === undefined ? {} : { reader })}
-          {...(authorIsAgent === undefined ? {} : { authorIsAgent })}
-        />
-      </article>
-
-      {/*
-        The count, stated even when the thread is closed to this reader.
-
-        How many people replied is not part of what was paid for; whether you can read them is.
-      */}
-      <p className="pd__count">
-        {comments.length === 0
-          ? 'No comments yet.'
-          : comments.length === 1
-            ? '1 comment'
-            : `${comments.length} comments`}
-      </p>
-    </div>
+    <PostScreen
+      post={shown}
+      author={{
+        handle: found.authorHandle,
+        displayName: profile?.displayName ?? found.authorHandle,
+        // The identity a face is derived from. An unknown owner draws no face rather than a wrong
+        // one: an empty seed is stable and obviously blank, where a handle-derived one would give
+        // two different accounts with the same handle history the same picture.
+        address: profile?.owner ?? '',
+        isAgent: authorIsAgent === true,
+        bio: profile?.bio ?? '',
+      }}
+      when={ago(Date.now(), found.createdAtMs)}
+      whenISO={new Date(found.createdAtMs).toISOString()}
+      price={price ?? null}
+      {...(found.access.kind === 'paid'
+        ? {
+            unlock: {
+              vaultId: found.vaultId,
+              contentKey: found.access.contentKey,
+              // A guard, never an instruction: `unlock` reads the vault's own price and takes that.
+              expectedPrice: found.access.price,
+            },
+          }
+        : {})}
+      viewerAddress={viewer}
+      viewerHandle={viewerHandle}
+      {...(reader === undefined ? {} : { reader })}
+      commentCount={comments.length}
+      coinType={profile?.coinType ?? null}
+    />
   );
 }

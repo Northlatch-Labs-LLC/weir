@@ -24,26 +24,8 @@
  * submitted are the bytes that were simulated.
  */
 
-import { useState } from 'react';
-import { useSigner } from '@/components/SignerProvider';
+import { useUnlock } from '@/components/app/use-unlock';
 import { SignIn } from '@/components/SignIn';
-
-/** Shared with subscribing — refusals a read can name before a transaction is built. */
-type Blocker =
-  | { kind: 'no-account' }
-  | { kind: 'self-payment' }
-  | { kind: 'insufficient-balance'; have: string; need: string }
-  | { kind: 'not-for-sale' }
-  | { kind: 'price-moved'; listed: string; live: string }
-  | { kind: 'tier-inactive' };
-
-interface Quote {
-  bytes: string;
-  gasMist: string;
-  contentKey: string;
-  creatorReceives: string;
-  platformReceives: string;
-}
 
 export function UnlockButton({
   vaultId,
@@ -64,59 +46,15 @@ export function UnlockButton({
   /** The same figure already formatted, so this component assumes nothing about decimals. */
   priceLabel: string;
 }) {
-  const { signer } = useSigner();
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [blocked, setBlocked] = useState<Blocker | null>(null);
-  const [digest, setDigest] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function simulate() {
-    if (signer === null) return;
-    setBusy(true);
-    setError(null);
-    setBlocked(null);
-    setQuote(null);
-    try {
-      const response = await fetch('/api/checkout/unlock', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        // No coin type. The route reads the vault's own denomination — a caller naming one would be
-        // choosing which generic instantiation of `unlock` executes.
-        body: JSON.stringify({ sender: signer.address, vaultId, contentKey, expectedPrice }),
-      });
-      const body = (await response.json()) as { quote?: Quote; blocked?: Blocker; error?: string };
-      if (body.blocked !== undefined) setBlocked(body.blocked);
-      else if (body.quote === undefined) setError(body.error ?? 'this could not be simulated');
-      else setQuote(body.quote);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function signAndSubmit() {
-    if (signer === null || quote === null) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const signature = await signer.signTransaction(quote.bytes);
-      const response = await fetch('/api/checkout/submit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged.
-        body: JSON.stringify({ bytes: quote.bytes, signature }),
-      });
-      const body = (await response.json()) as { digest?: string; error?: string };
-      if (body.digest === undefined) setError(body.error ?? 'the payment was not accepted');
-      else setDigest(body.digest);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
+  /*
+    The sequence lives in `use-unlock`, shared with the dialog the application frame opens. It was
+    extracted rather than copied: two implementations of one payment is how they stop agreeing.
+  */
+  const { signer, quote, blocked, digest, busy, error, simulate, signAndSubmit, cancel } = useUnlock({
+    vaultId,
+    contentKey,
+    expectedPrice,
+  });
 
   if (digest !== null) {
     return (
@@ -188,7 +126,7 @@ export function UnlockButton({
           <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
             {busy ? 'Confirming…' : 'Confirm and pay'}
           </button>
-          <button className="btn ghost" type="button" disabled={busy} onClick={() => setQuote(null)}>
+          <button className="btn ghost" type="button" disabled={busy} onClick={cancel}>
             Cancel
           </button>
         </div>

@@ -39,6 +39,7 @@ export const ICON_PATHS = {
   clock: 'M17.2 10a7.2 7.2 0 1 0-14.4 0 7.2 7.2 0 0 0 14.4 0M10 5.8V10l2.8 1.8',
   bolt: 'M11 2.6 4.6 11.2h4.2L9 17.4l6.4-8.6h-4.2z',
   close: 'M5.5 5.5l9 9M14.5 5.5l-9 9',
+  external: 'M11 4h5v5M16 4l-7.5 7.5M14 12v3.4a1.6 1.6 0 0 1-1.6 1.6H4.6A1.6 1.6 0 0 1 3 15.4V7.6A1.6 1.6 0 0 1 4.6 6H8',
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;
