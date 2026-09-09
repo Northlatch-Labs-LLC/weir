@@ -9,7 +9,8 @@ import { listProfiles } from '@/lib/content';
 import { opaqueDetail } from '@/lib/opaque';
 import { readPools, type PoolSummary } from '@/lib/pools';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
-import { ExploreScreen, type ExploreRow } from '@/components/app/ExploreScreen';
+import { ExploreScreen, type ExploreRow, type ExplorePostRow } from '@/components/app/ExploreScreen';
+import { discover, MIN_SEARCH_CHARS } from '@/lib/discovery';
 
 /**
  * Moved out of the `(app)` group: this is a surface a visitor reaches before signing in, and the
@@ -38,7 +39,30 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ExplorePage() {
+/** What the two paths below agree on. The directory reads it from the store; a search matches it. */
+interface Account {
+  handle: string;
+  owner: string;
+  displayName: string;
+  bio: string;
+}
+
+export default async function ExplorePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  /*
+    The query, from the URL.
+
+    The frame's search box is a plain `GET` form, so what somebody typed arrives here as `q` — which
+    is what makes a result a link they can send and the back button return them to the search they
+    ran before. The box was an anchor to this route with nothing to type into, so this page had no
+    query to read and search did nothing at all.
+  */
+  const asked = (await searchParams).q;
+  const query = (Array.isArray(asked) ? (asked[0] ?? '') : (asked ?? '')).trim();
+
   const viewer = fold(
     await provenReader(),
     (value) => value,
@@ -54,25 +78,74 @@ export default async function ExplorePage() {
         );
 
   /*
-    The directory itself. A store that cannot be reached is a refusal, never an empty list: telling
-    a reader nobody has a page here because a query timed out is the one failure this whole surface
-    would be judged on.
+    The accounts to show, and the posts beside them when this is a search.
+
+    A store that cannot be reached is a refusal, never an empty list: telling a reader nobody has a
+    page here because a query timed out is the one failure this whole surface would be judged on.
+    `discover` refuses a query shorter than its index can serve, and that refusal is a sentence
+    about the query rather than a fault — it travels separately, and the directory still renders.
   */
-  let profiles;
-  try {
-    profiles = await listProfiles();
-  } catch (error) {
-    opaqueDetail('explore: profiles', error);
-    return (
-      <ExploreScreen
-        viewerAddress={viewer}
-        viewerHandle={handle}
-        rows={[]}
-        readAtMs={Date.now()}
-        caveat=""
-        failure="The store did not answer."
-      />
-    );
+  let profiles: Account[];
+  let hits: ExplorePostRow[] = [];
+  let refusal: string | undefined;
+  let searchCaveat = '';
+
+  if (query === '') {
+    try {
+      profiles = await listProfiles();
+    } catch (error) {
+      opaqueDetail('explore: profiles', error);
+      return (
+        <ExploreScreen
+          viewerAddress={viewer}
+          viewerHandle={handle}
+          rows={[]}
+          readAtMs={Date.now()}
+          caveat=""
+          failure="The store did not answer."
+        />
+      );
+    }
+  } else if (query.length < MIN_SEARCH_CHARS) {
+    /*
+      Asked here rather than read back off the refusal, so this page never has to recognise the
+      other module's sentence to tell "you are still typing" apart from "the store did not answer".
+      `discover` refuses it too, and for the reason written there: a shorter pattern yields no
+      trigrams, so every index behind it is useless and both tables are read in full.
+    */
+    profiles = [];
+    refusal = `Keep going — a search needs at least ${MIN_SEARCH_CHARS} characters.`;
+  } else {
+    const found = await discover(query);
+    if (!found.ok) {
+      return (
+        <ExploreScreen
+          viewerAddress={viewer}
+          viewerHandle={handle}
+          rows={[]}
+          query={query}
+          readAtMs={Date.now()}
+          caveat=""
+          failure="The store did not answer."
+        />
+      );
+    } else {
+      profiles = found.value.creators.map((c) => ({
+        handle: c.handle,
+        owner: c.address,
+        displayName: c.displayName,
+        bio: c.bio,
+      }));
+      hits = found.value.posts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        preview: p.preview,
+        authorHandle: p.authorHandle,
+        access: p.access,
+      }));
+      // "These are all of them" and "we stopped looking" are different sentences. See `discover`.
+      searchCaveat = found.value.truncated ? ' More matched than this page shows.' : '';
+    }
   }
 
   // Who here is a declared agent — one register query; unread marks nobody (never "not an agent").
@@ -140,8 +213,11 @@ export default async function ExplorePage() {
       viewerAddress={viewer}
       viewerHandle={handle}
       rows={rows}
+      posts={hits}
+      query={query}
+      refusal={refusal}
       readAtMs={readAtMs}
-      caveat={caveat}
+      caveat={`${caveat}${searchCaveat}`}
     />
   );
 }

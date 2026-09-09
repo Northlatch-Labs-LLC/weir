@@ -34,11 +34,14 @@ export function AppFrame({
   viewer,
   reader,
   aside,
+  searchQuery,
   children,
 }: {
   viewer: Viewer;
   reader?: string | undefined;
   aside?: ReactNode;
+  /** What this page was searched for, so the frame's field still holds it. Only `/explore` sets it. */
+  searchQuery?: string | undefined;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -68,6 +71,13 @@ export function AppFrame({
       Link={Link}
       viewer={viewer}
       aside={aside}
+      searchQuery={searchQuery}
+      /*
+        The reader travels with the search, because it travels with every other link out of the
+        frame. A bare `GET` form posts only its own fields, so without this the one control that
+        leaves the frame without going through `withReader` would drop the address being read as.
+      */
+      searchHidden={reader === undefined ? undefined : { reader }}
       /*
         The wallet control lives in the frame, so it is on every route rather than only on the
         pages that happened to carry a sign-in panel. It also carries the address picker, which is

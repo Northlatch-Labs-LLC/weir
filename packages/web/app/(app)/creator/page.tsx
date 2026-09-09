@@ -131,13 +131,22 @@ export default async function CreatorPage() {
                 </div>
               </div>
             ),
-            (failure) => (
+            () => (
               <div data-reveal className="note crit">
                 <span className="lbl">This did not load</span>
+                {/*
+                  The cause is logged, not dropped into the sentence.
+
+                  `failure.detail` is a short internal string — "Forbidden" — and it landed between
+                  two sentences with no punctuation of its own: "…will not tell you what a vault
+                  costs. Forbidden A fee quoted from a stale constant…". A reader cannot act on it
+                  and it reads as a word the writer forgot to finish. The two sentences say the whole
+                  useful thing on their own.
+                */}
                 <p>
                   The platform&rsquo;s live terms could not be read, so this page will not tell you
-                  what a vault costs. {failure.detail} A fee quoted from a stale constant is how
-                  somebody agrees to a rate that was never offered.
+                  what a vault costs. A fee quoted from a stale constant is how somebody agrees to a
+                  rate that was never offered.
                 </p>
               </div>
             ),

@@ -355,6 +355,8 @@ export function AppShell({
   onPublish,
   connect,
   account,
+  searchQuery,
+  searchHidden,
 }: {
   pathname: string;
   Link: LinkComponent;
@@ -366,6 +368,10 @@ export function AppShell({
   connect?: ReactNode;
   /** The host's account menu, rendered in place of a link to your own page. */
   account?: ReactNode;
+  /** What the results page was asked for, so the field still holds it. See `SearchBox`. */
+  searchQuery?: string | undefined;
+  /** Frame state the search submit must carry — `reader`, today. See `SearchBox`. */
+  searchHidden?: Readonly<Record<string, string>> | undefined;
 }) {
   return (
     <div className="w-app">
@@ -375,6 +381,17 @@ export function AppShell({
       <div className="w-app__inner">
         <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} connect={connect} account={account} />
         <main id="w-main" className="w-column">
+          {/*
+            Search, for the widths where the aside is not on screen.
+
+            Below 1280px `.w-aside` is `display: none`, and the frame's only search field went with
+            it — so on a tablet and on every phone the application had no search at all. It sits at
+            the head of the column and scrolls away under the sticky header, which is where a
+            narrow layout puts it.
+          */}
+          <div className="w-column__search">
+            <SearchBox query={searchQuery ?? ''} hidden={searchHidden} />
+          </div>
           {children}
           <ColumnFooter Link={Link} />
         </main>
@@ -389,7 +406,7 @@ export function AppShell({
         {aside === undefined ? null : (
           <aside className="w-aside" aria-label="Discover">
             <div className="w-aside__sticky">
-              <SearchBox Link={Link} />
+              <SearchBox query={searchQuery ?? ''} hidden={searchHidden} />
               {aside}
             </div>
           </aside>

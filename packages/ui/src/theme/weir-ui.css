@@ -704,6 +704,112 @@
     transition: border-color var(--w-fast) var(--w-ease), color var(--w-fast) var(--w-ease);
   }
   .w-search:hover { border-color: var(--w-line-strong); color: var(--w-ink-9); }
+  /*
+    The field inside it. The box was an anchor with a label in it and nothing to type into; it is a
+    form now, and this is where the query goes.
+
+    The focus ring is drawn on the form rather than on the input, so the whole pill lights up the
+    way the border already does on hover — an outline around the bare text run inside a rounded
+    field reads as a fault.
+  */
+  .w-search__field {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--w-sans);
+    font-size: 15px;
+    color: var(--w-ink-10);
+  }
+  .w-search__field::placeholder { color: var(--w-ink-7); }
+  .w-search__field:focus { outline: none; }
+  .w-search:focus-within {
+    border-color: var(--w-line-strong);
+    color: var(--w-ink-9);
+    outline: 2px solid var(--w-mint);
+    outline-offset: 2px;
+  }
+  /* Safari draws its own clear control in the browser's colours, which are not these. */
+  .w-search__field::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+  /* --------------------------------------------------------------------
+     Search results, in the column.
+
+     The frame's search box submits `q` to /explore, and these are the parts
+     that page grows when it has one: a line saying what was searched and how
+     to get back to the directory, a heading per kind of hit, and a post as a
+     row of title, preview and how it is gated. A post's BODY is never here —
+     see `lib/discovery` for why matching on it would be a paywall that leaks.
+     -------------------------------------------------------------------- */
+  .w-colnote {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    margin: 0;
+    padding: 10px 22px;
+    border-bottom: 1px solid var(--w-line);
+    font-family: var(--w-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--w-ink-7);
+  }
+  .w-colnote a { color: var(--w-mint-dim); text-decoration: none; }
+  .w-colnote a:hover { color: var(--w-mint); text-decoration: underline; }
+
+  .w-sect {
+    margin: 0;
+    padding: 18px 22px 8px;
+    font-family: var(--w-sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--w-ink-7);
+  }
+
+  .w-hit {
+    display: block;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--w-line);
+    text-decoration: none;
+  }
+  .w-hit:hover { background: var(--w-hover); }
+  .w-hit__title {
+    display: block;
+    margin: 0;
+    font-family: var(--w-serif);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--w-ink-10);
+    text-wrap: pretty;
+  }
+  .w-hit__preview {
+    display: block;
+    margin: 4px 0 0;
+    max-width: 62ch;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+    text-wrap: pretty;
+  }
+  .w-hit__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 9px;
+    margin: 9px 0 0;
+    font-family: var(--w-mono);
+    font-size: 12px;
+    color: var(--w-ink-7);
+  }
+
+  /* Hidden where the aside carries the search field; shown where the aside is not on screen. */
+  .w-column__search { display: none; }
 
   .w-card__note {
     margin: 0 0 4px;
@@ -1760,6 +1866,12 @@
   @media (max-width: 1279px) {
     .w-aside { display: none; }
     .w-app__inner { width: auto; }
+    /* The aside took the search field with it. See `.w-column__search`. */
+    .w-column__search {
+      display: block;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--w-line);
+    }
   }
 
   /* Rail without words. Wide enough for a 24px icon and a 44px target. */
@@ -1871,5 +1983,69 @@
     .w-btn--primary,
     .w-btn--machine { border: 2px solid CanvasText; }
     .w-tab[aria-current='page'] .w-tab__rule { background: CanvasText; }
+  }
+
+  /* =========================================================================
+     One card, inside the application column
+
+     Two card systems render side by side. `.w-card` — this one — is a panel
+     ground, a 1px line, a 14px corner and 18px of padding. `.card`, `.panel`
+     and `.note` are the retired site's: a gradient over a different surface, a
+     12px corner, 24 to 28px of padding, and an inset highlight along the top
+     edge that nothing else in the product has. A reader going from `/vault` to
+     `/creator` crossed between them without leaving the column.
+
+     The pages holding the old classes are not rebuilt by this — their markup is
+     untouched — but the box they draw is the box everything else draws.
+     `/earnings`, `/purchases`, `/referrals`, `/names`, `/creator` and `/admin`
+     hold nine of these between them: nine elements of drift, one rule.
+
+     # Why it is here and not in `globals.css`
+
+     `weir.css` imports `globals.css` as `layer(estate)`, and `estate` is the
+     first of four layers. A rule written there loses to `ported.css` in a later
+     one however specific it is — which is exactly what happened: the padding
+     applied and the background, border, corner and shadow did not. This sheet
+     declares `weir-ui`, the last layer, so it is the one place a correction to
+     the retired cascade can actually land.
+
+     `.note` keeps its tighter padding and its label colours; it is a smaller
+     thing than a card and always was. What it gains is the same ground and the
+     same corner.
+     ====================================================================== */
+  .w-column .card,
+  .w-column .panel,
+  .w-column .note {
+    background: var(--w-panel);
+    background-image: none;
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-lg);
+    box-shadow: none;
+  }
+  .w-column .card,
+  .w-column .panel {
+    padding: 18px;
+  }
+  .w-column .note {
+    padding: 14px 18px;
+  }
+  .w-column .card:hover,
+  .w-column .panel:hover {
+    /* The old card lifted 3px on hover. A card in a column is not a control. */
+    transform: none;
+    border-color: var(--w-line);
+    box-shadow: none;
+  }
+  /* A title inside the old markup is the size a title inside the new markup is. */
+  .w-column .card > h2,
+  .w-column .card > h3,
+  .w-column .panel > h2,
+  .w-column .panel > h3 {
+    margin: 0 0 6px;
+    font-family: var(--w-sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--w-ink-10);
   }
 }

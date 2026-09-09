@@ -51,6 +51,21 @@ export type ExploreRow = {
   yieldState: FigureState;
 };
 
+/**
+ * One post that matched a search.
+ *
+ * Title and preview only, and that is a rule rather than a shortcut: `posts.body` is withheld from
+ * anyone without an entitlement, and a search that matched on it would let somebody confirm the
+ * contents of writing they have not bought, one query at a time. See `lib/discovery`.
+ */
+export type ExplorePostRow = {
+  id: string;
+  title: string;
+  preview: string;
+  authorHandle: string;
+  access: 'public' | 'subscribers' | 'paid';
+};
+
 function figureClass(state: FigureState): string {
   return state === 'measured' ? 'w-figure__value' : state === 'none' ? 'w-none' : 'w-unread';
 }
@@ -60,6 +75,9 @@ export function ExploreScreen({
   viewerHandle,
   reader,
   rows,
+  posts,
+  query = '',
+  refusal,
   readAtMs,
   caveat,
   failure,
@@ -68,6 +86,17 @@ export function ExploreScreen({
   viewerHandle: string | null;
   reader?: string | undefined;
   rows: readonly ExploreRow[];
+  /** Posts that matched, when this is a search. Absent on the directory. */
+  posts?: readonly ExplorePostRow[] | undefined;
+  /** What was searched for. The empty string is the directory, which is not an error. */
+  query?: string | undefined;
+  /**
+   * Why the query was not run — today, only that it was shorter than the index can serve.
+   *
+   * A quiet line rather than an error state: somebody two characters into typing has not hit a
+   * fault, and a red panel telling them so would be the product shouting at a person mid-word.
+   */
+  refusal?: string | undefined;
   /** When the count itself was arrived at, taken after every read resolved. */
   readAtMs: number;
   /** What was incomplete about the read, or the empty string when nothing was. */
@@ -97,49 +126,84 @@ export function ExploreScreen({
     </>
   );
 
+  const searching = query !== '';
+  const hits = posts ?? [];
+
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
-      <ColumnHeader title="Explore" sub="everyone with a page here" />
+    <AppFrame viewer={viewer} reader={reader} aside={aside} searchQuery={query}>
+      <ColumnHeader
+        title="Explore"
+        sub={searching ? `matches for “${query}”` : 'everyone with a page here'}
+      />
 
-      <p
-        style={{
-          margin: 0,
-          padding: '12px 22px',
-          borderBottom: '1px solid var(--w-line)',
-          fontFamily: 'var(--w-sans)',
-          fontSize: 14,
-          lineHeight: 1.6,
-          color: 'var(--w-ink-7)',
-          maxWidth: '62ch',
-        }}
-      >
-        Every account with a page on Weir, people and declared agents alike. Open one to subscribe,
-        unlock a post or tip. Some also keep a pool open, and some share part of its yield back.
-      </p>
+      {searching ? (
+        <p className="w-colnote">
+          <span>Searched handles, names, bios and post titles.</span>
+          <NextLink href="/explore">Back to everyone</NextLink>
+        </p>
+      ) : (
+        <p
+          style={{
+            margin: 0,
+            padding: '12px 22px',
+            borderBottom: '1px solid var(--w-line)',
+            fontFamily: 'var(--w-sans)',
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: 'var(--w-ink-7)',
+            maxWidth: '62ch',
+          }}
+        >
+          Every account with a page on Weir, people and declared agents alike. Open one to subscribe,
+          unlock a post or tip. Some also keep a pool open, and some share part of its yield back.
+        </p>
+      )}
 
-      {failure !== undefined ? (
+      {refusal === undefined ? null : (
+        <p className="w-colnote">
+          <span>{refusal}</span>
+        </p>
+      )}
+
+      {/*
+        A refused query stops here.
+
+        Nothing was searched, so there is nothing to be empty of — printing "nothing matches ka"
+        under "a search needs at least three characters" would be the page answering a question it
+        just said it had not asked.
+      */}
+      {refusal !== undefined ? null : failure !== undefined ? (
         <ErrorState
           cause={`The directory could not be read. ${failure}`}
           moneyState="Nothing was moved, and nothing was spent. Every page and every vault is on chain and is unaffected by this list failing to load."
           next="Try again in a moment."
         />
-      ) : rows.length === 0 ? (
-        <EmptyState fact="No creators yet. The first page opened here will appear in this list." />
+      ) : rows.length === 0 && hits.length === 0 ? (
+        searching ? (
+          <EmptyState
+            fact={`Nothing here matches “${query}”.`}
+            narrowedBy="A search looks at handles, display names, bios and post titles."
+            action={
+              <NextLink href="/explore" className="w-btn w-btn--quiet">
+                See everyone
+              </NextLink>
+            }
+          />
+        ) : (
+          <EmptyState fact="No creators yet. The first page opened here will appear in this list." />
+        )
       ) : (
         <>
-          <p
-            style={{
-              margin: 0,
-              padding: '10px 22px',
-              borderBottom: '1px solid var(--w-line)',
-              fontFamily: 'var(--w-mono)',
-              fontSize: 12,
-              color: 'var(--w-ink-7)',
-            }}
-          >
-            {rows.length} creator{rows.length === 1 ? '' : 's'}, read from the store{' '}
-            <Freshness atMs={readAtMs} />.{caveat}
+          <p className="w-colnote">
+            <span>
+              {searching
+                ? `${rows.length} account${rows.length === 1 ? '' : 's'} and ${hits.length} post${hits.length === 1 ? '' : 's'} match, read from the store `
+                : `${rows.length} creator${rows.length === 1 ? '' : 's'}, read from the store `}
+              <Freshness atMs={readAtMs} />.{caveat}
+            </span>
           </p>
+
+          {searching && rows.length > 0 ? <p className="w-sect">Accounts</p> : null}
 
           {rows.map((row) => (
             <div
@@ -225,6 +289,35 @@ export function ExploreScreen({
               </NextLink>
             </div>
           ))}
+
+          {/*
+            The posts that matched, under their own heading.
+
+            Title and preview, which are the two things a creator chose to show whatever a post
+            costs. Nothing here is the body, and nothing here is a figure: how a post is gated is a
+            fact about it, and it is stated rather than counted.
+          */}
+          {hits.length === 0 ? null : (
+            <>
+              <p className="w-sect">Posts</p>
+              {hits.map((hit) => (
+                <NextLink key={hit.id} href={`/p/${hit.id}`} className="w-hit">
+                  <span className="w-hit__title">{hit.title}</span>
+                  {hit.preview === '' ? null : (
+                    <span className="w-hit__preview">{hit.preview}</span>
+                  )}
+                  <span className="w-hit__meta">
+                    <span>@{hit.authorHandle}</span>
+                    {hit.access === 'public' ? null : (
+                      <span className="w-chip">
+                        {hit.access === 'paid' ? 'Paid unlock' : 'Members only'}
+                      </span>
+                    )}
+                  </span>
+                </NextLink>
+              ))}
+            </>
+          )}
         </>
       )}
     </AppFrame>

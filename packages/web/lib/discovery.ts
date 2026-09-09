@@ -68,6 +68,14 @@ const CHAIN_READ_CONCURRENCY = 8;
 
 export interface CreatorResult {
   handle: string;
+  /**
+   * The account's on-chain address.
+   *
+   * Carried because every surface that draws a person draws their avatar from the address and never
+   * from the handle — two people who change handles would otherwise swap faces. The query already
+   * selects it to find their support vaults; it was simply not passed on.
+   */
+  address: string;
   displayName: string;
   bio: string;
   vaultId: string;
@@ -160,7 +168,7 @@ export interface Discovery {
  * whole directory would look like a result. The EMPTY query is different and stays a directory,
  * which is what this module already says it is.
  */
-const MIN_SEARCH_CHARS = 3;
+export const MIN_SEARCH_CHARS = 3;
 
 export async function discover(query: string): Promise<Reading<Discovery>> {
   const q = query.trim();
@@ -390,6 +398,7 @@ export async function discover(query: string): Promise<Reading<Discovery>> {
 
       results.push({
         handle: row.handle,
+        address: row.owner,
         displayName: row.display_name,
         bio: row.bio,
         vaultId: row.vault_id,

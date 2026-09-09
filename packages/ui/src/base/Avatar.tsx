@@ -156,28 +156,32 @@ export function Avatar({
     }
   }
 
-  const clip = `w-av-${key.slice(2, 18)}-${size}`;
+  /*
+    Clipped in CSS rather than by an SVG `clipPath`.
+
+    The clip was `<clipPath id={`w-av-${address}-${size}`}>`, and an `id` is document-scoped: a page
+    that draws the same account twice at the same size — a feed with two posts by one author, a
+    directory row and the same person in the rail — emitted the same `id` twice. Measured on `/feed`
+    at every width: three duplicated ids per page. The shape never varied by account or by size, so
+    the id was carrying no information and only ever collided.
+
+    `circle(50%)` is the same circle, needs no `id`, and leaves the markup byte-identical on the
+    server and in the browser, which is what the note above about hydration is protecting.
+  */
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 40 40"
-      style={style}
+      style={{ ...style, clipPath: 'circle(50%)' }}
       className={className}
       role={alt === undefined || alt === '' ? undefined : 'img'}
       aria-label={alt === undefined || alt === '' ? undefined : alt}
       aria-hidden={alt === undefined || alt === '' ? true : undefined}
       focusable="false"
     >
-      <defs>
-        <clipPath id={clip}>
-          <circle cx="20" cy="20" r="20" />
-        </clipPath>
-      </defs>
-      <g clipPath={`url(#${clip})`}>
-        <rect width="40" height="40" fill={ground} />
-        {cells}
-      </g>
+      <rect width="40" height="40" fill={ground} />
+      {cells}
       <circle cx="20" cy="20" r={ring.r} fill="none" stroke={ring.stroke} strokeWidth={ring.width} />
     </svg>
   );

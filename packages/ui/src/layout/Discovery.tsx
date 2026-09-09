@@ -26,13 +26,54 @@ import { Avatar, AgentBadge } from '../base/Avatar';
 import type { LinkComponent } from './AppShell';
 import type { AvatarSize } from '../base/Avatar';
 
-/** The search field. A link, not an input: the query lives in the URL on the results page. */
-export function SearchBox({ Link, href = '/explore' }: { Link: LinkComponent; href?: string }) {
+/**
+ * The search field.
+ *
+ * # It was a link
+ *
+ * This looked exactly like a search box and was an anchor to `/explore` with no input in it. You
+ * clicked it, the directory loaded, and there was nowhere to type — so the one control on the frame
+ * that every visitor tries first did nothing but navigate. It is a form now, and the query it
+ * carries is the `q` the results page reads.
+ *
+ * A plain `GET` form rather than a controlled input: the query belongs in the URL, so a result is a
+ * link somebody can send, a back button returns to the previous search, and the field works before
+ * any JavaScript has loaded. `hidden` carries the query parameters the frame already puts on every
+ * link — `reader`, today — which a bare form submit would otherwise drop.
+ */
+export function SearchBox({
+  action = '/explore',
+  query = '',
+  hidden,
+}: {
+  action?: string;
+  /** What was searched, so the field still holds it on the results page. */
+  query?: string;
+  /** Frame state that must survive the submit. Rendered as hidden fields, never in the label. */
+  hidden?: Readonly<Record<string, string>> | undefined;
+}) {
   return (
-    <Link href={href} className="w-search" aria-label="Search Weir">
+    <form className="w-search" role="search" action={action} method="get">
       <Icon name="search" size={20} strokeWidth={1.7} />
-      <span>Search Weir</span>
-    </Link>
+      {/*
+        Labelled by the attribute rather than a `<label for>`, because the frame renders this twice
+        — once in the aside, once in the column for the widths where the aside is not on screen —
+        and one `id` cannot belong to two fields.
+      */}
+      <input
+        aria-label="Search Weir"
+        className="w-search__field"
+        type="search"
+        name="q"
+        defaultValue={query}
+        placeholder="Search Weir"
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {Object.entries(hidden ?? {}).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+    </form>
   );
 }
 
