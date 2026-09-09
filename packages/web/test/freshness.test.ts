@@ -5,7 +5,7 @@
  * every funnel note on the landing route now reads through this one function.
  */
 import { describe, expect, it } from 'vitest';
-import { ago } from '../lib/freshness';
+import { ago, posted } from '../lib/freshness';
 
 const MIN = 60_000;
 const HOUR = 3_600_000;
@@ -35,5 +35,47 @@ describe('ago', () => {
   it('zero-pads hours and minutes', () => {
     const at = Date.UTC(2026, 8, 4, 4, 5, 0); // 04:05 UTC
     expect(ago(at + HOUR, at)).toBe('read at 04:05 UTC');
+  });
+});
+
+/**
+ * A post's age is not a session's freshness.
+ *
+ * `ago` answers "how long since this session was read" and switches to a UTC clock time after an
+ * hour, deliberately. That function was also being used to date every post in the feed, so a post
+ * published this morning was labelled "read at 03:48 UTC" — a sentence about the reader, printed
+ * under somebody else's writing, saying nothing about when it was written.
+ */
+describe('posted', () => {
+  const now = Date.UTC(2026, 8, 9, 12, 0, 0);
+  const s = 1000;
+
+  it('says now under a minute', () => {
+    expect(posted(now, now - 30 * s)).toBe('now');
+  });
+
+  it('counts minutes, then hours, then days', () => {
+    expect(posted(now, now - 12 * 60 * s)).toBe('12m');
+    expect(posted(now, now - 3 * 3600 * s)).toBe('3h');
+    expect(posted(now, now - 2 * 86_400 * s)).toBe('2d');
+  });
+
+  it('floors rather than rounds, so nothing is dated into the future', () => {
+    expect(posted(now, now - 119 * 60 * s)).toBe('1h');
+    expect(posted(now, now - 59 * 60 * s)).toBe('59m');
+  });
+
+  it('becomes a date after a week, without the year while it is this year', () => {
+    expect(posted(now, Date.UTC(2026, 7, 21, 9, 0, 0))).toBe('21 Aug');
+  });
+
+  it('carries the year once it is not this one', () => {
+    expect(posted(now, Date.UTC(2025, 10, 3, 9, 0, 0))).toBe('3 Nov 2025');
+  });
+
+  it('never says "read at" — that is the other function, about the reader', () => {
+    for (const minutes of [0, 5, 90, 60 * 26, 60 * 24 * 400]) {
+      expect(posted(now, now - minutes * 60 * s)).not.toContain('read at');
+    }
   });
 });

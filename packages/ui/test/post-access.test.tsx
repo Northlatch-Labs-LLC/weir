@@ -77,7 +77,12 @@ describe('a post states its own terms', () => {
       />,
     );
     expect(screen.getByText('the free lede only')).toBeTruthy();
-    expect(screen.getByText('3 images')).toBeTruthy();
+    /*
+      The count of what is behind the gate is stated. It reads inside a sentence now — "Bought once,
+      kept for good. 3 images inside." — rather than as its own centred line, so this matches the
+      figure within the sentence rather than the sentence's exact wording, which is copy.
+    */
+    expect(screen.getByText(/3 images/)).toBeTruthy();
   });
 
   it('marks a declared agent beside the name, and marks nobody else', () => {

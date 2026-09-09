@@ -100,15 +100,23 @@ export function PostCard({
   if (locked) {
     bodyRegion = (
       <div className="w-locked">
-        <span style={{ color: 'var(--w-ink-6)' }}>
-          <Icon name="lock" size={24} strokeWidth={1.5} />
-        </span>
-        {post.lockedAssets !== undefined && post.lockedAssets > 0 ? (
-          <span className="w-locked__note">
-            <Icon name="image" size={16} />
-            {post.lockedAssets} {post.lockedAssets === 1 ? 'image' : 'images'}
+        {/*
+          What is behind the panel, stated once, in a line.
+
+          The panel used to be an icon over a button in a tall centred column and said nothing at
+          all — the reader had to infer from a padlock what kind of gate this was. It says which
+          gate, and how many pictures are behind it when there are any, in the space the padlock
+          alone used to take.
+        */}
+        <span className="w-locked__what">
+          <Icon name="lock" size={20} strokeWidth={1.6} />
+          <span>
+            {access.kind === 'paid' ? 'Bought once, kept for good.' : 'For subscribers.'}
+            {post.lockedAssets !== undefined && post.lockedAssets > 0
+              ? ` ${post.lockedAssets} ${post.lockedAssets === 1 ? 'image' : 'images'} inside.`
+              : ''}
           </span>
-        ) : null}
+        </span>
         {access.kind === 'paid' ? (
           <button
             type="button"

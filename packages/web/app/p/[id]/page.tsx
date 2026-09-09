@@ -35,7 +35,7 @@ import { formatUnits } from '@/lib/units';
 import { createClient, fold, readDecimals } from '@projectx-social/sdk';
 import { PostScreen } from '@/components/app/PostScreen';
 import { accountHandle } from '@/lib/accounts';
-import { ago } from '@/lib/freshness';
+import { posted } from '@/lib/freshness';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,7 +173,7 @@ export default async function PostPage({
         isAgent: authorIsAgent === true,
         bio: profile?.bio ?? '',
       }}
-      when={ago(Date.now(), found.createdAtMs)}
+      when={posted(Date.now(), found.createdAtMs)}
       whenISO={new Date(found.createdAtMs).toISOString()}
       price={price ?? null}
       {...(found.access.kind === 'paid'

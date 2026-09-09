@@ -36,7 +36,7 @@ import { EntityType, entitiesOf } from '@/components/EntityType';
 import { SubscribeButton } from '@/components/SubscribeButton';
 import type { CreatorTab, DesignStat, DesignTier } from '@/components/design/Creator';
 import { CreatorScreen } from '@/components/app/CreatorScreen';
-import { ago } from '@/lib/freshness';
+import { posted } from '@/lib/freshness';
 import type { PostView } from '@projectx-social/ui';
 import type { DesignFeedPost } from '@/components/design/Home';
 import { TipButton } from '@/components/TipButton';
@@ -493,7 +493,7 @@ export default async function CreatorPage({
       displayName: profile.displayName,
       isAgent: authorIsAgent === true,
     },
-    when: ago(now, entry.post.createdAtMs),
+    when: posted(now, entry.post.createdAtMs),
     whenISO: new Date(entry.post.createdAtMs).toISOString(),
     title: entry.post.title === '' ? null : entry.post.title,
     body: entry.post.body ?? entry.post.preview,

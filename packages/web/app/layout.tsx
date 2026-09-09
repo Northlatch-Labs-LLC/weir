@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from 'next';
 import { geist, geistMono, inter, jetbrainsMono, sourceSerif } from './fonts';
 import { SignerProvider } from '@/components/SignerProvider';
 import { SessionBridge } from '@/components/SessionBridge';
-import { DesignLab } from '@/components/lab/DesignLab';
 import { AppShell } from '@/components/shell/AppShell';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/structured-data';
@@ -207,12 +206,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <JsonLd data={websiteJsonLd()} />
       </head>
       <body>
-        <div className="bg-field" aria-hidden>
-          <div className="bg-field__grid" />
-          <div className="aurora aurora--a" />
-          <div className="aurora aurora--b" />
-          <div className="aurora aurora--c" />
-        </div>
+        {/*
+          The atmospheric background is gone.
+
+          A ruled field and three coloured aurora blobs were painted under every page — the editorial
+          website's weather, still showing through the application that replaced it. It was also the
+          widest thing in the document: the blobs are positioned past the right edge, so every page
+          scrolled sideways by about 450px whatever was on it.
+
+          The application's ground is flat. `--w-ground` is the colour and `.w-app` paints it.
+        */}
 
         {/*
           The skip link moved into the frame.
@@ -254,15 +257,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           */}
           <SessionBridge />
           <AppShell>{children}</AppShell>
-          {/*
-            The design lab, on every screen while the dev server is running.
-
-            It returns null outside development and the route it saves to refuses outside
-            development, so this is not a production surface that happens to be hidden — there is
-            nothing on the other side of it. `/lab` is the index that explains it.
-          */}
-          {process.env.NODE_ENV === 'development' && <DesignLab />}
-        </SignerProvider>
+                  </SignerProvider>
       </body>
     </html>
   );

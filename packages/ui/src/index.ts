@@ -29,3 +29,11 @@ export {
   type LinkComponent,
 } from './layout/AppShell';
 export { PostCard, type PostView, type PostAuthor, type PostAccess } from './post/PostCard';
+export {
+  SearchBox,
+  PersonRow,
+  RailCard,
+  SeekingRow,
+  type PersonRowView,
+  type SeekingView,
+} from './layout/Discovery';

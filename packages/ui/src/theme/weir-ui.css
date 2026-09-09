@@ -329,6 +329,8 @@
   }
   .w-btn--quiet:hover { background: var(--w-hover); }
   .w-btn--sm { min-height: 34px; padding: 0 16px; font-size: 13px; }
+  /* The size a page's own call to action takes, where it is the thing on the screen. */
+  .w-btn--lg { min-height: 54px; padding: 0 28px; font-size: 16.5px; }
   .w-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
   .w-chip {
@@ -430,17 +432,38 @@
   }
   .w-post__title + .w-post__text { margin-top: 0; }
 
+  /*
+    A row, not a column.
+
+    Centred in a column with 26px of padding, the panel over a gated post was the tallest thing on
+    the card — a 200px empty box under two lines of preview, on every subscriber and paid post in
+    the feed. What it has to say is short: what this is, and the one control that opens it. A row
+    says both in 56px and leaves the writing as the biggest thing on the post, which is the point.
+  */
   .w-locked {
     margin-top: 12px;
     border: 1px solid var(--w-line-strong);
     border-radius: var(--w-r-lg);
     background: var(--w-raised);
-    padding: 26px 24px;
+    padding: 12px 14px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
   }
+  .w-locked__what {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    color: var(--w-ink-7);
+    font-family: var(--w-sans);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  .w-locked .w-btn { flex-shrink: 0; }
   .w-locked__note {
     display: flex;
     align-items: center;
@@ -527,6 +550,91 @@
     gap: 11px;
     padding: 11px 0;
     border-top: 1px solid var(--w-line);
+  }
+
+  /* ---- the discovery column ---------------------------------------------
+     The rail carried one list of names, which is what made a populated
+     product look deserted. These are the pieces the artboard's rail is made
+     of: a search field, rows of people with an action beside them, and an
+     agent's own words about the operator it is looking for.
+     -------------------------------------------------------------------- */
+  .w-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 46px;
+    padding: 0 16px;
+    border-radius: var(--w-r-full);
+    background: var(--w-panel);
+    border: 1px solid var(--w-line);
+    color: var(--w-ink-6);
+    font-family: var(--w-sans);
+    font-size: 15px;
+    text-decoration: none;
+    transition: border-color var(--w-fast) var(--w-ease), color var(--w-fast) var(--w-ease);
+  }
+  .w-search:hover { border-color: var(--w-line-strong); color: var(--w-ink-9); }
+
+  .w-card__note {
+    margin: 0 0 4px;
+    font-family: var(--w-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+  }
+  .w-card__rows { display: flex; flex-direction: column; }
+  .w-card__more {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 12px;
+    font-family: var(--w-sans);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--w-mint-dim);
+    text-decoration: none;
+  }
+  .w-card__more:hover { color: var(--w-mint); }
+
+  .w-person {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 0;
+    border-top: 1px solid var(--w-line);
+  }
+  .w-person__who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+  .w-person__who .w-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+  }
+  .w-person__meta {
+    font-family: var(--w-mono);
+    font-size: 12px;
+    color: var(--w-ink-7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .w-person__action { flex-shrink: 0; }
+
+  .w-seeking {
+    padding: 13px 0;
+    border-top: 1px solid var(--w-line);
+  }
+  .w-seeking__words {
+    margin: 9px 0 10px;
+    font-family: var(--w-serif);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--w-ink-9);
   }
 
   .w-figure__label {
@@ -677,6 +785,19 @@
     min-width: 0;
     padding: 18px 22px 8px;
   }
+  /* A page written for a 1100px editorial column can hold a table wider than
+     640px. It scrolls inside itself rather than taking the document sideways —
+     the one rule that keeps a wide table from becoming a horizontal page. */
+  .w-legacy table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+  .w-legacy pre,
+  .w-legacy img,
+  .w-legacy svg { max-width: 100%; }
+  .w-legacy pre { overflow-x: auto; }
 
   /* ---- the footer -------------------------------------------------------
      Inside the column rather than across the viewport. The rail and the
@@ -709,11 +830,345 @@
   }
 
   /* =========================================================================
-     Three widths, and every screen is verified at all three
+     The front door
+
+     Not the application frame. A landing page inside a navigation rail is not
+     a landing page: the rail is a menu of rooms a stranger cannot enter, and
+     it answers "where am I" before anything has said what this is. So `/` for
+     somebody signed out is its own page with its own header, and the rail
+     starts the moment they have an account.
+     ====================================================================== */
+  .w-land { background: var(--w-ground); color: var(--w-ink-10); }
+  .w-land__wrap { max-width: 1240px; margin: 0 auto; padding: 0 40px; }
+
+  .w-land__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    height: 74px;
+    border-bottom: 1px solid var(--w-line);
+  }
+  .w-land__nav { display: flex; align-items: center; gap: 26px; }
+  /*
+    The plain links only. `:not(.w-btn)` is load-bearing: this rule is more specific than
+    `.w-btn--primary`, so without it the "Create account" button took this colour and rendered
+    light grey on mint — the one control on the page a stranger is meant to press, unreadable.
+  */
+  .w-land__nav a:not(.w-btn) {
+    font-family: var(--w-sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--w-ink-9);
+    text-decoration: none;
+  }
+  .w-land__nav a:not(.w-btn):hover { color: var(--w-ink-10); }
+
+  .w-land__hero {
+    display: flex;
+    gap: 56px;
+    align-items: flex-start;
+    padding: 76px 0 68px;
+  }
+  .w-land__pitch { flex: 1 1 600px; min-width: 0; }
+  .w-land__flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 13px;
+    border: 1px solid rgba(140, 247, 198, 0.34);
+    border-radius: var(--w-r-full);
+    background: rgba(140, 247, 198, 0.06);
+    font-family: var(--w-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--w-mint);
+  }
+  .w-land h1 {
+    margin: 22px 0 0;
+    font-family: var(--w-sans);
+    font-size: clamp(38px, 4.4vw, 62px);
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  .w-land__lede {
+    margin: 22px 0 0;
+    max-width: 56ch;
+    font-family: var(--w-serif);
+    font-size: 20px;
+    line-height: 1.56;
+    color: var(--w-ink-9);
+  }
+  .w-land__cta { display: flex; align-items: center; gap: 13px; margin-top: 32px; flex-wrap: wrap; }
+  .w-land__fine { margin: 15px 0 0; font-family: var(--w-sans); font-size: 13.5px; color: var(--w-ink-6); }
+
+  /* The mechanic, drawn as four steps rather than claimed in a sentence. */
+  .w-steps {
+    flex: 0 1 420px;
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xl);
+    background: var(--w-panel);
+    padding: 22px 22px 20px;
+  }
+  .w-steps__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .w-steps__list { display: flex; flex-direction: column; gap: 2px; }
+  .w-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 14px;
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xs);
+    background: var(--w-raised);
+  }
+  .w-step:first-child { border-radius: var(--w-r-md) var(--w-r-md) var(--w-r-xs) var(--w-r-xs); }
+  .w-step:last-child { border-radius: var(--w-r-xs) var(--w-r-xs) var(--w-r-md) var(--w-r-md); }
+  .w-step--end { border-color: rgba(140, 247, 198, 0.34); background: rgba(140, 247, 198, 0.05); }
+  .w-step__n {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: var(--w-r-full);
+    background: rgba(140, 247, 198, 0.12);
+    color: var(--w-mint);
+    font-family: var(--w-mono);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .w-step__what { flex: 1; font-family: var(--w-sans); font-size: 13.5px; line-height: 1.45; color: var(--w-ink-9); }
+  .w-step__sum { font-family: var(--w-mono); font-size: 14px; font-weight: 600; color: var(--w-ink-10); }
+
+  .w-land__section { padding: 8px 0 78px; }
+  .w-land h2 {
+    margin: 0 0 6px;
+    font-family: var(--w-sans);
+    font-size: clamp(27px, 2.6vw, 34px);
+    line-height: 1.14;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+  }
+  .w-land__sub {
+    margin: 0 0 28px;
+    max-width: 70ch;
+    font-family: var(--w-serif);
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+  }
+
+  /* The three tiers: follower, subscriber, member. */
+  .w-tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .w-tier {
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xl);
+    background: var(--w-panel);
+    padding: 25px 23px 23px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .w-tier--money {
+    border-color: rgba(140, 247, 198, 0.4);
+    background: rgba(140, 247, 198, 0.05);
+  }
+  .w-tier__flag {
+    position: absolute;
+    top: -11px;
+    left: 22px;
+    height: 22px;
+    padding: 0 11px;
+    border-radius: var(--w-r-full);
+    background: var(--w-mint);
+    color: var(--w-ground);
+    font-family: var(--w-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+  }
+  .w-tier__top { display: flex; align-items: center; gap: 11px; margin-bottom: 13px; }
+  .w-tier__ring {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--w-r-full);
+    border: 1px solid var(--w-line-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--w-ink-9);
+    flex-shrink: 0;
+  }
+  .w-tier--money .w-tier__ring { border-color: rgba(140, 247, 198, 0.5); color: var(--w-mint); }
+  .w-tier h3 { margin: 0; font-family: var(--w-sans); font-size: 19px; font-weight: 700; color: var(--w-ink-10); }
+  .w-tier__what { margin: 0 0 15px; font-family: var(--w-sans); font-size: 14.5px; line-height: 1.6; color: var(--w-ink-9); }
+  .w-tier ul { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+  .w-tier li {
+    display: flex;
+    gap: 9px;
+    font-family: var(--w-sans);
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--w-ink-7);
+  }
+  .w-tier--money li { color: var(--w-ink-9); }
+  .w-tier li svg { flex-shrink: 0; margin-top: 2px; }
+  .w-tier__price {
+    margin-top: auto;
+    font-family: var(--w-mono);
+    font-size: 21px;
+    font-weight: 600;
+    color: var(--w-ink-10);
+  }
+  .w-tier--money .w-tier__price { color: var(--w-mint); }
+  .w-tier__price small { font-family: var(--w-sans); font-size: 14px; font-weight: 400; color: var(--w-ink-7); }
+  .w-tier .w-btn { margin-top: 15px; }
+
+  /* The agent band. */
+  .w-band {
+    border: 1px solid rgba(169, 139, 250, 0.34);
+    border-radius: 22px;
+    background: rgba(169, 139, 250, 0.05);
+    padding: 42px;
+    display: flex;
+    gap: 46px;
+    align-items: flex-start;
+  }
+  .w-band__say { flex: 1 1 520px; min-width: 0; }
+  .w-band__flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 13px;
+    border: 1px solid rgba(169, 139, 250, 0.4);
+    border-radius: var(--w-r-full);
+    font-family: var(--w-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--w-violet);
+  }
+  .w-band__list { flex: 0 1 380px; display: flex; flex-direction: column; gap: 10px; }
+
+  .w-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .w-three section {
+    border: 1px solid var(--w-line);
+    border-radius: var(--w-r-xl);
+    background: var(--w-panel);
+    padding: 24px 23px;
+  }
+  .w-three h3 { margin: 0 0 9px; font-family: var(--w-sans); font-size: 18px; font-weight: 700; color: var(--w-ink-10); }
+  .w-three p { margin: 0; font-family: var(--w-sans); font-size: 14.5px; line-height: 1.62; color: var(--w-ink-7); }
+
+  .w-land__close {
+    border-top: 1px solid var(--w-line);
+    padding-top: 50px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 36px;
+    flex-wrap: wrap;
+  }
+  .w-land__foot {
+    border-top: 1px solid var(--w-line);
+    padding: 28px 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+  .w-land__foot nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .w-land__foot a { font-family: var(--w-sans); font-size: 13px; color: var(--w-ink-7); text-decoration: none; }
+  .w-land__foot a:hover { color: var(--w-ink-10); text-decoration: underline; }
+  .w-land__mark {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--w-sans);
+    font-size: 12.5px;
+    color: var(--w-ink-5);
+  }
+
+  @media (max-width: 1023px) {
+    .w-land__wrap { padding: 0 24px; }
+    .w-land__hero { flex-direction: column; gap: 36px; padding: 52px 0 48px; }
+    .w-steps { flex: 1 1 auto; width: 100%; }
+    .w-band { flex-direction: column; gap: 32px; padding: 32px; }
+    .w-band__list { width: 100%; }
+    .w-tiers, .w-three { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 833px) {
+    .w-land__nav a { display: none; }
+    .w-land__hero { padding: 40px 0 40px; }
+    .w-land__section { padding-bottom: 56px; }
+  }
+
+  /* =========================================================================
+     Four widths, and every screen is verified at all of them
+
+     There were three, and the gap between them was a defect on every single
+     page: the rail is 268px and the column 640px, so between 834px and 908px
+     the two of them are wider than the window and the whole document scrolled
+     sideways. 834px is exactly the tablet artboard's width, so the one size
+     the design was drawn for was the one size it broke at.
+
+     The column flexes rather than holding 640px, and the rail drops to icons
+     before it disappears — which is what a rail this narrow is for.
      ====================================================================== */
   @media (max-width: 1279px) {
     .w-aside { display: none; }
     .w-app__inner { width: auto; }
+  }
+
+  /* Rail without words. Wide enough for a 24px icon and a 44px target. */
+  @media (max-width: 1023px) {
+    .w-app__inner { width: 100%; }
+    .w-rail { width: 84px; padding-left: 10px; padding-right: 10px; }
+    .w-rail__wordmark { display: none; }
+    .w-rail__brand { justify-content: center; padding: 8px 0 18px; }
+    .w-nav { justify-content: center; padding-left: 0; padding-right: 0; }
+    .w-nav > span:not(.w-nav__badge) { display: none; }
+    .w-nav__badge {
+      position: absolute;
+      top: 2px;
+      right: 8px;
+      margin-left: 0;
+    }
+    .w-nav { position: relative; }
+    .w-rail__publish { margin: 16px 4px 0; padding: 0; font-size: 0; }
+    .w-rail__publish::after {
+      content: '+';
+      font-family: var(--w-sans);
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1;
+    }
+    .w-rail__connect { margin: 16px 4px 0; }
+    .w-rail__connect > button,
+    .w-rail__connect > .w-btn { font-size: 12px; padding: 0 6px; }
+    .w-rail__alt { display: none; }
+    .w-rail__account { justify-content: center; padding: 10px 0; }
+    .w-rail__account > span:last-child { display: none; }
+    /* The column takes what is left rather than insisting on 640px. */
+    .w-column { width: auto; flex: 1; min-width: 0; }
   }
   @media (max-width: 833px) {
     .w-rail { display: none; }

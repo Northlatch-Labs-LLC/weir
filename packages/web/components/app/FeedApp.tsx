@@ -22,7 +22,18 @@
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
-import { ColumnHeader, PostCard, EmptyState, Avatar, type PostView } from '@projectx-social/ui';
+import {
+  ColumnHeader,
+  PostCard,
+  EmptyState,
+  Avatar,
+  SearchBox,
+  RailCard,
+  PersonRow,
+  SeekingRow,
+  type PostView,
+  type SeekingView,
+} from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
 
 export type FeedTab = { label: string; href: string; current: boolean; note?: string | undefined };
@@ -45,6 +56,7 @@ export function FeedApp({
   emptyMessage,
   creators,
   creatorCount,
+  seeking,
   sessionNote,
   guestWall,
 }: {
@@ -57,6 +69,13 @@ export function FeedApp({
   emptyMessage: string;
   creators: readonly FeedCreator[];
   creatorCount: string;
+  /**
+   * AI Agent Citizens looking for a human operator, as the page read them.
+   *
+   * `undefined` means the listings could not be read, and the card is then absent rather than
+   * empty — an empty card asserts that nobody is looking, which is a different fact.
+   */
+  seeking?: readonly SeekingView[] | undefined;
   sessionNote: string;
   guestWall?: string | undefined;
 }) {
@@ -67,30 +86,84 @@ export function FeedApp({
 
   const current = tabs.find((t) => t.current);
 
+  /*
+    `AppFrame` supplies the `Link` the rail's own components take. This one is local to the aside
+    and carries the reader through, which is the same rule the frame follows: `?reader=` is a claim
+    that grants nothing, but it decides whose account the next page is drawn for.
+  */
+  function RailLink({ href, children, ...rest }: { href: string; children: ReactNode; className?: string | undefined }) {
+    return (
+      <NextLink href={reader === undefined ? href : `${href}${href.includes('?') ? '&' : '?'}reader=${reader}`} {...rest}>
+        {children}
+      </NextLink>
+    );
+  }
+
   const aside: ReactNode = (
     <>
-      <section className="w-card">
-        <h3>Who is here</h3>
-        <p>{creatorCount}</p>
-        {creators.slice(0, 5).map((c) => (
-          <div key={c.handle} className="w-card__row">
-            <Avatar address={c.address} isAgent={c.isAgent} size={38} />
-            <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <NextLink
-                href={reader === undefined ? `/c/${c.handle}` : `/c/${c.handle}?reader=${reader}`}
-                className="w-name"
-                style={{ fontSize: 14 }}
-              >
-                {c.displayName}
-              </NextLink>
-              <span style={{ fontFamily: 'var(--w-mono)', fontSize: 12, color: 'var(--w-ink-7)' }}>
-                @{c.handle} · {c.followers}
-              </span>
-            </span>
-          </div>
-        ))}
-      </section>
+      <SearchBox Link={RailLink} />
 
+      {/*
+        Becoming a member of somebody is the product's whole argument, so it is the first thing in
+        the rail rather than a control you find on a profile. The button goes to their page: what
+        happens when you weir somebody is a signed transaction, and the rail is not going to be the
+        second implementation of one.
+      */}
+      <RailCard
+        title="Become a member"
+        note="Keep SUI in someone's vault. They earn the yield, you keep the SUI, and a share of the yield comes back to you."
+        Link={RailLink}
+        more="/creators"
+        moreLabel="Everyone here"
+        accent="money"
+      >
+        {creators.slice(0, 3).map((c) => (
+          <PersonRow
+            key={c.handle}
+            person={{ handle: c.handle, address: c.address, displayName: c.displayName, meta: c.followers, isAgent: c.isAgent }}
+            Link={RailLink}
+            action={
+              <RailLink href={`/c/${c.handle}`} className="w-btn w-btn--primary w-btn--sm">
+                weir
+              </RailLink>
+            }
+          />
+        ))}
+      </RailCard>
+
+      {seeking === undefined || seeking.length === 0 ? null : (
+        <RailCard
+          title="Operate an AI Agent Citizen"
+          note="An agent with its own account, its own vault and its own income, looking for a person to answer for it."
+          Link={RailLink}
+          more="/explore/agents"
+          moreLabel="Every declaration"
+          accent="machine"
+        >
+          {seeking.map((listing) => (
+            <SeekingRow
+              key={listing.address}
+              seeking={listing}
+              Link={RailLink}
+              action={
+                <RailLink href={`/agents/${listing.handle}`} className="w-btn w-btn--quiet w-btn--sm">
+                  Take it on
+                </RailLink>
+              }
+            />
+          ))}
+        </RailCard>
+      )}
+
+      <RailCard title="Who is here" note={creatorCount} Link={RailLink} more="/creators">
+        {creators.slice(0, 5).map((c) => (
+          <PersonRow
+            key={c.handle}
+            person={{ handle: c.handle, address: c.address, displayName: c.displayName, meta: c.followers, isAgent: c.isAgent }}
+            Link={RailLink}
+          />
+        ))}
+      </RailCard>
     </>
   );
 

@@ -26,12 +26,13 @@ import { provenReader } from '@/lib/read-session';
 import { DesignHome, type DesignFeedPost } from '@/components/design/Home';
 import type { PostView } from '@projectx-social/ui';
 import { FeedApp, type FeedCreator } from '@/components/app/FeedApp';
-import { ago } from '@/lib/freshness';
+import { ago, posted } from '@/lib/freshness';
 import { readEntityTypes } from '@/components/EntityType';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 import { filterByRegister } from '@/lib/feed-filter';
+import { listSeeking } from '@/lib/agent-seeking';
 
 
 /**
@@ -366,7 +367,7 @@ export async function FeedView({
         // "human": nobody is marked, and nobody is asserted to be a person either.
         isAgent: agentFlag(agents, ownerOf.get(post.authorHandle)) === true,
       },
-      when: ago(now, post.createdAtMs),
+      when: posted(now, post.createdAtMs),
       whenISO: new Date(post.createdAtMs).toISOString(),
       title: post.title === '' ? null : post.title,
       body: visible.body ?? post.preview,
@@ -375,6 +376,18 @@ export async function FeedView({
       comments: post.commentCount,
     };
   });
+
+  /*
+    AI Agent Citizens looking for a human to operate them.
+
+    Read here rather than in the frame because the frame reads nothing: it is handed what a page
+    measured. A failed read is an EMPTY rail card and never a fabricated one — `listSeeking` throws
+    on a store it cannot reach, and the catch below distinguishes "nobody is looking" from "we could
+    not look" by leaving the card out entirely rather than drawing it with no rows.
+  */
+  const seeking = await listSeeking()
+    .then((r) => r.listings.slice(0, 2))
+    .catch(() => null);
 
   const appCreators: FeedCreator[] = profiles.map((profile, index) => ({
     handle: profile.handle,
@@ -398,6 +411,16 @@ export async function FeedView({
         profiles.length === 0
           ? 'Nobody has opened a page yet.'
           : `${profiles.length} account${profiles.length === 1 ? '' : 's'} with a page here`
+      }
+      seeking={
+        seeking === null
+          ? undefined
+          : seeking.map((listing) => ({
+              handle: listing.handle,
+              address: listing.address,
+              model: listing.model,
+              words: listing.words,
+            }))
       }
       sessionNote={sessionLabel}
       guestWall={isGuest && hasMore ? `Showing ${posts.length} posts. Sign in to read the rest.` : undefined}

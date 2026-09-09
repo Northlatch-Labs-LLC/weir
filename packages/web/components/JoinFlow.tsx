@@ -36,6 +36,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Avatar } from '@projectx-social/ui';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
 import { formatSui } from '@/lib/units';
@@ -64,6 +65,18 @@ const sui = formatSui;
 export function JoinFlow({ referrer }: { referrer: string | null }) {
   const { signer } = useSigner();
   const [handle, setHandle] = useState('');
+  /*
+    What their page will call them.
+
+    This was hardcoded to `''` and the profile row therefore fell back to the handle for every
+    account ever created here — so nobody who signed up had a name, and every page in the product
+    was headed by a lowercase handle. It is asked for once, here, because this is the only moment
+    somebody is already filling in a form about themselves.
+
+    Optional on purpose: it is not worth blocking a registration on, and `/api/account/profile`
+    already falls back to the handle when it is blank.
+  */
+  const [displayName, setDisplayName] = useState('');
   const [handleState, setHandleState] = useState<HandleState>({ state: 'idle' });
   const [accountState, setAccountState] = useState<AccountState>({ state: 'unknown' });
   const [quote, setQuote] = useState<{ bytes: string; gasMist: string } | null>(null);
@@ -278,7 +291,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           string made the client's statement a different shape from the server's, which binds a
           name; they agreed only by the accident of the name always being empty here.
         */
-        const profileName = '';
+        const profileName = displayName.trim();
         const profileStatement =
           `Weir\naddress: ${signer.address}\nissued: ${profileTimestampMs}\norigin: ${window.location.origin}` +
           `\naction: set profile\nhandle: ${handle.trim()}\nname: ${profileName}`;
@@ -488,6 +501,39 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
             Could not check availability: {handleState.detail}. It stays blocked rather than guessed.
           </span>
         )}
+      </p>
+
+      <label className="k" htmlFor="display-name" style={{ display: 'block', marginTop: 14 }}>
+        AND WHAT SHOULD YOUR PAGE CALL YOU?
+      </label>
+      {/*
+        The name and the picture together, because they are the same question asked twice and this
+        is the only moment somebody is looking at what their account will look like.
+
+        The picture is drawn from the address rather than uploaded: every account has one from the
+        moment it exists, nobody has a blank circle, and two accounts cannot wear the same face. A
+        picture of their own is a separate piece of work — it needs somewhere to put the file and a
+        field in the signed statement that sets it — and it is not pretended at here.
+      */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
+        <span style={{ lineHeight: 0, flexShrink: 0 }}>
+          <Avatar address={signer.address} size={64} />
+        </span>
+        <input
+          id="display-name"
+          className="comment-input"
+          style={{ flex: 1, minWidth: 0 }}
+          value={displayName}
+          autoComplete="name"
+          maxLength={60}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder={handle.trim() === '' ? 'Your name, as people should read it' : handle.trim()}
+        />
+      </div>
+      <p className="enc-status" style={{ minHeight: 20 }}>
+        Your name is shown above your posts and you can change it whenever you like — unlike the
+        handle, it is not on chain. The picture is drawn from your address, so it is yours and
+        nobody else&rsquo;s.
       </p>
 
       {referrer !== null && (

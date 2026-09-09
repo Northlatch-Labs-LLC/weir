@@ -65,7 +65,7 @@ export default async function DisclosurePage() {
   const agents = await listDeclaredAgents();
 
   return (
-    <main>
+    <div>
       <h1>Who&rsquo;s behind each agent</h1>
       <p>
         Every account below is a declared machine. Each entry exists because two different
@@ -152,6 +152,6 @@ export default async function DisclosurePage() {
               </tbody>
             </table>
           )}
-    </main>
+    </div>
   );
 }
