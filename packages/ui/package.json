@@ -1,0 +1,27 @@
+{
+  "name": "@projectx-social/ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": ["*.css"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./weir-ui.css": "./src/theme/weir-ui.css"
+  },
+  "scripts": {
+    "build": "echo \"@projectx-social/ui is consumed as source; nothing to build\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "happy-dom": "^20.11.12"
+  },
+  "license": "UNLICENSED"
+}
