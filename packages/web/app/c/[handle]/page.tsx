@@ -34,7 +34,10 @@ import { titleFor } from '@/lib/site-map';
 import { formatUnits } from '@/lib/units';
 import { EntityType, entitiesOf } from '@/components/EntityType';
 import { SubscribeButton } from '@/components/SubscribeButton';
-import { DesignCreator, type CreatorTab, type DesignStat, type DesignTier } from '@/components/design/Creator';
+import type { CreatorTab, DesignStat, DesignTier } from '@/components/design/Creator';
+import { CreatorScreen } from '@/components/app/CreatorScreen';
+import { ago } from '@/lib/freshness';
+import type { PostView } from '@projectx-social/ui';
 import type { DesignFeedPost } from '@/components/design/Home';
 import { TipButton } from '@/components/TipButton';
 import { DepositCheckout } from '@/components/DepositCheckout';
@@ -474,12 +477,41 @@ export default async function CreatorPage({
       <TipButton vaultId={profile.vaultId} decimals={coinDecimals} symbol={coinSymbol} />
     );
 
+  /*
+    The posts, as the application draws them.
+
+    `visiblePost` has already decided what each may contain — a gated post arrives with no body, so
+    the mapping below cannot release one. A price is carried only when the coin's scale was read;
+    `null` renders as "Locked" rather than as a figure nobody could check.
+  */
+  const now = Date.now();
+  const appPosts: PostView[] = profilePosts.map((entry) => ({
+    id: entry.post.id,
+    author: {
+      address: profile.owner,
+      handle: profile.handle,
+      displayName: profile.displayName,
+      isAgent: authorIsAgent === true,
+    },
+    when: ago(now, entry.post.createdAtMs),
+    whenISO: new Date(entry.post.createdAtMs).toISOString(),
+    title: entry.post.title === '' ? null : entry.post.title,
+    body: entry.post.body ?? entry.post.preview,
+    access:
+      entry.post.access.kind === 'paid'
+        ? { kind: 'paid', price: entry.price ?? null }
+        : entry.post.access.kind === 'subscribers'
+          ? { kind: 'subscribers', tier: null }
+          : { kind: 'free' },
+    unlocked: !entry.post.locked && entry.post.access.kind !== 'public',
+    comments: entry.post.commentCount,
+  }));
+
   return (
     <>
       {/*
         This is a profile, not an article or a product: one account, its name, and how many follow
-        it — the same figure the identity line below renders as "`@handle · N followers`".
-        `lib/structured-data.ts` explains what `profilePageJsonLd` omits when a creator has not
+        it. `lib/structured-data.ts` explains what `profilePageJsonLd` omits when a creator has not
         written a bio, rather than inventing one for the markup.
       */}
       <JsonLd
@@ -490,77 +522,53 @@ export default async function CreatorPage({
           followers,
         })}
       />
-      <DesignCreator
-      tab={tab}
-      tabHref={{ posts: tabHref('posts'), membership: tabHref('membership') }}
-      signedIn={viewer !== null}
-      myHandle={ownerName}
-      profile={{
-        handle: profile.handle,
-        displayName: profile.displayName,
-        bio: profile.bio,
-        initials: profile.handle.slice(0, 2),
-        meta: `@${profile.handle} · ${followers} follower${followers === 1 ? '' : 's'}${following ? ' · following' : ''}`,
-        sui: ownerName ?? shortId(profile.owner),
-        agent: agentIdentity,
-      }}
-      tiers={tiers}
-      stats={stats}
-      /*
-        Two of the three are counted here; the third is not counted anywhere.
-
-        There is no subscriber tally in the content store or on the vault — a subscription is an
-        object in a buyer's wallet, and counting them means walking every holder. `null` renders an
-        em dash, which is the truth. A zero would tell a visitor this creator has nobody.
-      */
-      counts={{ posts: profilePosts.length, followers, subscribers: null }}
-      profilePosts={profilePosts}
-      viewingLabel={
-        profilePosts.length === 0
-          ? 'No posts yet.'
-          : viewer === null
-            ? 'Paid posts stay locked until you sign in.'
-            : 'Paid posts open against what your address holds.'
-      }
-      tiersHref={v === null || profile.vaultId === null ? undefined : explorerUrl(profile.vaultId)}
-      tiersLabel={v === null ? 'No vault' : 'View the vault on chain'}
-      subscribeSlot={subscribeSlot}
-      depositSlot={depositSlot}
-      tipSlot={tipSlot}
-      depositLine="The vault belongs to that account rather than to this page, so it backs every page they publish. No function in the contract lets anyone but you move your deposit."
-      depositNote=""
-      vaultHref={onChainStakeVault === undefined ? undefined : `/vault/${onChainStakeVault}`}
-      perks={perks.map((perk) => ({
-        title: perk.title,
-        detail: perk.detail,
-        threshold: money(perk.thresholdUnits),
+      <CreatorScreen
+        profile={{
+          handle: profile.handle,
+          displayName: profile.displayName,
+          bio: profile.bio,
+          address: profile.owner,
+          isAgent: authorIsAgent === true,
+          sui: ownerName ?? shortId(profile.owner),
+        }}
+        counts={{ posts: profilePosts.length, followers, subscribers: null }}
         /*
-          Three states, and the third is the point. `true` is earned, `false` is a complete tally
-          that fell short, `undefined` is "we cannot say" — a guest, a failed read, or a tally the
-          ceiling cut short. Collapsing the third into `false` would tell somebody they had not paid
-          when they may have.
+          The page classified each figure when it read it. "not measured" is carried through as a
+          flag rather than re-derived from the string, so a screen cannot accidentally draw an
+          unread figure in the shape of a number.
         */
-        met:
-          standing === null || !standing.ok
-            ? undefined
-            : standing.value.given >= perk.thresholdUnits
-              ? true
-              : standing.value.partial
-                ? undefined
-                : false,
-      }))}
-      perksGiven={
-        standing === null || !standing.ok || standing.value.given === 0n
-          ? undefined
-          : money(standing.value.given)
-      }
-      perksPartial={standing !== null && standing.ok && standing.value.partial}
-      supportersFirst={supportersFirst}
-      {...(rebateBps !== null && rebateBps > 0
-        ? {
-            depositShare: `This creator hands back ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of what their vault earns to the people pooled behind them. Your part accrues in proportion to what you deposited, and you claim it yourself.`,
-          }
-        : {})}
+        figures={stats.map((stat: DesignStat) => ({
+          label: stat.label,
+          value: stat.value,
+          note: stat.note,
+          unread: stat.value === 'not measured',
+        }))}
+        tiers={tiers.map((t: DesignTier) => ({
+          price: t.price,
+          cadence: t.cadence,
+          net: t.net,
+          held: t.held,
+          action: t.action,
+        }))}
+        posts={appPosts}
+        followSlot={subscribeSlot}
+        tipSlot={tipSlot}
+        depositSlot={depositSlot}
+        depositLine={
+          rebateBps !== null && rebateBps > 0
+            ? `Your SUI stays yours and comes back whenever you ask. It earns while it sits behind ${profile.displayName}, and they hand back ${(rebateBps / 100).toFixed(2).replace(/\.?0+$/, '')}% of what it earns to the people pooled behind them.`
+            : `Your SUI stays yours and comes back whenever you ask. It earns while it sits behind ${profile.displayName}, and the earnings are theirs.`
+        }
+        tab={tab}
+        tabHref={{ posts: tabHref('posts'), membership: tabHref('membership') }}
+        viewerAddress={viewer}
+        viewerHandle={ownerName}
+        {...(reader === undefined ? {} : { reader })}
+        emptyMessage={
+          profilePosts.length === 0
+            ? `${profile.displayName} has not published anything yet.`
+            : 'No posts on this tab.'
+        }
       />
     </>
   );
