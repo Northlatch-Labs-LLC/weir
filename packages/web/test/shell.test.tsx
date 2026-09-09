@@ -28,12 +28,20 @@ vi.mock('@/components/design/AppNav', () => ({ AppNav: () => <nav data-testid="r
 vi.mock('@/components/design/Reveals', () => ({ Reveals: () => null }));
 vi.mock('@/components/shell/SiteFooter', () => ({ SiteFooter: () => <footer /> }));
 vi.mock('@/components/shell/RightRail', () => ({ RightRail: () => <div data-testid="discover" /> }));
+/*
+  The wallet control needs the signer provider, which needs a wallet registry. What is under test
+  here is that the frame gives it a place on every route, not what it does when clicked — that is
+  `test/wallet-accounts.test.tsx`.
+*/
+vi.mock('@/components/WalletConnect', () => ({
+  WalletConnect: () => <button type="button" data-testid="wallet-connect" />,
+}));
 
 const { SiteHeader } = await import('../components/shell/SiteHeader');
 const { Breadcrumbs } = await import('../components/shell/Breadcrumbs');
 const { MobileBar } = await import('../components/shell/MobileBar');
 const { PageTabs } = await import('../components/shell/PageTabs');
-const { AppShell } = await import('../components/shell/AppShell');
+const { AppShell, carriesItsOwnFrame } = await import('../components/shell/AppShell');
 const { DESTINATIONS } = await import('../lib/site-map');
 
 afterEach(() => {
@@ -209,53 +217,160 @@ describe('every address the shell hard-codes exists', () => {
 });
 
 /**
- * The shell opens the rail for members only, on a proved session.
+ * One frame, on every route.
  *
- * Rendered rather than read as source: what is pinned is the branch, and a failed read must land
- * on the guest side of it.
+ * There were two: a set of rebuilt screens drawing the application frame, and everything else
+ * wearing an older header, logo, footer, mobile bar and trail. Clicking from the feed to `/signin`
+ * crossed between them, which read as two products stitched together. What is pinned here is that
+ * the second one is gone — not merely preferred, not merely default: never rendered.
  */
-describe('the shell', () => {
+describe('the frame', () => {
   async function shell() {
     return render(await AppShell({ children: <p>page</p> }));
   }
 
-  it('renders neither rail for a guest', async () => {
+  it('wraps a route that does not build its own', async () => {
     session = { ok: true, value: null };
-    const { queryByTestId, getByText, container } = await shell();
-    expect(queryByTestId('rail')).toBeNull();
-    expect(container.querySelector('.weir-shell__rail')).toBeNull();
+    const { getByText, container } = await shell();
     expect(getByText('page')).toBeTruthy();
+    expect(container.querySelector('nav.w-rail')).not.toBeNull();
+    expect(container.querySelector('nav.w-bottom')).not.toBeNull();
   });
 
-  it('renders the menu rail and the discovery rail for a proved member', async () => {
+  it('carries the footer, on a page that has none of its own', async () => {
+    const { container } = await shell();
+    const foot = container.querySelector('footer.w-foot');
+    expect(foot).not.toBeNull();
+    expect(foot?.querySelector('a[href="/legal/terms"]')).not.toBeNull();
+  });
+
+  it('offers the wallet control to a guest, on every route it wraps', async () => {
+    session = { ok: true, value: null };
+    const { getByTestId } = await shell();
+    expect(getByTestId('wallet-connect')).toBeTruthy();
+  });
+
+  it('names the member in the rail on a proved session', async () => {
     session = { ok: true, value: '0x9c8f6a1d2b4e7c05a3f18d6b29e4c7a0f5b3d8e1c6a94f27b0d5e83a1c6f492b' };
-    const { getByTestId, container } = await shell();
-    expect(getByTestId('rail')).toBeTruthy();
-    expect(container.querySelector('aside.weir-shell__rail')).not.toBeNull();
+    const { container } = await shell();
+    expect(container.querySelector('a.w-rail__account')?.textContent).toContain('nova');
   });
 
   it('treats a failed session read as a guest, never as a member', async () => {
     session = { ok: false, failure: { kind: 'transport' } };
-    const { queryByTestId } = await shell();
-    expect(queryByTestId('rail')).toBeNull();
+    const { container } = await shell();
+    expect(container.querySelector('a.w-rail__account')).toBeNull();
   });
 
   it('has exactly one main landmark, the skip-link target', async () => {
     const { container } = await shell();
     expect(container.querySelectorAll('main')).toHaveLength(1);
-    expect(container.querySelector('main')?.id).toBe('main');
+    expect(container.querySelector('main')?.id).toBe('w-main');
   });
 
   it('is mounted once, from the root layout, around every route', () => {
     const layout = readFileSync(resolve(process.cwd(), 'app/layout.tsx'), 'utf8');
     expect(layout).toContain('<AppShell>{children}</AppShell>');
-    // No screen may bring its own header back.
-    const design = resolve(process.cwd(), 'components/design');
-    const { readdirSync } = require('node:fs') as typeof import('node:fs');
-    for (const file of readdirSync(design)) {
-      const source = readFileSync(resolve(design, file), 'utf8');
-      expect(source, `${file} renders its own chrome`).not.toMatch(/<(DesignHeader|DesignFooter|SiteHeader|SiteFooter)\b/);
-      expect(source, `${file} nests a second <main>`).not.toMatch(/<main[\s>]/);
+  });
+});
+
+/**
+ * Which routes build their own frame, and — the part that was wrong — which do not.
+ *
+ * The list used to be matched as a prefix, so `/agents` covered `/agents/build` and
+ * `/agents/declare`. Those pages build no frame, were handed through as though they did, and
+ * rendered with no navigation at all: a page with no way out of itself.
+ */
+describe('routes that build their own frame', () => {
+  it('recognises the screens that do', () => {
+    for (const path of ['/', '/feed', '/explore', '/creators', '/agents', '/alerts', '/messages', '/studio', '/vault', '/c/nova', '/p/0xabc']) {
+      expect(carriesItsOwnFrame(path), `${path} builds its own frame`).toBe(true);
     }
+  });
+
+  it('does not mistake a sub-route for one', () => {
+    for (const path of ['/agents/build', '/agents/declare', '/agents/nova', '/explore/agents', '/vault/0xabc', '/signin', '/join', '/creator', '/earnings', '/purchases', '/security', '/legal/terms']) {
+      expect(carriesItsOwnFrame(path), `${path} must be wrapped`).toBe(false);
+    }
+  });
+
+  it('wraps when there is no request to ask — an extra frame is fixable, a missing one is not', () => {
+    expect(carriesItsOwnFrame(null)).toBe(false);
+  });
+
+  /*
+    Every framed path above must be a page that actually renders `AppFrame`, or the list is a lie
+    and those routes lose their navigation. Read from the files rather than trusted.
+  */
+  it('every framed path is a page that renders the frame', () => {
+    const { existsSync, readdirSync } = require('node:fs') as typeof import('node:fs');
+    const app = resolve(process.cwd(), 'app');
+    /** Where a URL path's page file lives, allowing for the route groups above it. */
+    function pageFor(urlPath: string): string | null {
+      const rest = urlPath === '/' ? '' : urlPath.slice(1);
+      const direct = resolve(app, rest, 'page.tsx');
+      if (existsSync(direct)) return direct;
+      for (const entry of readdirSync(app)) {
+        if (!entry.startsWith('(')) continue;
+        const grouped = resolve(app, entry, rest, 'page.tsx');
+        if (existsSync(grouped)) return grouped;
+      }
+      return null;
+    }
+
+    for (const path of ['/', '/feed', '/explore', '/creators', '/agents', '/alerts', '/messages', '/studio', '/vault']) {
+      const file = pageFor(path);
+      expect(file, `${path} has no page`).not.toBeNull();
+      /*
+        Followed one import deep: several of these pages are a few lines that hand off to a view
+        (`/feed` → `FeedView` → `FeedApp`), and the frame is in the view.
+      */
+      const source = readFileSync(file as string, 'utf8');
+      const reaches =
+        /components\/app\//.test(source) ||
+        [...source.matchAll(/from '@\/(components\/[^']+)'/g)].some(([, mod]) => {
+          const dep = resolve(process.cwd(), `${mod}.tsx`);
+          return existsSync(dep) && /components\/app\//.test(readFileSync(dep, 'utf8'));
+        });
+      expect(reaches, `${path} is listed as framed but does not reach components/app`).toBe(true);
+    }
+  });
+});
+
+/**
+ * The old chrome renders nowhere.
+ *
+ * The files still exist — deleting them is a separate change with its own blast radius — but
+ * nothing in the application may mount them. This is the guard that stops one of them creeping
+ * back into a layout and putting a second header on a page again.
+ */
+describe('the old chrome', () => {
+  it('is imported by no page, layout or shell', () => {
+    const { readdirSync, statSync } = require('node:fs') as typeof import('node:fs');
+    const retired = ['SiteHeader', 'SiteFooter', 'MobileBar', 'Breadcrumbs', 'RightRail', 'AppNav'];
+    const offenders: string[] = [];
+
+    function walk(dir: string): void {
+      for (const entry of readdirSync(dir)) {
+        const full = resolve(dir, entry);
+        if (statSync(full).isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry)) continue;
+        // A retired component may still import its neighbours; only live code is checked.
+        if (retired.some((name) => entry === `${name}.tsx`)) continue;
+        const source = readFileSync(full, 'utf8');
+        for (const name of retired) {
+          if (new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(source)) {
+            offenders.push(`${full.replace(process.cwd(), '')} imports ${name}`);
+          }
+        }
+      }
+    }
+
+    walk(resolve(process.cwd(), 'app'));
+    walk(resolve(process.cwd(), 'components/shell'));
+    expect(offenders).toEqual([]);
   });
 });

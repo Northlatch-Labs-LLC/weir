@@ -223,17 +223,43 @@ export interface RememberedWallet {
 function store(): Storage | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage ?? null;
+    return window.sessionStorage ?? null;
   } catch {
     return null;
   }
 }
 
+/**
+ * The record used to live in `localStorage`, which made it permanent.
+ *
+ * The intent was that a reload should not sign you out, and that is right. The effect was that a
+ * reader who had ever connected could not get back to the signed-out view at all: every new tab,
+ * every next day, the silent reconnect ran again and the guest state became unreachable — including
+ * for the person trying to check what a visitor sees.
+ *
+ * `sessionStorage` keeps the part that was wanted and drops the part that was not: a reload keeps
+ * you connected, closing the tab does not. Nothing here is a secret — a wallet name and a public
+ * address — so the move costs nothing but the permanence.
+ *
+ * This clears the old permanent copy on the way past, so somebody carrying one is fixed by their
+ * next load rather than by a console command they should never have needed to be told.
+ */
+function clearPermanentCopy(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage?.removeItem(WALLET_STORAGE_KEY);
+  } catch {
+    // A browser that refuses localStorage has nothing stale in it to clear.
+  }
+}
+
 export function rememberWallet(remembered: RememberedWallet): void {
+  clearPermanentCopy();
   store()?.setItem(WALLET_STORAGE_KEY, JSON.stringify(remembered));
 }
 
 export function forgetWallet(): void {
+  clearPermanentCopy();
   store()?.removeItem(WALLET_STORAGE_KEY);
 }
 
@@ -245,6 +271,7 @@ export function forgetWallet(): void {
  * guess this whole change exists to delete.
  */
 export function readRememberedWallet(): RememberedWallet | null {
+  clearPermanentCopy();
   const raw = store()?.getItem(WALLET_STORAGE_KEY);
   if (raw === null || raw === undefined) return null;
   try {

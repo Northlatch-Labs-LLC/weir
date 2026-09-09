@@ -35,13 +35,25 @@
  * wrong; it is small, and it is built here against the provider that exists.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSigner } from '@/components/SignerProvider';
 
-export function WalletConnect() {
+export function WalletConnect({
+  triggerClassName = 'btn account-connect',
+  triggerLabel,
+}: {
+  /**
+   * The trigger's classes. The application frame wants the design's own button; the legacy header
+   * wants the one it already had. Only the trigger differs — the window, the wallet list and the
+   * address picker are the same code either way, which is the point of taking a class name rather
+   * than growing a second copy of this component.
+   */
+  triggerClassName?: string | undefined;
+  triggerLabel?: ReactNode;
+} = {}) {
   const {
     wallets,
     unusableWallets,
@@ -114,12 +126,16 @@ export function WalletConnect() {
         <button
           ref={triggerRef}
           type="button"
-          className="btn account-connect"
+          className={triggerClassName}
           aria-haspopup="dialog"
           aria-expanded={open}
           onClick={() => setOpen(true)}
         >
-          <span className="account-signin__label">Connect&nbsp;</span>wallet
+          {triggerLabel ?? (
+            <>
+              <span className="account-signin__label">Connect&nbsp;</span>wallet
+            </>
+          )}
         </button>
       )}
 

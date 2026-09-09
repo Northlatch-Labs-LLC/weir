@@ -13,6 +13,7 @@ import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode, CSSProperties } from 'react';
 import { AppShell, type Viewer } from '@projectx-social/ui';
+import { WalletConnect } from '@/components/WalletConnect';
 
 /**
  * The reader's address travels in the query string on every link, because it is what the frame
@@ -61,7 +62,18 @@ export function AppFrame({
   }
 
   return (
-    <AppShell pathname={pathname} Link={Link} viewer={viewer} aside={aside}>
+    <AppShell
+      pathname={pathname}
+      Link={Link}
+      viewer={viewer}
+      aside={aside}
+      /*
+        The wallet control lives in the frame, so it is on every route rather than only on the
+        pages that happened to carry a sign-in panel. It also carries the address picker, which is
+        why it is mounted while connected too — see `WalletConnect`.
+      */
+      connect={<WalletConnect triggerClassName="w-btn w-btn--primary" triggerLabel="Connect wallet" />}
+    >
       {children}
     </AppShell>
   );

@@ -57,7 +57,7 @@ export function DesignSignin({ nextPath = '/' }: { nextPath?: string }) {
               kicker="Sign in"
               title="Sign in, and the"
               accent="address is yours."
-              lede="Either path ends the same way: a real Sui address, controlled by you. Weir never holds it, and there is no password to reset because there is no account to hold one."
+              lede="Either path ends the same way: a real Sui address, and your keys are what sign for it. Nothing to remember, nothing to reset."
             />
             <div style={{ display: 'grid', gap: '1.5rem' }}>
               <div style={{ background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.07),0 14px 34px -26px rgba(var(--shade-rgb,0,0,0),0.85)', padding: '1.5rem' }}>

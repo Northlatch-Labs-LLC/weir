@@ -20,6 +20,7 @@ export {
   LeftRail,
   BottomBar,
   ColumnHeader,
+  ColumnFooter,
   WeirMark,
   NAV,
   BOTTOM,

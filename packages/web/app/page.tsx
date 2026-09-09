@@ -1,20 +1,20 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
-import { fold } from '@projectx-social/sdk';
-import { provenReader } from '@/lib/read-session';
-import { LandingData } from '@/components/design/landing-data';
 import { FeedView } from '@/components/feed/FeedView';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * The front door.
+ * The front door is the product.
  *
- * `/` is two things: the landing for somebody who has just arrived, and the feed for somebody who
- * is signed in. The test is generous in the *guest* direction — a proved session or a connected
- * wallet (`?reader=`) means "here to use the product" and gets the feed; anybody else gets the
- * argument for it. A failed session read therefore shows marketing, which leaks nothing.
+ * `/` used to fork: a marketing landing for a guest, the feed for a member. That fork is why the
+ * front page carried a second header and a footer belonging to a website rather than to this
+ * application — and it meant the first thing a new reader saw was an argument for the place
+ * instead of the place.
  *
- * The feed's own address is `/feed`, where a guest can also see the public sample.
+ * It is the feed for everyone now. A guest gets the public sample, in the same frame, with the
+ * wallet control in the rail where it is on every other route. `components/design/landing-data`
+ * still exists and is one import away if a marketing page is wanted again — at its own address,
+ * not at this one.
  */
 export default async function Home({
   searchParams,
@@ -22,13 +22,5 @@ export default async function Home({
   searchParams: Promise<{ reader?: string; view?: string }>;
 }) {
   const { reader, view } = await searchParams;
-  const viewer = fold(
-    await provenReader(),
-    (value) => value,
-    () => null,
-  );
-  if (viewer === null && reader === undefined) {
-    return <LandingData signedIn={false} myHandle={null} />;
-  }
   return <FeedView reader={reader} requested={view} />;
 }

@@ -107,12 +107,21 @@ export function LeftRail({
   nav = NAV,
   viewer,
   onPublish,
+  connect,
 }: {
   pathname: string;
   Link: LinkComponent;
   nav?: readonly NavItem[] | undefined;
   viewer: Viewer;
   onPublish?: (() => void) | undefined;
+  /**
+   * The control that connects a wallet, supplied by the host.
+   *
+   * It lives in the rail rather than on a sign-in page because the rail is on every route: a reader
+   * who lands on a post, a creator or the feed can connect from where they are. When the host
+   * passes nothing, the rail falls back to a link to `/signin`, which is a page and not a dead end.
+   */
+  connect?: ReactNode;
 }) {
   return (
     <nav className="w-rail" aria-label="Weir">
@@ -137,6 +146,13 @@ export function LeftRail({
           <button type="button" className="w-btn w-btn--primary w-rail__publish" onClick={onPublish}>
             Publish
           </button>
+          {/*
+            Mounted while connected as well, and deliberately: the host's control is the only place
+            the address picker exists, and a wallet can hand back several addresses minutes after
+            the window was dismissed. It draws nothing here — it is the window that has to stay
+            reachable, not the trigger.
+          */}
+          {connect}
           <Link href={viewer.handle === null ? '/vault' : `/c/${viewer.handle}`} className="w-rail__account">
             <Avatar address={viewer.address} src={viewer.avatarUrl} size={40} />
             <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -151,12 +167,46 @@ export function LeftRail({
             </span>
           </Link>
         </>
-      ) : (
+      ) : connect === undefined ? (
         <Link href="/signin" className="w-btn w-btn--primary w-rail__publish">
           Sign in
         </Link>
+      ) : (
+        <div className="w-rail__connect">
+          {connect}
+          <Link href="/signin" className="w-rail__alt">
+            or continue with Google
+          </Link>
+        </div>
       )}
     </nav>
+  );
+}
+
+/**
+ * The foot of the column.
+ *
+ * Says where you are and what it costs. The fee is stated because it is a term of using the place,
+ * not because anybody asked.
+ */
+export function ColumnFooter({ Link }: { Link: LinkComponent }) {
+  return (
+    <footer className="w-foot">
+      <div className="w-foot__links">
+        <Link href="/explore">Explore</Link>
+        <Link href="/creators">Creators</Link>
+        <Link href="/agents">Agents</Link>
+        <Link href="/security">Security</Link>
+        <Link href="/legal/terms">Terms</Link>
+        <Link href="/legal/privacy">Privacy</Link>
+        <Link href="/legal/creator-terms">Creator terms</Link>
+        <Link href="/disclosure">Disclosure</Link>
+      </div>
+      <div className="w-foot__line">
+        <WeirMark size={16} />
+        <span>Weir · on Sui · 2.9% at settlement</span>
+      </div>
+    </footer>
   );
 }
 
@@ -238,6 +288,7 @@ export function AppShell({
   aside,
   children,
   onPublish,
+  connect,
 }: {
   pathname: string;
   Link: LinkComponent;
@@ -246,6 +297,7 @@ export function AppShell({
   aside?: ReactNode;
   children: ReactNode;
   onPublish?: (() => void) | undefined;
+  connect?: ReactNode;
 }) {
   return (
     <div className="w-app">
@@ -253,9 +305,10 @@ export function AppShell({
         Skip to content
       </a>
       <div className="w-app__inner">
-        <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} />
+        <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} connect={connect} />
         <main id="w-main" className="w-column">
           {children}
+          <ColumnFooter Link={Link} />
         </main>
         {aside === undefined ? null : (
           <aside className="w-aside" aria-label="Discover">

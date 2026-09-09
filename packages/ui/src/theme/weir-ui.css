@@ -112,6 +112,10 @@
     border-left: 1px solid var(--w-line);
     border-right: 1px solid var(--w-line);
     min-height: 100dvh;
+    /* A column so the footer can take `margin-top: auto` and sit at the bottom
+       of a short page instead of halfway up it. */
+    display: flex;
+    flex-direction: column;
   }
   .w-aside {
     width: var(--w-aside);
@@ -196,6 +200,23 @@
     margin: 16px 8px 0;
     min-height: 50px;
   }
+  /* The host's wallet control, given the same footprint as the Publish button
+     so the rail keeps its shape whether you are signed in or not. */
+  .w-rail__connect {
+    margin: 16px 8px 0;
+  }
+  .w-rail__connect > button,
+  .w-rail__connect > .w-btn { width: 100%; min-height: 50px; }
+  .w-rail__alt {
+    display: block;
+    margin-top: 9px;
+    text-align: center;
+    font-family: var(--w-sans);
+    font-size: 12.5px;
+    color: var(--w-ink-7);
+    text-decoration: none;
+  }
+  .w-rail__alt:hover { color: var(--w-ink-10); text-decoration: underline; }
   .w-rail__account {
     margin-top: auto;
     display: flex;
@@ -645,6 +666,48 @@
     z-index: 7;
   }
 
+  /* ---- pages not yet rebuilt --------------------------------------------
+     A screen assembled from this package sets its own gutter per band — a post
+     card, a column header and an empty state are not indented the same amount.
+     A page written before the frame existed took its gutter from the old page
+     wrapper, so inside the column it would sit flush against the rule. This
+     supplies one, and nothing else: it is a gutter, not a second design.
+     -------------------------------------------------------------------- */
+  .w-legacy {
+    min-width: 0;
+    padding: 18px 22px 8px;
+  }
+
+  /* ---- the footer -------------------------------------------------------
+     Inside the column rather than across the viewport. The rail and the
+     discovery column scroll on their own, so a footer laid across the bottom
+     of the page would belong to none of them; at the foot of the column it
+     ends the thing you were actually reading.
+     -------------------------------------------------------------------- */
+  .w-foot {
+    margin-top: auto;
+    padding: 22px 22px 30px;
+    border-top: 1px solid var(--w-line);
+    font-family: var(--w-sans);
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--w-ink-6);
+  }
+  .w-foot__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-bottom: 12px;
+  }
+  .w-foot a { color: var(--w-ink-7); text-decoration: none; }
+  .w-foot a:hover { color: var(--w-ink-10); text-decoration: underline; }
+  .w-foot__line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--w-ink-5);
+  }
+
   /* =========================================================================
      Three widths, and every screen is verified at all three
      ====================================================================== */
@@ -660,6 +723,8 @@
     .w-fab { display: flex; }
     .w-post { padding: 14px 16px 12px; }
     .w-head__row { padding: 12px 16px 12px; }
+    .w-legacy { padding: 14px 16px 8px; }
+    .w-foot { padding: 20px 16px 28px; }
     .w-actions { gap: 0; justify-content: space-between; }
   }
 

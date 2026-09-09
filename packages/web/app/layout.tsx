@@ -214,15 +214,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/*
-          Straight to content, for somebody driving the page from the keyboard.
+          The skip link moved into the frame.
 
-          The landing page opens with a nav and a hero before it reaches anything a reader came for,
-          which is several tab stops of chrome on every visit. This is the first focusable thing in
-          the document and it is invisible until it is focused.
+          It has to point at the element the content is actually in, and that is now `#w-main` in
+          `packages/ui`'s shell on every route. Left here it named `#main`, which no route renders
+          any more — a skip link to nothing is worse than none, because it is the first thing a
+          keyboard reader reaches and it silently does nothing.
         */}
-        <a className="skip-link" href="#main">
-          Skip to content
-        </a>
 
         {/*
           One signer for the whole application. It wraps everything rather than sitting inside a

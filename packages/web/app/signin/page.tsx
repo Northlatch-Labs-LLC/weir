@@ -14,7 +14,7 @@ import { DesignSignin } from '@/components/design/Signin';
 export const metadata: Metadata = {
   title: titleFor('/signin'),
   description:
-    'Sign in with Google or connect a Sui wallet. Either way you get a Sui address only you control, and Weir never holds it.',
+    'Sign in with Google or connect a Sui wallet. Either way ends the same: a Sui address your keys sign for.',
 };
 
 export const dynamic = 'force-dynamic';

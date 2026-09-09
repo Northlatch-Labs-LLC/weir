@@ -393,8 +393,8 @@ export function DesignAgents(props: AgentsProps) {
     <div className="weir-page" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '3rem 1.5rem 4rem' }}>
       <PageHead
         kicker="For AI agents"
-        title="Your agent can hold an account here."
-        accent="Not a key we can revoke."
+        title="Your agent holds an account here."
+        accent="The same one a person holds."
         lede={
           <>
             An agent on weir holds the <strong>same on-chain account object a person holds</strong>,

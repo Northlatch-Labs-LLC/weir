@@ -200,20 +200,22 @@ function bound(): string | null {
 const REMEMBERED = 'projectx.wallet';
 
 /*
-  A `localStorage` for the test environment, because there isn't one.
+  Both web storages for the test environment, because there is only one here.
 
-  happy-dom implements `sessionStorage` but `window.localStorage` reads as `undefined` here: Node
-  ships its own experimental `localStorage` global that is inert unless the process was started with
+  happy-dom implements `sessionStorage` but `window.localStorage` reads as `undefined`: Node ships
+  its own experimental `localStorage` global that is inert unless the process was started with
   `--localstorage-file`, and it shadows the one happy-dom would otherwise provide.
 
-  So this is not a mock standing in for behaviour under test — it is the missing half of the DOM.
-  Map-backed and exact, so `getItem` on an absent key returns `null` the way the real API does
+  So these are not mocks standing in for behaviour under test — they are the missing half of the
+  DOM. Map-backed and exact, so `getItem` on an absent key returns `null` the way the real API does
   rather than `undefined`, which is the distinction every assertion below turns on.
+
+  TWO maps, not one shared. The wallet record lives in `sessionStorage` and `lib/signer.ts` deletes
+  any older permanent copy out of `localStorage` on the way past; backing both with one map would
+  make that deletion erase the record it is about to read.
 */
-const stored = new Map<string, string>();
-Object.defineProperty(window, 'localStorage', {
-  configurable: true,
-  value: {
+function webStorage(stored: Map<string, string>): Storage {
+  return {
     getItem: (key: string) => stored.get(key) ?? null,
     setItem: (key: string, value: string) => void stored.set(key, value),
     removeItem: (key: string) => void stored.delete(key),
@@ -222,17 +224,23 @@ Object.defineProperty(window, 'localStorage', {
     get length() {
       return stored.size;
     },
-  },
-});
+  } as Storage;
+}
+
+const stored = new Map<string, string>();
+const sessionStored = new Map<string, string>();
+Object.defineProperty(window, 'localStorage', { configurable: true, value: webStorage(stored) });
+Object.defineProperty(window, 'sessionStorage', { configurable: true, value: webStorage(sessionStored) });
 
 function remember(walletName: string, address: string) {
-  window.localStorage.setItem(REMEMBERED, JSON.stringify({ wallet: walletName, address }));
+  window.sessionStorage.setItem(REMEMBERED, JSON.stringify({ wallet: walletName, address }));
 }
 
 beforeEach(() => {
   registered = [];
   registryListeners.clear();
   stored.clear();
+  sessionStored.clear();
 });
 
 /*
@@ -244,6 +252,50 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+/*
+  The signed-out view has to be reachable.
+
+  While the wallet record lived in `localStorage`, anybody who had ever connected was reconnected
+  silently on every load, in every tab, forever. There was no way back to the guest state — not for
+  a reader who wanted to disconnect, and not for the person trying to see what a visitor sees. The
+  record is scoped to the tab now, and a leftover permanent copy is dropped rather than obeyed.
+*/
+describe('getting back to signed out', () => {
+  it('does not reconnect from a record left in localStorage', async () => {
+    stored.set(REMEMBERED, JSON.stringify({ wallet: 'Slush', address: FIRST }));
+    const slush = wallet([account(FIRST)]);
+    registered = [slush.handle];
+
+    mount(<><SignIn /><Probe /></>);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Slush/ })).not.toBeNull());
+    expect(bound()).toBe('none');
+    // Not even a silent attempt: the record is not consulted, so nothing asks the extension.
+    expect(slush.connect).not.toHaveBeenCalled();
+  });
+
+  it('clears the stale permanent copy rather than leaving it to fire again', async () => {
+    stored.set(REMEMBERED, JSON.stringify({ wallet: 'Slush', address: FIRST }));
+    const slush = wallet([account(FIRST)]);
+    registered = [slush.handle];
+
+    mount(<><SignIn /><Probe /></>);
+
+    await waitFor(() => expect(stored.has(REMEMBERED)).toBe(false));
+  });
+
+  it('remembers the connection for this tab, so a reload does not sign you out', async () => {
+    const slush = wallet([account(FIRST)]);
+    registered = [slush.handle];
+    mount(<><SignIn /><Probe /></>);
+
+    await clickWallet();
+
+    await waitFor(() => expect(bound()).toBe(FIRST));
+    expect(sessionStored.get(REMEMBERED)).toContain(FIRST);
+  });
 });
 
 describe('choosing which address a wallet session uses', () => {
