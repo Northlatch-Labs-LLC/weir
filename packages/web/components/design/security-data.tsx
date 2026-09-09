@@ -29,16 +29,25 @@ const ALERT = 'var(--alert,#f2a29b)';
 const LINE = 'rgba(var(--line-rgb,28,61,71),0.9)';
 
 const GUARANTEES: readonly DesignGuarantee[] = [
-  { icon: <Icon name="lock" size={18} />, title: 'One predicate, in one place', body: 'A gated body is released only against a Subscription or Unlock object held on chain. There is no second code path, no admin override, no support tool that can hand it over.', mechanism: 'a failed read locks, never unlocks' },
-  { icon: <Icon name="eye" size={18} />, title: 'Nothing to leak client-side', body: 'A body you have not bought is not in the payload at all. There is no blurred paragraph in the HTML, no hidden div, no CSS to disable: the browser never received the words.', mechanism: 'gates render from absence, not from concealment' },
+  { icon: <Icon name="lock" size={18} />, title: 'One predicate, in one place', body: 'A gated body is released only against a Subscription or Unlock object held on chain. That check is the only thing that opens it, it runs in one function, and every path to the body goes through that function.', mechanism: 'a failed read locks, never unlocks' },
+  { icon: <Icon name="eye" size={18} />, title: 'The words are never sent', body: 'A body you have not bought is not in the payload. The server composes the page without it, so what arrives in your browser is a page that never contained those words.', mechanism: 'gates render from absence, not from concealment' },
   { icon: <Icon name="shield" size={18} />, title: 'Encrypted before it is stored', body: 'A paid post\u2019s words and media live on Walrus as ciphertext, sealed to the same identity, so one unlock opens both. Seal releases the key against the object in your wallet, not against a row here. The paywall is key custody, not our server agreeing to say no. A subscriber post\u2019s words are sealed too, to the month they were published: a lapsed subscription keeps what it paid for and opens nothing published after. Its media, and everything in a free post, are gated by this server rather than sealed.', mechanism: 'Seal keys · Walrus blobs · your object' },
   { icon: <Icon name="vault" size={18} />, title: 'Your deposit stays yours', body: 'A deposit moves from your wallet into the vault object and is redeemable one for one. Withdrawing is a call you sign against that object.', mechanism: 'no deployed function moves your principal; upgrades need 2 of 3 keys' },
   { icon: <Icon name="key" size={18} />, title: 'An account nobody can close', body: 'Sign in with Google through zkLogin and you get a real Sui address: Google never learns the address, the chain never learns the account. Your subscriptions and unlocks are objects in your wallet, not rows in ours.', mechanism: 'if this site went dark, your access survives it' },
   { icon: <Icon name="check" size={18} />, title: 'Verifiable by strangers', body: 'The package digest, the tier object, the vault object and every settlement are public. Read the chain and check every figure on this page against it.', mechanism: 'every figure names its source or says not measured' },
 ];
 
+/*
+  The heading above these says "three things". There were two.
+
+  A count in a heading that disagrees with what is under it is the kind of defect a reader notices
+  before they notice anything the section says. The missing one is settlement, which belongs here
+  rather than in the guarantees above: same-transaction payment is the thing a payout schedule
+  cannot imitate.
+*/
 const ONLY_CHAIN: readonly DesignOnlyChain[] = [
   { figure: '∞', title: 'A paywall that outlives the platform', body: "Your subscriber's access is an object in their wallet. Ours is not the server that grants it, so our uptime, our terms of service and our continued existence are not conditions of your business." },
+  { figure: '0d', title: 'Paid in the same transaction', body: 'Money reaches your vault at the instant somebody pays, in the transaction that pays it. There is no payout schedule, no holding period and no minimum balance to reach. Withdrawing is a transaction you sign.' },
   { figure: '1:1', title: 'Numbers anyone can check', body: 'Every fee, payout and balance is a public record with a digest. Nobody has to trust a screenshot of a dashboard: a competitor, a journalist or a tax authority can verify it independently.' },
 ];
 

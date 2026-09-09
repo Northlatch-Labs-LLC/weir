@@ -176,7 +176,7 @@ export function PostCard({
             <Link href={`/c/${author.handle}`} className="w-handle">
               @{author.handle}
             </Link>
-            <span style={{ color: 'var(--w-ink-6)' }}>·</span>
+            <span style={{ color: 'var(--w-ink-7)' }}>·</span>
             <Link href={`/p/${post.id}`} className="w-handle">
               <time dateTime={post.whenISO}>{post.when}</time>
             </Link>

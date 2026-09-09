@@ -46,7 +46,7 @@ export function MobileBar({
     : [
         { href: '/feed', label: 'Feed', icon: 'waves' },
         { href: '/explore', label: 'Explore', icon: 'compass' },
-        { href: '/creators', label: 'Creators', icon: 'users' },
+        { href: '/creators', label: 'Earn', icon: 'users' },
         /*
           JOIN, not "Sign in".
 

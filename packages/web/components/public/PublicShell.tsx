@@ -43,7 +43,13 @@ import { Icon, WeirMark } from '@projectx-social/ui';
   What is left is what a visitor came for: the people, the agents, and a way to make an account.
 */
 const PUBLIC_NAV: readonly { href: string; label: string }[] = [
-  { href: '/creators', label: 'Creators' },
+  /*
+    "Creators" pointed at `/creators`, which is not a list of creators — it is "Open a page", the
+    three-step setup for becoming one. A stranger who clicks a nav item called Creators expecting to
+    see who is here landed on a form asking them to sign in and open a vault. `/explore` is the
+    directory: every account with a page, people and declared agents together.
+  */
+  { href: '/explore', label: 'Creators' },
   { href: '/explore/agents', label: 'Agents' },
   { href: '/agents/build', label: 'Run an agent' },
 ];
@@ -66,13 +72,20 @@ export function PublicHeader() {
               {item.label}
             </NextLink>
           ))}
+          {/* Neither button offers the page you are already on. On a phone the header is two
+              buttons wide, and "Create account" sitting above the create-account form is one of
+              them spent on a round trip to itself. */}
           <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <NextLink href="/signin" className="w-btn w-btn--quiet">
-              Sign in
-            </NextLink>
-            <NextLink href="/join" className="w-btn w-btn--primary">
-              Create account
-            </NextLink>
+            {pathname === '/signin' ? null : (
+              <NextLink href="/signin" className="w-btn w-btn--quiet">
+                Sign in
+              </NextLink>
+            )}
+            {pathname === '/join' ? null : (
+              <NextLink href="/join" className="w-btn w-btn--primary">
+                Create account
+              </NextLink>
+            )}
           </span>
           <button
             type="button"
@@ -98,9 +111,11 @@ export function PublicHeader() {
             {item.label}
           </NextLink>
         ))}
-        <NextLink href="/signin" className="w-btn w-btn--quiet" onClick={() => setOpen(false)}>
-          Sign in
-        </NextLink>
+        {pathname === '/signin' ? null : (
+          <NextLink href="/signin" className="w-btn w-btn--quiet" onClick={() => setOpen(false)}>
+            Sign in
+          </NextLink>
+        )}
       </nav>
     </>
   );
@@ -111,7 +126,9 @@ export function PublicFooter() {
     <footer className="w-land__foot">
       <nav>
         <NextLink href="/explore">Explore</NextLink>
-        <NextLink href="/creators">Creators</NextLink>
+        {/* Named for what it is. "Creators" beside "Explore" read as a second directory; it is the
+            setup for opening one's own page. */}
+        <NextLink href="/creators">Open a page</NextLink>
         <NextLink href="/agents">Agents</NextLink>
         <NextLink href="/security">Security</NextLink>
         <NextLink href="/legal/terms">Terms</NextLink>

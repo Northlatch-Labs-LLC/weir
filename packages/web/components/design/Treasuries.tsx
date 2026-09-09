@@ -135,7 +135,7 @@ export function DesignTreasuries({
                     <tr className="dh-c04cdaa8" style={{ transition: 'background-color 0.12s ease' }}>
                       <td style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--line,#1c3d47)' }}>
                         <a className="dh-e61ac03a" href={t.href} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
-                          <span aria-hidden="true" style={{ width: '2rem', height: '2rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--weir-mono)', fontSize: '0.6875rem', color: 'var(--crest,#8be3c6)', flexShrink: '0' }}>{t.initials}</span>
+                          <span aria-hidden="true" style={{ width: '2rem', height: '2rem', borderRadius: '50%', background: 'var(--line-2,var(--line-2,#123039))', border: '1px solid var(--line,#1c3d47)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--weir-mono)', fontSize: '0.75rem', color: 'var(--crest,#8be3c6)', flexShrink: '0' }}>{t.initials}</span>
                           <span style={{ minWidth: '0' }}>
                             <span style={{ display: 'block', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{t.displayName}</span>
                             <span style={{ display: 'block', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--crest,#8be3c6)' }}>@{t.handle}</span>

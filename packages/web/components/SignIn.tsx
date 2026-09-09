@@ -255,22 +255,41 @@ export function SignIn({
               own browser — Slush and Phantom both have one. On a computer, install one and reload.
             </p>
             {/*
-              Two real links, because a sentence is not a control.
+              Controls, because a sentence is not one — but the right controls in the right order.
 
-              With Google unavailable on the deployment and no wallet extension in the browser, this
-              component rendered a paragraph and nothing else — so `/join`, the page whose entire
-              job is to get somebody an account, had no button and no field anywhere on it. That is
-              not a hypothetical: a visitor on a browser with no Sui wallet meets it, and every
-              visitor meets it if the zkLogin session read fails after a deploy.
+              With Google unavailable and no wallet extension present this rendered a paragraph and
+              nothing else, so `/join` had no button and no field anywhere on it. The first fix put
+              "Get Slush" and "Get Phantom" here, and that was wrong in its own way: this component
+              is mounted on eight signed-out pages, so every one of them suddenly led with "install
+              a browser extension" as its primary action.
 
-              The wallets open in a new tab because the reader is mid-signup and closing this page
-              loses the handle they were about to claim.
+              Signing in comes first, because `/signin` offers whatever this deployment has — it is
+              the page that knows — and installing an extension is what somebody does only when
+              there is no other way. The installs stay, quiet, beneath it.
+
+              Not shown on `/signin` itself, where it would be a link to the page you are reading.
             */}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
-              <a className="btn" href="https://slush.app" target="_blank" rel="noreferrer noopener">
+              {/*
+                The design system's buttons, not the legacy ones. `.btn ghost` renders mint-dim text
+                over `.btn`'s own mint background — 1.2:1, measured — because `ghost` never resets
+                the fill in this cascade. `.w-btn` is the current system and is checked at both
+                widths.
+              */}
+              {pathname === '/signin' ? null : (
+                <a className="w-btn w-btn--primary w-btn--sm" href="/signin">
+                  Sign in
+                </a>
+              )}
+              <a
+                className={pathname === '/signin' ? 'w-btn w-btn--primary w-btn--sm' : 'w-btn w-btn--quiet w-btn--sm'}
+                href="https://slush.app"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
                 Get Slush
               </a>
-              <a className="btn ghost" href="https://phantom.app/download" target="_blank" rel="noreferrer noopener">
+              <a className="w-btn w-btn--quiet w-btn--sm" href="https://phantom.app/download" target="_blank" rel="noreferrer noopener">
                 Get Phantom
               </a>
             </div>

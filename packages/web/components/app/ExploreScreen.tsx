@@ -179,28 +179,45 @@ export function ExploreScreen({
                   </p>
                 )}
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                    gap: 12,
-                    marginTop: 12,
-                    maxWidth: '30rem',
-                  }}
-                >
-                  <div>
-                    <div className="w-figure__label">Pooled behind them</div>
-                    <div className={figureClass(row.pooledState)} style={{ fontSize: 17 }}>
-                      {row.pooled}
-                    </div>
+                {/*
+                  A figure that could not be read is omitted here rather than printed.
+
+                  Not a softening of the rule — the rule is that a failed read is never a value, and
+                  it is not one here either: the line above this list says which column could not be
+                  read, once, for the whole page. What this drops is the repetition. Six rows times
+                  two columns printed "not measured" twelve times in red on the one screen a stranger
+                  uses to decide whether anybody is here, which reads as a broken product rather than
+                  as a store that was briefly unreachable. `none` still prints: that is the store
+                  answering, and the answer is worth showing.
+                */}
+                {row.pooledState === 'unread' && row.yieldState === 'unread' ? null : (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      gap: 12,
+                      marginTop: 12,
+                      maxWidth: '30rem',
+                    }}
+                  >
+                    {row.pooledState === 'unread' ? null : (
+                      <div>
+                        <div className="w-figure__label">Pooled behind them</div>
+                        <div className={figureClass(row.pooledState)} style={{ fontSize: 17 }}>
+                          {row.pooled}
+                        </div>
+                      </div>
+                    )}
+                    {row.yieldState === 'unread' ? null : (
+                      <div>
+                        <div className="w-figure__label">Yield shared back</div>
+                        <div className={figureClass(row.yieldState)} style={{ fontSize: 17 }}>
+                          {row.yieldShare}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <div className="w-figure__label">Yield shared back</div>
-                    <div className={figureClass(row.yieldState)} style={{ fontSize: 17 }}>
-                      {row.yieldShare}
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
 
               <NextLink href={`/c/${row.handle}`} className="w-btn w-btn--quiet">

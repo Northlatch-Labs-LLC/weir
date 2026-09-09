@@ -378,16 +378,6 @@ export function DesignWaitlist({
               <canvas ref={canvasRef} aria-hidden="true" style={{ display: 'block', width: '100%', height: '100%' }}></canvas>
             </div>
 
-            {/*
-              See what is here before committing to anything. Both sides are open to a visitor the
-              gate would otherwise turn away — that is the funnel's whole job on this page.
-            */}
-            {funnel !== null && (
-              <div style={{ marginTop: '1rem', marginBottom: '2.5rem' }}>
-                <ExploreFunnel sides={funnel} />
-              </div>
-            )}
-
             <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,20rem),1fr))', alignItems: 'start', marginTop: '1rem' }}>
               <section aria-labelledby="wl-form-title" style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.94))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.6)', padding: '2rem' }}>
                 <h2 id="wl-form-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}>Join the list</h2>
@@ -555,6 +545,21 @@ export function DesignWaitlist({
                 </div>
               </div>
             </div>
+
+            {/*
+              See what is here before committing to anything — and after the form, not before it.
+
+              This sat above the form and pushed the email field 2,218 pixels down a page whose title
+              is "Join the list": two full-height browse sections stood between the heading and the
+              only control on it. The funnel's job is to catch somebody the gate would otherwise turn
+              away, which is a job it does after they have declined to leave an address, not instead
+              of asking.
+            */}
+            {funnel !== null && (
+              <div style={{ marginTop: '2.5rem' }}>
+                <ExploreFunnel sides={funnel} />
+              </div>
+            )}
           </div>
       {/* The honeypot. Off-screen rather than hidden, because a bot that skips hidden fields is the
           one this catches — and tab-skipped so no human and no screen reader reaches it. */}

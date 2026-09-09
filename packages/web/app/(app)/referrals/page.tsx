@@ -18,8 +18,7 @@ export default function ReferralsPage() {
       */}
       <PageHead
         kicker="Your account"
-        title="Bring someone, and take a share of"
-        accent="our cut."
+        title="Referrals"
         lede="Never out of the creator's. The share is a percentage of the platform fee, so a creator receives exactly what they would have received anyway."
       />
       <AccountTabs />

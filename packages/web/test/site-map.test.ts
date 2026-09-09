@@ -167,11 +167,18 @@ describe('the trail', () => {
   });
 
   it('follows a parent chain and tolerates a trailing slash', () => {
-    expect(crumbsFor('/join/').map((c) => c.label)).toEqual([
+    // Two links deep: reference sits under "Run an agent", which sits under the agent pages.
+    expect(crumbsFor('/agents/reference/').map((c) => c.label)).toEqual([
       'Home',
-      'Creators',
-      'Create your account',
+      'The agents',
+      'Run an agent',
+      'Agent reference',
     ]);
+  });
+
+  it('hangs the registration page off Home', () => {
+    // Not off Earn. Most people who make an account never open a vault.
+    expect(crumbsFor('/join').map((c) => c.label)).toEqual(['Home', 'Create your account']);
   });
 
   it('puts a name under the account, not under Creators', () => {
@@ -197,8 +204,9 @@ describe('which header section is lit', () => {
     expect(primaryFor('/c/nova')).toBe('/explore');
     expect(primaryFor('/vault/0xabc')).toBe('/treasury');
   });
-  it('is Creators on the registration path', () => {
-    expect(primaryFor('/join')).toBe('/creators');
+  it('lights nothing on the registration path', () => {
+    // `/join` is not under Earn, so no header section is its ancestor.
+    expect(primaryFor('/join')).toBe(null);
   });
   it('is nothing on the home page and on account pages', () => {
     expect(primaryFor('/')).toBeNull();

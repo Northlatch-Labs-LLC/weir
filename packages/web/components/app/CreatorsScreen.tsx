@@ -135,8 +135,18 @@ export function CreatorsScreen({
     { label: 'Objects created', value: '1 tier object, 1 creator vault', unread: false },
   ];
 
+  /*
+    The summary is a preview of the form, so it goes where the form goes.
+
+    Signed out, the column says "Sign in to set your page up" and the rail beside it still drew
+    "Your page — Nothing has been sent", a handle of "not set" and "You keep: not measured": a
+    running commentary on a form that is not on screen, with a failed read as its headline number,
+    to somebody who has not typed anything. What stays is the explanation of the share, which is
+    worth reading before signing in.
+  */
   const aside: ReactNode = (
     <>
+      {viewerAddress === null ? null : (
       <section className="w-card">
         <h3>{clean === '' ? 'Your page' : `weir.social/c/${clean}`}</h3>
         <p>Nothing has been sent. The next step is one transaction your wallet signs.</p>
@@ -155,6 +165,7 @@ export function CreatorsScreen({
           </div>
         ))}
       </section>
+      )}
 
       <section className="w-card">
         <h3>The share you can set</h3>

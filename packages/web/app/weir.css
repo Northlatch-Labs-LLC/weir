@@ -363,6 +363,17 @@
      rather than being flattened into the base class. Still `--bloom-a`-driven
      (base + 0.1) so daylight still dims it instead of relighting it to night
      strength, which was the bug in every hardcoded copy. */
+  /* Forced-colors mode passes the @supports test above and then replaces every background, which
+     leaves the transparent text with nothing painting it. The gradient is not worth a heading that
+     disappears, so in that mode the words take the system's own colour. */
+  @media (forced-colors: active) {
+    .weir-owned {
+      background: none;
+      color: CanvasText;
+      filter: none;
+    }
+  }
+
   @supports (background-clip: text) or (-webkit-background-clip: text) {
     .weir-owned.loud {
       filter: drop-shadow(0 0 30px rgba(var(--crest-rgb), calc(var(--bloom-a) + 0.1)));

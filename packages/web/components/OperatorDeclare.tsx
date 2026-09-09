@@ -260,15 +260,33 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
                   ) : (
                     <>
                       {done !== undefined && !done.ok ? <p style={{ ...VALUE, marginTop: '0.75rem' }} data-offer-refused="true">Not posted: {done.why}</p> : null}
-                      <button
-                        type="button"
-                        style={{ ...BUTTON, marginTop: '1rem', opacity: busy !== null ? 0.5 : 1 }}
-                        disabled={busy !== null || signer === null}
-                        onClick={() => void claim(listing)}
-                        data-claim={listing.address}
-                      >
-                        {signer === null ? 'Connect a wallet above to answer for this agent' : busy === listing.address ? 'Waiting for the wallet…' : 'I will answer for this agent — sign my half'}
-                      </button>
+                      {/*
+                        A link when there is nobody signed in, a button when there is.
+
+                        This was one disabled button reading "Connect a wallet above to answer for
+                        this agent" — a dead control pointing at something that is not always above
+                        it, on the page where an operator has already decided to take an agent on.
+                        A visitor who is not signed in gets the thing that signs them in.
+                      */}
+                      {signer === null ? (
+                        <a
+                          href="/signin"
+                          style={{ ...BUTTON, marginTop: '1rem', display: 'inline-block', textDecoration: 'none' }}
+                          data-claim={listing.address}
+                        >
+                          Sign in to answer for this agent
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          style={{ ...BUTTON, marginTop: '1rem', opacity: busy !== null ? 0.5 : 1 }}
+                          disabled={busy !== null}
+                          onClick={() => void claim(listing)}
+                          data-claim={listing.address}
+                        >
+                          {busy === listing.address ? 'Waiting for the wallet…' : 'I will answer for this agent — sign my half'}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

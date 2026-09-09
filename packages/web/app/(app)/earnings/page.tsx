@@ -19,8 +19,7 @@ export default function EarningsPage() {
       */}
       <PageHead
         kicker="Creator studio"
-        title="What you were paid, and what you can"
-        accent="take out."
+        title="Earnings"
         lede="What buyers paid, what the platform took, and what you can withdraw right now: three figures, read from your vault on chain."
       />
       <PageTabs label="Creator studio" items={CREATOR} />

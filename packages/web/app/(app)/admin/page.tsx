@@ -59,8 +59,7 @@ export default async function AdminPage() {
       {/* Chrome from `AppFrame`; `PageHead` restores the `h1` the retired title bar used to supply. */}
       <PageHead
         kicker="Platform"
-        title="The live terms, and who is allowed to"
-        accent="change them."
+        title="Admin"
         lede="Read from the shared object on chain. Administering it means holding the PlatformCap — every function that changes anything below takes it by reference, so the contract refuses anyone else regardless of what this page shows."
       />
       {siteAdmin && <SiteModeSwitch initial={mode} />}

@@ -56,8 +56,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
       */}
       <PageHead
         kicker="Support vault"
-        title="Support without"
-        accent="spending."
+        title="Vault"
         lede="Your deposit stays yours and is withdrawable in full at any time. Only the staking yield it earns goes to the creator, never the principal."
       />
 

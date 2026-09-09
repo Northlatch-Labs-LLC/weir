@@ -300,6 +300,23 @@ describe('the way in is never absent', () => {
     const branch = source.slice(source.indexOf('wallets.length === 0 && unusableWallets.length === 0'));
     expect(branch).toContain('slush.app');
     expect(branch).toContain('phantom.app');
-    expect(branch).toMatch(/className="btn"/);
+    expect(branch).toMatch(/w-btn--primary/);
+  });
+
+  it('leads with signing in, not with installing an extension', () => {
+    /*
+      The second half of the same defect. This component is mounted on eight signed-out pages, so
+      offering the wallet installs as the primary control made every one of them lead with "install
+      a browser extension". `/signin` knows what this deployment actually offers; that is where
+      somebody goes first, and the installs are what is left when there is no other way.
+    */
+    const source = readFileSync(resolve(process.cwd(), 'components/SignIn.tsx'), 'utf8');
+    const branch = source.slice(source.indexOf('wallets.length === 0 && unusableWallets.length === 0'));
+    const signIn = branch.indexOf('href="/signin"');
+    const slush = branch.indexOf('slush.app');
+    expect(signIn).toBeGreaterThan(-1);
+    expect(signIn, 'the sign-in link must come before the wallet installs').toBeLessThan(slush);
+    // And not on the sign-in page itself, where it would link to the page being read.
+    expect(branch).toContain("pathname === '/signin' ? null :");
   });
 });

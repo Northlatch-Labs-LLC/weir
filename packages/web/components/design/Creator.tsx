@@ -249,7 +249,7 @@ export function DesignCreator({
                               <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
                                 <span style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{perk.title}</span>
                                 {/* The state is named in words, never by colour alone. */}
-                                <span style={{ flex: '0 0 auto', fontFamily: 'var(--weir-mono)', fontSize: '0.6875rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: perk.met === true ? 'var(--crest,#8be3c6)' : 'var(--dim,#a3bcb8)' }}>{perk.met === true ? 'Yours' : `From ${perk.threshold}`}</span>
+                                <span style={{ flex: '0 0 auto', fontFamily: 'var(--weir-mono)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: perk.met === true ? 'var(--crest,#8be3c6)' : 'var(--dim,#a3bcb8)' }}>{perk.met === true ? 'Yours' : `From ${perk.threshold}`}</span>
                               </span>
                               {perk.detail !== '' && (
                                 <span style={{ fontSize: '0.875rem', lineHeight: '1.5', color: 'var(--ink-2,#b9cdc9)' }}>{perk.detail}</span>

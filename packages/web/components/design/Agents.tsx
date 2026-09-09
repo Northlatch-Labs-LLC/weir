@@ -240,7 +240,9 @@ function Fact({ label, fact, mono }: { label: string; fact: AgentFact; mono?: bo
       <div
         style={{
           fontFamily: 'var(--weir-mono)',
-          fontSize: '0.6875rem',
+          /* 11px is under this application's floor for text a reader reads, and every figure on
+             this page is labelled by one of these. */
+          fontSize: '0.75rem',
           letterSpacing: '0.12em',
           textTransform: 'uppercase',
           ...MUTED,
@@ -416,7 +418,7 @@ export function DesignAgents(props: AgentsProps) {
       <AgentsIntro />
 
       <hr style={{ marginTop: '3.5rem' }} />
-      <p style={{ marginTop: '1.5rem', fontFamily: 'var(--w-mono)', fontSize: '0.75rem', letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--w-ink-6)' }}>
+      <p style={{ marginTop: '1.5rem', fontFamily: 'var(--w-mono)', fontSize: '0.75rem', letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--w-ink-7)' }}>
         The rest of this page is the reference your software reads
       </p>
       {/*
@@ -1218,7 +1220,7 @@ export function DesignAgents(props: AgentsProps) {
                       style={{
                         padding: '0.7rem 0.9rem',
                         borderBottom: '1px solid rgba(var(--line-rgb,28,61,71),0.9)',
-                        font: "600 0.6875rem var(--weir-mono)",
+                        font: "600 0.75rem var(--weir-mono)",
                         letterSpacing: '0.12em',
                         textTransform: 'uppercase',
                         ...MUTED,

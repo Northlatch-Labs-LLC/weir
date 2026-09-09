@@ -210,6 +210,7 @@
   .w-rail__alt {
     display: block;
     margin-top: 9px;
+    padding-block: 3px;
     text-align: center;
     font-family: var(--w-sans);
     font-size: 12.5px;
@@ -344,9 +345,11 @@
     border-radius: var(--w-r-full);
     border: 1px solid var(--w-line-strong);
     background: rgba(89, 99, 124, 0.12);
-    color: var(--w-ink-7);
+    /* Was `--w-ink-7` at 11px: 2.11:1 against the chip's own fill, on the marker that states a
+       post's price, on every post in the product. */
+    color: var(--w-ink-9);
     font-family: var(--w-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -365,14 +368,16 @@
   .w-agent {
     display: inline-flex;
     align-items: center;
-    height: 18px;
+    height: 20px;
     padding: 0 7px;
     border-radius: var(--w-r-xs);
     border: 1px solid rgba(169, 139, 250, 0.45);
     background: rgba(169, 139, 250, 0.12);
     color: var(--w-violet);
     font-family: var(--w-mono);
-    font-size: 10px;
+    /* 10px. This is the marker that tells a reader they are paying a machine, and it was the
+       smallest text in the product. */
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.1em;
   }
@@ -403,21 +408,39 @@
     gap: 8px;
     flex-wrap: wrap;
   }
+  /* The 24px rule, and the one tool that keeps it without moving anything.
+
+     A name is 22px tall and a handle 21px, because that is what 15px and 13px type occupy. Both are
+     links, and a link under 24px is a target somebody's thumb misses. `padding-block` on an inline
+     box grows the hit rectangle without contributing to the line box, so the row keeps the height it
+     had and the target reaches 25px. Horizontal size is left to the line: a two-character handle is
+     16px wide and inline in its byline, which is the one target-size case WCAG exempts, and padding
+     there would push the separators around instead. */
   .w-name {
     font-family: var(--w-sans);
     font-size: 15px;
     font-weight: 700;
     color: var(--w-ink-10);
     text-decoration: none;
+    padding-block: 2px;
   }
   .w-handle {
     font-family: var(--w-mono);
     font-size: 13px;
     color: var(--w-ink-7);
     text-decoration: none;
+    padding-block: 2px;
   }
+  /* Measure, not width.
+
+     Between 834 and 1023px the rail collapses to icons and the column takes the space it leaves —
+     841px at 1023, which put 99 characters on a line of body serif. A reading measure is 45 to 90
+     and the post page already holds 62; the feed was the one surface that did not. Capped rather
+     than the column narrowed, because everything else in the column — the composer, the action row,
+     a quoted post — wants the full width it has. */
   .w-post__title {
     margin: 8px 0 6px;
+    max-width: 46ch;
     font-family: var(--w-serif);
     font-size: 21px;
     font-weight: 600;
@@ -427,6 +450,7 @@
   }
   .w-post__text {
     margin: 6px 0 0;
+    max-width: 68ch;
     font-family: var(--w-serif);
     font-size: 17px;
     line-height: 1.62;
@@ -595,7 +619,8 @@
     border-radius: var(--w-r-full);
     background: var(--w-panel);
     border: 1px solid var(--w-line);
-    color: var(--w-ink-6);
+    /* ink-6 measures 4.14:1 here, under the 4.5 a 15px placeholder has to clear. */
+    color: var(--w-ink-7);
     font-family: var(--w-sans);
     font-size: 15px;
     text-decoration: none;
@@ -621,6 +646,7 @@
     font-weight: 600;
     color: var(--w-mint-dim);
     text-decoration: none;
+    padding-block: 2px;
   }
   .w-card__more:hover { color: var(--w-mint); }
 
@@ -779,7 +805,8 @@
   .w-bottom__item[aria-current='page'] { color: var(--w-ink-10); }
   .w-bottom__label {
     font-family: var(--w-sans);
-    font-size: 10px;
+    /* 10px, on the only navigation a phone gets. */
+    font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.02em;
   }
@@ -840,7 +867,9 @@
     font-family: var(--w-sans);
     font-size: 12.5px;
     line-height: 1.75;
-    color: var(--w-ink-6);
+    /* ink-6 measures 4.36:1 on the ground, which is under the 4.5 small text has to clear. The
+       separators and the dateline are read, not decoration. */
+    color: var(--w-ink-7);
   }
   .w-foot__links {
     display: flex;
@@ -848,13 +877,15 @@
     gap: 6px 14px;
     margin-bottom: 12px;
   }
-  .w-foot a { color: var(--w-ink-7); text-decoration: none; }
+  /* Footer links are not inline in a sentence, so the target-size exemption does not cover them:
+     they carry their own 24px. */
+  .w-foot a { color: var(--w-ink-7); text-decoration: none; padding-block: 2px; }
   .w-foot a:hover { color: var(--w-ink-10); text-decoration: underline; }
   .w-foot__line {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--w-ink-5);
+    color: var(--w-ink-7);
   }
 
   /* =========================================================================
@@ -918,7 +949,8 @@
     border-radius: var(--w-r-full);
     background: rgba(140, 247, 198, 0.06);
     font-family: var(--w-mono);
-    font-size: 11.5px;
+    /* 12px is the floor for anything a reader reads, and the front page is where it matters most. */
+    font-size: 12px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--w-mint);
@@ -941,7 +973,9 @@
     color: var(--w-ink-9);
   }
   .w-land__cta { display: flex; align-items: center; gap: 13px; margin-top: 32px; flex-wrap: wrap; }
-  .w-land__fine { margin: 15px 0 0; font-family: var(--w-sans); font-size: 13.5px; color: var(--w-ink-6); }
+  /* ink-6 measures 4.43:1 — under 4.5 for text this size, and this is the line that says the
+     account is free and needs no password. */
+  .w-land__fine { margin: 15px 0 0; font-family: var(--w-sans); font-size: 13.5px; color: var(--w-ink-7); }
 
   /* The mechanic, drawn as four steps rather than claimed in a sentence. */
   .w-steps {
@@ -1033,7 +1067,7 @@
     background: var(--w-mint);
     color: var(--w-ground);
     font-family: var(--w-mono);
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1140,8 +1174,9 @@
     align-items: center;
     gap: 9px;
     font-family: var(--w-sans);
-    font-size: 12.5px;
-    color: var(--w-ink-5);
+    font-size: 13px;
+    /* `--w-ink-5` measured 3.56:1 on the ground. */
+    color: var(--w-ink-7);
   }
 
   @media (max-width: 1023px) {
@@ -1233,8 +1268,17 @@
   .w-doc ul,
   .w-doc ol { margin: 14px 0 0; padding-left: 22px; max-width: 68ch; }
   .w-doc li { margin-top: 7px; }
-  .w-doc a { color: var(--w-mint-dim); }
-  .w-doc a:hover { color: var(--w-mint); }
+  /*
+    Links in prose, and NOT controls.
+
+    `:not()` is load-bearing here for the second time in this sheet. `.w-doc a` outranks `.btn` and
+    `.w-btn`, so without it every button-shaped link inside a document took the prose colour and
+    rendered mint text on a mint button — 1.39:1, measured, on the sign-in control of `/join`. The
+    same mistake was made in `.w-land__nav a` and fixed there; this is the rule that reintroduced
+    it, so `test/contrast.test.ts` now pins both.
+  */
+  .w-doc a:not(.btn):not(.w-btn):not(.w-brief) { color: var(--w-mint-dim); }
+  .w-doc a:not(.btn):not(.w-btn):not(.w-brief):hover { color: var(--w-mint); }
   .w-doc code {
     font-family: var(--w-mono);
     font-size: 0.88em;

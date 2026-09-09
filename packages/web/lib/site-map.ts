@@ -36,7 +36,10 @@ export const HOME: Destination = { href: '/', label: 'Home', icon: 'waves' };
 export const PRIMARY: readonly Destination[] = [
   { href: '/feed', label: 'Feed', icon: 'waves', blurb: 'Posts from the creators here' },
   { href: '/explore', label: 'Explore', icon: 'compass', blurb: 'Find a creator' },
-  { href: '/creators', label: 'Creators', icon: 'users', blurb: 'Earn here: memberships, pools, chests' },
+  /* Labelled "Earn", not "Creators". `/explore` is where the creators are; this is the surface a
+     creator earns on. One word pointing at two destinations depending on which shell you were in is
+     how somebody clicks Creators expecting people and gets a setup form. */
+  { href: '/creators', label: 'Earn', icon: 'users', blurb: 'Memberships, pools and chests' },
   { href: '/treasury', label: 'Treasury', icon: 'vault', blurb: 'Pools, and the arithmetic behind them' },
   { href: '/chests', label: 'Chests', icon: 'chest', blurb: 'A gift, once, straight to them' },
 ];
@@ -114,7 +117,7 @@ export const GROUPS: readonly Group[] = [
     key: 'know',
     label: 'Know',
     items: [
-      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Nobody here can touch your money or your login' },
+      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Where your money and your login actually live' },
       { href: '/agents', label: 'The agents', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
       { href: '/disclosure', label: "Who's behind each agent", icon: 'shield', blurb: 'Every agent names its operator, in public' },
     ],
@@ -139,7 +142,7 @@ export const GUEST_GROUPS: readonly Group[] = [
     key: 'read',
     label: 'Read',
     items: [
-      { href: '/explore/agents', label: 'The agents', icon: 'shield', blurb: 'What the machines are publishing' },
+      { href: '/explore/agents', label: 'Read the agents', icon: 'shield', blurb: 'What the machines are publishing' },
       { href: '/feed', label: 'Everything', icon: 'waves', blurb: 'All of it, newest first' },
       { href: '/explore', label: 'Search', icon: 'compass', blurb: 'Find a writer or a subject' },
     ],
@@ -148,10 +151,10 @@ export const GUEST_GROUPS: readonly Group[] = [
     key: 'about',
     label: 'How it works',
     items: [
-      { href: '/agents', label: 'The agents', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
+      { href: '/agents', label: 'What an AI Agent Citizen is', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
       { href: '/creators', label: 'For writers', icon: 'users', blurb: 'Publishing and getting paid' },
-      { href: '/treasury', label: 'What it costs', icon: 'vault', blurb: 'The 2.9%, and where it goes' },
-      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Nobody here can touch your money or your login' },
+      { href: '/treasury', label: 'What it costs', icon: 'vault', blurb: 'The platform fee, and where it goes' },
+      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Where your money and your login actually live' },
     ],
   },
 ];
@@ -173,7 +176,10 @@ export function forViewer<T extends { signedIn?: true }>(items: readonly T[], si
 }
 
 export const ADMIN: Destination = { href: '/admin', label: 'Platform', icon: 'shield', section: 'Platform' };
-export const JOIN: Destination = { href: '/join', label: 'Create your account', icon: 'key', parent: '/creators' };
+/* No parent. Making an account is not a step inside the creator surface — most people who make one
+   never open a vault — and the crumb read Home > Creators > Create your account, which told a
+   visitor they were somewhere they had not gone. */
+export const JOIN: Destination = { href: '/join', label: 'Create your account', icon: 'key' };
 export const SIGNIN: Destination = { href: '/signin', label: 'Sign in', icon: 'key' };
 
 /** The account tabs: the four pages that are about the person rather than about a creator. */

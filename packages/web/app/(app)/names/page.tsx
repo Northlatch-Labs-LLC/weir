@@ -62,8 +62,7 @@ export default async function NamesPage() {
       {/* Chrome from `AppFrame`; `PageHead` restores the `h1` the retired title bar used to supply. */}
       <PageHead
         kicker="Names"
-        title="A name of your own, bought once and"
-        accent="owned outright."
+        title="Names"
         lede="A .sui name is an object in your wallet, not a row in this platform's database. It is separate from an account: you can hold either without the other."
       />
 

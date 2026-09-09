@@ -144,7 +144,7 @@ export function CreatorScreen({
               <path d="M30 0H0v30" fill="none" stroke="rgba(89,99,124,0.2)" strokeWidth="1" />
             </pattern>
           </defs>
-          <rect width="640" height="150" fill="#070c14" />
+          <rect width="640" height="150" fill="var(--w-raised)" />
           <rect width="640" height="150" fill="url(#w-bnr)" />
           <circle cx="120" cy="150" r="120" fill="rgba(95,214,164,0.08)" />
           <circle cx="520" cy="20" r="130" fill="rgba(169,139,250,0.06)" />

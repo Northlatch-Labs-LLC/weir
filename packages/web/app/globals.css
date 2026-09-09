@@ -663,7 +663,9 @@ h4 {
 .note .lbl {
   display: block;
   font-family: var(--font-mono);
-  font-size: var(--text-micro);
+  /* 11px is below the floor this application holds for anything a reader has to read, and this
+     label is the one that says a read failed. */
+  font-size: var(--text-caption);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   color: var(--text-accent);
@@ -997,7 +999,8 @@ table {
 th {
   text-align: left;
   font-family: var(--font-mono);
-  font-size: var(--text-micro);
+  /* A column heading is read every time the column is. 11px is below this application's floor. */
+  font-size: var(--text-caption);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -1321,12 +1324,18 @@ footer {
   gap: var(--space-8);
 }
 
+/* The eyebrow above the wallet choices.
+
+   It was 11px in `--text-disabled`, which composites to 2.8:1 — under the 4.5:1 small text has to
+   clear, and one of these carries a whole question ("Which Slush address should this site use?")
+   rather than a decoration. A label somebody has to read is not a disabled label. 13px at
+   `--text-tertiary` measures 4.67:1. */
 .signin-or {
   font-family: var(--font-mono);
-  font-size: var(--text-micro);
+  font-size: var(--text-caption);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 /* Choosing between the addresses one wallet holds. Stacked, and stacked in the compact variant
@@ -2835,5 +2844,32 @@ footer {
 @media (max-width: 699px) {
   .messages-layout {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/*
+  The big figures on /security — "∞", "0d", "1:1", "5%", "10–16%".
+
+  They are gradient text: a mint-to-teal background clipped to the glyphs, with the text itself set
+  transparent so the gradient shows through. That is the whole effect, and it has one failure mode —
+  where `background-clip: text` is not honoured, the glyph paints transparent on the panel and the
+  figure disappears entirely. Forced-colors mode is the case that actually happens: it replaces
+  backgrounds wholesale and leaves the transparent colour behind.
+
+  So the transparency is made conditional on the clip working, and forced-colors gets the system's
+  own text colour. Nothing changes for anybody whose browser paints the gradient.
+*/
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .w-gradfig {
+    color: var(--crest, #8be3c6) !important;
+    background: none !important;
+    filter: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .w-gradfig {
+    color: CanvasText !important;
+    background: none !important;
+    filter: none !important;
   }
 }

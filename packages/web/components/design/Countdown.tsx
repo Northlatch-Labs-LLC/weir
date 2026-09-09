@@ -88,7 +88,7 @@ function Cell({ value, unit }: { value: number; unit: string }) {
         style={{
           marginTop: '0.4rem',
           fontFamily: 'var(--weir-mono)',
-          fontSize: '0.6875rem',
+          fontSize: '0.75rem',
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           color: DIM,

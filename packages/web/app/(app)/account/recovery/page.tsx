@@ -36,8 +36,7 @@ export default function RecoveryPage() {
       */}
       <PageHead
         kicker="Your account"
-        title="The salt behind your address, and how to"
-        accent="keep it."
+        title="Recovery"
         lede="A zkLogin address is derived from your Google account and a salt this site holds. Take a copy and the address stays reachable even if this site does not. A wallet session has nothing here — it already holds its own keys."
       />
       <AccountRecovery />

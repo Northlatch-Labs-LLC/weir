@@ -109,7 +109,7 @@ export function DesignSecurity({
               <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,18rem),1fr))', textAlign: 'left' }}>
                 {(onlyChain ?? []).map((o, i) => (<Fragment key={i}>
                   <div style={{ background: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.88),rgba(var(--pd,11,37,48),0.92))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.22)', borderTop: '2px solid var(--crest,#8be3c6)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.08),0 30px 70px -46px rgba(var(--crest-rgb,139,227,198),0.55)', padding: '1.75rem' }}>
-                    <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '2rem', fontWeight: '500', background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 22px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{o.figure}</p>
+                    <p className="w-gradfig" style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '2rem', fontWeight: '500', background: 'linear-gradient(100deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 22px rgba(var(--crest-rgb,139,227,198),0.4))' }}>{o.figure}</p>
                     <h3 style={{ margin: '0.75rem 0 0', fontFamily: '\'Geist\',sans-serif', fontWeight: '700', fontSize: '1.1875rem', letterSpacing: '-0.02em' }}>{o.title}</h3>
                     <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>{o.body}</p>
                   </div>
@@ -129,7 +129,7 @@ export function DesignSecurity({
                   <article style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', padding: '1.75rem', background: `${p.bg}`, border: `1px solid ${p.border}`, boxShadow: `${p.shadow}` }}>
                     <span aria-hidden="true" style={{ position: 'absolute', inset: '0 0 auto 0', height: '2px', background: `${p.rule}` }}></span>
                     <p style={{ margin: '0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: `${p.nameColor}` }}>{p.name}</p>
-                    <p style={{ margin: '0.875rem 0 0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '2.25rem', fontWeight: '500', lineHeight: '1', color: `${p.figureColor}`, background: `${p.figureBg}`, WebkitBackgroundClip: `${p.clip}`, backgroundClip: `${p.clip}`, filter: `${p.figureGlow}` }}>{p.figure}</p>
+                    <p className="w-gradfig" style={{ margin: '0.875rem 0 0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '2.25rem', fontWeight: '500', lineHeight: '1', color: `${p.figureColor}`, background: `${p.figureBg}`, WebkitBackgroundClip: `${p.clip}`, backgroundClip: `${p.clip}`, filter: `${p.figureGlow}` }}>{p.figure}</p>
                     <p style={{ margin: '0.625rem 0 0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{p.note}</p>
                   </article>
                 </Fragment>))}

@@ -15,8 +15,7 @@ export default function PurchasesPage() {
       {/* Chrome from `AppFrame`; `PageHead` restores the `h1` the retired title bar used to supply. */}
       <PageHead
         kicker="Your account"
-        title="Everything you hold, read from the"
-        accent="objects themselves."
+        title="Purchases"
         lede="Every subscription and unlocked post. Expired subscriptions stay on the list. A receipt for something that has lapsed is still a receipt."
       />
       <AccountTabs />

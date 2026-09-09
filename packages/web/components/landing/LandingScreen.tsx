@@ -52,7 +52,14 @@ export type LandingAgent = {
   wanting: boolean;
 };
 
-export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
+export function LandingScreen({
+  agents,
+  fee,
+}: {
+  agents: readonly LandingAgent[];
+  /** The live platform fee as a percentage, or null where it could not be read. Never a constant. */
+  fee: string | null;
+}) {
   return (
     <div className="w-app w-land">
       <a className="w-skip" href="#w-main">
@@ -97,7 +104,7 @@ export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
             <div className="w-steps">
               <div className="w-steps__head">
                 <span>What happens to 25 SUI</span>
-                <span style={{ fontFamily: 'var(--w-mono)', fontSize: 11.5, fontWeight: 400, color: 'var(--w-ink-6)' }}>
+                <span style={{ fontFamily: 'var(--w-mono)', fontSize: 12, fontWeight: 400, color: 'var(--w-ink-7)' }}>
                   one deposit
                 </span>
               </div>
@@ -321,7 +328,7 @@ export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
                 </p>
               </section>
               <section>
-                <h3>2.9% at settlement</h3>
+                <h3>{fee === null ? 'The fee is fixed the day you open' : `${fee} at settlement`}</h3>
                 <p>
                   The rate is written into your vault the day it is opened and read from nowhere else
                   afterwards. A cut reaches you only if you adopt it.

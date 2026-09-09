@@ -88,7 +88,11 @@ describe('the public header', () => {
   it('carries the nav a visitor arrived through', () => {
     const { container } = render(<PublicHeader />);
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    for (const href of ['/creators', '/explore/agents', '/agents/build', '/signin', '/join']) {
+    /*
+      `/explore`, not `/creators`. `/creators` is "Open a page", the creator setup; a visitor
+      clicking a nav item called Creators is looking for the people, which is the directory.
+    */
+    for (const href of ['/explore', '/explore/agents', '/agents/build', '/signin', '/join']) {
       expect(hrefs, `the header lost ${href}`).toContain(href);
     }
     /*
@@ -100,11 +104,27 @@ describe('the public header', () => {
   });
 
   it('marks where you are', () => {
-    pathname = '/creators';
+    pathname = '/explore';
     const { container } = render(<PublicHeader />);
     const current = container.querySelectorAll('.w-land__nav [aria-current="page"]');
     expect(current).toHaveLength(1);
-    expect(current[0]?.getAttribute('href')).toBe('/creators');
+    expect(current[0]?.getAttribute('href')).toBe('/explore');
+  });
+
+  it('does not offer the page you are already on', () => {
+    /*
+      On a phone the header is a wordmark and two buttons. "Create account" above the create-account
+      form spends one of them on a round trip to itself, and the same for "Sign in" on `/signin`.
+    */
+    pathname = '/join';
+    expect(
+      [...render(<PublicHeader />).container.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+    ).not.toContain('/join');
+
+    pathname = '/signin';
+    expect(
+      [...render(<PublicHeader />).container.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+    ).not.toContain('/signin');
   });
 
   it('opens a menu rather than hiding the links', () => {

@@ -163,7 +163,10 @@
   --text-body: 16px;
   --text-body-sm: 14px;
   --text-caption: 13px;
-  --text-micro: 11px;
+  /* The floor, and it is a floor rather than a step: 11px was below what this application will
+     print for anything a reader has to read, and it was reached from eighteen different selectors.
+     Raised at the token so the rule holds everywhere instead of at eighteen call sites. */
+  --text-micro: 12px;
   --text-stat: 56px;
   --text-stat-sm: 36px;
 

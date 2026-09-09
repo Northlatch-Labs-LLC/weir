@@ -6,6 +6,7 @@ import { LandingScreen, type LandingAgent } from '@/components/landing/LandingSc
 import { listProfiles, countFollowers } from '@/lib/content';
 import { listDeclaredAgents } from '@/lib/agents';
 import { listSeeking } from '@/lib/agent-seeking';
+import { readProtocol } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,27 @@ export default async function Home({
     would be the worst possible thing on this page.
   */
   const agents = await landingAgents().catch(() => [] as LandingAgent[]);
-  return <LandingScreen agents={agents} />;
+
+  /*
+    The platform fee, read rather than written.
+
+    The front page carried the heading "2.9% at settlement" as a literal. That figure is on chain
+    and can be changed by the contract's own `set-fees`, so a constant here is a rate the front page
+    would keep quoting after it stopped being true — a wrong money figure on the one surface a
+    stranger reads before deciding. A failed read hands `null` down and the heading loses its number
+    instead of guessing one; the paragraph under it is the point either way.
+  */
+  const fee = fold(
+    await readProtocol(),
+    (snapshot) => {
+      const bps = snapshot.platform.feeBps;
+      const frac = (bps % 100n).toString().padStart(2, '0').replace(/0+$/, '');
+      return `${bps / 100n}${frac === '' ? '' : `.${frac}`}%`;
+    },
+    () => null,
+  );
+
+  return <LandingScreen agents={agents} fee={fee} />;
 }
 
 /**

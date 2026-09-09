@@ -71,11 +71,21 @@ export default async function CreatorPage() {
     <>
       <PageHead
         kicker="Creator studio"
-        title="Open a vault, and set what a subscription"
-        accent="costs."
+        title="Become a creator"
         lede="Open your creator vault and set what a membership costs. Three steps, in the order the contract requires them."
       />
       <PageTabs label="Creator studio" items={CREATOR} />
+
+      {/*
+        The setup, before the explanation of what a vault is.
+
+        This page opened with two explanation cards and put the only control 1,015 pixels down —
+        measured, not guessed. Somebody arriving from "Become a creator" had already decided; what
+        they need is the first step, and the explanation is what they read while they are in it.
+      */}
+      <div style={{ marginTop: 'var(--space-20)' }}>
+        <CreatorSetup />
+      </div>
       {mine !== null && mine.handle !== null && mine.decimals !== null && (
         <section data-reveal className="card" aria-labelledby="perks-title">
           <h2 id="perks-title" style={{ marginTop: 0 }}>What a tip also gets them</h2>
@@ -93,8 +103,8 @@ export default async function CreatorPage() {
           <p style={{ color: 'var(--text-secondary)' }}>
             A vault is a shared object on Sui that collects money on your behalf — subscriptions,
             tips and one-off unlocks all land in it. It pays out to whoever holds its capability,
-            which is your wallet and nobody else&rsquo;s. This platform never takes custody of the
-            balance; it takes its cut at the moment of payment, and the rest is already yours.
+            which is your wallet. The platform&rsquo;s cut is taken at the moment of payment; the
+            rest is already yours.
           </p>
 
           {fold(
@@ -140,9 +150,6 @@ export default async function CreatorPage() {
           </p>
         </div>
 
-        <div style={{ marginTop: 'var(--space-24)' }}>
-          <CreatorSetup />
-        </div>
 
         <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
           <span className="lbl">The fee is fixed into your vault, not looked up</span>
