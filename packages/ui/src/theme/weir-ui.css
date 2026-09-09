@@ -307,6 +307,9 @@
     font-weight: 600;
     cursor: pointer;
     text-decoration: none;
+    /* A control's label is one line. "Create account" broke across two in a narrow header and the
+       button grew a second row rather than the header giving it the width. */
+    white-space: nowrap;
     transition: filter var(--w-fast) var(--w-ease), background var(--w-fast) var(--w-ease);
   }
   .w-btn--primary {
@@ -1141,7 +1144,13 @@
     .w-tiers, .w-three { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 833px) {
-    .w-land__nav a { display: none; }
+    /*
+      The plain links only. Hiding every `a` in the bar took the Sign in and Create account buttons
+      with them, so a phone visitor met a landing page with no way into the product at all — on the
+      one device where the header is the only navigation there is.
+    */
+    .w-land__nav a:not(.w-btn) { display: none; }
+    .w-land__nav .w-btn { padding: 0 16px; font-size: 14px; }
     .w-land__hero { padding: 40px 0 40px; }
     .w-land__section { padding-bottom: 56px; }
   }
@@ -1167,7 +1176,9 @@
   @media (max-width: 1023px) {
     .w-app__inner { width: 100%; }
     .w-rail { width: 84px; padding-left: 10px; padding-right: 10px; }
-    .w-rail__wordmark { display: none; }
+    /* Scoped to the rail. The landing header reuses this class for its wordmark, and hiding it
+       there left the front page branded with a bare mark and no name. */
+    .w-rail .w-rail__wordmark { display: none; }
     .w-rail__brand { justify-content: center; padding: 8px 0 18px; }
     .w-nav { justify-content: center; padding-left: 0; padding-right: 0; }
     .w-nav > span:not(.w-nav__badge) { display: none; }
