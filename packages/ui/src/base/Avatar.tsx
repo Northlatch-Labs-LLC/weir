@@ -113,7 +113,11 @@ export function Avatar({
     return <img src={src} alt={alt ?? ''} width={size} height={size} style={box} className={className} />;
   }
 
-  const next = seed(address.toLowerCase());
+  // One normalisation, used for both the pattern and the element id: an address that arrives in a
+  // different case is the same account and must produce byte-identical markup, or React will
+  // re-render it on hydration and two components showing the same person will disagree.
+  const key = address.toLowerCase();
+  const next = seed(key);
   const pair = PAIRS[next() % PAIRS.length] ?? PAIRS[0]!;
   const [ground, figure] = pair;
 
@@ -138,7 +142,7 @@ export function Avatar({
     }
   }
 
-  const clip = `w-av-${address.slice(2, 10)}-${size}`;
+  const clip = `w-av-${key.slice(2, 18)}-${size}`;
   return (
     <svg
       width={size}

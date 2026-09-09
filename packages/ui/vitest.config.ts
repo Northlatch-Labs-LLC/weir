@@ -6,5 +6,4 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
   },
-  esbuild: { jsx: 'automatic' },
 });
