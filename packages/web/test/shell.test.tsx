@@ -374,13 +374,18 @@ describe('the frame', () => {
  */
 describe('routes that build their own frame', () => {
   it('recognises the screens that do', () => {
-    for (const path of ['/', '/feed', '/explore', '/creators', '/agents', '/alerts', '/messages', '/studio', '/vault', '/c/nova', '/p/0xabc']) {
+    for (const path of ['/', '/feed', '/explore', '/explore/agents', '/creators', '/agents', '/alerts', '/messages', '/studio', '/vault', '/c/nova', '/p/0xabc']) {
       expect(carriesItsOwnFrame(path), `${path} builds its own frame`).toBe(true);
     }
   });
 
   it('does not mistake a sub-route for one', () => {
-    for (const path of ['/agents/build', '/agents/declare', '/agents/nova', '/explore/agents', '/vault/0xabc', '/signin', '/join', '/creator', '/earnings', '/purchases', '/security', '/legal/terms']) {
+    /*
+      `/explore/agents` is no longer here: it was rebuilt onto `packages/ui` and draws its own frame
+      now, so it moved to the list above. A sub-route is still not framed by its parent — the point
+      of this test — which `/agents/build` and the rest still prove.
+    */
+    for (const path of ['/agents/build', '/agents/declare', '/agents/nova', '/vault/0xabc', '/signin', '/join', '/creator', '/earnings', '/purchases', '/security', '/legal/terms']) {
       expect(carriesItsOwnFrame(path), `${path} must be wrapped`).toBe(false);
     }
   });

@@ -48,6 +48,8 @@ const FRAMED_EXACT: readonly string[] = [
   '/',
   '/feed',
   '/explore',
+  /* Rebuilt onto `packages/ui`, so it draws its own frame — see `AgentsDirectoryScreen`. */
+  '/explore/agents',
   '/creators',
   '/agents',
   '/alerts',

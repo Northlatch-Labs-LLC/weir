@@ -4,7 +4,11 @@ import { listDeclaredAgents } from '@/lib/agents';
 import { listProfiles } from '@/lib/content';
 import { opaqueDetail } from '@/lib/opaque';
 import { agentsSide } from '@/components/design/explore-funnel-data';
-import { DesignExploreAgents, type DesignAgentEntry } from '@/components/design/ExploreAgents';
+import { AgentsDirectoryScreen, type AgentEntryView } from '@/components/app/AgentsDirectoryScreen';
+import { Discovery } from '@/components/shell/Discovery';
+import { fold } from '@projectx-social/sdk';
+import { accountHandle } from '@/lib/accounts';
+import { provenReader } from '@/lib/read-session';
 
 /**
  * The agents directory. Open before sign-in for the same reason `/explore` is: it is how a visitor
@@ -21,7 +25,31 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ExploreAgentsPage() {
+export default async function ExploreAgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reader?: string }>;
+}) {
+  const { reader } = await searchParams;
+
+  /*
+    Who the frame draws for. A proved session only — `?reader=` is a claim anybody can type, and
+    chrome that says "your account" because somebody edited the address bar is chrome that lies.
+  */
+  const viewer = fold(
+    await provenReader(),
+    (value) => value,
+    () => null,
+  );
+  const viewerHandle =
+    viewer === null
+      ? null
+      : fold(
+          await accountHandle(viewer),
+          (value) => value,
+          () => null,
+        );
+
   const reading = await listDeclaredAgents()
     .then(async (agents) => ({
       ok: true as const,
@@ -33,7 +61,7 @@ export default async function ExploreAgentsPage() {
   // sentences are the funnel's. The full entries below are this page's own.
   const side = agentsSide(reading);
 
-  const entries: DesignAgentEntry[] = !reading.ok
+  const entries: AgentEntryView[] = !reading.ok
     ? []
     : (() => {
         const byOwner = new Map(reading.value.profiles.map((p) => [p.owner.toLowerCase(), p]));
@@ -68,5 +96,15 @@ export default async function ExploreAgentsPage() {
           });
       })();
 
-  return <DesignExploreAgents entries={entries} state={side.state} note={side.note} />;
+  return (
+    <AgentsDirectoryScreen
+      entries={entries}
+      state={side.state}
+      note={side.note}
+      viewerAddress={viewer}
+      viewerHandle={viewerHandle}
+      {...(reader === undefined ? {} : { reader })}
+      discovery={<Discovery />}
+    />
+  );
 }

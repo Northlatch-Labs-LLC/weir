@@ -14,6 +14,7 @@
  * place on Weir where money leaves you for good, said plainly.
  */
 
+import NextLink from 'next/link';
 import { PageHead } from '@/components/design/PageHead';
 import { Fragment, useState, type ReactNode } from 'react';
 import { useReveals } from '@/components/design/use-weir-line';
@@ -149,7 +150,13 @@ export function DesignChests({
 
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,19rem),1fr))' }}>
               {(withHandlers ?? []).map((c, i) => (<Fragment key={i}>
-                <article className="dh-0b27bfb9" data-reveal style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)', borderRadius: '10px', boxShadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.07),0 14px 34px -26px rgba(var(--shade-rgb,0,0,0),0.85)', padding: '1.5rem', transition: 'border-color 0.18s ease,transform 0.18s ease,box-shadow 0.18s ease' }}>
+                {/*
+                  `.w-card`, the application's card, rather than a gradient panel with every colour,
+                  radius and shadow typed into the element. The rule along the top stays — it is the
+                  one thing here the card does not already say — and it is the only inline value left
+                  on this element.
+                */}
+                <article className="w-card" data-reveal style={{ position: 'relative', overflow: 'hidden' }}>
                   <span aria-hidden="true" style={{ position: 'absolute', inset: '0 0 auto 0', height: '2px', background: `${c.rule}` }}></span>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
                     <h3 style={{ margin: '0', display: 'flex', alignItems: 'center', gap: '0.55rem', fontFamily: '\'Geist\',sans-serif', fontWeight: '700', fontSize: '1.1875rem', letterSpacing: '-0.02em' }}><span style={{ color: 'var(--crest,#8be3c6)', display: 'inline-flex', animation: 'floatY 5s ease-in-out infinite' }}>{c.icon}</span>{c.name}</h3>
@@ -173,14 +180,29 @@ export function DesignChests({
                       )}
                     </>
                   )}
-                  <p style={{ margin: '0.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{c.split}</p>
+                  {/*
+                    Sans, not mono. Mono in this system means a figure or a machine fact — an
+                    address, a digest, a count. "A platform fee is taken at settlement" is a
+                    sentence, and setting sentences in mono is what makes a page read as output
+                    rather than as writing.
+                  */}
+                  <p style={{ margin: '0.5rem 0 0', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.55, color: 'var(--w-ink-7)', textWrap: 'pretty' }}>{c.split}</p>
                   <div style={{ marginTop: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
                     {(c.amounts ?? []).map((amt, i) => (<Fragment key={i}>
-                      <button type="button" onClick={amt.onClick} style={{ padding: '0.45rem 0.9rem', borderRadius: '99px', cursor: 'pointer', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem', background: `${amt.bg}`, color: `${amt.color}`, border: `1px solid ${amt.border}`, transition: 'border-color 0.12s ease,color 0.12s ease,background-color 0.12s ease' }}>{amt.label}</button>
+                      {/* The prefill chips, on `.w-btn`. Same handler, same label, same amount. */}
+                      <button type="button" className="w-btn w-btn--quiet w-btn--sm" onClick={amt.onClick} style={{ fontFamily: 'var(--w-mono)', fontVariantNumeric: 'tabular-nums' }}>{amt.label}</button>
                     </Fragment>))}
                   </div>
-                  <button className="dh-f2bac7c4" type="button" onClick={() => { window.location.href = c.href; }} style={{ marginTop: '1.25rem', width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem 1.35rem', borderRadius: '10px', font: '600 0.9375rem \'Geist\',sans-serif', lineHeight: '1', background: 'var(--crest,#8be3c6)', color: 'var(--bg,#04161d)', border: '1px solid transparent', cursor: 'pointer', boxShadow: '0 0 22px -6px rgba(var(--crest-rgb,139,227,198),0.5)', transition: 'transform 0.12s ease,background-color 0.12s ease,box-shadow 0.18s ease' }}>{c.giveLabel}</button>
-                  <p style={{ margin: '0.75rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: `${c.noteColor}` }}>{c.note}</p>
+                  {/*
+                    A link, not a button that assigns `window.location`.
+
+                    The destination is unchanged — `c.href`, the creator's own page, where the
+                    signature is asked for. What changes is that it is now a real link: it opens in a
+                    new tab on a middle click, it has a target a screen reader can announce as a
+                    destination, and it navigates on the client instead of reloading the application.
+                  */}
+                  <NextLink href={c.href} className="w-btn w-btn--primary" style={{ marginTop: '1.25rem', width: '100%', justifyContent: 'center' }}>{c.giveLabel}</NextLink>
+                  <p style={{ margin: '0.75rem 0 0', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.55, color: `${c.noteColor}`, textWrap: 'pretty' }}>{c.note}</p>
                 </article>
               </Fragment>))}
             </div>
