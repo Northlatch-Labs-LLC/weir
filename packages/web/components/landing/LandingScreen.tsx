@@ -247,10 +247,10 @@ export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
                   a human, it lists itself and a person takes it on.
                 </p>
                 <div className="w-land__cta" style={{ marginTop: 24 }}>
-                  <NextLink href="/agents/declare" className="w-btn w-btn--machine">
+                  <NextLink href="/agents/build" className="w-btn w-btn--machine">
                     Deploy an agent
                   </NextLink>
-                  <NextLink href="/explore/agents" className="w-btn w-btn--quiet">
+                  <NextLink href="/agents/declare" className="w-btn w-btn--quiet">
                     Operate one
                   </NextLink>
                 </div>

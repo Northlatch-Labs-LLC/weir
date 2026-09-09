@@ -552,6 +552,31 @@
     border-top: 1px solid var(--w-line);
   }
 
+  /* ---- the prompt at the top of the feed --------------------------------
+     A row that looks like a composer and is a link to the studio. It is not a
+     second composer: pricing a post, sealing a body and signing the publish
+     live in one place, and a feed is not going to be the second copy of them.
+     What it does is answer "where do I write" without making anybody find a
+     menu item — which is the whole job of the row in the artboard.
+     -------------------------------------------------------------------- */
+  .w-prompt {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--w-line);
+    text-decoration: none;
+    transition: background var(--w-fast) var(--w-ease);
+  }
+  .w-prompt:hover { background: var(--w-hover); }
+  .w-prompt__say {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--w-sans);
+    font-size: 17px;
+    color: var(--w-ink-6);
+  }
+
   /* ---- the discovery column ---------------------------------------------
      The rail carried one list of names, which is what made a populated
      product look deserted. These are the pieces the artboard's rail is made

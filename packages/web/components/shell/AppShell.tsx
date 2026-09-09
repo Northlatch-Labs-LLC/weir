@@ -28,6 +28,7 @@ import { PATHNAME_HEADER } from '@/proxy';
 import { fold } from '@projectx-social/sdk';
 import { Reveals } from '@/components/design/Reveals';
 import { AppFrame } from '@/components/app/AppFrame';
+import { Discovery } from '@/components/shell/Discovery';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 
@@ -106,6 +107,14 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             ? { signedIn: false }
             : { signedIn: true, address: viewer, handle: myHandle, displayName: myHandle }
         }
+        /*
+          The discovery column, on every wrapped route.
+
+          Without it these pages rendered a 640px column with 372px of empty ground beside it — a
+          third of a wide screen, blank, on twenty-three routes. A rebuilt screen passes its own
+          `aside` built from what it read; everything else gets this one.
+        */
+        aside={<Discovery />}
       >
         {/* A gutter for pages written before the column existed. See `.w-legacy`. */}
         <div className="w-legacy">{children}</div>

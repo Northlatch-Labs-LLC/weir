@@ -181,6 +181,22 @@ export function FeedApp({
         pathname={current?.href}
       />
 
+      {/*
+        Where you write, at the top of what you read.
+
+        A link to the studio wearing the shape of a composer, not a composer: pricing a post,
+        sealing its body and signing the publish are one implementation and the feed is not going to
+        be a second one. Members only — offering a stranger a box to write in and then asking them
+        to sign in is a worse welcome than not offering it.
+      */}
+      {viewer.signedIn ? (
+        <NextLink href={reader === undefined ? '/studio' : `/studio?reader=${reader}`} className="w-prompt">
+          <Avatar address={viewer.address} size={44} />
+          <span className="w-prompt__say">What are you publishing?</span>
+          <span className="w-btn w-btn--primary w-btn--sm">Publish</span>
+        </NextLink>
+      ) : null}
+
       <p
         style={{
           margin: 0,

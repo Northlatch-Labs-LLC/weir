@@ -36,6 +36,14 @@ vi.mock('@/components/shell/RightRail', () => ({ RightRail: () => <div data-test
 vi.mock('@/components/WalletConnect', () => ({
   WalletConnect: () => <button type="button" data-testid="wallet-connect" />,
 }));
+/*
+  The discovery column reads the store and is an async server component; a test renderer cannot
+  await one. What is under test here is that the frame HAS a rail on every wrapped route, not what
+  the rail found — `test/backing.test.ts` and the store's own tests cover the reads.
+*/
+vi.mock('@/components/shell/Discovery', () => ({
+  Discovery: () => <div data-testid="discovery" />,
+}));
 
 const { SiteHeader } = await import('../components/shell/SiteHeader');
 const { Breadcrumbs } = await import('../components/shell/Breadcrumbs');
@@ -235,6 +243,12 @@ describe('the frame', () => {
     expect(getByText('page')).toBeTruthy();
     expect(container.querySelector('nav.w-rail')).not.toBeNull();
     expect(container.querySelector('nav.w-bottom')).not.toBeNull();
+    /*
+      And the discovery column. Without it these pages rendered a 640px column with 372px of blank
+      ground beside it on every route that had not been rebuilt — which is most of what made a
+      populated product look deserted.
+    */
+    expect(container.querySelector('aside.w-aside')).not.toBeNull();
   });
 
   it('carries the footer, on a page that has none of its own', async () => {
