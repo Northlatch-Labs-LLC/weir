@@ -506,6 +506,14 @@ export default async function CreatorPage({
       }}
       tiers={tiers}
       stats={stats}
+      /*
+        Two of the three are counted here; the third is not counted anywhere.
+
+        There is no subscriber tally in the content store or on the vault — a subscription is an
+        object in a buyer's wallet, and counting them means walking every holder. `null` renders an
+        em dash, which is the truth. A zero would tell a visitor this creator has nobody.
+      */
+      counts={{ posts: profilePosts.length, followers, subscribers: null }}
       profilePosts={profilePosts}
       viewingLabel={
         profilePosts.length === 0

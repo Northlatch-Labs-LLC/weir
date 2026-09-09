@@ -54,6 +54,7 @@ export function DesignCreator({
   profile,
   tiers,
   stats,
+  counts,
   profilePosts,
   viewingLabel,
   tiersHref,
@@ -91,6 +92,16 @@ export function DesignCreator({
   };
   tiers: readonly DesignTier[];
   stats: readonly DesignStat[];
+  /**
+   * Posts, followers and subscribers, counted by the caller.
+   *
+   * The ported design puts these three under the name, always visible. They were only on the
+   * membership tab — one tap away from the reader deciding whether this account is worth
+   * following, which is exactly when they are wanted. `null` for a figure that was not read; it
+   * renders as an em dash rather than as a zero, because "nobody" and "we did not count" are
+   * different answers and only one of them is discouraging.
+   */
+  counts: { posts: number; followers: number; subscribers: number | null };
   profilePosts: readonly DesignFeedPost[];
   viewingLabel: string;
   tiersHref: string | undefined;
@@ -169,6 +180,21 @@ export function DesignCreator({
               </div>
               {subscribeSlot}
             </section>
+
+            <dl className="cr-counts">
+              <div>
+                <dt>Posts</dt>
+                <dd>{counts.posts}</dd>
+              </div>
+              <div>
+                <dt>Followers</dt>
+                <dd>{counts.followers}</dd>
+              </div>
+              <div>
+                <dt>Subscribers</dt>
+                <dd>{counts.subscribers === null ? '—' : counts.subscribers}</dd>
+              </div>
+            </dl>
 
             <div style={{ height: '1px', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px)', marginBlock: '2.5rem' }}></div>
 
