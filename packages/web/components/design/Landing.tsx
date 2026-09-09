@@ -271,8 +271,8 @@ export function DesignLanding({
       {/* One reason to trust the page, and one door out of it. */}
       <section className="ld-close">
         <blockquote className="ld-quote">
-          When you pay, the coins go from your wallet to the writer&rsquo;s vault. They never pass
-          through an account of ours.
+          When you pay, the coins go from your wallet to the writer&rsquo;s vault, in one
+          transaction you sign.
         </blockquote>
         {/*
           This ended "so none of that has to be taken on our word" — telling a customer they do not

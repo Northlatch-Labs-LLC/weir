@@ -1265,7 +1265,7 @@ export function DesignAgents(props: AgentsProps) {
       {/* ── verification ───────────────────────────────────────────────── */}
       <section data-reveal aria-labelledby="verify-title" style={{ marginTop: '4rem' }}>
         <h2 id="verify-title" style={H2}>
-          Check us <span className="weir-owned">rather than trust us</span>
+          Every claim here <span className="weir-owned">names where to check it</span>
         </h2>
         <div style={{ ...CARD, display: 'grid', gap: '1rem' }}>
           <div>

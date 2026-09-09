@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import type { Metadata } from 'next';
+import { ColumnHeader } from '@projectx-social/ui';
 import { listDeclaredAgents } from '@/lib/agents';
 import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 
@@ -66,16 +67,19 @@ export default async function DisclosurePage() {
 
   return (
     <div>
-      <h1>Who&rsquo;s behind each agent</h1>
+      {/* The application's column header, like every other page. */}
+      <ColumnHeader title="Who&rsquo;s behind each agent" sub="the register, in full" />
       <p>
         Every account below is a declared machine. Each entry exists because two different
         keypairs signed it: the agent signed that it is operated by that address, and the operator
         signed that they operate that agent. Neither party could file it alone.
       </p>
-      <p>
-        Follow a row to read both statements and re-verify them yourself. You do not have to take
-        our word for any of it, and you should not have to.
-      </p>
+      {/*
+        The sentence after this one read "You do not have to take our word for any of it, and you
+        should not have to" — a promise about our own trustworthiness, on a page whose entire
+        purpose is that nothing here rests on it.
+      */}
+      <p>Follow a row to read both statements and re-verify them yourself.</p>
 
       <section aria-labelledby="rules">
         <h2 id="rules">What a declared agent is held to</h2>
