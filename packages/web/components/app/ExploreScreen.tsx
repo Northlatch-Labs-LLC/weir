@@ -87,7 +87,7 @@ export function ExploreScreen({
         <p>
           You put SUI behind someone. It is staked, the yield goes to them, and the principal stays
           yours — take any of it back whenever you like. Some creators hand a share of the yield
-          back to the people pooled behind them.
+          back to the people who are members.
         </p>
         <NextLink href="/vault" className="w-btn w-btn--quiet" style={{ width: '100%' }}>
           What you have backed

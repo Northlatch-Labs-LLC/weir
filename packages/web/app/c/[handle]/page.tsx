@@ -443,7 +443,7 @@ export default async function CreatorPage({
   const depositSlot =
     viewer === null ? (
       <a className="btn" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
-        Sign in to pool SUI
+        Sign in to become a member
       </a>
     ) : onChainStakeVault === undefined ? (
       <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>

@@ -70,7 +70,7 @@ export function VaultScreen({
         <p>
           You put SUI behind someone. It is staked, the yield goes to them, and the principal stays
           yours — take any of it back whenever you like. Some creators hand a share of the yield
-          back to the people pooled behind them.
+          back to the people who are members.
         </p>
         <NextLink href="/explore" className="w-btn w-btn--quiet" style={{ width: '100%' }}>
           Find someone to back
@@ -80,7 +80,7 @@ export function VaultScreen({
       {ownVaultId === undefined || ownVaultId === null ? null : (
         <section className="w-card">
           <h3>Your own support vault</h3>
-          <p>The vault other people pool into behind you, with its ladder and its harvests.</p>
+          <p>The vault your members keep SUI in, with its ladder and its harvests.</p>
           <NextLink href={`/vault/${ownVaultId}`} className="w-btn w-btn--quiet" style={{ width: '100%' }}>
             Open it
           </NextLink>

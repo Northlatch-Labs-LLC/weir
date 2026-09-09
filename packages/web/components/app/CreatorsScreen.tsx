@@ -121,7 +121,7 @@ export function CreatorsScreen({
   const shareNote =
     share === 0
       ? 'You keep all of it. Perfectly normal, and the number is public, so say why if you like.'
-      : `You give poolers back ${share}% of the yield their deposit generates for you; you keep ${100 - share}% as your own. The share is written on the vault object itself.`;
+      : `You give your members back ${share}% of the yield their deposit generates for you; you keep ${100 - share}% as your own. The share is written on the vault object itself.`;
 
   const summary: ReadonlyArray<{ label: string; value: string; unread: boolean }> = [
     { label: 'Handle', value: clean === '' ? 'not set' : `@${clean}`, unread: false },
