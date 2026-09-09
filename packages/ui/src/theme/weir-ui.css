@@ -66,6 +66,21 @@
     --w-base: 300ms;
   }
 
+  /*
+    Border-box, scoped to the application.
+
+    Not a global reset: this sheet is imported alongside a legacy cascade that was written against
+    whatever box model it had, and changing that globally would move layouts this package has not
+    replaced yet. Scoped to `.w-app` it is safe, and it means a full-width control inside a padded
+    card fits the card — which it did not when the host page happened not to set it.
+  */
+  .w-app,
+  .w-app *,
+  .w-app *::before,
+  .w-app *::after {
+    box-sizing: border-box;
+  }
+
   /* =========================================================================
      Shell
      ====================================================================== */
