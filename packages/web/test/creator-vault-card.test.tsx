@@ -194,11 +194,21 @@ describe('the tip field', () => {
 */
 const PAGE = readFileSync(resolve(process.cwd(), 'app/c/[handle]/page.tsx'), 'utf8');
 
-/** Everything the page assembles for `depositSlot`, up to the next slot it builds. */
+/**
+ * Everything the page assembles for `depositSlot`, up to the next thing it builds for the tip.
+ *
+ * The window used to end at `const tipSlot`. `const tipNote` was then declared above it — the
+ * sentence explaining why a tip is not on offer, which names `coinDecimals` because that is the
+ * read that failed — and the window swallowed it, so the assertion below started failing on code
+ * that is not in the pool card at all. It ends at whichever of the two comes first.
+ */
 const DEPOSIT_SLOT = (() => {
   const start = PAGE.indexOf('const depositSlot');
   if (start === -1) throw new Error('depositSlot was not found on the creator page');
-  const end = PAGE.indexOf('const tipSlot', start);
+  const ends = ['const tipNote', 'const tipSlot']
+    .map((decl) => PAGE.indexOf(decl, start))
+    .filter((at) => at !== -1);
+  const end = ends.length === 0 ? -1 : Math.min(...ends);
   return PAGE.slice(start, end === -1 ? PAGE.length : end);
 })();
 

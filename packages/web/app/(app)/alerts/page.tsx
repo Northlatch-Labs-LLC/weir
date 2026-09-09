@@ -7,6 +7,7 @@ import { provenReader } from '@/lib/read-session';
 import { readNotifications } from '@/lib/notifications';
 import { formatUnits } from '@/lib/units';
 import { AlertsScreen, type AlertView } from '@/components/app/AlertsScreen';
+import { Discovery } from '@/components/shell/Discovery';
 
 /**
  * `/alerts` — what happened while you were away.
@@ -66,6 +67,7 @@ export default async function NotificationsPage({
   if (viewer === null) {
     return (
       <AlertsScreen
+        discovery={<Discovery />}
         viewerAddress={null}
         viewerHandle={null}
         {...(reader === undefined ? {} : { reader })}
@@ -85,6 +87,7 @@ export default async function NotificationsPage({
   if (!reading.ok) {
     return (
       <AlertsScreen
+        discovery={<Discovery />}
         viewerAddress={viewer}
         viewerHandle={handle}
         {...(reader === undefined ? {} : { reader })}
@@ -158,6 +161,7 @@ export default async function NotificationsPage({
 
   return (
     <AlertsScreen
+      discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
       {...(reader === undefined ? {} : { reader })}

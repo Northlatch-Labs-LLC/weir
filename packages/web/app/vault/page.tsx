@@ -8,6 +8,7 @@ import { readBacking } from '@/lib/backing';
 import { findStakeCaps } from '@/lib/stake';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { VaultScreen, type BackingRowView } from '@/components/app/VaultScreen';
+import { Discovery } from '@/components/shell/Discovery';
 
 /**
  * `/vault` — your money.
@@ -42,6 +43,7 @@ export default async function VaultPage({
   if (viewer === null) {
     return (
       <VaultScreen
+        discovery={<Discovery />}
         viewerAddress={null}
         viewerHandle={null}
         {...(reader === undefined ? {} : { reader })}
@@ -71,6 +73,7 @@ export default async function VaultPage({
   if (!backing.ok) {
     return (
       <VaultScreen
+        discovery={<Discovery />}
         viewerAddress={viewer}
         viewerHandle={handle}
         {...(reader === undefined ? {} : { reader })}
@@ -99,6 +102,7 @@ export default async function VaultPage({
 
   return (
     <VaultScreen
+      discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
       {...(reader === undefined ? {} : { reader })}

@@ -10,7 +10,7 @@
 
 import NextLink from 'next/link';
 import type { ReactNode } from 'react';
-import { SearchBox, RailCard, PersonRow, SeekingRow } from '@projectx-social/ui';
+import { RailCard, PersonRow, SeekingRow } from '@projectx-social/ui';
 
 export type DiscoveryPerson = {
   handle: string;
@@ -45,14 +45,16 @@ export function DiscoveryRail({
 }) {
   return (
     <>
-      <SearchBox Link={Link} />
-
+      {/* The search box moved into `AppShell`'s aside, so it is first on every route with one
+          rather than first only where this rail is the whole column. */}
+      {/* "Everyone here" points at `/explore`, the directory — not `/creators`, which is the setup
+          form for opening your own page. */}
       {people === null || people.length === 0 ? null : (
         <RailCard
           title="Become a member"
           note="Keep SUI in someone's vault. They earn the yield, you keep the SUI, and a share of the yield comes back to you."
           Link={Link}
-          more="/creators"
+          more="/explore"
           moreLabel="Everyone here"
           accent="money"
         >

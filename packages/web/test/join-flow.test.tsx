@@ -316,7 +316,11 @@ describe('the way in is never absent', () => {
     const slush = branch.indexOf('slush.app');
     expect(signIn).toBeGreaterThan(-1);
     expect(signIn, 'the sign-in link must come before the wallet installs').toBeLessThan(slush);
-    // And not on the sign-in page itself, where it would link to the page being read.
-    expect(branch).toContain("pathname === '/signin' ? null :");
+    /*
+      And not on the two pages whose own chrome already offers it: `/signin`, where it would link to
+      the page being read, and `/join`, where the public header carries a "Sign in" button sixteen
+      pixels from the top and this rendered a second one four hundred pixels below it.
+    */
+    expect(branch).toContain("pathname === '/signin' || pathname === '/join' ? null :");
   });
 });

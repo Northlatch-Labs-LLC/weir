@@ -19,6 +19,7 @@
  * way of the writing.
  */
 
+import type { ReactNode } from 'react';
 import NextLink from 'next/link';
 import { ColumnHeader } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
@@ -28,16 +29,35 @@ export function StudioScreen({
   viewerAddress,
   viewerHandle,
   reader,
+  discovery,
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
+  /**
+   * The discovery column, read on the server and handed down.
+   *
+   * A server component passed as a prop into a client one: this screen cannot read the store
+   * itself, and the rail is the same rail every other wrapped route gets. Optional, so a test or a
+   * caller without it renders the page's own cards and nothing else.
+   */
+  discovery?: ReactNode;
 }) {
   const viewer =
     viewerAddress === null
       ? ({ signedIn: false } as const)
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerHandle } as const);
 
+
+  /*
+    The page's own cards, and then the people.
+
+    These four screens pass an `aside`, and an `aside` REPLACES the discovery column rather than
+    joining it — so `/vault`, `/studio`, `/alerts` and `/messages` were the only wrapped routes with
+    no faces on them at all, and 337 to 715 pixels of empty ground under one explanatory card. The
+    discovery rail is read on the server and handed down as `discovery`, so it renders beneath the
+    page's own cards instead of replacing them.
+  */
   const aside = (
     <>
       <section className="w-card">
@@ -85,7 +105,16 @@ export function StudioScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame
+      viewer={viewer}
+      reader={reader}
+      aside={
+        <>
+          {aside}
+          {discovery}
+        </>
+      }
+    >
       <ColumnHeader title="Studio" sub={viewerHandle === null ? undefined : `publishing as @${viewerHandle}`} />
 
       <p
@@ -104,7 +133,9 @@ export function StudioScreen({
         subscription. A paid post is priced on chain and bought once, permanently.
       </p>
 
-      <div style={{ padding: '18px 22px 40px' }}>
+      {/* `w-fill` so the composer takes the room between the header and the footer rather than
+          leaving a 992px void under it when the aside is taller than this column. */}
+      <div className="w-fill" style={{ padding: '18px 22px 40px' }}>
         <StudioComposer />
       </div>
     </AppFrame>

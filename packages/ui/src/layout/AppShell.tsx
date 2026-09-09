@@ -17,6 +17,7 @@
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
 import { Icon, type IconName } from '../base/Icon';
 import { Avatar } from '../base/Avatar';
+import { SearchBox } from './Discovery';
 
 export type LinkComponent = ComponentType<{
   href: string;
@@ -40,11 +41,21 @@ export type NavItem = {
  *
  * Vault sits in the rail rather than inside a settings page. Money was the first thing this
  * product did, so it is a place you go, not a preference you find.
+ *
+ * # This list is the rail
+ *
+ * `packages/web/lib/site-map.ts` declares the same destinations again with different labels and a
+ * different icon set. Nothing renders that copy — `SiteHeader` and `MobileBar` are imported by no
+ * page — so a label changed there changes nothing a visitor sees. Changed here.
+ *
+ * `/creators` is "Earn", not "Creators": `/explore` is where the creators are, and this is the
+ * surface a creator earns on. The front door's nav calls `/explore` Creators, so one word pointing
+ * at two destinations depending on which shell you were in is what this removes.
  */
 export const NAV: readonly NavItem[] = [
   { href: '/feed', label: 'Home', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'explore' },
-  { href: '/creators', label: 'Creators', icon: 'creators' },
+  { href: '/creators', label: 'Earn', icon: 'creators' },
   { href: '/agents', label: 'Agents', icon: 'agents' },
   { href: '/alerts', label: 'Alerts', icon: 'alerts' },
   { href: '/messages', label: 'Messages', icon: 'messages' },
@@ -108,6 +119,7 @@ export function LeftRail({
   viewer,
   onPublish,
   connect,
+  account,
 }: {
   pathname: string;
   Link: LinkComponent;
@@ -122,6 +134,8 @@ export function LeftRail({
    * passes nothing, the rail falls back to a link to `/signin`, which is a page and not a dead end.
    */
   connect?: ReactNode;
+  /** The host's account menu, rendered in place of a link to your own page. */
+  account?: ReactNode;
 }) {
   return (
     <nav className="w-rail" aria-label="Weir">
@@ -143,29 +157,59 @@ export function LeftRail({
 
       {viewer.signedIn ? (
         <>
-          <button type="button" className="w-btn w-btn--primary w-rail__publish" onClick={onPublish}>
-            Publish
-          </button>
+          {/*
+            A link, not a button with a handler nobody passes.
+
+            This was `<button onClick={onPublish}>`, and `onPublish` is optional — the application's
+            frame never passed one, so the most prominent control in the rail did nothing at all
+            when pressed. Publishing lives at `/studio`, which is where the composer at the top of
+            the feed already goes; `onPublish` is still honoured when a host supplies one.
+          */}
+          {onPublish === undefined ? (
+            <Link href="/studio" className="w-btn w-btn--primary w-rail__publish">
+              Publish
+            </Link>
+          ) : (
+            <button type="button" className="w-btn w-btn--primary w-rail__publish" onClick={onPublish}>
+              Publish
+            </button>
+          )}
           {/*
             Mounted while connected as well, and deliberately: the host's control is the only place
             the address picker exists, and a wallet can hand back several addresses minutes after
             the window was dismissed. It draws nothing here — it is the window that has to stay
             reachable, not the trigger.
           */}
-          {connect}
-          <Link href={viewer.handle === null ? '/vault' : `/c/${viewer.handle}`} className="w-rail__account">
-            <Avatar address={viewer.address} src={viewer.avatarUrl} size={40} />
-            <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <span style={{ fontFamily: 'var(--w-sans)', fontSize: 14, fontWeight: 600, color: 'var(--w-ink-10)' }}>
-                {viewer.displayName ?? viewer.handle ?? 'Your account'}
-              </span>
-              {viewer.handle === null ? null : (
-                <span style={{ fontFamily: 'var(--w-mono)', fontSize: 12, color: 'var(--w-ink-7)' }}>
-                  @{viewer.handle}
+          {/*
+            The account menu, when the host has one — otherwise a link to your own page.
+
+            The rail replaced a menu with a link, and the menu was the only place "use a different
+            address", "sign out" and the address itself lived. Nothing else mounted it, so a signed-in
+            reader had no way to see which address they were signed in as, no way to change it and no
+            way to sign out: the wallet was picked up and could not be put down. `account` is that
+            menu; the link below is the fallback for a host that has none.
+
+            `connect` is not rendered beside it, because the menu carries the same control and a
+            second "Connect wallet" next to a connected account is nonsense.
+          */}
+          {account ?? (
+            <>
+              {connect}
+              <Link href={viewer.handle === null ? '/vault' : `/c/${viewer.handle}`} className="w-rail__account">
+                <Avatar address={viewer.address} src={viewer.avatarUrl} size={40} />
+                <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--w-sans)', fontSize: 14, fontWeight: 600, color: 'var(--w-ink-10)' }}>
+                    {viewer.displayName ?? viewer.handle ?? 'Your account'}
+                  </span>
+                  {viewer.handle === null ? null : (
+                    <span style={{ fontFamily: 'var(--w-mono)', fontSize: 12, color: 'var(--w-ink-7)' }}>
+                      @{viewer.handle}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-          </Link>
+              </Link>
+            </>
+          )}
         </>
       ) : connect === undefined ? (
         <Link href="/signin" className="w-btn w-btn--primary w-rail__publish">
@@ -198,7 +242,9 @@ export function ColumnFooter({ Link }: { Link: LinkComponent }) {
     <footer className="w-foot">
       <div className="w-foot__links">
         <Link href="/explore">Explore</Link>
-        <Link href="/creators">Creators</Link>
+        {/* "Open a page" rather than "Creators", matching the front door's footer. Beside Explore,
+            "Creators" read as a second directory; it is the setup for opening your own page. */}
+        <Link href="/creators">Open a page</Link>
         <Link href="/agents">Agents</Link>
         <Link href="/security">Security</Link>
         <Link href="/legal/terms">Terms</Link>
@@ -252,16 +298,31 @@ export function ColumnHeader({
   tabs,
   Link,
   pathname,
+  back,
 }: {
   title: string;
   sub?: string | undefined;
   tabs?: ReadonlyArray<{ href: string; label: string }> | undefined;
   Link?: LinkComponent | undefined;
   pathname?: string | undefined;
+  /**
+   * Where this page sits under, when it sits under something.
+   *
+   * The rail reaches the eight top-level destinations and nothing else, so a page below one of them
+   * — a creator, a post, a vault, an agent's record — had no route back except the browser's own
+   * button. On a phone, where the rail is four icons, it had none at all. Given a destination, the
+   * header carries an arrow to it, left of the title, the way every application of this shape does.
+   */
+  back?: { href: string; label: string } | undefined;
 }) {
   return (
     <header className="w-head">
       <div className={tabs === undefined ? 'w-head__row w-head__row--plain' : 'w-head__row'}>
+        {back === undefined || Link === undefined ? null : (
+          <Link href={back.href} className="w-head__back" aria-label={`Back to ${back.label}`}>
+            <Icon name="back" size={20} strokeWidth={2} />
+          </Link>
+        )}
         <h1 id="w-title" tabIndex={-1}>
           {title}
         </h1>
@@ -293,6 +354,7 @@ export function AppShell({
   children,
   onPublish,
   connect,
+  account,
 }: {
   pathname: string;
   Link: LinkComponent;
@@ -302,6 +364,8 @@ export function AppShell({
   children: ReactNode;
   onPublish?: (() => void) | undefined;
   connect?: ReactNode;
+  /** The host's account menu, rendered in place of a link to your own page. */
+  account?: ReactNode;
 }) {
   return (
     <div className="w-app">
@@ -309,14 +373,25 @@ export function AppShell({
         Skip to content
       </a>
       <div className="w-app__inner">
-        <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} connect={connect} />
+        <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} connect={connect} account={account} />
         <main id="w-main" className="w-column">
           {children}
           <ColumnFooter Link={Link} />
         </main>
+        {/*
+          Search sits at the top of the aside, in the frame rather than in the discovery rail.
+
+          It was the rail's first child, which was right while the rail was the whole aside. Once a
+          page's own cards render above it — `/vault`, `/studio`, `/alerts`, `/messages` — the search
+          box appeared halfway down the column, below an explanatory card, which is not where anybody
+          looks for it. In the frame it is first on every route that has an aside at all.
+        */}
         {aside === undefined ? null : (
           <aside className="w-aside" aria-label="Discover">
-            <div className="w-aside__sticky">{aside}</div>
+            <div className="w-aside__sticky">
+              <SearchBox Link={Link} />
+              {aside}
+            </div>
           </aside>
         )}
       </div>

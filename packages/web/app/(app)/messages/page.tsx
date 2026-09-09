@@ -5,6 +5,7 @@ import { fold } from '@projectx-social/sdk';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 import { MessagesScreen } from '@/components/app/MessagesScreen';
+import { Discovery } from '@/components/shell/Discovery';
 
 /**
  * `/messages` — private messages.
@@ -41,6 +42,7 @@ export default async function MessagesPage({
 
   return (
     <MessagesScreen
+      discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
       {...(reader === undefined ? {} : { reader })}

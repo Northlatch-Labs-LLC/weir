@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode, CSSProperties } from 'react';
 import { AppShell, type Viewer } from '@projectx-social/ui';
 import { WalletConnect } from '@/components/WalletConnect';
+import { AccountMenu } from '@/components/AccountMenu';
 
 /**
  * The reader's address travels in the query string on every link, because it is what the frame
@@ -73,6 +74,20 @@ export function AppFrame({
         why it is mounted while connected too — see `WalletConnect`.
       */
       connect={<WalletConnect triggerClassName="w-btn w-btn--primary" triggerLabel="Connect wallet" />}
+      /*
+        The account menu, mounted at last.
+
+        It was written, styled and covered by twenty tests, and the only thing that ever rendered it
+        was `SiteHeader` — a component of the retired site shell that no page imports. So on every
+        route of the live application there was no way to read which address you were signed in as,
+        no way to switch to another address the wallet holds, and no way to sign out. The wallet was
+        picked up and could not be put down.
+
+        Nothing about how a session is proved changes here. `SessionBridge` still asks for the
+        signature, `provenReader` still decides who the server answers as, and this menu still only
+        shows and ends what that already established.
+      */
+      account={<AccountMenu />}
     >
       {children}
     </AppShell>

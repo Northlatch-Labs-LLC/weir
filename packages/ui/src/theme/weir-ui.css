@@ -241,6 +241,33 @@
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--w-line);
   }
+  /*
+    The way back, for a page that sits under another.
+
+    The rail lists eight destinations; everything below one of them — a creator's page, a post, a
+    vault, an agent's record — had no route back to where the reader came from except the browser's
+    own button, and on a phone the rail is four icons and there was none. 40px so it clears the
+    target-size floor on its own.
+  */
+  .w-head__back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-left: -8px;
+    margin-right: 2px;
+    flex: none;
+    border-radius: var(--w-r-full);
+    color: var(--w-ink-9);
+    text-decoration: none;
+    transition: background var(--w-fast) var(--w-ease), color var(--w-fast) var(--w-ease);
+  }
+  .w-head__back:hover {
+    background: var(--w-hover);
+    color: var(--w-ink-10);
+  }
+
   .w-head__row {
     display: flex;
     align-items: baseline;
@@ -744,12 +771,42 @@
     from { background-position: 200% 0; }
     to { background-position: -200% 0; }
   }
-  .w-state {
+  /*
+    The block that takes whatever room is left.
+
+    `.w-column` stretches to whichever of it and the aside is taller, and its footer takes
+    `margin-top: auto`. A page with one panel on it therefore had the panel at the top, the footer
+    at the bottom, and up to 1,173 pixels of nothing between them. This is put on the panel that
+    should own that room. `.w-state` below does the same thing for every empty state without being
+    asked.
+  */
+  .w-fill {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    max-height: 720px;
+  }
+
+  /*
+    An empty state fills the room it is standing in.
+
+    `.w-column` is a flex column whose footer takes `margin-top: auto`, and the column stretches to
+    whichever of it and the aside is taller. On `/vault`, `/alerts`, `/studio` and `/messages` that
+    left one sentence at the top, the footer at the bottom, and 850 to 1,170 pixels of nothing
+    between them — measured. Growing into that space and centring in it turns the void into the
+    frame around the sentence, which is what a page with one thing to say should look like. Bounded,
+    so it centres in a tall column without stranding itself a screen down a short one.
+  */
+  .w-state {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 12px;
     padding: 56px 28px;
+    max-height: 620px;
     text-align: center;
   }
   .w-state__fact {

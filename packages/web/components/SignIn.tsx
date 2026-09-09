@@ -276,13 +276,21 @@ export function SignIn({
                 the fill in this cascade. `.w-btn` is the current system and is checked at both
                 widths.
               */}
-              {pathname === '/signin' ? null : (
+              {/*
+                Not on the two pages whose own chrome already offers it.
+
+                `/signin` is this page, and on `/join` the public header carries a "Sign in" button
+                sixteen pixels from the top — so the panel rendered a second one, same words, same
+                destination, four hundred pixels below the first. On every other page there is no
+                other way in from here, and it leads.
+              */}
+              {pathname === '/signin' || pathname === '/join' ? null : (
                 <a className="w-btn w-btn--primary w-btn--sm" href="/signin">
                   Sign in
                 </a>
               )}
               <a
-                className={pathname === '/signin' ? 'w-btn w-btn--primary w-btn--sm' : 'w-btn w-btn--quiet w-btn--sm'}
+                className={pathname === '/signin' || pathname === '/join' ? 'w-btn w-btn--primary w-btn--sm' : 'w-btn w-btn--quiet w-btn--sm'}
                 href="https://slush.app"
                 target="_blank"
                 rel="noreferrer noopener"

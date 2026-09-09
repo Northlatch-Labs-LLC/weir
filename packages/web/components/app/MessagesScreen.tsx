@@ -28,16 +28,35 @@ export function MessagesScreen({
   viewerAddress,
   viewerHandle,
   reader,
+  discovery,
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
+  /**
+   * The discovery column, read on the server and handed down.
+   *
+   * A server component passed as a prop into a client one: this screen cannot read the store
+   * itself, and the rail is the same rail every other wrapped route gets. Optional, so a test or a
+   * caller without it renders the page's own cards and nothing else.
+   */
+  discovery?: ReactNode;
 }) {
   const viewer =
     viewerAddress === null
       ? ({ signedIn: false } as const)
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerHandle } as const);
 
+
+  /*
+    The page's own cards, and then the people.
+
+    These four screens pass an `aside`, and an `aside` REPLACES the discovery column rather than
+    joining it — so `/vault`, `/studio`, `/alerts` and `/messages` were the only wrapped routes with
+    no faces on them at all, and 337 to 715 pixels of empty ground under one explanatory card. The
+    discovery rail is read on the server and handed down as `discovery`, so it renders beneath the
+    page's own cards instead of replacing them.
+  */
   const aside: ReactNode = (
     <>
       <section className="w-card">
@@ -74,10 +93,20 @@ export function MessagesScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame
+      viewer={viewer}
+      reader={reader}
+      aside={
+        <>
+          {aside}
+          {discovery}
+        </>
+      }
+    >
       <ColumnHeader title="Messages" sub="encrypted in your browser" />
 
-      <div style={{ padding: '18px 20px 32px' }}>
+      {/* Fills the room between header and footer — see `.w-fill`. */}
+      <div className="w-fill" style={{ padding: '18px 20px 32px' }}>
         <Messages />
       </div>
     </AppFrame>

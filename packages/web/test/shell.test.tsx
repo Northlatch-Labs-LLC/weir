@@ -264,16 +264,37 @@ describe('the frame', () => {
     expect(getByTestId('wallet-connect')).toBeTruthy();
   });
 
-  it('names the member in the rail on a proved session', async () => {
+  it('gives a proved session the account menu, not a link to its own page', async () => {
+    /*
+      The rail used to name the member in a plain `a.w-rail__account` pointing at their creator
+      page. That link was the whole of the account area, so a signed-in reader could not see which
+      address they were signed in as, switch to another the wallet holds, or sign out — `AccountMenu`
+      holds all three and nothing mounted it. It is mocked in this file; that it is MOUNTED is the
+      assertion.
+    */
     session = { ok: true, value: '0x9c8f6a1d2b4e7c05a3f18d6b29e4c7a0f5b3d8e1c6a94f27b0d5e83a1c6f492b' };
-    const { container } = await shell();
-    expect(container.querySelector('a.w-rail__account')?.textContent).toContain('nova');
+    const { container, getByTestId } = await shell();
+    expect(getByTestId('account-menu')).toBeTruthy();
+    expect(container.querySelector('a.w-rail__account')).toBeNull();
   });
 
   it('treats a failed session read as a guest, never as a member', async () => {
     session = { ok: false, failure: { kind: 'transport' } };
-    const { container } = await shell();
+    const { container, queryByTestId } = await shell();
     expect(container.querySelector('a.w-rail__account')).toBeNull();
+    expect(queryByTestId('account-menu')).toBeNull();
+  });
+
+  it('gives the rail a Publish that goes somewhere', async () => {
+    /*
+      It was `<button onClick={onPublish}>` and the frame passes no `onPublish`, so the rail's most
+      prominent control did nothing when pressed. Publishing is `/studio`.
+    */
+    session = { ok: true, value: '0x9c8f6a1d2b4e7c05a3f18d6b29e4c7a0f5b3d8e1c6a94f27b0d5e83a1c6f492b' };
+    const { container } = await shell();
+    const publish = container.querySelector('.w-rail__publish');
+    expect(publish?.tagName).toBe('A');
+    expect(publish?.getAttribute('href')).toContain('/studio');
   });
 
   it('has exactly one main landmark, the skip-link target', async () => {

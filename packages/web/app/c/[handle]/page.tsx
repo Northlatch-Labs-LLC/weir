@@ -296,13 +296,22 @@ export default async function CreatorPage({
     label, value: 'not measured', note: why, font: BODY, size: '1.0625rem', style: 'italic', color: ALERT,
   });
 
+  /*
+    No vault is an answer, not a failed read.
+
+    These three were rendered as `unread` — "not measured", body face, alert colour, three times
+    across the top of somebody's page. Nothing failed: the account has not opened a vault, and the
+    store said so. A reader who sees three red figures on a stranger's page reads a broken product,
+    and the rule that a failed read is never a value does not ask for a failure to be printed where
+    there was none. So the figures are absent and the fact is stated once, in the body colour, below.
+
+    `coinDecimals === null` below IS a failed read, and it still prints "not measured".
+  */
+  const noVaultNote = v === null ? 'No vault opened yet, so nothing has settled on this page.' : null;
+
   const stats: DesignStat[] =
     v === null
-      ? [
-          unread('Settled volume', 'this page has no vault, so nothing has settled'),
-          unread('Subscriptions', 'no vault'),
-          unread('Unclaimed earnings', 'no vault'),
-        ]
+      ? []
       : coinDecimals === null
         ? [
             unread('Settled volume', "the coin's decimals could not be read, so no figure is priced"),
@@ -460,16 +469,24 @@ export default async function CreatorPage({
     rule the tier cards follow, and for the same reason: an amount typed against the wrong number of
     decimals is a real payment at the wrong size.
   */
+  /*
+    A control, or nothing.
+
+    The slot sits in the action row beside the avatar, which is sized for a button. When there was
+    no vault or no readable scale it held a full sentence instead, and on a 640px column that
+    sentence wrapped across the whole width, ABOVE the creator's own name, in the alert colour — the
+    first thing a stranger read on somebody's page was a red error. The reason is still stated; it
+    is stated as a quiet line under the counts, which is `tipNote` below.
+  */
+  const tipNote =
+    profile.vaultId === null
+      ? 'No creator vault yet, so there is nowhere for a tip to settle.'
+      : coinDecimals === null
+        ? 'Tips are not offered right now: the coin\u2019s scale could not be read, so an amount cannot be priced.'
+        : null;
+
   const tipSlot =
-    profile.vaultId === null ? (
-      <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
-        This account has no creator vault yet, so there is nowhere for a tip to settle.
-      </p>
-    ) : coinDecimals === null ? (
-      <p style={{ margin: 0, color: ALERT, fontSize: '0.9375rem' }}>
-        Not offered right now: the coin&rsquo;s scale could not be read, so an amount cannot be priced.
-      </p>
-    ) : viewer === null ? (
+    profile.vaultId === null || coinDecimals === null ? undefined : viewer === null ? (
       <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
         Sign in to tip
       </a>
@@ -553,6 +570,8 @@ export default async function CreatorPage({
         posts={appPosts}
         followSlot={subscribeSlot}
         tipSlot={tipSlot}
+        tipNote={tipNote}
+        figuresNote={noVaultNote}
         depositSlot={depositSlot}
         /*
           The account, never this page.

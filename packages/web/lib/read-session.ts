@@ -97,16 +97,21 @@ export const READ_SESSION_COOKIE = 'projectx_read';
 /**
  * How long a proof of readership lasts.
  *
- * A day, because the wallet prompt that mints it is the cost. Shorter means re-prompting people
- * mid-session, which is how users learn to approve prompts without reading them.
+ * Two hours. It was a day, and the argument for a day was about prompt fatigue — re-prompting
+ * people mid-session is how they learn to approve prompts without reading them. That argument is
+ * real and it is not the whole account: a day means somebody comes back the next morning, connects
+ * a wallet out of habit, and the site names them without asking for anything. Nothing was
+ * authorised that should not have been, and it still reads as the site having kept hold of them.
+ *
+ * Two hours is longer than a sitting and shorter than a memory. Signing out ends it immediately —
+ * `DELETE /api/session`, from the account menu in the rail.
  *
  * That last clause used to read "the same reasoning `isSingleUse` gives for not spending read
  * signatures". `isSingleUse` no longer gives it: reads are spent like every other kind, because the
  * exemption was reasoned from the signer's side and ignored what the same bytes are worth to
- * somebody who intercepted them. The argument for a long TTL stands on its own — it is about how
- * often a person is asked, not about whether a signature is reusable.
+ * somebody who intercepted them.
  */
-export const READ_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+export const READ_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 
 /** What the row holds. The token itself never reaches the database. */
 function digestOf(token: string): Buffer {

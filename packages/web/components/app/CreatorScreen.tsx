@@ -47,6 +47,8 @@ export function CreatorScreen({
   posts,
   followSlot,
   tipSlot,
+  tipNote,
+  figuresNote,
   depositSlot,
   depositLine,
   accountName,
@@ -72,6 +74,16 @@ export function CreatorScreen({
   posts: readonly PostView[];
   followSlot: ReactNode;
   tipSlot?: ReactNode;
+  /**
+   * Why tipping is not on offer, when it is not.
+   *
+   * Separate from `tipSlot` because the slot is an action row sized for a button. A sentence put
+   * there wrapped across the column above the creator's own name; this renders quietly under the
+   * counts, where a reader looks for context rather than for a control.
+   */
+  tipNote?: string | null;
+  /** Stated instead of the figures when there are none to state — never beside them. */
+  figuresNote?: string | null;
   depositSlot?: ReactNode;
   depositLine?: string | undefined;
   /**
@@ -112,9 +124,13 @@ export function CreatorScreen({
           {depositSlot}
         </section>
       )}
+      {/*
+        The bio is in the column, under the name, where it is written. Repeating it here put the
+        same two sentences twice on one screen, four hundred pixels apart. What this card is for is
+        the account behind the page — the thing the column does not say.
+      */}
       <section className="w-card">
         <h3>About</h3>
-        <p>{profile.bio === '' ? 'No description yet.' : profile.bio}</p>
         <div className="w-card__row" style={{ justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'var(--w-sans)', fontSize: 13, color: 'var(--w-ink-7)' }}>Name on chain</span>
           <span className="w-mono" style={{ fontSize: 12, color: 'var(--w-ink-9)' }}>
@@ -127,9 +143,20 @@ export function CreatorScreen({
 
   return (
     <AppFrame viewer={viewer} reader={reader} aside={aside}>
+      {/*
+        A creator's page sits under the directory, so the header carries the way back to it. The
+        rail reaches eight destinations and this is not one of them; without this the only route
+        off a creator's page was the browser's back button, and on a phone the rail is four icons.
+      */}
       <ColumnHeader
         title={profile.displayName}
         sub={counts.followers === 1 ? '1 follower' : `${counts.followers} followers`}
+        back={{ href: '/explore', label: 'Explore' }}
+        Link={({ href, children, ...rest }) => (
+          <NextLink href={href} {...rest}>
+            {children}
+          </NextLink>
+        )}
       />
 
       {/*
@@ -157,8 +184,13 @@ export function CreatorScreen({
           <span style={{ border: '4px solid var(--w-ground)', borderRadius: 999, lineHeight: 0, position: 'relative', zIndex: 1 }}>
             <Avatar address={profile.address} isAgent={profile.isAgent} size={92} />
           </span>
+          {/*
+            Follow only. The tip control is a whole panel — a label, an amount field, a quote and
+            two buttons — and it was rendered here, in a row sized for buttons and pulled 40px up
+            over the banner. On every creator page it floated across the header beside the avatar.
+            It renders below the identity now, where a form belongs.
+          */}
           <span style={{ display: 'flex', gap: 10, paddingBottom: 6, flexWrap: 'wrap' }}>
-            {tipSlot}
             {followSlot}
           </span>
         </div>
@@ -193,19 +225,48 @@ export function CreatorScreen({
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(figures.length, 3)}, minmax(0, 1fr))`, gap: 12, marginBottom: 20 }}>
-          {figures.map((f) => (
-            <div key={f.label} className="w-card" style={{ padding: '14px 16px' }}>
-              <div className="w-figure__label">{f.label}</div>
-              {f.unread ? (
-                <div className="w-unread" style={{ fontSize: 17 }}>{f.value}</div>
-              ) : (
-                <div className="w-figure__value" style={{ fontSize: 19 }}>{f.value}</div>
-              )}
-              <div className="w-figure__note">{f.note}</div>
-            </div>
-          ))}
-        </div>
+        {/*
+          The reasons, before the figures, and quietly.
+
+          Both of these used to be alert-coloured sentences in the action row or three red cards
+          across the top of the page. They are context, not alarms.
+        */}
+        {tipSlot === undefined ? null : (
+          <div style={{ maxWidth: '34rem', marginBottom: 16 }}>{tipSlot}</div>
+        )}
+
+        {tipNote === null || tipNote === undefined ? null : (
+          <p style={{ margin: '0 0 12px', maxWidth: '56ch', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--w-ink-7)' }}>
+            {tipNote}
+          </p>
+        )}
+
+        {figures.length === 0 ? (
+          figuresNote === null || figuresNote === undefined ? null : (
+            <p style={{ margin: '0 0 20px', maxWidth: '56ch', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--w-ink-7)' }}>
+              {figuresNote}
+            </p>
+          )
+        ) : (
+          /*
+            `auto-fit` rather than a hardcoded column count. `repeat(3, 1fr)` held three columns at
+            every width, so on a 390px phone each figure was a 110px box wrapping "Settled volume"
+            into two lines above a two-line note. Below about 500px they stack.
+          */
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))', gap: 12, marginBottom: 20 }}>
+            {figures.map((f) => (
+              <div key={f.label} className="w-card" style={{ padding: '14px 16px' }}>
+                <div className="w-figure__label">{f.label}</div>
+                {f.unread ? (
+                  <div className="w-unread" style={{ fontSize: 17 }}>{f.value}</div>
+                ) : (
+                  <div className="w-figure__value" style={{ fontSize: 19 }}>{f.value}</div>
+                )}
+                <div className="w-figure__note">{f.note}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="w-tabs">

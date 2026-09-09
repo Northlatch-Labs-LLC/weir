@@ -89,7 +89,16 @@ export function PostScreen({
 
   return (
     <AppFrame viewer={viewer} reader={reader} aside={aside}>
-      <ColumnHeader title="Post" />
+      {/* A post sits under the page that published it. */}
+      <ColumnHeader
+        title="Post"
+        back={{ href: `/c/${author.handle}`, label: author.displayName }}
+        Link={({ href, children, ...rest }) => (
+          <NextLink href={href} {...rest}>
+            {children}
+          </NextLink>
+        )}
+      />
 
       <article style={{ padding: '20px 22px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

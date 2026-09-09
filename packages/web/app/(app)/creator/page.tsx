@@ -161,10 +161,17 @@ export default async function CreatorPage() {
           </p>
         </div>
 
-        <footer>
+        {/*
+          A `<p>`, not a `<footer>`.
+
+          The frame already ends every column with the application's footer, so this made `/creator`
+          the one route in the product with two of them, one above the other. What it says is a
+          sentence about vaults, not the foot of the site.
+        */}
+        <p className="note" style={{ marginTop: 'var(--space-20)' }}>
           A vault is a shared object: anyone can pay into it, only the capability holder can take
           money out, and the capability is bound to that one vault.
-        </footer>
+        </p>
           </>
   );
 }

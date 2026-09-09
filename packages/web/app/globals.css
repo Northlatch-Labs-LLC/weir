@@ -2873,3 +2873,70 @@ footer {
     filter: none !important;
   }
 }
+
+/* ==========================================================================
+   The account menu, inside the application rail
+
+   `AccountMenu` was built for the retired site header: a pill on a horizontal
+   bar, with its popover hanging below and to the right. The rail is a vertical
+   column and the menu now sits at the bottom of it, so the trigger takes the
+   rail's own shape — full width, the same 40px avatar and two-line identity as
+   every other row — and the popover opens upward instead of off the bottom of
+   the screen.
+
+   Scoped to `.w-rail` so the legacy header, if anything ever mounts it again,
+   keeps the pill it was drawn for.
+   ========================================================================== */
+.w-rail .account-slot {
+  margin-top: auto;
+  width: 100%;
+}
+.w-rail .account-trigger {
+  width: 100%;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--w-r-full);
+  background: transparent;
+  text-align: left;
+}
+.w-rail .account-trigger:hover {
+  background: var(--w-hover);
+  border-color: transparent;
+}
+.w-rail .account-trigger .avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.w-rail .account-trigger__id {
+  min-width: 0;
+}
+.w-rail .account-chevron {
+  margin-left: auto;
+  flex: none;
+}
+/* Upward, and the full width of the rail: a menu anchored to the top of a
+   trigger that sits at the bottom of a 100dvh column opens off the screen. */
+.w-rail .account-pop {
+  top: auto;
+  bottom: calc(100% + var(--space-8));
+  right: auto;
+  left: 0;
+  min-width: 100%;
+}
+/* The rail collapses to icons between 834 and 1023px; the identity text goes
+   with the nav labels rather than wrapping under a 40px avatar. */
+@media (max-width: 1023px) {
+  .w-rail .account-trigger__id,
+  .w-rail .account-chevron {
+    display: none;
+  }
+  .w-rail .account-trigger {
+    justify-content: center;
+    padding: 10px 0;
+  }
+  .w-rail .account-pop {
+    min-width: 264px;
+  }
+}

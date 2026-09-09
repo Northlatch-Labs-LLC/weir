@@ -27,7 +27,6 @@ import {
   PostCard,
   EmptyState,
   Avatar,
-  SearchBox,
   RailCard,
   PersonRow,
   SeekingRow,
@@ -101,7 +100,7 @@ export function FeedApp({
 
   const aside: ReactNode = (
     <>
-      <SearchBox Link={RailLink} />
+      {/* The frame renders the search box at the top of every aside — see `AppShell`. */}
 
       {/*
         Becoming a member of somebody is the product's whole argument, so it is the first thing in
@@ -109,11 +108,12 @@ export function FeedApp({
         happens when you weir somebody is a signed transaction, and the rail is not going to be the
         second implementation of one.
       */}
+      {/* `more` is `/explore`, the directory — not `/creators`, which is the setup form. */}
       <RailCard
         title="Become a member"
         note="Keep SUI in someone's vault. They earn the yield, you keep the SUI, and a share of the yield comes back to you."
         Link={RailLink}
-        more="/creators"
+        more="/explore"
         moreLabel="Everyone here"
         accent="money"
       >
@@ -155,8 +155,17 @@ export function FeedApp({
         </RailCard>
       )}
 
-      <RailCard title="Who is here" note={creatorCount} Link={RailLink} more="/creators">
-        {creators.slice(0, 5).map((c) => (
+      {/*
+        The people the card above did not already name.
+
+        Both cards sliced from the top of the same list, so the first three accounts on Weir appeared
+        twice in one rail, one card under the other — the same avatar, name and follower count, six
+        rows apart. This one starts where that one stopped, and disappears when there is nobody left
+        to introduce.
+      */}
+      {creators.length <= 3 ? null : (
+      <RailCard title="Who is here" note={creatorCount} Link={RailLink} more="/explore">
+        {creators.slice(3, 8).map((c) => (
           <PersonRow
             key={c.handle}
             person={{ handle: c.handle, address: c.address, displayName: c.displayName, meta: c.followers, isAgent: c.isAgent }}
@@ -164,6 +173,7 @@ export function FeedApp({
           />
         ))}
       </RailCard>
+      )}
     </>
   );
 
@@ -210,34 +220,14 @@ export function FeedApp({
         {sessionNote}
       </p>
 
-      {viewerAddress === null ? null : (
-        /*
-          The way to publish, at the top of the feed where the design puts it.
+      {/*
+        There was a second composer here.
 
-          It is a link to the studio rather than an input that looks like a composer: publishing on
-          Weir sets a price on chain and seals a body, which is not something a box on the feed can
-          honestly pretend to do in one keystroke. A control that opens the real thing is truthful;
-          a fake one that discards what you typed is not.
-        */
-        <NextLink
-          href="/studio"
-          style={{
-            display: 'flex',
-            gap: 12,
-            alignItems: 'center',
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--w-line)',
-          }}
-        >
-          <Avatar address={viewerAddress} size={44} />
-          <span style={{ fontFamily: 'var(--w-serif)', fontSize: 19, color: 'var(--w-ink-6)' }}>
-            Publish something
-          </span>
-          <span className="w-btn w-btn--primary w-btn--sm" style={{ marginLeft: 'auto', minHeight: 38, padding: '0 22px' }}>
-            Publish
-          </span>
-        </NextLink>
-      )}
+        Two of them rendered one under the other for anybody signed in: `.w-prompt` above, and a
+        hand-rolled copy of the same link below — same avatar, same "Publish" pill, same destination
+        — with the session line wedged between them. The design component stays; the copy is gone,
+        along with the inline styles it carried.
+      */}
 
       {posts.length === 0 ? (
         <EmptyState fact={emptyMessage} />

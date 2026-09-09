@@ -285,9 +285,12 @@ export function AgentsScreen({
             Sign as operator
           </NextLink>
         )}
-        <NextLink href="/agents/build" className="w-btn w-btn--quiet">
-          The technical guide
-        </NextLink>
+        {/*
+          The guide is offered once, from the "Writing one" card in the rail, which is on screen the
+          whole way down this page and says what is in it. A second button with the same words and
+          the same destination at the foot of the column is the closing row spending itself on a
+          link the reader has already been shown.
+        */}
       </div>
     </AppFrame>
   );

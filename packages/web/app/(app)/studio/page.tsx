@@ -5,6 +5,7 @@ import { titleFor } from '@/lib/site-map';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 import { StudioScreen } from '@/components/app/StudioScreen';
+import { Discovery } from '@/components/shell/Discovery';
 
 export const metadata: Metadata = { title: titleFor('/studio') };
 
@@ -43,6 +44,7 @@ export default async function Studio({
 
   return (
     <StudioScreen
+      discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
       {...(reader === undefined ? {} : { reader })}
