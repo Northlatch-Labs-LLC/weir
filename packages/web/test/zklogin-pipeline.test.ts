@@ -47,7 +47,7 @@ import {
   readIdTokenFromFragment,
   readUnverifiedClaims,
 } from '../lib/zklogin';
-import { deriveUserSalt, forgetProverProbe, nonceFor, proverReachable, verifyGoogleIdToken } from '../lib/zklogin-server';
+import { deriveUserSalt, forgetProverProbe, nonceFor, proverReachable, requestProof, verifyGoogleIdToken } from '../lib/zklogin-server';
 
 const CLIENT_ID = '1234567890-testclient.apps.googleusercontent.com';
 const ISSUER = 'https://accounts.google.com';
@@ -487,16 +487,49 @@ describe('the proving service is asked whether it is there', () => {
   beforeEach(() => { forgetProverProbe(); });
   afterEach(() => { vi.unstubAllGlobals(); forgetProverProbe(); });
 
-  it('counts any HTTP answer as reachable, including a refusal of the empty probe body', async () => {
+  it('counts the prover talking as reachable, including a refusal of the empty probe body', async () => {
     /*
       The probe sends `{}`, which is not a valid proof request. A prover that answers 400 has still
       proved it is running, and that is the whole question. Requiring a 200 would demand a real
       proof — seconds of computation — on every page that offers sign-in.
     */
-    for (const status of [200, 400, 404, 405, 500]) {
+    for (const status of [200, 400, 404, 405, 422, 500]) {
       forgetProverProbe();
       vi.stubGlobal('fetch', async () => new Response('', { status }));
       expect((await proverReachable(config)).ok, `status ${status}`).toBe(true);
+    }
+  });
+
+  it('does not count the edge answering for a machine that is gone', async () => {
+    /*
+      The one that got through. Cloudflare sits in front of the prover and answers even when the
+      prover does not: 530 with a "Cloudflare Tunnel error" page is a disconnected `cloudflared`.
+      Reading "an HTTP response came back" as "the prover is up" reported `available: true` on a
+      deployment where every sign-in ended at that page, which is the exact failure this probe was
+      added to prevent.
+    */
+    for (const status of [502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530]) {
+      forgetProverProbe();
+      vi.stubGlobal('fetch', async () => new Response('<!doctype html><html>…</html>', { status }));
+      const result = await proverReachable(config);
+      expect(result.ok, `status ${status} must not read as reachable`).toBe(false);
+      if (!result.ok) expect(result.failure.detail).toContain(String(status));
+    }
+  });
+
+  it('never puts an edge error page in front of a person', async () => {
+    /*
+      The callback printed `the prover answered 530: <!doctype html> <!--[if lt IE 7]>…` at somebody
+      who had just tried to sign in. The status is the useful part; the document is not.
+    */
+    vi.stubGlobal('fetch', async () =>
+      new Response('<!doctype html><html><head><title>Cloudflare Tunnel error</title></head></html>', { status: 530 }));
+    const result = await requestProof({ proverUrl: config.proverUrl, proverKey: 'k', payload: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.detail).not.toContain('doctype');
+      expect(result.failure.detail).not.toContain('<html');
+      expect(result.failure.detail).toContain('530');
     }
   });
 

@@ -408,6 +408,39 @@ export function deriveUserSalt(input: {
  * been answered.
  */
 /**
+ * Statuses that mean the proving machine is not there, whatever answered.
+ *
+ * Cloudflare sits in front of the prover, and Cloudflare answers even when the machine behind it
+ * does not: 520 through 527 and 530 are its own origin-side errors, and 530 with a "Cloudflare
+ * Tunnel error" page is what a disconnected `cloudflared` looks like from outside. Reading "an HTTP
+ * response came back" as "the prover is up" is exactly the mistake this whole probe exists to catch,
+ * and it let a dead prover through: the deployment reported `available: true` while every sign-in
+ * ended at the tunnel error.
+ *
+ * 502, 503 and 504 join them for the same reason — a gateway saying the thing behind it is not
+ * answering. Everything else, 400 and 404 and 405 included, is the prover itself talking.
+ */
+function originIsDown(status: number): boolean {
+  return status === 502 || status === 503 || status === 504 || (status >= 520 && status <= 530);
+}
+
+/**
+ * A failure body fit to be read by a person.
+ *
+ * An edge error page is a whole HTML document, and this string reaches the screen: the callback
+ * page printed `the prover answered 530: <!doctype html> <!--[if lt IE 7]>…` at somebody who had
+ * just tried to sign in. The status is the useful part; the document is not, and it is kept out.
+ */
+function proverDetail(status: number, body: string): string {
+  const looksLikeMarkup = /^\s*<(?:!doctype|html|head|body)/i.test(body);
+  if (looksLikeMarkup || originIsDown(status)) {
+    return `the proving service did not answer (${status} from the host in front of it)`;
+  }
+  const trimmed = body.trim().slice(0, 200);
+  return `the prover answered ${status}${trimmed === '' ? '' : `: ${trimmed}`}`;
+}
+
+/**
  * Whether the proving service is answering at all, cached for a minute.
  *
  * # Why this exists
@@ -469,7 +502,13 @@ export async function proverReachable(
             source,
             "refused at the edge — PROJECTX_SOCIAL_ZKLOGIN_PROVER_KEY does not match the rule guarding the proving service's hostname",
           )
-        : ok('reachable' as const, nowMs);
+        : originIsDown(response.status)
+          ? fail(
+              'transport',
+              source,
+              `the host in front of the prover answered ${response.status}, which is what it says when the machine behind it is not connected`,
+            )
+          : ok('reachable' as const, nowMs);
   } catch (cause) {
     result = fail(
       'transport',
@@ -533,11 +572,7 @@ export async function requestProof(input: {
           "refused at the edge, not by the prover — PROJECTX_SOCIAL_ZKLOGIN_PROVER_KEY does not match the rule guarding the proving service's hostname",
         );
       }
-      return fail(
-        'transport',
-        source,
-        `the prover answered ${response.status}${detail === '' ? '' : `: ${detail}`}`,
-      );
+      return fail('transport', source, proverDetail(response.status, detail));
     }
     return ok((await response.json()) as unknown);
   } catch (error) {
