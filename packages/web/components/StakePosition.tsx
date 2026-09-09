@@ -269,7 +269,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
           <span className="k">YOUR GIVE-BACK</span>
           <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-10) 0 var(--space-16)' }}>
             This creator hands back {Number(vault.rebateBps) / 100}% of what their vault earns to
-            the people backing them. You have{' '}
+            the people who are members. You have{' '}
             <strong>{sui(position?.pendingRebateMist ?? '0')} SUI</strong> accrued.
           </p>
           {quote?.what === 'rebate' ? (

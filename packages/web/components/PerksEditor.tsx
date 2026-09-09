@@ -173,7 +173,7 @@ export function PerksEditor({
   }
 
   if (signer === null) {
-    return <p className="section-note">Sign in to set what supporters get.</p>;
+    return <p className="section-note">Sign in to set what members get.</p>;
   }
 
   return (
@@ -257,7 +257,7 @@ export function PerksEditor({
               setSupportersFirst(e.target.checked);
             }}
           />
-          <span>Say on my page that I answer supporters first</span>
+          <span>Say on my page that I answer members first</span>
         </label>
         <button type="button" className="btn" disabled={busy} onClick={save}>
           {busy ? 'Signing…' : 'Save perks'}

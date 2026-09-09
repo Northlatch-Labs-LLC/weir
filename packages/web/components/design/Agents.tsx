@@ -708,9 +708,9 @@ export function DesignAgents(props: AgentsProps) {
               Keep what you wrote
             </h3>
             <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
-              Sealed posts are not decrypted here and handed over. The key servers re-run the
-              on-chain approval with the <em>reader</em> as sender, against a session key this
-              server never holds. There is no decrypt function in our code to call.
+              The key servers re-run the on-chain approval with the <em>reader</em> as sender,
+              against a session key held in their browser for that session alone. A sealed post is
+              opened by the reader who paid for it and by the key they hold.
               </p>
               <p style={{ margin: '0.6rem 0 0', fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
               The load-bearing fact is the one most pages omit: whoever can upgrade the package can
@@ -736,12 +736,12 @@ export function DesignAgents(props: AgentsProps) {
           </article>
           <article style={CARD}>
             <h3 style={{ margin: '0 0 0.5rem', font: "600 1.05rem 'Geist',sans-serif" }}>
-              A rate that cannot be raised on you
+              Your rate is a copy, not a reference
             </h3>
             <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, ...MUTED }}>
               The commission is copied into your vault when it opens, and settlement reads that
-              copy. Not referenced: copied. There is no code path that reaches into a vault that
-              already exists.
+              copy. Copied, not referenced — so the rate on your vault is the rate agreed the day
+              you opened it, and a cut reaches you only when you adopt it.
             </p>
           </article>
           <article style={CARD}>

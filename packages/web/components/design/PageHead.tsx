@@ -10,6 +10,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { ColumnHeader } from '@projectx-social/ui';
 
 export function PageHead({
   kicker,
@@ -37,37 +38,41 @@ export function PageHead({
   centered?: boolean;
 }) {
   /*
-    One heading, left, in the serif — the ported design's page head.
+    The application's column header, not a page's hero.
 
     # What changed here rather than in twenty-nine files
 
-    Every page in this application called `PageHead` with a `kicker`, a split `title`/`accent`, and
-    often `centered`. That produced a mono-caps eyebrow above a two-tone gradient headline, centred
-    on the page: a landing-page device, worn by `/purchases` and `/messages` as well as by the
-    front door. The ported design gives every page the same plain treatment, so the change belongs
-    to the component and not to its callers.
+    Every page in this application called `PageHead`, and it rendered a display headline three
+    lines tall with a paragraph under it — a landing-page device, worn by `/purchases`,
+    `/earnings` and `/messages` as well as by the front door. Inside a 640px column that headline
+    was the whole first screen: a reader opening their earnings met sixty-point type telling them
+    what the page was, and had to scroll to reach a figure.
 
-    `accent` is joined to the title rather than dropped. It always held the second half of the
-    sentence — `title="Say what you are"` `accent="say so."` — so ignoring it would have silently
-    truncated the heading on twenty pages.
+    The rebuilt screens use `ColumnHeader` from `packages/ui` — a compact sticky bar carrying the
+    name of where you are. This makes every page that has not been rebuilt yet wear the same one,
+    which is a single edit rather than twenty-nine, and it means the two halves of the product stop
+    disagreeing about what a page title looks like.
 
-    `kicker` and `centered` are still accepted and no longer rendered. Left in the signature
-    deliberately: removing them is a twenty-nine-file edit that says nothing, and keeping them
-    means the decision can be reversed here alone.
+    The lede is kept and demoted: it says what the page does, which is worth one quiet line under
+    the title rather than a paragraph in serif. `accent` is joined to the title rather than dropped
+    — it always held the second half of the sentence (`title="Say what you are"` `accent="say
+    so."`), so ignoring it would silently truncate the heading on twenty pages. `kicker` and
+    `centered` are accepted and not rendered, so the decision can be reversed here alone.
   */
   const heading = accent === undefined ? title : `${title} ${accent}`;
 
   return (
-    <header className="weir-pagehead">
-      <div className="weir-pagehead__row">
-        <div className="weir-pagehead__text">
-          <h1 className="weir-pagehead__title">{heading}</h1>
-          <p className="weir-pagehead__lede">{lede}</p>
+    <>
+      <ColumnHeader title={heading} />
+      {(lede !== undefined && lede !== null && lede !== '') || actions !== undefined ? (
+        <div className="weir-pagehead">
+          {lede === undefined || lede === null || lede === '' ? null : (
+            <p className="weir-pagehead__lede">{lede}</p>
+          )}
+          {actions === undefined ? null : <div className="weir-pagehead__actions">{actions}</div>}
         </div>
-        {actions !== undefined && <div className="weir-pagehead__actions">{actions}</div>}
-      </div>
-      <div className="weir-rule" aria-hidden />
-    </header>
+      ) : null}
+    </>
   );
 }
 

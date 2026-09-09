@@ -121,7 +121,7 @@ export function CreatorsScreen({
   const shareNote =
     share === 0
       ? 'You keep all of it. Perfectly normal, and the number is public, so say why if you like.'
-      : `You give poolers back ${share}% of the yield their deposit generates for you; you keep ${100 - share}% as your own. It is written on the object, so nobody has to trust you to keep it there.`;
+      : `You give poolers back ${share}% of the yield their deposit generates for you; you keep ${100 - share}% as your own. The share is written on the vault object itself.`;
 
   const summary: ReadonlyArray<{ label: string; value: string; unread: boolean }> = [
     { label: 'Handle', value: clean === '' ? 'not set' : `@${clean}`, unread: false },
@@ -193,7 +193,7 @@ export function CreatorsScreen({
         }}
       >
         Subscriptions and unlocks settle on chain and {feeLabel} is taken at settlement. The pool
-        costs your supporters nothing they keep, and it is the line that reaches the people who will
+        costs your members nothing they keep, and it is the line that reaches the people who will
         never subscribe.
       </p>
 
@@ -283,7 +283,7 @@ export function CreatorsScreen({
 
           <div style={SECTION}>
             <label htmlFor="creators-yield" style={LABEL}>
-              Yield shared back to supporters
+              Yield shared back to members
             </label>
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 16 }}>
               <input

@@ -99,7 +99,7 @@ export function CreatorScreen({
     <>
       {depositSlot === undefined ? null : (
         <section className="w-card w-card--money">
-          <h3 style={{ color: 'var(--w-mint)' }}>Back this account</h3>
+          <h3 style={{ color: 'var(--w-mint)' }}>Become a member</h3>
           {accountName === undefined ? null : (
             <p className="w-mono" style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--w-ink-7)' }}>
               {accountName}

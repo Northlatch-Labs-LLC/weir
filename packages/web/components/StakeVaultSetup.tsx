@@ -201,7 +201,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
       <div className="panel">
         <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 'var(--space-10)' }}>Open a support vault</h2>
         <p style={{ color: 'var(--text-secondary)' }}>
-          Supporters deposit SUI, it is delegated to a validator, and you receive the yield. Their
+          Members deposit SUI, it is delegated to a validator, and you receive the yield. Their
           principal is never touched and they can withdraw in full at any time.
         </p>
 
@@ -341,7 +341,7 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
             </span>
           </div>
           <div className="stat">
-            <span className="k">Supporters&rsquo; share</span>
+            <span className="k">Members&rsquo; share</span>
             <span className="v">{Number(vault?.rebateBps ?? '0') / 100}%</span>
           </div>
         </div>
@@ -394,11 +394,11 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
           share nobody chose should not quietly redirect your revenue. Setting it to 100% is
           allowed. Some creators run the vault purely as a give-back to their audience.
         </p>
-        {confirmable('rebate', `Sets the supporters' share to ${rebate || '0'}%.`) ?? (
+        {confirmable('rebate', `Sets the members' share to ${rebate || '0'}%.`) ?? (
           <div style={{ display: 'flex', gap: 'var(--space-8)', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               className="comment-input" style={{ maxWidth: 120 }} inputMode="decimal"
-              aria-label="Supporters' share, percent"
+              aria-label="Members' share, percent"
               placeholder={`${Number(vault?.rebateBps ?? '0') / 100}%`}
               value={rebate} onChange={(e) => setRebate(e.target.value)}
             />

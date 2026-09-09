@@ -83,7 +83,7 @@ export function ExploreScreen({
   const aside: ReactNode = (
     <>
       <section className="w-card">
-        <h3>What backing is</h3>
+        <h3>What being a member is</h3>
         <p>
           You put SUI behind someone. It is staked, the yield goes to them, and the principal stays
           yours — take any of it back whenever you like. Some creators hand a share of the yield

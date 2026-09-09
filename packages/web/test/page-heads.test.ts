@@ -88,16 +88,50 @@ describe('every application page names itself', () => {
 describe('the page head itself', () => {
   const head = readFileSync(resolve(process.cwd(), 'components/design/PageHead.tsx'), 'utf8');
 
-  it('renders an h1, not a styled div', () => {
-    /*
-      The whole point. A `div` with heading-sized type looks identical and carries none of the
-      document structure — which is the state these pages were already in, by accident.
-    */
-    expect(head).toMatch(/<h1[\s>]/);
+  /*
+    `PageHead` no longer draws a heading of its own: it renders `ColumnHeader` from `packages/ui`,
+    which is the same header every rebuilt screen wears. That is the point of the change — the two
+    halves of the product stopped disagreeing about what a page title looks like — so what is
+    pinned here follows the delegation rather than the markup that used to be in this file.
+  */
+  it('renders the application\u2019s column header', () => {
+    expect(head).toContain('<ColumnHeader');
+    expect(head).toContain("from '@projectx-social/ui'");
   });
 
-  it('keeps the accent out of the heading text itself', () => {
-    expect(head).toContain('{title}');
-    expect(head).toContain('weir-grad');
+  it('still produces a real h1, one level down', () => {
+    /*
+      The whole point, and it survives the move. A `div` with heading-sized type looks identical and
+      carries none of the document structure — which is the state these pages were already in, by
+      accident. The element now lives in `ColumnHeader`, so that is where it is checked.
+    */
+    const column = readFileSync(
+      resolve(process.cwd(), '../ui/src/layout/AppShell.tsx'),
+      'utf8',
+    );
+    expect(column).toMatch(/<h1[\s>]/);
+  });
+
+  it('keeps the whole heading, accent included', () => {
+    /*
+      `accent` always held the second half of the sentence — `title="Say what you are"`
+      `accent="say so."` — so a head that rendered only `title` would silently truncate the
+      heading on twenty pages.
+    */
+    expect(head).toContain('accent === undefined ? title : `${title} ${accent}`');
+  });
+
+  it('draws no display hero of its own any more', () => {
+    /*
+      The regression this guards: a page hero three lines tall, inside a 640px column, meant a
+      reader opening their earnings met sixty-point type before a single figure.
+
+      Scoped to `PageHead`'s own body rather than the file, which also exports `PageSection` — a section
+      heading inside a page legitimately still carries the gradient, and asserting against the whole
+      file would fail for the wrong reason.
+    */
+    const body = head.slice(head.indexOf('export function PageHead'), head.indexOf('export function PageSection'));
+    expect(body).not.toContain('weir-pagehead__title');
+    expect(body).not.toContain('weir-grad');
   });
 });

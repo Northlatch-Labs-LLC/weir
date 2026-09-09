@@ -66,7 +66,7 @@ export function VaultScreen({
   const aside: ReactNode = (
     <>
       <section className="w-card">
-        <h3>What backing is</h3>
+        <h3>What being a member is</h3>
         <p>
           You put SUI behind someone. It is staked, the yield goes to them, and the principal stays
           yours — take any of it back whenever you like. Some creators hand a share of the yield
@@ -114,7 +114,7 @@ export function VaultScreen({
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, padding: '20px 22px' }}>
             <div className="w-card">
-              <div className="w-figure__label">Yours, backing others</div>
+              <div className="w-figure__label">Yours, in their vaults</div>
               <div className="w-figure__value">{total ?? '—'}</div>
               <div className="w-figure__note">withdraw any of it, any time</div>
             </div>
@@ -153,14 +153,14 @@ export function VaultScreen({
 
           <div style={{ padding: '4px 22px 8px' }}>
             <h2 style={{ margin: 0, fontFamily: 'var(--w-sans)', fontSize: 15, fontWeight: 700, color: 'var(--w-ink-10)' }}>
-              Who you are backing
+              Who you are a member of
             </h2>
           </div>
 
           {rows.length === 0 ? (
             <EmptyState
               fact="You have not backed anyone yet."
-              narrowedBy="Backing costs nothing but the time your money spends there."
+              narrowedBy="Being a member costs nothing but the time your money spends there."
               action={
                 <NextLink href="/explore" className="w-btn w-btn--primary">
                   Find someone to back

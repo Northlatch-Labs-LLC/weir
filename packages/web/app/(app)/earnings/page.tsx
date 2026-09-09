@@ -27,13 +27,17 @@ export default function EarningsPage() {
 
       <Earnings />
 
+      {/*
+        A note headed "Nothing here can hold your money" used to sit here, listing the four things
+        this contract does not do. Every sentence of it answered an accusation nobody had made, and
+        naming a pause switch is what puts the idea of one in the reader's head. What is true and
+        worth saying is below: where the money is, and what the fee was.
+      */}
       <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
-        <span className="lbl">Nothing here can hold your money</span>
+        <span className="lbl">Your fee rate</span>
         <p>
-          Withdrawing checks no pause switch on chain. There is
-          no approval queue, no processing period and no minimum payout. Those are all names for a
-          float, and this contract has none. The platform&rsquo;s fee was fixed into your
-          vault the day it was created and cannot be raised on it afterwards.
+          The platform&rsquo;s fee was written into your vault the day it was created and is read
+          from nowhere else afterwards. A fee <em>cut</em> reaches you only if you adopt it.
         </p>
       </div>
     </>

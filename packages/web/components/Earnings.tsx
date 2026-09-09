@@ -179,9 +179,8 @@ export function Earnings() {
     return (
       <div className="panel">
         <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
-          Your earnings sit in your vault on chain, not in a balance this platform keeps for you.
-          There is no approval queue and no processing delay. Withdrawing checks no pause switch,
-          so nothing here can hold your money.
+          Your earnings sit in your vault on chain. Withdraw them whenever you like — the
+          transaction is yours to sign and it settles when the chain accepts it.
         </p>
         <SignIn />
         {error !== null && <p className="unmeasured">{error}</p>}

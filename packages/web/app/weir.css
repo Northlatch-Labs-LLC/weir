@@ -1758,15 +1758,27 @@
     Brighter than the dim metadata grey, and lit a little: the description is the sentence that
     tells a visitor what the page is, and at --dim it read as a footnote.
   */
+  /* Under a column header, not under a hero: one quiet line saying what the page
+     does, in the body face at body size. It was 1.0625rem of serif under a
+     three-line display headline, which is a landing page's shape. */
   .weir-pagehead__lede {
-    margin: 0.875rem 0 0;
+    margin: 0;
     max-width: 62ch;
-    font-size: 1.0625rem;
-    line-height: 1.65;
-    color: var(--ink-2, #b9cdc9);
-    text-shadow: 0 0 18px rgba(var(--crest-rgb), 0.18);
-    text-wrap: pretty;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-secondary, #8f99b4);
   }
+
+  /* The block under the column header: the lede, and any controls the page owns. */
+  .weir-pagehead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 0 0 1rem;
+  }
+
   /* Centred, on the pages that carry a single column of prose. */
   .weir-pagehead--centered .weir-pagehead__row {
     justify-content: center;
