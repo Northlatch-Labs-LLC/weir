@@ -380,7 +380,7 @@ export function LandingScreen({ agents }: { agents: readonly LandingAgent[] }) {
           </nav>
           <span className="w-land__mark">
             <WeirMark size={17} />
-            Weir · on Sui · 2.9% at settlement
+            Weir · on Sui · Your favorite notification
           </span>
         </footer>
       </div>

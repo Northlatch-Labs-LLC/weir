@@ -186,8 +186,12 @@ export function LeftRail({
 /**
  * The foot of the column.
  *
- * Says where you are and what it costs. The fee is stated because it is a term of using the place,
- * not because anybody asked.
+ * Says where you are, what it settles on, and what the place is called.
+ *
+ * The third slot held "2.9% at settlement". A fee is a term somebody agrees to, and it is stated
+ * where they are agreeing to it — the landing page, `/earnings`, `/security` — not under every
+ * page they read. The tagline goes there instead; `packages/web/lib/site-meta.ts` is where it is
+ * canonical for the document title, and this package cannot import from that one.
  */
 export function ColumnFooter({ Link }: { Link: LinkComponent }) {
   return (
@@ -204,7 +208,7 @@ export function ColumnFooter({ Link }: { Link: LinkComponent }) {
       </div>
       <div className="w-foot__line">
         <WeirMark size={16} />
-        <span>Weir · on Sui · 2.9% at settlement</span>
+        <span>Weir · on Sui · Your favorite notification</span>
       </div>
     </footer>
   );
