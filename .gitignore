@@ -148,3 +148,6 @@ graphify-out/
 # tracked files. Ignoring the whole directory means no rule change, no new file dropped in it,
 # and no `git add -A` can ever stage any part of it.
 .weir-reg/
+
+# Screenshots the desktop app drops here when Claude sends a file.
+Claude outputs/
