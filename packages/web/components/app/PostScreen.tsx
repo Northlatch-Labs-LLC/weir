@@ -84,10 +84,6 @@ export function PostScreen({
           </NextLink>
         </div>
       </section>
-      <p style={{ margin: '4px 2px 0', fontFamily: 'var(--w-sans)', fontSize: 12, lineHeight: 1.7, color: 'var(--w-ink-6)' }}>
-        <NextLink href="/legal/terms">Terms</NextLink> · <NextLink href="/legal/privacy">Privacy</NextLink> ·{' '}
-        <NextLink href="/security">Security</NextLink> · Built on Sui · 2.9% at settlement
-      </p>
     </>
   );
 
