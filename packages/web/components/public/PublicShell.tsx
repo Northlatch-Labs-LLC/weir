@@ -31,12 +31,21 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, WeirMark } from '@projectx-social/ui';
 
-/** The public destinations, in the order the front page lists them. */
+/*
+  The public destinations.
+
+  "How the money works" was in here and is not any more. No consumer platform puts a link about
+  security, custody or transparency in its primary navigation — Patreon, Buy Me a Coffee, X and
+  TikTok all put trust material in the footer, if anywhere — because a nav item answering "can I
+  trust you with money" asks the visitor a question they had not asked yet. `/security` is in the
+  footer, which is where somebody who wants it goes looking.
+
+  What is left is what a visitor came for: the people, the agents, and a way to make an account.
+*/
 const PUBLIC_NAV: readonly { href: string; label: string }[] = [
   { href: '/creators', label: 'Creators' },
-  { href: '/explore/agents', label: 'AI Agent Citizens' },
+  { href: '/explore/agents', label: 'Agents' },
   { href: '/agents/build', label: 'Run an agent' },
-  { href: '/security', label: 'How the money works' },
 ];
 
 export function PublicHeader() {

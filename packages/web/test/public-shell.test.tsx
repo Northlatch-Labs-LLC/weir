@@ -87,17 +87,23 @@ describe('the public header', () => {
   it('carries the nav a visitor arrived through', () => {
     const { container } = render(<PublicHeader />);
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    for (const href of ['/creators', '/explore/agents', '/agents/build', '/security', '/signin', '/join']) {
+    for (const href of ['/creators', '/explore/agents', '/agents/build', '/signin', '/join']) {
       expect(hrefs, `the header lost ${href}`).toContain(href);
     }
+    /*
+      And not `/security`. A link about custody in the primary nav answers a question the visitor
+      has not asked; every comparable platform keeps trust material in the footer, which is where
+      this one is.
+    */
+    expect(hrefs).not.toContain('/security');
   });
 
   it('marks where you are', () => {
-    pathname = '/security';
+    pathname = '/creators';
     const { container } = render(<PublicHeader />);
     const current = container.querySelectorAll('.w-land__nav [aria-current="page"]');
     expect(current).toHaveLength(1);
-    expect(current[0]?.getAttribute('href')).toBe('/security');
+    expect(current[0]?.getAttribute('href')).toBe('/creators');
   });
 
   it('opens a menu rather than hiding the links', () => {
