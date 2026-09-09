@@ -13,8 +13,20 @@
  *
  * So the old chrome is not conditional any more — it is gone. Every route gets the application
  * frame. A screen that already builds its own (`components/app/*Screen`) is handed straight
- * through, because it renders the same frame with a discovery rail this layout cannot fill; every
- * other route is wrapped here. Same rail, same mark, same footer, same wallet control, everywhere.
+ * through; every other route is wrapped. Same rail, same mark, same footer, same wallet control.
+ *
+ * # What this file does, and what `ChromeRouter` does
+ *
+ * This half reads: the proved session, and the discovery rail. Both are server work and neither
+ * varies by route, so both are done once here.
+ *
+ * WHICH chrome to draw is decided in `ChromeRouter`, on the client, from `usePathname()`. That is
+ * not a preference. This is the root layout, and the App Router renders a root layout once and
+ * reuses it for every client-side navigation beneath it — so a decision made here is a decision
+ * made on the first paint of the session and never revisited. It was made here, from a pathname
+ * header, and the result was measurable: clicking "Explore" from `/security` left the public header
+ * on screen and drew the application rail inside it — two `<main>` elements and two footers on one
+ * page — while clicking "Security" from `/explore` produced a page with no chrome at all.
  *
  * # Who the frame thinks you are
  *
@@ -23,108 +35,16 @@
  * session read draws the signed-out frame, which leaks nothing — every page resolves its own
  * entitlement regardless of what the frame drew.
  */
-import { headers } from 'next/headers';
-import { PATHNAME_HEADER } from '@/proxy';
 import { fold } from '@projectx-social/sdk';
 import { Reveals } from '@/components/design/Reveals';
-import { AppFrame } from '@/components/app/AppFrame';
 import { Discovery } from '@/components/shell/Discovery';
-import { PublicShell } from '@/components/public/PublicShell';
+import { ChromeRouter } from '@/components/shell/ChromeRouter';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 
-/*
-  Routes whose page renders `AppFrame` itself.
-
-  Exact, not prefixed, and that distinction is the bug this list previously had: `/agents` was
-  matched as a prefix, so `/agents/build` and `/agents/declare` counted as framed, were handed
-  through, and rendered with no navigation at all. Sub-routes are framed here unless they are
-  listed here themselves.
-*/
-const FRAMED_EXACT: readonly string[] = [
-  '/',
-  '/feed',
-  '/explore',
-  '/creators',
-  '/agents',
-  '/alerts',
-  '/messages',
-  '/studio',
-  '/vault',
-];
-
-/* Handle and post pages: every path beneath these roots is a framed screen. */
-const FRAMED_ROOTS: readonly string[] = ['/c/', '/p/'];
-
-/*
-  Pages you read before you have an account.
-
-  These wear the front door's header and footer rather than the application's rail. The rail lists
-  Vault, Studio, Messages and Alerts — eight rooms a visitor cannot enter — and its mark links to
-  `/feed`, so somebody who clicked "How the money works" on the front page landed in a menu of
-  places they could not go, with no route back to the page they came from. That was a dead end on
-  every informational route in the product.
-
-  Matched as prefixes where a whole section belongs here (`/legal/`), exactly otherwise.
-*/
-const PUBLIC_EXACT: readonly string[] = [
-  '/security',
-  '/disclosure',
-  '/waitlist',
-  '/signin',
-  '/join',
-  '/add-funds',
-  '/agents/build',
-  '/agents/reference',
-  '/agents/declare',
-];
-const PUBLIC_ROOTS: readonly string[] = ['/legal/'];
-
-export function isPublicPage(pathname: string | null): boolean {
-  if (pathname === null) return false;
-  if (PUBLIC_EXACT.includes(pathname)) return true;
-  return PUBLIC_ROOTS.some((root) => pathname.startsWith(root));
-}
-
-export function carriesItsOwnFrame(pathname: string | null): boolean {
-  if (pathname === null) return false;
-  if (FRAMED_EXACT.includes(pathname)) return true;
-  return FRAMED_ROOTS.some((root) => pathname.startsWith(root));
-}
-
-/**
- * The path this render is for, or `null` when there is no request to ask.
- *
- * `headers()` THROWS outside a request — a test renderer, a build-time evaluation — rather than
- * answering empty. A throw means nobody set the header, and the honest answer to "does this route
- * build its own frame" is then "assume not", which wraps it. That is the safe direction now: an
- * extra frame is visible and fixable, a missing one leaves a page with no way out of itself.
- */
-async function currentPath(): Promise<string | null> {
-  try {
-    return (await headers()).get(PATHNAME_HEADER);
-  } catch {
-    return null;
-  }
-}
+export { isPublicPage, carriesItsOwnFrame, normalisePath } from '@/components/shell/ChromeRouter';
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = await currentPath();
-  if (carriesItsOwnFrame(pathname)) return <>{children}</>;
-
-  /*
-    The public shell reads nothing: who you are does not change what `/security` or the legal pages
-    say, and a page a stranger reads should not wait on a session lookup to render.
-  */
-  if (isPublicPage(pathname)) {
-    return (
-      <>
-        <Reveals />
-        <PublicShell>{children}</PublicShell>
-      </>
-    );
-  }
-
   const viewer = fold(
     await provenReader(),
     (value) => value,
@@ -144,7 +64,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       {/* The scroll entrance the older pages run. Without it a `data-reveal` section stays at
           opacity 0 — invisible, not merely unanimated. It stays until those sections are gone. */}
       <Reveals />
-      <AppFrame
+      <ChromeRouter
         viewer={
           viewer === null
             ? { signedIn: false }
@@ -157,11 +77,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           third of a wide screen, blank, on twenty-three routes. A rebuilt screen passes its own
           `aside` built from what it read; everything else gets this one.
         */
-        aside={<Discovery />}
+        discovery={<Discovery />}
       >
-        {/* A gutter for pages written before the column existed. See `.w-legacy`. */}
-        <div className="w-legacy">{children}</div>
-      </AppFrame>
+        {children}
+      </ChromeRouter>
     </>
   );
 }

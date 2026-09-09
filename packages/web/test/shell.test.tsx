@@ -49,7 +49,7 @@ const { SiteHeader } = await import('../components/shell/SiteHeader');
 const { Breadcrumbs } = await import('../components/shell/Breadcrumbs');
 const { MobileBar } = await import('../components/shell/MobileBar');
 const { PageTabs } = await import('../components/shell/PageTabs');
-const { AppShell, carriesItsOwnFrame } = await import('../components/shell/AppShell');
+const { AppShell, carriesItsOwnFrame, isPublicPage } = await import('../components/shell/AppShell');
 const { DESTINATIONS } = await import('../lib/site-map');
 
 afterEach(() => {
@@ -233,9 +233,65 @@ describe('every address the shell hard-codes exists', () => {
  * the second one is gone — not merely preferred, not merely default: never rendered.
  */
 describe('the frame', () => {
+  /*
+    A route that does NOT build its own frame, so the shell wraps it.
+
+    The chrome is chosen from `usePathname()` now, not from a request header, because a root layout
+    is rendered once and reused for every client-side navigation beneath it — so a choice made from
+    a header was a choice made on the first paint of the session and never revisited. Measured
+    before the change: clicking "Explore" from `/security` left the public header on screen with the
+    application rail drawn inside it, two `<main>` elements and two footers; clicking "Security"
+    from `/explore` produced a page with no chrome at all.
+
+    This block's pathname therefore has to be a wrapped one. The file's default is `/explore`, which
+    builds its own.
+  */
+  const wrapped = '/earnings';
   async function shell() {
+    pathname = wrapped;
     return render(await AppShell({ children: <p>page</p> }));
   }
+
+  afterEach(() => { pathname = '/explore'; });
+
+  it('follows the pathname, so a client-side navigation changes the chrome', async () => {
+    /*
+      The defect this whole indirection exists for. Same layout render, three pathnames, three
+      answers — because the answer is computed where `usePathname()` can change it.
+    */
+    session = { ok: true, value: null };
+    const frame = await AppShell({ children: <p>page</p> });
+
+    pathname = '/earnings';
+    const wrappedRender = render(frame);
+    expect(wrappedRender.container.querySelector('nav.w-rail')).not.toBeNull();
+    expect(wrappedRender.container.querySelector('.w-land__bar')).toBeNull();
+    cleanup();
+
+    pathname = '/security';
+    const publicRender = render(frame);
+    expect(publicRender.container.querySelector('.w-land__bar')).not.toBeNull();
+    expect(publicRender.container.querySelector('nav.w-rail')).toBeNull();
+    cleanup();
+
+    pathname = '/feed';
+    const ownRender = render(frame);
+    expect(ownRender.container.querySelector('nav.w-rail')).toBeNull();
+    expect(ownRender.container.querySelector('.w-land__bar')).toBeNull();
+    expect(ownRender.getByText('page')).toBeTruthy();
+  });
+
+  it('reads a trailing slash as the same route', async () => {
+    /*
+      `/vault` and `/vault/` are one route and were not one string, so a trailing slash fell through
+      every exact match and got the wrapped frame ON TOP of the frame `/vault` builds for itself.
+      Two rails, from a slash.
+    */
+    expect(carriesItsOwnFrame('/vault/')).toBe(true);
+    expect(carriesItsOwnFrame('/feed/')).toBe(true);
+    expect(isPublicPage('/security/')).toBe(true);
+    expect(isPublicPage('/legal/terms/')).toBe(true);
+  });
 
   it('wraps a route that does not build its own', async () => {
     session = { ok: true, value: null };
