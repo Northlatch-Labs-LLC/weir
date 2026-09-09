@@ -54,8 +54,18 @@ const FRAMED_EXACT: readonly string[] = [
 /* Handle and post pages: every path beneath these roots is a framed screen. */
 const FRAMED_ROOTS: readonly string[] = ['/c/', '/p/'];
 
+/*
+  Not part of the product, and therefore not in the product's frame.
+
+  `/lab` is the development tool for changing the design. Drawing the application's own rail around
+  it would put the thing being edited inside the thing editing it, and every colour change would
+  recolour the tool.
+*/
+const OUTSIDE: readonly string[] = ['/lab'];
+
 export function carriesItsOwnFrame(pathname: string | null): boolean {
   if (pathname === null) return false;
+  if (OUTSIDE.some((root) => pathname === root || pathname.startsWith(`${root}/`))) return true;
   if (FRAMED_EXACT.includes(pathname)) return true;
   return FRAMED_ROOTS.some((root) => pathname.startsWith(root));
 }
