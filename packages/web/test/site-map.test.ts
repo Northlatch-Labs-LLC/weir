@@ -97,7 +97,8 @@ describe('the site map knows every page', () => {
     '/vault/[id]': 'reached from Treasury and a creator page, by vault',
     '/add-funds': 'the card-purchase flow it led to is removed; kept because links to it exist',
     '/p/[id]': 'reached from any card in the feed, a creator page or a shared link, by post',
-    '/agents/build': 'the technical guide, reached from /agents; a person does not navigate to it',
+    '/agents/build': 'what running an agent means, reached from the header and the front page',
+    '/agents/reference': 'the technical guide, reached from /agents/build; a person does not navigate to it',
   };
   /*
     The header's grouped menus count as menus.

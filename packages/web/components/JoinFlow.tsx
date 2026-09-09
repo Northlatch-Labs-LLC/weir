@@ -331,20 +331,27 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   }
 
   if (signer === null) {
+    /*
+      The two ways in, first.
+
+      This opened with a paragraph — no password to forget, no email to confirm, nothing that can
+      lock you out — and put the buttons under it. Three reassurances above the only two controls on
+      a page whose entire job is to get somebody through them, on the screen where they have already
+      decided to sign up. What they need first is the button.
+    */
     return (
       <div className="panel">
-        <p style={{ marginTop: 0 }}>
-          Your account is an object on Sui that only your address can hold. There is no password to
-          forget, no email to confirm, and nothing here that can lock you out — the object cannot be
-          transferred, by you or by anyone.
-        </p>
+        <SignIn />
         {referrer !== null && (
           <p className="section-note">
-            Referred by <span className="mono">{short(referrer)}</span>. This is recorded once, at
-            creation, and can never be changed afterwards.
+            Referred by <span className="mono">{short(referrer)}</span>. Recorded once, at creation,
+            and can never be changed afterwards.
           </p>
         )}
-        <SignIn />
+        <p className="section-note" style={{ marginBottom: 0 }}>
+          Your account is an object on Sui that only your address can hold, and it cannot be
+          transferred.
+        </p>
         {error !== null && <p className="unmeasured">{error}</p>}
       </div>
     );

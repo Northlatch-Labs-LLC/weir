@@ -75,6 +75,7 @@ const PUBLIC_EXACT: readonly string[] = [
   '/join',
   '/add-funds',
   '/agents/build',
+  '/agents/reference',
   '/agents/declare',
 ];
 const PUBLIC_ROOTS: readonly string[] = ['/legal/'];

@@ -14,6 +14,8 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 let signer: { address: string; kind: string; label: string; signTransaction: ReturnType<typeof vi.fn> } | null = null;
 vi.mock('@/components/SignerProvider', () => ({ useSigner: () => ({ signer }) }));
@@ -273,5 +275,31 @@ describe('the quote belongs to the address it was simulated for', () => {
     await waitFor(() => expect(sign).toHaveBeenCalledWith('AAAAquote'));
     const submitted = calls.find((call) => call.url.includes('/api/checkout/submit'));
     expect(submitted?.body).toEqual({ bytes: 'AAAAquote', signature: 'sig' });
+  });
+});
+
+/**
+ * The signup page always offers a way to sign up.
+ *
+ * # The defect
+ *
+ * With Google unavailable on the deployment and no wallet extension in the browser, `SignIn`
+ * rendered one paragraph and no control — so `/join`, whose entire job is to get somebody an
+ * account, had no button and no field anywhere on it. Measured at 1440px: zero buttons, zero
+ * inputs. A visitor on a browser without a Sui wallet meets that, and every visitor meets it if the
+ * zkLogin session read fails after a deploy.
+ */
+describe('the way in is never absent', () => {
+  it('offers wallets to install when neither path is available', () => {
+    const source = readFileSync(resolve(process.cwd(), 'components/SignIn.tsx'), 'utf8');
+    /*
+      Read from the source rather than rendered: the branch depends on a wallet registry and a
+      session fetch, and what is being defended is that the branch produces CONTROLS rather than
+      prose. The rendered assertions for the other branches are in `wallet-accounts.test.tsx`.
+    */
+    const branch = source.slice(source.indexOf('wallets.length === 0 && unusableWallets.length === 0'));
+    expect(branch).toContain('slush.app');
+    expect(branch).toContain('phantom.app');
+    expect(branch).toMatch(/className="btn"/);
   });
 });

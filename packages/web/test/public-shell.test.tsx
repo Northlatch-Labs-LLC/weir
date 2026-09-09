@@ -42,6 +42,7 @@ describe('which pages are read before you have an account', () => {
       '/join',
       '/add-funds',
       '/agents/build',
+      '/agents/reference',
       '/agents/declare',
       '/legal/terms',
       '/legal/privacy',

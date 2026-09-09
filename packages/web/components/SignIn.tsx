@@ -206,7 +206,7 @@ export function SignIn({
       */}
       {!compact && session?.available === true && (
         <p className="signin-note">
-          Either way the address is yours. We can see it; we <strong>cannot</strong> spend from it.
+          Either way, the address is <strong>yours</strong> — the keys are held by you, not here.
         </p>
       )}
 
@@ -251,8 +251,29 @@ export function SignIn({
               {session?.available === true ? 'or use a wallet' : 'use a wallet'}
             </span>
             <p className="signin-note" style={{ margin: 0 }}>
-              No Sui wallet in this browser. On a phone, open weir.social inside your wallet app's own browser — Slush and Phantom both have one. On a computer, install one and reload.
+              No Sui wallet in this browser. On a phone, open weir.social inside your wallet app&rsquo;s
+              own browser — Slush and Phantom both have one. On a computer, install one and reload.
             </p>
+            {/*
+              Two real links, because a sentence is not a control.
+
+              With Google unavailable on the deployment and no wallet extension in the browser, this
+              component rendered a paragraph and nothing else — so `/join`, the page whose entire
+              job is to get somebody an account, had no button and no field anywhere on it. That is
+              not a hypothetical: a visitor on a browser with no Sui wallet meets it, and every
+              visitor meets it if the zkLogin session read fails after a deploy.
+
+              The wallets open in a new tab because the reader is mid-signup and closing this page
+              loses the handle they were about to claim.
+            */}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+              <a className="btn" href="https://slush.app" target="_blank" rel="noreferrer noopener">
+                Get Slush
+              </a>
+              <a className="btn ghost" href="https://phantom.app/download" target="_blank" rel="noreferrer noopener">
+                Get Phantom
+              </a>
+            </div>
           </div>
         )
       )}

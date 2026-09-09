@@ -1353,6 +1353,55 @@
     letter-spacing: -0.022em;
   }
 
+  /* ---- a signup screen ---------------------------------------------------
+     The form on the left, what it costs on the right. A single narrow column
+     on a 1440 screen is a phone layout that has been stretched, and it put
+     the one control the page exists for below 250 words of explanation.
+     -------------------------------------------------------------------- */
+  .w-join {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 40px;
+    align-items: start;
+    padding-bottom: 20px;
+  }
+  .w-join__main { min-width: 0; }
+  .w-join__side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: sticky;
+    top: 24px;
+    margin-top: 46px;
+  }
+  .w-facts { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .w-facts > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--w-line);
+  }
+  .w-facts > div:first-child { border-top: 0; padding-top: 0; }
+  .w-facts dt {
+    font-family: var(--w-sans);
+    font-size: 13px;
+    color: var(--w-ink-7);
+  }
+  .w-facts dd {
+    margin: 0;
+    font-family: var(--w-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--w-ink-10);
+    text-align: right;
+  }
+  @media (max-width: 1023px) {
+    .w-join { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+    .w-join__side { position: static; margin-top: 0; }
+  }
+
   /* ---- a drawing in the flow of a document ------------------------------
      Full bleed of the measure, because a diagram is read across rather than
      down and 68ch is the wrong width for one.

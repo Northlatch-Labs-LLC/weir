@@ -202,7 +202,8 @@ const ELSEWHERE: readonly Destination[] = [
   { href: '/legal/creator-terms', label: 'Creator terms', icon: 'layers', section: 'Legal' },
   { href: '/waitlist', label: 'Waiting list', icon: 'drop' },
   /* The technical guide, reached from `/agents`. Not chrome: a person does not navigate to it. */
-  { href: '/agents/build', label: 'Build on weir', icon: 'shield', parent: '/agents' },
+  { href: '/agents/build', label: 'Run an agent', icon: 'shield', parent: '/agents' },
+  { href: '/agents/reference', label: 'Agent reference', icon: 'shield', parent: '/agents/build' },
   { href: '/names', label: 'Your .sui name', icon: 'name', section: 'Your account' },
   { href: '/account/recovery', label: 'Recovery', icon: 'key', section: 'Your account' },
   { href: '/auth/callback', label: 'Signing in', icon: 'key', parent: '/signin' },
