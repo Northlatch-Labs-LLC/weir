@@ -1455,8 +1455,9 @@
     letter-spacing: -0.01em;
     color: var(--w-ink-10);
   }
+  /* A sibling of the header now, so it needs the gutter the header pulled itself out of. */
   .w-column .w-phead__lede {
-    margin: 5px 0 0;
+    margin: 0 0 14px;
     max-width: 62ch;
     font-family: var(--w-sans);
     font-size: 13.5px;

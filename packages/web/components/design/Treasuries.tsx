@@ -34,6 +34,7 @@ export function DesignTreasuries({
   myHandle,
   treasuries,
   treasuryCols,
+  treasuryNote,
   ladder,
   epochLabel,
   capturePct,
@@ -42,6 +43,8 @@ export function DesignTreasuries({
   myHandle: string | null;
   treasuries: readonly DesignTreasuryRow[];
   treasuryCols: readonly string[];
+  /** Why the table's figures are dashes, when they are. Stated once here rather than per cell. */
+  treasuryNote?: string | undefined;
   ladder: readonly DesignLadderRung[];
   epochLabel: string;
   /** `LADDER_DEPTH / RUNGS`, as a percentage. Derived from the contract, never typed. */
@@ -123,6 +126,19 @@ export function DesignTreasuries({
             ) : (
             <div data-reveal style={{ overflowX: 'auto', border: '1px solid var(--line,#1c3d47)', borderRadius: '10px', background: 'var(--panel,#0b2530)' }}>
               <table className="weir-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9375rem' }}>
+                {/*
+                  Said once, for the whole table.
+
+                  The pool index is one read. Printed per cell, its failure filled three columns on
+                  every row — eighteen identical red italics on the page whose job is to show a
+                  stranger that money moves here. A caption is where a table says what it could not
+                  fill in, and the cells carry a dash.
+                */}
+                {treasuryNote === undefined || treasuryNote === '' ? null : (
+                  <caption style={{ captionSide: 'top', textAlign: 'left', padding: '0 1.25rem 0.75rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--alert,#f2a29b)' }}>
+                    {treasuryNote}
+                  </caption>
+                )}
                 <thead>
                   <tr>
                     {(treasuryCols ?? []).map((col, i) => (<Fragment key={i}>

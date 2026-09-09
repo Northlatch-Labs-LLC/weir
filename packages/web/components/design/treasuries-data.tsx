@@ -63,7 +63,15 @@ export async function TreasuriesData({
     return {
       name: `rung ${index + 1}`,
       pct: `${Math.round(((index + 1) / rungCount) * 100)}%`,
-      state: position === null ? 'not measured' : unlocked ? 'unlocked' : 'maturing',
+      /*
+        No state, rather than "not measured" seven times.
+
+        The epoch is one read for the whole ladder, and `epochLabel` below already says it could not
+        be taken. Repeating it under every rung printed the same three words seven times down a
+        column. The rung keeps its alert colour, which is what says the position is unknown; nothing
+        here claims a rung is liquid.
+      */
+      state: position === null ? '' : unlocked ? 'unlocked' : 'maturing',
       bg: position === null ? 'rgba(var(--alert-rgb,242,162,155),0.5)' : unlocked ? CREST : 'rgba(var(--line-rgb,28,61,71),0.9)',
       color: position === null ? ALERT : unlocked ? CREST : DIM,
     };
@@ -72,7 +80,7 @@ export async function TreasuriesData({
   const unlockedNow = position === null ? null : position + 1;
   const epochLabel =
     epoch === null
-      ? 'epoch not measured: the chain could not be read, so no rung is shown as unlocked'
+      ? 'The epoch could not be read, so no rung is shown as unlocked.'
       : `epoch ${epoch.toString()} · ${unlockedNow} of ${rungCount} rungs unlocked now`;
 
   /*
@@ -103,8 +111,16 @@ export async function TreasuriesData({
           displayName: profile.displayName,
           initials: profile.handle.slice(0, 2),
           href: `/c/${profile.handle}`,
+          /*
+            An em dash, not "not measured", when the whole index failed.
+
+            `indexed` is one read for the entire page. Printed per cell it became eighteen red
+            italics on six rows — the same sentence, eighteen times, on the page that is supposed to
+            show a stranger that money is moving here. The failure is stated once, above the table,
+            in `poolNote`; a dash in the cell means "not shown", which is what it is.
+          */
           pooled: !indexed
-            ? 'not measured'
+            ? '—'
             : pool === undefined
               ? 'no pool open'
               : `${formatUnits(pool.totalPrincipalMist, SUI_DECIMALS)} SUI`,
@@ -112,7 +128,7 @@ export async function TreasuriesData({
           pooledStyle: !indexed ? 'italic' : 'normal',
           pooledColor: !indexed ? ALERT : pool === undefined ? DIM : INK,
           yieldShare: !indexed
-            ? 'not measured'
+            ? '—'
             : pool === undefined
               ? 'none'
               : pool.rebateBps === 0n
@@ -121,7 +137,7 @@ export async function TreasuriesData({
           yieldFont: !indexed || pool === undefined ? BODY : MONO,
           yieldColor: !indexed ? ALERT : pool === undefined ? DIM : INK,
           validator: !indexed
-            ? 'not measured'
+            ? '—'
             : pool === undefined
               ? 'none'
               : `${pool.validator.slice(0, 6)}…${pool.validator.slice(-4)}`,
@@ -143,6 +159,11 @@ export async function TreasuriesData({
       signedIn={signedIn}
       myHandle={myHandle}
       treasuries={treasuries}
+      treasuryNote={
+        pools === null
+          ? 'The pool index could not be read just now, so the figures below are not shown rather than estimated.'
+          : ''
+      }
       treasuryCols={treasuryCols}
       ladder={ladder}
       epochLabel={epochLabel}

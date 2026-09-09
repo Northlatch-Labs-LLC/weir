@@ -64,12 +64,26 @@ export async function ChestsData({
     (value) => value,
     () => null,
   );
-  const potsWhy =
-    potsReading.ok
-      ? potsReading.value.truncated
-        ? 'more settled payments than one page can total'
-        : ''
-      : `${potsReading.failure.kind}: ${potsReading.failure.source}`;
+  /*
+    Why the totals are absent, in words, once.
+
+    This was `${kind}: ${source}` — "denied: PaymentSettled events" — and it was printed under
+    "not measured" on every card, six times down the page, at somebody who came to give a creator
+    money. That is an internal cause built for a log, and the reader cannot act on it.
+
+    The two cases a reader can tell apart are stated instead: the walk hit its ceiling, or the log
+    could not be read. The cause is logged for whoever runs this.
+  */
+  if (!potsReading.ok) {
+    console.warn(
+      `chest totals unavailable: ${potsReading.failure.kind} — ${potsReading.failure.source}`,
+    );
+  }
+  const potsWhy = potsReading.ok
+    ? potsReading.value.truncated
+      ? 'more settled payments than one page can total'
+      : ''
+    : '';
   /* A truncated walk holds subtotals. They are not totals and are not shown as any. */
   const potsUsable = pots !== null && !pots.truncated;
 
@@ -111,8 +125,10 @@ export async function ChestsData({
       potColor: 'var(--ink,#dce9e6)',
       potNote: note,
     });
+    /* An empty `pot` renders nothing at all — see `Chests`. `why` is shown only when there is a
+       reader-facing one, which today is the truncated walk. */
     const unmeasured = (why: string) => ({
-      pot: 'not measured',
+      pot: '',
       potFont: BODY,
       potSize: '1.0625rem',
       potStyle: 'italic',
@@ -131,7 +147,15 @@ export async function ChestsData({
         potNote: 'this creator has not opened a vault',
       };
     }
-    if (!potsUsable) return unmeasured(potsWhy || 'the payment log could not be read');
+    /*
+      No figure at all, rather than "not measured" on every card.
+
+      The rule is that a failed read is never a value, and it is not one here either: the line above
+      the list says the totals could not be read, once, for the whole page. What this drops is the
+      repetition — six cards each carrying the same red italic and the same explanation, on the one
+      screen whose job is to make giving somebody money feel like a thing that works.
+    */
+    if (!potsUsable) return unmeasured(potsWhy);
 
     const decimals = profile.coinType == null ? null : (decimalsByCoin.get(profile.coinType) ?? null);
     const symbol = profile.coinType?.split('::').pop() ?? '';

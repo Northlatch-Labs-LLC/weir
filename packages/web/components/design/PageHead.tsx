@@ -74,14 +74,28 @@ export function PageHead({
     `.w-column .w-phead` and `.w-doc .w-phead` in `packages/ui` decide what that looks like. That is
     also what fixes the inversion these pages had: a 20px h1 above 48px section headings.
   */
+  /*
+    The lede is a sibling of the header, not a child of it.
+
+    In the column the header is `position: sticky`, so everything inside it is pinned to the top of
+    the screen for the whole page. `/chests` has a ten-line lede: its sticky bar measured 247px —
+    a quarter of a 950px viewport, held there while the reader scrolled past everything under it.
+    `/treasury` measured 164px against `/earnings`' 101px, for the same reason.
+
+    Out here the title bar stays the height of a title bar, and the lede scrolls away under it like
+    the rest of the page. In the document shell nothing moves: both were block-level, one after the
+    other, and both selectors are descendant selectors that still match.
+  */
   return (
-    <header className="w-phead">
-      <h1 id="w-title" tabIndex={-1}>
-        {heading}
-      </h1>
+    <>
+      <header className="w-phead">
+        <h1 id="w-title" tabIndex={-1}>
+          {heading}
+        </h1>
+        {actions === undefined ? null : <div className="w-phead__actions">{actions}</div>}
+      </header>
       {hasLede ? <p className="w-phead__lede">{lede}</p> : null}
-      {actions === undefined ? null : <div className="w-phead__actions">{actions}</div>}
-    </header>
+    </>
   );
 }
 

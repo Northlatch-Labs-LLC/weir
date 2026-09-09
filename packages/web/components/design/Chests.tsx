@@ -156,9 +156,23 @@ export function DesignChests({
                     <span style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.06em', padding: '0.15rem 0.55rem', borderRadius: '99px', border: `1px solid ${c.tagBorder}`, color: `${c.tagColor}`, whiteSpace: 'nowrap' }}>{c.tag}</span>
                   </div>
                   <p style={{ margin: '0.75rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', maxWidth: '62ch', textWrap: 'pretty' }}>{c.body}</p>
-                  <p style={{ margin: '1.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>In the chest</p>
-                  <p style={{ margin: '0.25rem 0 0', fontFamily: `${c.potFont}`, fontSize: `${c.potSize}`, fontWeight: '500', fontStyle: `${c.potStyle}`, color: `${c.potColor}`, fontVariantNumeric: 'tabular-nums' }}>{c.pot}</p>
-                  <p style={{ margin: '0.2rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.75rem', letterSpacing: '0.04em', color: 'var(--dim,#a3bcb8)' }}>{c.potNote}</p>
+                  {/*
+                    No figure, no label, no note.
+
+                    An empty `pot` is the page saying the totals could not be read — which it says
+                    once, above the list. Drawing "IN THE CHEST / not measured / denied: …" on every
+                    card said it six times in red on the one screen whose job is to make giving
+                    somebody money feel like a thing that works.
+                  */}
+                  {c.pot === '' ? null : (
+                    <>
+                      <p style={{ margin: '1.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>In the chest</p>
+                      <p style={{ margin: '0.25rem 0 0', fontFamily: `${c.potFont}`, fontSize: `${c.potSize}`, fontWeight: '500', fontStyle: `${c.potStyle}`, color: `${c.potColor}`, fontVariantNumeric: 'tabular-nums' }}>{c.pot}</p>
+                      {c.potNote === '' ? null : (
+                        <p style={{ margin: '0.2rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.75rem', letterSpacing: '0.04em', color: 'var(--dim,#a3bcb8)' }}>{c.potNote}</p>
+                      )}
+                    </>
+                  )}
                   <p style={{ margin: '0.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{c.split}</p>
                   <div style={{ marginTop: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
                     {(c.amounts ?? []).map((amt, i) => (<Fragment key={i}>
