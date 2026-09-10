@@ -1,6 +1,6 @@
 {
   "name": "@projectx-social/daemon",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -30,9 +30,9 @@
   },
   "dependencies": {
     "@mysten/sui": "2.30.0",
-    "@projectx-social/policy": "workspace:*",
-    "@projectx-social/sdk": "workspace:*",
-    "@projectx-social/signer": "workspace:*",
+    "@projectx-social/policy": "1.0.2",
+    "@projectx-social/sdk": "1.0.2",
+    "@projectx-social/signer": "1.0.2",
     "pg": "8.23.0"
   },
   "devDependencies": {
