@@ -14,10 +14,11 @@
     "seal:migrate": "tsx --tsconfig tsconfig.scripts.json --env-file=.env.local scripts/seal-migrate-keys.ts"
   },
   "dependencies": {
-    "@mysten/dapp-kit": "1.1.17",
-    "@mysten/seal": "1.4.6",
+    "@mysten/dapp-kit-core": "1.6.24",
+    "@mysten/dapp-kit-react": "2.1.26",
+    "@mysten/seal": "1.4.9",
     "@mysten/sui": "2.30.0",
-    "@mysten/suins": "^1.2.18",
+    "@mysten/suins": "^2.0.5",
     "@mysten/wallet-standard": "0.21.23",
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
@@ -26,20 +27,20 @@
     "@projectx-social/ui": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "@types/pg": "8.23.1",
-    "jose": "^6.2.10",
-    "next": "16.3.3",
+    "jose": "^6.2.12",
+    "next": "16.3.4",
     "pg": "8.23.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "server-only": "0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.3",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
-    "happy-dom": "^20.11.12",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "happy-dom": "^20.14.3",
     "tailwindcss": "^4"
   },
   "license": "UNLICENSED"

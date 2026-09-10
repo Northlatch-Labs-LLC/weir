@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import AutoImport from "unplugin-auto-import/vite";
+import tailwindcss from "@tailwindcss/vite";
 // import { readdyJsxRuntimeProxyPlugin } from "./vite.jsx-runtime-proxy";
 
 const base = process.env.BASE_PATH || "/";
@@ -19,6 +20,14 @@ export default defineConfig({
   plugins: [
     // ...proxyPlugins,
     react(),
+    /*
+      Tailwind 4 compiles through Vite rather than through PostCSS.
+
+      Version 3 ran as a PostCSS plugin, which is why `postcss.config.ts` and `autoprefixer` existed
+      here; version 4 has its own engine and prefixes what it emits, so both are gone rather than
+      kept as dead configuration.
+    */
+    tailwindcss(),
     AutoImport({
       imports: [
         {

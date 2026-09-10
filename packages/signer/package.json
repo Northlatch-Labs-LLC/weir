@@ -24,9 +24,9 @@
   },
   "devDependencyComment": "@mysten/seal is a DEV dependency and must stay one. No file under src/ imports it, and none should: this package produces signatures and Seal reads content. It is here for test/custody-compat.test.ts alone, which answers by execution whether Seal's SessionKey accepts a multisig or secp256r1 signer — because if it does not, MultiSigSigner cannot be the custody floor and a multisig agent could pay for content it then could not read. The version is pinned to the one the rest of the workspace runs; a test that answers that question against a different version answers nothing.",
   "devDependencies": {
-    "@mysten/seal": "1.4.6",
+    "@mysten/seal": "1.4.9",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   },
   "files": [
     "dist",

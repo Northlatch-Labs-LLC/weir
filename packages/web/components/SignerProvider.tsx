@@ -3,40 +3,39 @@
 /**
  * Who is signing, and how they came to be signing.
  *
- * # What changed, and why it is worth the churn
+ * # Why this file moved twice
  *
- * The wallet half of this file used to be written by hand: `getWallets()`, a `register` /
- * `unregister` subscription, `standard:connect` called directly, a `standard:events` `change`
- * listener, a remembered-wallet record in `localStorage` and a silent reconnect on load. Nine
- * hundred lines, of which roughly half was a re-implementation of `@mysten/dapp-kit` — Mysten's own
- * React layer, which had never been installed in this repository.
+ * The wallet half was written by hand once — `getWallets()`, a register/unregister subscription,
+ * `standard:connect` called directly, a `standard:events` listener, a remembered-wallet record and
+ * a silent reconnect. Nine hundred lines, half of them a re-implementation of somebody else's
+ * library. That went to `@mysten/dapp-kit`.
  *
- * Discovery, connecting, disconnecting, autoconnect, account switching and the extension's own
- * change events are now dapp-kit's. They are not this product's problem and never were.
+ * `@mysten/dapp-kit` is deprecated. Not a version behind — ended. It speaks the JSON-RPC API that
+ * Sui has retired, and the rest of this workspace has been on `@mysten/sui` 2.x, which speaks gRPC,
+ * the whole time. So the wallet layer talked to the chain over a protocol nothing else here uses,
+ * and it was never going to get another release.
+ *
+ * This is `@mysten/dapp-kit-react` on `@mysten/dapp-kit-core`, which is the same library after the
+ * rewrite: one kit object created outside React instead of three nested providers, nanostores
+ * instead of react-query, and a client built from `SuiGrpcClient` — the same transport `lib/chain`
+ * already uses to read this chain.
  *
  * # What stays ours, and has to
  *
- * dapp-kit has no concept of the two things this application actually depends on:
+ * The kit has no concept of the two things this application depends on:
  *
  *   - **zkLogin as a peer of a browser wallet.** A Google sign-in and an extension produce the same
- *     {@link ActiveSigner}, and every consumer is written against that one shape. dapp-kit knows
- *     only about wallets.
+ *     {@link ActiveSigner}, and every consumer is written against that one shape.
  *   - **A proved read session.** Connecting is the extension sharing an address. It grants nothing
  *     here. What grants anything is a signature over the read-content statement, which mints a
- *     server session — see `SessionBridge`. dapp-kit has no opinion on that, correctly.
+ *     server session — see `SessionBridge`. The kit has no opinion on that, correctly.
  *
  * # The contract is unchanged on purpose
  *
  * Thirty-three components call `useSigner()`. {@link SignerContextValue} keeps every member it had,
- * with the same meaning, so this is one file changing rather than thirty-four.
- *
- * # dapp-kit's client is not this application's client
- *
- * `SuiClientProvider` exists because `WalletProvider` needs it. It builds a JSON-RPC client, and
- * this deployment reads the chain over gRPC — see `lib/chain`. Nothing here reads chain state
- * through dapp-kit, and nothing should start: the network named below is for the wallet layer's own
- * bookkeeping, and it is passed in from the server rather than assumed, so a deployment pointed at
- * one network can never hand a wallet a chain identifier belonging to another.
+ * with the same meaning. The wallet and account types are the kit's `UiWallet` and `UiWalletAccount`
+ * rather than the raw standard's — the fields those components read (`name`, `icon`, `address`,
+ * `label`) are the same on both, which is why this is one file changing rather than thirty-four.
  */
 
 import {
@@ -48,19 +47,21 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  SuiClientProvider,
-  WalletProvider,
-  useAccounts,
-  useConnectWallet,
+  DAppKitProvider,
   useCurrentAccount,
   useCurrentWallet,
-  useDisconnectWallet,
-  useSwitchAccount,
+  useDAppKit,
   useWallets,
-} from '@mysten/dapp-kit';
-import type { Wallet, WalletAccount } from '@mysten/wallet-standard';
+} from '@mysten/dapp-kit-react';
+import {
+  createDAppKit,
+  CurrentAccountSigner,
+  type DAppKit,
+  type UiWallet,
+  type UiWalletAccount,
+} from '@mysten/dapp-kit-core';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   generateNonce,
@@ -81,7 +82,6 @@ import {
   walletSigner,
   zkLoginSignerAdapter,
   type ActiveSigner,
-  type SuiChain,
 } from '@/lib/signer';
 
 interface SessionInfo {
@@ -112,22 +112,22 @@ export interface UnusableWallet {
 
 /** A connected wallet holding more than one address, waiting to be told which. */
 export interface AccountChoice {
-  wallet: Wallet;
-  accounts: readonly WalletAccount[];
+  wallet: UiWallet;
+  accounts: readonly UiWalletAccount[];
 }
 
 interface SignerContextValue {
   signer: ActiveSigner | null;
-  wallets: Wallet[];
+  wallets: UiWallet[];
   unusableWallets: UnusableWallet[];
   session: SessionInfo | null;
   accountChoice: AccountChoice | null;
-  walletAccounts: readonly WalletAccount[] | null;
-  chooseAccount: (account: WalletAccount) => void;
+  walletAccounts: readonly UiWalletAccount[] | null;
+  chooseAccount: (account: UiWalletAccount) => void;
   cancelAccountChoice: () => void;
   reopenAccountChoice: () => void;
   reauthorizeWallet: () => Promise<void>;
-  connectWallet: (wallet: Wallet) => Promise<void>;
+  connectWallet: (wallet: UiWallet) => Promise<void>;
   signInWithGoogle: (returnTo: string) => Promise<void>;
   signOut: () => void;
   exportRecovery: () => Promise<RecoveryDetails | null>;
@@ -169,20 +169,6 @@ function isComplete(session: ActiveSession | PendingSession): session is ActiveS
   return 'address' in session && 'addressSeed' in session;
 }
 
-/**
- * One query client for the life of the document.
- *
- * Built lazily and kept, rather than constructed in render: a new client on every render throws
- * away every cache dapp-kit keeps and re-runs the queries behind autoconnect on each pass.
- */
-let queryClient: QueryClient | null = null;
-function sharedQueryClient(): QueryClient {
-  queryClient ??= new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
-  });
-  return queryClient;
-}
-
 export function SignerProvider({
   children,
   network,
@@ -192,86 +178,84 @@ export function SignerProvider({
   /**
    * The network this deployment is pointed at, read from configuration on the server.
    *
-   * `null` when the configuration could not be read. A wallet is asked to sign for `sui:<network>`,
-   * so an unknown network means no wallet signer is built at all and connecting says why. It does
-   * not mean a plausible guess: a signature requested against a chain nobody chose is the failure
-   * this refuses to have.
+   * `null` when the configuration could not be read. A wallet signs against the kit's current
+   * network, so an unknown network means no wallet signer is built at all and connecting says why.
+   * It does not mean a plausible guess: a signature requested against a chain nobody chose is the
+   * failure this refuses to have.
    */
   network: string | null;
   /**
-   * The node URL this deployment is configured with.
+   * The gRPC endpoint this deployment is configured with, handed to the kit's client.
    *
-   * Handed to dapp-kit only because `SuiClientProvider` will not construct without one. Nothing in
-   * this application queries through that client — chain reads go through `lib/chain` — so this is
-   * the configured endpoint rather than a public node nobody chose. If dapp-kit ever does call it,
-   * it calls the node this deployment already uses, and fails loudly if that node cannot answer.
+   * The same transport `lib/chain` reads through. Under the previous kit this was a JSON-RPC URL
+   * for a client nothing in this application used; now it is the deployment's own node, and the
+   * kit reads the chain the same way the rest of the product does.
    */
   rpcUrl: string | null;
 }) {
   /*
-    One entry, named for the network this deployment is on.
+    One kit for the life of the document.
 
-    `SuiClientProvider` will not construct without a URL, so the configured endpoint is given
-    rather than a public node nobody chose. Where the configuration could not be read, the entry
-    points at a closed port: dapp-kit gets its object, and anything that tried to query through it
-    would fail loudly instead of silently reaching a network this deployment is not on.
+    `createDAppKit` builds stores, a client and a wallet registry. Calling it in render would throw
+    all of that away on every pass — including the connection autoconnect is in the middle of
+    restoring. `useState` with an initialiser runs it exactly once per mount, and this provider
+    mounts once, in the root layout.
+
+    Where the configuration could not be read, the kit is still built — the reader can still see
+    which wallets they have — but pointed at a closed port and named `mainnet` only so the object
+    exists. Nothing signs in that state: `walletActiveSigner` below requires a real `network`.
   */
-  const networks = {
-    [network ?? 'mainnet']: {
-      url: rpcUrl ?? 'http://127.0.0.1:0',
-      network: (network ?? 'mainnet') as 'mainnet',
-    },
-  };
+  const [kit] = useState(() =>
+    createDAppKit({
+      networks: [(network ?? 'mainnet') as 'mainnet'],
+      createClient: (forNetwork) =>
+        new SuiGrpcClient({ network: forNetwork, baseUrl: rpcUrl ?? 'http://127.0.0.1:0' }),
+      /* Carried over so a reader who was connected before this change still is. */
+      storageKey: 'projectx.wallet',
+      /*
+        The kit offers to inject Mysten's hosted Slush wallet alongside the reader's extensions.
+        It is off because adding a wallet provider to this product is a decision, not a default —
+        turning it on is deleting this line.
+      */
+      slushWalletConfig: null,
+    }),
+  );
 
   return (
-    <QueryClientProvider client={sharedQueryClient()}>
-      {/*
-        dapp-kit's own client, for dapp-kit's own bookkeeping. Nothing in this application reads
-        the chain through it — see the note at the top of this file — so its network falling back
-        here changes nothing anybody signs. What must never be guessed is the chain identifier
-        handed to a wallet, and that is built below from `network` alone.
-      */}
-      <SuiClientProvider
-        networks={networks}
-        network={network ?? 'mainnet'}
-      >
-        <WalletProvider
-          autoConnect
-          storageKey="projectx.wallet"
-          /*
-            The same requirement the hand-written layer enforced: a wallet that cannot sign a
-            personal message or a transaction cannot be used here, and offering it would produce a
-            connect that succeeds and a sign-in that cannot.
-          */
-          walletFilter={isUsableWallet}
-          /*
-            dapp-kit ships its own button and modal, styled with vanilla-extract. This application
-            has its own, so the theme is turned off rather than loaded and overridden — that also
-            keeps `@mysten/dapp-kit/dist/index.css` out of the bundle entirely.
-          */
-          theme={null}
-        >
-          <SignerBridge network={network}>{children}</SignerBridge>
-        </WalletProvider>
-      </SuiClientProvider>
-    </QueryClientProvider>
+    <DAppKitProvider dAppKit={kit}>
+      <SignerBridge network={network}>{children}</SignerBridge>
+    </DAppKitProvider>
   );
 }
 
 /**
- * The product's own signer, assembled from dapp-kit's wallet state and this application's zkLogin.
+ * The product's own signer, assembled from the kit's wallet state and this application's zkLogin.
  *
- * Everything that follows is either zkLogin, which dapp-kit does not know about, or a translation
- * from dapp-kit's shape into the {@link ActiveSigner} that thirty-three components already read.
+ * Everything that follows is either zkLogin, which the kit does not know about, or a translation
+ * from the kit's shape into the {@link ActiveSigner} that thirty-three components already read.
  */
 function SignerBridge({ children, network }: { children: ReactNode; network: string | null }) {
-  const wallets = useWallets();
+  const kit = useDAppKit();
+  const registered = useWallets();
   const currentAccount = useCurrentAccount();
-  const { currentWallet } = useCurrentWallet();
-  const accounts = useAccounts();
-  const { mutateAsync: connect } = useConnectWallet();
-  const { mutateAsync: disconnect } = useDisconnectWallet();
-  const { mutate: switchAccount } = useSwitchAccount();
+  const currentWallet = useCurrentWallet();
+
+  /*
+    The kit no longer takes a filter.
+
+    `walletFilter` was removed in the rewrite: the kit filters by network compatibility itself, which
+    is not the same question. A wallet that cannot sign a personal message is compatible with mainnet
+    and still cannot comment, follow or read its own direct messages here — it would connect, then
+    fail on the third thing the reader tried. So the filter moved from a prop to this line, and the
+    ones it removes are still named below rather than silently absent.
+  */
+  const wallets = useMemo(() => registered.filter(isUsableWallet), [registered]);
+
+  /** Every address the connected wallet currently authorises, in the kit's order. */
+  const accounts = useMemo<readonly UiWalletAccount[]>(
+    () => currentWallet?.accounts ?? [],
+    [currentWallet],
+  );
 
   const [zkSigner, setZkSigner] = useState<ActiveSigner | null>(null);
   const [zkSession, setZkSession] = useState<ActiveSession | null>(null);
@@ -280,20 +264,25 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   /** Open only when the reader asked for it, or when a connect returned more than one address. */
   const [choiceOpen, setChoiceOpen] = useState(false);
 
-  const chain: SuiChain | null = network === null ? null : `sui:${network}`;
-
   /*
     The wallet's signer, derived rather than stored.
 
-    The hand-written version held the bound account in state and kept it in step with the
-    extension through a `standard:events` subscription — the source of the "no longer sharing that
-    address" branch, the re-bind, and the forget. dapp-kit's store already tracks all of that, so
-    the signer is now a function of what it reports and cannot drift from it.
+    The hand-written version held the bound account in state and kept it in step with the extension
+    through a `standard:events` subscription — the source of the "no longer sharing that address"
+    branch, the re-bind, and the forget. The kit's stores already track all of that.
+
+    `CurrentAccountSigner` holds the kit rather than an account, so it signs with whatever is current
+    at the moment of signing. That closes the window the old shape left open: a signer built from an
+    account captured at quote time, used after the reader switched addresses inside the extension.
   */
   const walletActiveSigner = useMemo<ActiveSigner | null>(() => {
-    if (currentWallet === null || currentAccount === null || chain === null) return null;
-    return walletSigner({ wallet: currentWallet, account: currentAccount, chain });
-  }, [currentWallet, currentAccount, chain]);
+    if (currentWallet === null || currentAccount === null || network === null) return null;
+    return walletSigner({
+      signer: new CurrentAccountSigner(kit as DAppKit),
+      address: currentAccount.address,
+      label: currentWallet.name,
+    });
+  }, [kit, currentWallet, currentAccount, network]);
 
   /*
     A wallet outranks a Google session when both are present.
@@ -307,11 +296,11 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   /* Wallets that announced themselves but cannot do what this application needs. */
   const unusableWallets = useMemo<UnusableWallet[]>(
     () =>
-      wallets
+      registered
         .map((wallet) => ({ name: wallet.name, support: walletSupport(wallet) }))
         .filter((entry) => !entry.support.ok && entry.support.missing.length > 0)
         .map((entry) => ({ name: entry.name, missing: entry.support.missing })),
-    [wallets],
+    [registered],
   );
 
   /* This deployment's zkLogin configuration, and a Google session restored from the tab. */
@@ -342,19 +331,19 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   }, []);
 
   const connectWallet = useCallback(
-    async (wallet: Wallet) => {
+    async (wallet: UiWallet) => {
       setError(null);
       setChoiceOpen(false);
-      if (chain === null) {
+      if (network === null) {
         setError('this deployment has not been told which network it is on, so nothing can be signed here');
         return;
       }
       try {
-        const result = await connect({ wallet: wallet as never });
+        const result = await kit.connectWallet({ wallet });
         /*
           Several authorised addresses is a question, not a default.
 
-          dapp-kit binds the first account it is given. Where the reader authorised more than one,
+          The kit binds the first account it is given. Where the reader authorised more than one,
           the previous behaviour — and the one this product wants — is to ask which, rather than
           pick and be silently wrong about whose vault is on screen.
         */
@@ -363,7 +352,7 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
         setError(cause instanceof Error ? cause.message : String(cause));
       }
     },
-    [connect, chain],
+    [kit, network],
   );
 
   /*
@@ -382,12 +371,12 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
     setError(null);
     setChoiceOpen(false);
     try {
-      await disconnect();
+      await kit.disconnectWallet();
     } catch {
       /* An extension that refuses to disconnect is still worth trying to connect again. */
     }
     await connectWallet(wallet);
-  }, [currentWallet, disconnect, connectWallet]);
+  }, [currentWallet, kit, connectWallet]);
 
   const reopenAccountChoice = useCallback(() => {
     if (currentWallet === null || accounts.length === 0) {
@@ -399,15 +388,15 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   }, [currentWallet, accounts]);
 
   const chooseAccount = useCallback(
-    (account: WalletAccount) => {
+    (account: UiWalletAccount) => {
       setError(null);
       setChoiceOpen(false);
       /* Choosing a wallet address ends a Google session; one signer at a time. */
       setZkSigner(null);
       setZkSession(null);
-      switchAccount({ account: account as never });
+      kit.switchAccount({ account });
     },
-    [switchAccount],
+    [kit],
   );
 
   const cancelAccountChoice = useCallback(() => {
@@ -465,7 +454,7 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
     setZkSession(null);
     setChoiceOpen(false);
     setError(null);
-    void disconnect().catch(() => undefined);
+    void kit.disconnectWallet().catch(() => undefined);
     void fetch('/api/session', { method: 'DELETE' })
       .catch(() => undefined)
       .finally(() => {
@@ -481,7 +470,7 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
         */
         window.location.assign('/');
       });
-  }, [disconnect]);
+  }, [kit]);
 
   const exportRecovery = useCallback(async (): Promise<RecoveryDetails | null> => {
     if (zkSession === null) return null;

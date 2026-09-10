@@ -1,6 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+  Tailwind 4. The three `@tailwind` directives it replaces were version 3's way in.
+
+  `@config` keeps the theme in `tailwind.config.ts` rather than moving it into an `@theme` block
+  here: the colours in it are already `var(--ink-*)` references into the ramp defined below, so
+  translating them would mean writing the same indirection twice in two syntaxes.
+*/
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 :root {
   /* Ink ramp — dark first. #03050a → #f4f7fc */

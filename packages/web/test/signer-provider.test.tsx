@@ -27,44 +27,36 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 let registered: unknown[] = [];
 
 /*
-  dapp-kit stands in for the browser here, and that is the boundary this file tests.
+  The kit stands in for the browser here, and that is the boundary this file tests.
 
-  Wallet discovery, connecting and account switching belong to `@mysten/dapp-kit` now. What this
-  provider still owns is the translation: which wallets it passes on, which it reports as unusable,
-  and when it builds a zkLogin signer. So the kit is mocked at its hooks and `registered` is what it
-  reports.
+  Wallet discovery, connecting and account switching belong to `@mysten/dapp-kit-react` and its core.
+  What this provider still owns is the translation: which wallets it passes on, which it reports as
+  unusable, and when it builds a zkLogin signer. So the kit is mocked at its hooks and `registered`
+  is what it reports.
 
-  This replaces a mock of `@mysten/wallet-standard`'s `getWallets`, which stopped reaching anything
-  the moment discovery moved: dapp-kit resolves its own copy of that package, so the mock applied to
-  a module nobody called and the three tests below passed against an empty list — they would have
-  passed with discovery entirely broken. `walletFilter` is asserted directly instead, because that
-  is now the whole of what this provider says about which wallets are offered.
+  Two earlier versions of this mock were wrong in instructive ways. The first mocked
+  `@mysten/wallet-standard`'s `getWallets`, which stopped reaching anything the moment discovery
+  moved into a library that resolves its own copy — the tests then passed against an empty list, and
+  would have passed with discovery entirely broken. The second asserted `walletFilter`, a
+  `WalletProvider` prop that the rewrite deleted. Filtering is this provider's own line now, so what
+  is asserted is the output: how many wallets it passes on.
 */
-let lastWalletFilter: ((wallet: unknown) => boolean) | undefined;
-vi.mock('@mysten/dapp-kit', () => ({
-  SuiClientProvider: ({ children }: { children: React.ReactNode }) => children,
-  WalletProvider: ({
-    children,
-    walletFilter,
-  }: {
-    children: React.ReactNode;
-    walletFilter?: (wallet: unknown) => boolean;
-  }) => {
-    lastWalletFilter = walletFilter;
-    return children;
-  },
-  useWallets: () => registered.filter((w) => lastWalletFilter?.(w) ?? true),
+vi.mock('@mysten/dapp-kit-react', () => ({
+  DAppKitProvider: ({ children }: { children: React.ReactNode }) => children,
+  useDAppKit: () => ({
+    connectWallet: vi.fn(async () => ({ accounts: [] })),
+    disconnectWallet: vi.fn(async () => undefined),
+    switchAccount: vi.fn(),
+  }),
+  useWallets: () => registered,
   useCurrentAccount: () => null,
-  useCurrentWallet: () => ({ currentWallet: null }),
-  useAccounts: () => [],
-  useConnectWallet: () => ({ mutateAsync: vi.fn() }),
-  useDisconnectWallet: () => ({ mutateAsync: vi.fn(async () => undefined) }),
-  useSwitchAccount: () => ({ mutate: vi.fn() }),
+  useCurrentWallet: () => null,
 }));
-vi.mock('@tanstack/react-query', () => ({
-  QueryClient: class {},
-  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
+vi.mock('@mysten/dapp-kit-core', () => ({
+  createDAppKit: () => ({}),
+  CurrentAccountSigner: class {},
 }));
+vi.mock('@mysten/sui/grpc', () => ({ SuiGrpcClient: class {} }));
 
 /*
  * The zkLogin signer is stubbed. Constructing a real one needs a proof, and what is under test is
@@ -221,11 +213,7 @@ describe('wallets the browser offers', () => {
   const usable = {
     name: 'Test Wallet',
     chains: ['sui:mainnet'],
-    features: {
-      'standard:connect': {},
-      'sui:signTransaction': {},
-      'sui:signPersonalMessage': {},
-    },
+    features: ['standard:connect', 'sui:signTransaction', 'sui:signPersonalMessage'],
   };
 
   it('offers a wallet that can do everything the application asks', async () => {
@@ -241,7 +229,7 @@ describe('wallets the browser offers', () => {
      * own direct messages — so it would connect and then fail on the third thing tried, with an
      * error about a missing feature.
      */
-    registered = [{ ...usable, features: { 'standard:connect': {}, 'sui:signTransaction': {} } }];
+    registered = [{ ...usable, features: ['standard:connect', 'sui:signTransaction'] }];
     mockSession({ network: 'mainnet', available: false });
     render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));

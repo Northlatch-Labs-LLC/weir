@@ -19,13 +19,13 @@
     "prepare": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@mysten/seal": "1.4.6",
+    "@mysten/seal": "1.4.9",
     "@mysten/sui": "2.30.0",
     "@projectx-social/sdk": "1.0.2"
   },
   "devDependencies": {
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   },
   "files": [
     "dist",

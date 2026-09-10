@@ -17,14 +17,14 @@
     "@projectx-social/policy": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
     "@projectx-social/signer": "workspace:*",
-    "zod": "4.5.4"
+    "zod": "4.6.1"
   },
   "devDependencies": {
     "@projectx-social/agent": "workspace:^",
     "esbuild": "0.28.2",
-    "tsx": "4.23.12",
+    "tsx": "4.23.13",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   },
   "comment2": "The unit's ExecStart runs dist/server.js, so the build is not optional here the way it is in a library: the deploy builds this package on the droplet from the source tarball and systemd runs the emitted JavaScript. `tsx` is kept for the `serve` script, which is how it is run on this laptop, and for bin/."
 }

@@ -23,8 +23,6 @@
  */
 
 import { fromBase64 } from '@mysten/sui/utils';
-import { Transaction } from '@mysten/sui/transactions';
-import type { Wallet, WalletAccount } from '@mysten/wallet-standard';
 
 /** How the current session signs. Shown to the user, because it is not a detail to them. */
 export type SignerKind = 'wallet' | 'zklogin';
@@ -47,77 +45,44 @@ export interface ActiveSigner {
 }
 
 /**
- * The chain identifier passed to a wallet when signing.
+ * The part of a wallet signer this application actually calls.
  *
- * Read from the network the server is configured for rather than hardcoded, so a wallet connected
- * to testnet is refused by the wallet itself instead of producing a signature against the wrong
- * network. A literal here would make that mismatch silent.
+ * `CurrentAccountSigner` from `@mysten/dapp-kit-core` satisfies this: it holds the kit rather than
+ * an account, so it always signs with whichever address is current and cannot go stale between a
+ * quote and a signature. Declared structurally rather than by importing the class, so this file
+ * stays testable without standing a whole kit up.
  */
-export type SuiChain = `sui:${string}`;
+export interface WalletSigningSurface {
+  signTransaction(bytes: Uint8Array): Promise<{ bytes: string; signature: string }>;
+  signPersonalMessage(bytes: Uint8Array): Promise<{ signature: string }>;
+}
 
 /**
- * Wrap a connected Wallet Standard wallet.
+ * Wrap the kit's signer as this application's {@link ActiveSigner}.
  *
- * The feature objects are looked up once, at construction, rather than at each call. A wallet that
- * lost a feature between connecting and signing is a broken wallet, and finding that out while
- * holding a simulated transaction is worse than finding out at connect time.
+ * # What this no longer does
+ *
+ * It used to reach into `wallet.features['sui:signTransaction']` through a hand-written cast that
+ * described the wallet's contract incorrectly — `transaction: string` where the standard passes an
+ * object the wallet calls `.toJSON()` on — so `tsc` checked the call against our own wrong claim
+ * and every wallet signature died in the browser. Feature lookup, the `toJSON` round trip and the
+ * chain identifier are the kit's now, and it is generated from the standard rather than mirrored.
+ *
+ * # What it still does, and must
+ *
+ * The comparison below. Everything else here is plumbing.
  */
 export function walletSigner(input: {
-  wallet: Wallet;
-  account: WalletAccount;
-  chain: SuiChain;
+  signer: WalletSigningSurface;
+  address: string;
+  label: string;
 }): ActiveSigner {
-  /*
-    The shape of `sui:signTransaction`, and the reason this was wrong.
-
-    It does not take bytes. It takes an object the wallet calls `.toJSON()` on, and it returns the
-    bytes it actually signed alongside the signature. The previous version of this cast declared
-    `transaction: string` and a return of `{ signature }` only — so we handed a wallet a base64
-    string and it failed in the browser with `t.transaction.toJSON is not a function`.
-
-    The cast is why that compiled. It did not describe the wallet's contract, it overrode it, and
-    `tsc` then checked this code against our own wrong claim. A hand-written mirror of somebody
-    else's signature is only safe if something fails when the original moves; nothing did.
-  */
-  const signTx = input.wallet.features['sui:signTransaction'] as
-    | {
-        signTransaction: (i: {
-          transaction: { toJSON: () => Promise<string> };
-          account: WalletAccount;
-          chain: string;
-        }) => Promise<{ bytes: string; signature: string }>;
-      }
-    | undefined;
-
-  const signMsg = input.wallet.features['sui:signPersonalMessage'] as
-    | {
-        signPersonalMessage: (i: {
-          message: Uint8Array;
-          account: WalletAccount;
-        }) => Promise<{ signature: string }>;
-      }
-    | undefined;
-
   return {
     kind: 'wallet',
-    address: input.account.address,
-    label: input.wallet.name,
+    address: input.address,
+    label: input.label,
     async signTransaction(bytes) {
-      if (signTx === undefined) {
-        throw new Error(`${input.wallet.name} cannot sign transactions`);
-      }
-      /*
-        Rebuilt from the prepared bytes rather than passed as a string.
-
-        Everything in these bytes is already resolved — the server built them, so gas coins, budget
-        and price are fixed values, not the unresolved placeholders a client-built transaction
-        carries. Re-serialising fully resolved data is deterministic, which is what makes this safe.
-      */
-      const { bytes: signedBytes, signature } = await signTx.signTransaction({
-        transaction: Transaction.from(fromBase64(bytes)),
-        account: input.account,
-        chain: input.chain,
-      });
+      const { bytes: signedBytes, signature } = await input.signer.signTransaction(fromBase64(bytes));
 
       /*
         The wallet returns the bytes it actually signed, and they are the authority — a wallet may
@@ -126,11 +91,12 @@ export function walletSigner(input: {
         nothing explaining why.
 
         Comparing is what keeps simulate-then-sign true. If a wallet ever does change the bytes,
-        this stops with a sentence naming that, rather than at a failed submission.
+        this stops with a sentence naming that, rather than at a failed submission — and it stops
+        before anything is sent, so the money is where it was.
       */
       if (signedBytes !== bytes) {
         throw new Error(
-          `${input.wallet.name} changed the transaction before signing it, so what it signed is ` +
+          `${input.label} changed the transaction before signing it, so what it signed is ` +
             `not what was simulated and quoted. Nothing has been submitted.`,
         );
       }
@@ -138,13 +104,7 @@ export function walletSigner(input: {
       return signature;
     },
     async signPersonalMessage(message) {
-      if (signMsg === undefined) {
-        throw new Error(`${input.wallet.name} cannot sign messages`);
-      }
-      const { signature } = await signMsg.signPersonalMessage({
-        message,
-        account: input.account,
-      });
+      const { signature } = await input.signer.signPersonalMessage(message);
       return signature;
     },
   };
@@ -185,142 +145,6 @@ export function zkLoginSignerAdapter(input: {
 }
 
 /**
- * Which wallet, and which of its addresses, this browser was last signed in with.
- *
- * # Why `localStorage`, when zkLogin insists on `sessionStorage`
- *
- * They store different kinds of thing, and the difference is the whole reason the rule differs.
- *
- * A zkLogin session contains an ephemeral *spending key*. It can sign for the user's address until
- * `maxEpoch` passes, so leaving it on disk turns a two-day window into an indefinite one — anybody
- * with the disk has the account. It goes in `sessionStorage` and dies with the tab, deliberately.
- *
- * This holds a wallet's name and a public address. Both are public, neither is a credential, and
- * possessing them grants nothing: every signature still has to be approved inside the extension,
- * which holds the key and never gave it to us. There is no secret here to expire.
- *
- * So do not "fix" one of these to match the other. Moving this to `sessionStorage` costs a wallet
- * user their session on every tab close for no security gained. Moving zkLogin to `localStorage`
- * leaves a spending key on disk, which is the failure the comment in `SignerProvider` describes.
- */
-export const WALLET_STORAGE_KEY = 'projectx.wallet';
-
-export interface RememberedWallet {
-  /** The wallet's own name, as it registered itself. */
-  wallet: string;
-  /** The exact address that was bound. Restoring anything else is the defect this file fixed. */
-  address: string;
-}
-
-/**
- * The store, or nothing.
- *
- * `localStorage` is not always reachable: Safari's private mode throws on access, and some embedded
- * browsers omit it. That is "this browser cannot remember", which is a real answer — the reader
- * signs in again — and is not the same as "nothing was remembered". Neither is treated as an error
- * to show, because there is nothing the reader could do about either.
- */
-function store(): Storage | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.sessionStorage ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The record used to live in `localStorage`, which made it permanent.
- *
- * The intent was that a reload should not sign you out, and that is right. The effect was that a
- * reader who had ever connected could not get back to the signed-out view at all: every new tab,
- * every next day, the silent reconnect ran again and the guest state became unreachable — including
- * for the person trying to check what a visitor sees.
- *
- * `sessionStorage` keeps the part that was wanted and drops the part that was not: a reload keeps
- * you connected, closing the tab does not. Nothing here is a secret — a wallet name and a public
- * address — so the move costs nothing but the permanence.
- *
- * This clears the old permanent copy on the way past, so somebody carrying one is fixed by their
- * next load rather than by a console command they should never have needed to be told.
- */
-function clearPermanentCopy(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage?.removeItem(WALLET_STORAGE_KEY);
-  } catch {
-    // A browser that refuses localStorage has nothing stale in it to clear.
-  }
-}
-
-export function rememberWallet(remembered: RememberedWallet): void {
-  clearPermanentCopy();
-  store()?.setItem(WALLET_STORAGE_KEY, JSON.stringify(remembered));
-}
-
-export function forgetWallet(): void {
-  clearPermanentCopy();
-  store()?.removeItem(WALLET_STORAGE_KEY);
-}
-
-/**
- * What was remembered, or `null`.
- *
- * Both fields are required. A half-written record is discarded rather than partly believed: a name
- * with no address would restore a wallet and then have to pick an address, which is exactly the
- * guess this whole change exists to delete.
- */
-export function readRememberedWallet(): RememberedWallet | null {
-  clearPermanentCopy();
-  const raw = store()?.getItem(WALLET_STORAGE_KEY);
-  if (raw === null || raw === undefined) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<RememberedWallet>;
-    if (typeof parsed.wallet !== 'string' || typeof parsed.address !== 'string') {
-      forgetWallet();
-      return null;
-    }
-    return { wallet: parsed.wallet, address: parsed.address };
-  } catch {
-    forgetWallet();
-    return null;
-  }
-}
-
-/**
- * Every address a connected wallet has authorised for this site.
- *
- * # Why both sources are read
- *
- * The Wallet Standard puts the authorised set on `wallet.accounts` and describes `standard:connect`
- * as the way to *obtain* that authorisation. Several wallets answer `connect()` with the currently
- * active account alone and leave the rest on the wallet object — so code that read only the return
- * value saw one address, never offered a choice, and bound whatever the extension happened to be
- * showing. That is the reported defect: Slush and Phantom each binding one fixed address no matter
- * which account was selected inside them.
- *
- * The reverse also happens: an address authorised during this very connect can appear in the return
- * value before the wallet object catches up. Dropping it would lose the address just approved.
- *
- * So neither source is authoritative alone and neither is discarded. The wallet object leads because
- * that is where the standard says the set lives; anything the connect result adds is appended.
- * De-duplicated by address, because the same account arriving twice is one account.
- */
-export function authorisedAccounts(
-  wallet: Wallet,
-  returned: readonly WalletAccount[],
-): readonly WalletAccount[] {
-  const merged: WalletAccount[] = [];
-  const seen = new Set<string>();
-  for (const account of [...wallet.accounts, ...returned]) {
-    if (seen.has(account.address)) continue;
-    seen.add(account.address);
-    merged.push(account);
-  }
-  return merged;
-}
-
-/**
  * A wallet that can do everything this application asks of one.
  *
  * Both features are required, not just signing transactions. A wallet missing
@@ -342,6 +166,18 @@ export interface WalletSupport {
 }
 
 /**
+ * The shape both a raw Wallet Standard wallet and the kit's `UiWallet` share.
+ *
+ * `UiWallet` reports features as a list of identifiers rather than an object keyed by them, which
+ * is why this is declared here rather than imported: the check below is about which identifiers are
+ * present, and that question has the same answer either way.
+ */
+export interface WalletCapabilities {
+  chains: readonly string[];
+  features: readonly string[];
+}
+
+/**
  * What a given wallet is missing, rather than merely whether it passed.
  *
  * The two generations of feature name matter here. Sui's Wallet Standard renamed
@@ -349,7 +185,7 @@ export interface WalletSupport {
  * Requiring the new name alone excluded any wallet that had not caught up — a supported wallet
  * disappearing over a spelling rather than a capability. Either name satisfies this.
  */
-export function walletSupport(wallet: Wallet): WalletSupport {
+export function walletSupport(wallet: WalletCapabilities): WalletSupport {
   /*
     An extension for a different chain entirely is not a broken Sui wallet, it is simply not one.
     Naming it as unsupported would put a complaint about an Ethereum-only extension on the screen of
@@ -360,7 +196,7 @@ export function walletSupport(wallet: Wallet): WalletSupport {
   }
 
   const missing = REQUIRED.filter(
-    (requirement) => !requirement.any.some((feature) => feature in wallet.features),
+    (requirement) => !requirement.any.some((feature) => wallet.features.includes(feature)),
   ).map((requirement) => requirement.label);
 
   return { ok: missing.length === 0, missing };
@@ -370,6 +206,6 @@ export function walletSupport(wallet: Wallet): WalletSupport {
  * The predicate the discovery filter uses. It delegates, so "usable" has one definition rather than
  * two that can drift apart.
  */
-export function isUsableWallet(wallet: Wallet): boolean {
+export function isUsableWallet(wallet: WalletCapabilities): boolean {
   return walletSupport(wallet).ok;
 }

@@ -10,24 +10,25 @@
  * name` exists to stop coming back.
  */
 
-import { describe, expect, it } from 'vitest';
-import type { Wallet, WalletAccount } from '@mysten/wallet-standard';
+import { describe, expect, it, vi } from 'vitest';
 import { Transaction } from '@mysten/sui/transactions';
-import { toBase64 } from '@mysten/sui/utils';
-import { isUsableWallet, walletSigner, walletSupport } from '@/lib/signer';
+import { toBase64, fromBase64 } from '@mysten/sui/utils';
+import {
+  isUsableWallet,
+  walletSigner,
+  walletSupport,
+  type WalletCapabilities,
+} from '@/lib/signer';
 
 /**
  * The smallest thing shaped like a wallet.
  *
- * Only `name`, `chains` and the *keys* of `features` are read, so the values can be empty objects —
- * and the cast stays confined to this helper rather than spread across every case.
+ * Features are a list of identifiers rather than an object keyed by them: that is how the kit's
+ * `UiWallet` reports them, and it is the shape `walletSupport` now reads. The check has always been
+ * about which identifiers are present, so the answer is unchanged.
  */
-function wallet(name: string, chains: string[], features: string[]): Wallet {
-  return {
-    name,
-    chains,
-    features: Object.fromEntries(features.map((feature) => [feature, {}])),
-  } as unknown as Wallet;
+function wallet(name: string, chains: string[], features: string[]): WalletCapabilities & { name: string } {
+  return { name, chains, features };
 }
 
 const SUI = ['sui:mainnet'];
@@ -86,16 +87,25 @@ describe('walletSupport', () => {
 });
 
 /*
-  What we hand a wallet, and what we do with what comes back.
+  What we hand the kit's signer, and what we do with what comes back.
 
-  `sui:signTransaction` takes an object it calls `.toJSON()` on. We passed a base64 string, and the
-  hand-written cast in `lib/signer.ts` declared `transaction: string` — so `tsc` checked the call
-  against our own wrong claim rather than the wallet's contract, and every wallet signature in the
-  product died in the browser with `t.transaction.toJSON is not a function`. That blocked handle
-  registration end to end.
+  # What this file used to test, and why it does not any more
 
-  A mirrored signature is only safe if something fails when the original moves. Nothing did. These
-  are that something: they assert the shape at the call site rather than the shape we wrote down.
+  It used to build a wallet with a real `sui:signTransaction` feature and assert that we called it
+  correctly: that we passed an object with a `toJSON` method rather than a base64 string, and that
+  the account and chain went through untouched. Those assertions existed because `lib/signer.ts`
+  mirrored the wallet's contract by hand through a cast — declaring `transaction: string` where the
+  standard passes an object — so `tsc` checked our calls against our own wrong claim, and every
+  wallet signature in the product died in the browser with `t.transaction.toJSON is not a function`.
+
+  That mirror is gone. `@mysten/dapp-kit-core` makes the call now, against types generated from the
+  standard rather than copied from it, so a mirror that can drift no longer exists to be pinned.
+
+  # What is left is the part that is ours
+
+  The comparison. It is the only thing standing between a wallet that re-serialises before signing
+  and a signature valid for a transaction nobody sends — which the chain refuses with nothing
+  explaining why, after the reader has read a quote and approved it.
 */
 describe('walletSigner', () => {
   /** One valid, fully-resolved transaction, built once and reused. */
@@ -111,58 +121,42 @@ describe('walletSigner', () => {
   }
 
   /**
-   * A wallet that records what it was handed and answers the way the standard says: the bytes it
-   * actually signed, alongside the signature.
+   * A stand-in for `CurrentAccountSigner`: it records the raw bytes it was handed and answers the
+   * way the standard says — the bytes it actually signed, alongside the signature.
    */
-  function signingWallet(reply?: (bytes: string) => { bytes: string; signature: string }) {
-    const seen: { transaction?: unknown; account?: unknown; chain?: unknown } = {};
-    const handle = {
-      name: 'Slush',
-      chains: SUI,
-      features: {
-        'sui:signTransaction': {
-          version: '2.0.0',
-          async signTransaction(input: { transaction: { toJSON: () => Promise<string> } }) {
-            Object.assign(seen, input);
-            // The wallet's own round trip: it calls `toJSON`, and a string has no such method.
-            const json = await input.transaction.toJSON();
-            const rebuilt = toBase64(await Transaction.from(json).build());
-            return reply?.(rebuilt) ?? { bytes: rebuilt, signature: 'sig-from-slush' };
-          },
-        },
-      },
-    } as unknown as Wallet;
-    return { handle, seen };
+  function kitSigner(reply?: (bytes: string) => { bytes: string; signature: string }) {
+    const seen: { transaction?: Uint8Array; message?: Uint8Array } = {};
+    return {
+      seen,
+      signTransaction: vi.fn(async (bytes: Uint8Array) => {
+        seen.transaction = bytes;
+        const echoed = toBase64(bytes);
+        return reply?.(echoed) ?? { bytes: echoed, signature: 'sig-from-slush' };
+      }),
+      signPersonalMessage: vi.fn(async (bytes: Uint8Array) => {
+        seen.message = bytes;
+        return { signature: 'msg-sig' };
+      }),
+    };
   }
 
-  const account = { address: `0x${'1'.repeat(64)}` } as unknown as WalletAccount;
+  const ADDRESS = `0x${'1'.repeat(64)}`;
 
-  it('hands the wallet a transaction it can serialise, not a base64 string', async () => {
+  it('hands the kit raw bytes, not the base64 the server produced', async () => {
+    /*
+      The seam's whole job. `/api/*​/prepare` returns base64; every signer underneath signs bytes.
+      Converting here rather than at either end is what keeps the signed transaction byte-identical
+      to the simulated one.
+    */
     const bytes = await preparedBytes();
-    const slush = signingWallet();
+    const signer = kitSigner();
 
-    const signature = await walletSigner({
-      wallet: slush.handle,
-      account,
-      chain: 'sui:mainnet',
-    }).signTransaction(bytes);
+    const signature = await walletSigner({ signer, address: ADDRESS, label: 'Slush' })
+      .signTransaction(bytes);
 
-    expect(typeof (slush.seen.transaction as { toJSON?: unknown })?.toJSON).toBe('function');
+    expect(signer.seen.transaction).toBeInstanceOf(Uint8Array);
+    expect(signer.seen.transaction).toEqual(fromBase64(bytes));
     expect(signature).toBe('sig-from-slush');
-  });
-
-  /*
-    The chain comes from the deployment's configuration and is passed through untouched. A wallet
-    connected to testnet has to be able to refuse; a literal here would make that mismatch silent.
-  */
-  it('passes the account and the configured chain through to the wallet', async () => {
-    const bytes = await preparedBytes();
-    const slush = signingWallet();
-
-    await walletSigner({ wallet: slush.handle, account, chain: 'sui:mainnet' }).signTransaction(bytes);
-
-    expect(slush.seen.account).toBe(account);
-    expect(slush.seen.chain).toBe('sui:mainnet');
   });
 
   /*
@@ -174,32 +168,55 @@ describe('walletSigner', () => {
   */
   it('refuses to return a signature over bytes that are not the ones simulated', async () => {
     const bytes = await preparedBytes();
-    const tampered = signingWallet(() => ({ bytes: 'AAAA', signature: 'sig-from-slush' }));
+    const tampered = kitSigner(() => ({ bytes: 'AAAA', signature: 'sig-from-slush' }));
 
     await expect(
-      walletSigner({ wallet: tampered.handle, account, chain: 'sui:mainnet' }).signTransaction(bytes),
+      walletSigner({ signer: tampered, address: ADDRESS, label: 'Slush' }).signTransaction(bytes),
     ).rejects.toThrow(/changed the transaction before signing/);
   });
 
-  /*
-    The round trip has to be lossless or the gate above fires on every honest wallet. The server
-    resolved every input before building — gas coin, budget and price are fixed values — which is
-    exactly what makes re-serialising deterministic rather than merely usually equal.
-  */
-  it('survives the wallet’s own rebuild of the transaction unchanged', async () => {
+  it('names the wallet in that refusal, because the reader has to know which one to distrust', async () => {
     const bytes = await preparedBytes();
-    const slush = signingWallet();
+    const tampered = kitSigner(() => ({ bytes: 'AAAA', signature: 'x' }));
 
     await expect(
-      walletSigner({ wallet: slush.handle, account, chain: 'sui:mainnet' }).signTransaction(bytes),
+      walletSigner({ signer: tampered, address: ADDRESS, label: 'Phantom' }).signTransaction(bytes),
+    ).rejects.toThrow(/^Phantom changed/);
+  });
+
+  it('says nothing was submitted, because nothing was', async () => {
+    // The comparison happens before the signature is returned, so it fires before submission — and
+    // the sentence a reader gets has to be true about their money, not merely reassuring.
+    const bytes = await preparedBytes();
+    const tampered = kitSigner(() => ({ bytes: 'AAAA', signature: 'x' }));
+
+    await expect(
+      walletSigner({ signer: tampered, address: ADDRESS, label: 'Slush' }).signTransaction(bytes),
+    ).rejects.toThrow(/Nothing has been submitted/);
+  });
+
+  it('passes an honest round trip through unchanged', async () => {
+    const bytes = await preparedBytes();
+
+    await expect(
+      walletSigner({ signer: kitSigner(), address: ADDRESS, label: 'Slush' }).signTransaction(bytes),
     ).resolves.toBe('sig-from-slush');
   });
 
-  it('says which wallet cannot sign rather than failing on an absent feature', async () => {
-    const cannot = { name: 'Odd', chains: SUI, features: {} } as unknown as Wallet;
+  it('passes a personal message through as the raw bytes it was given', async () => {
+    // No base64 anywhere on this path: messages are bytes from the caller to the wallet.
+    const signer = kitSigner();
+    const message = new TextEncoder().encode('read:0xabc');
 
-    await expect(
-      walletSigner({ wallet: cannot, account, chain: 'sui:mainnet' }).signTransaction('AAAA'),
-    ).rejects.toThrow('Odd cannot sign transactions');
+    const signature = await walletSigner({ signer, address: ADDRESS, label: 'Slush' })
+      .signPersonalMessage(message);
+
+    expect(signer.seen.message).toEqual(message);
+    expect(signature).toBe('msg-sig');
+  });
+
+  it('reports the address and label it was built with', async () => {
+    const active = walletSigner({ signer: kitSigner(), address: ADDRESS, label: 'Slush' });
+    expect(active).toMatchObject({ kind: 'wallet', address: ADDRESS, label: 'Slush' });
   });
 });

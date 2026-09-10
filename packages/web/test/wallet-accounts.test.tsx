@@ -43,51 +43,65 @@ const account = (address: string, label?: string) => ({
 const A = account('0x' + 'a'.repeat(64), 'Trading');
 const B = account('0x' + 'b'.repeat(64));
 
+/**
+ * The wallet the kit reports.
+ *
+ * `accounts` is on the wallet itself, which is where the authorised set lives now — the previous kit
+ * exposed it through a `useAccounts` hook, the rewrite removed that, and the migration guide points
+ * at the connection's wallet. Rebuilt per test by {@link walletWith} so the two never disagree.
+ */
 const WALLET = {
   name: 'Test Wallet',
   chains: ['sui:mainnet'],
-  features: {
-    'standard:connect': {},
-    'sui:signTransaction': {},
-    'sui:signPersonalMessage': {},
-  },
+  features: ['standard:connect', 'sui:signTransaction', 'sui:signPersonalMessage'],
+  accounts: [] as unknown[],
 };
 
 /* What the kit reports. Set per test, before rendering. */
 let currentWallet: unknown = null;
 let currentAccount: unknown = null;
-let accounts: unknown[] = [];
 let connectResult: { accounts: unknown[] } = { accounts: [] };
 const connect = vi.fn(async () => connectResult);
 const disconnect = vi.fn(async () => undefined);
 const switchAccount = vi.fn();
 const order: string[] = [];
 
-vi.mock('@mysten/dapp-kit', () => ({
-  SuiClientProvider: ({ children }: { children: React.ReactNode }) => children,
-  WalletProvider: ({ children }: { children: React.ReactNode }) => children,
+/** The connected wallet, carrying exactly the addresses this test wants it to authorise. */
+function walletWith(accounts: unknown[]) {
+  return { ...WALLET, accounts };
+}
+
+/*
+  The kit is one object with methods, not a set of mutation hooks.
+
+  `useConnectWallet`/`useDisconnectWallet`/`useSwitchAccount` were react-query mutations in the
+  deprecated kit; the rewrite dropped react-query entirely and put the actions on the instance
+  `useDAppKit()` returns. The provider calls them directly, so that is what is mocked.
+*/
+const kit = {
+  connectWallet: async () => {
+    order.push('connect');
+    return connect();
+  },
+  disconnectWallet: async () => {
+    order.push('disconnect');
+    return disconnect();
+  },
+  switchAccount,
+};
+
+vi.mock('@mysten/dapp-kit-react', () => ({
+  DAppKitProvider: ({ children }: { children: React.ReactNode }) => children,
+  useDAppKit: () => kit,
   useWallets: () => [WALLET],
   useCurrentAccount: () => currentAccount,
-  useCurrentWallet: () => ({ currentWallet }),
-  useAccounts: () => accounts,
-  useConnectWallet: () => ({
-    mutateAsync: async () => {
-      order.push('connect');
-      return connect();
-    },
-  }),
-  useDisconnectWallet: () => ({
-    mutateAsync: async () => {
-      order.push('disconnect');
-      return disconnect();
-    },
-  }),
-  useSwitchAccount: () => ({ mutate: switchAccount }),
+  useCurrentWallet: () => currentWallet,
 }));
-vi.mock('@tanstack/react-query', () => ({
-  QueryClient: class {},
-  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
+vi.mock('@mysten/dapp-kit-core', () => ({
+  createDAppKit: () => kit,
+  CurrentAccountSigner: class {},
 }));
+vi.mock('@mysten/sui/grpc', () => ({ SuiGrpcClient: class {} }));
 
 const { SignerProvider, useSigner } = await import('../components/SignerProvider');
 const { SESSION_STORAGE_KEY } = await import('../lib/zklogin');
@@ -152,7 +166,6 @@ const press = async (label: string) => {
 beforeEach(() => {
   currentWallet = null;
   currentAccount = null;
-  accounts = [];
   connectResult = { accounts: [] };
   connect.mockClear();
   disconnect.mockClear();
@@ -180,8 +193,7 @@ describe('several authorised addresses are a question, not a guess', () => {
       one silently is how somebody reads the wrong account's money.
     */
     connectResult = { accounts: [A, B] };
-    currentWallet = WALLET;
-    accounts = [A, B];
+    currentWallet = walletWith([A, B]);
     mount();
     await press('connect');
     expect(screen.getByTestId('choice').textContent).toBe('open');
@@ -190,8 +202,7 @@ describe('several authorised addresses are a question, not a guess', () => {
 
   it('switches to the address the reader picked, and closes the question', async () => {
     connectResult = { accounts: [A, B] };
-    currentWallet = WALLET;
-    accounts = [A, B];
+    currentWallet = walletWith([A, B]);
     mount();
     await press('connect');
     await press('choose B');
@@ -201,8 +212,7 @@ describe('several authorised addresses are a question, not a guess', () => {
 
   it('lets the reader back out without switching to anything', async () => {
     connectResult = { accounts: [A, B] };
-    currentWallet = WALLET;
-    accounts = [A, B];
+    currentWallet = walletWith([A, B]);
     mount();
     await press('connect');
     await press('cancel');
@@ -213,9 +223,8 @@ describe('several authorised addresses are a question, not a guess', () => {
 
 describe('reopening the choice', () => {
   it('offers every address the wallet currently authorises', async () => {
-    currentWallet = WALLET;
+    currentWallet = walletWith([A, B]);
     currentAccount = A;
-    accounts = [A, B];
     mount();
     await press('reopen');
     expect(screen.getByTestId('choice-accounts').textContent).toBe(`${A.address},${B.address}`);
@@ -231,9 +240,8 @@ describe('reopening the choice', () => {
 
 describe('asking the extension again', () => {
   it('disconnects first, because a connected wallet answers from cache and shows nothing', async () => {
-    currentWallet = WALLET;
+    currentWallet = walletWith([A]);
     currentAccount = A;
-    accounts = [A];
     connectResult = { accounts: [A] };
     mount();
     await press('reauthorize');
@@ -255,9 +263,8 @@ describe('what the provider reports about the wallet', () => {
   });
 
   it('reports every address the wallet authorises, not only the bound one', async () => {
-    currentWallet = WALLET;
+    currentWallet = walletWith([A, B]);
     currentAccount = A;
-    accounts = [A, B];
     mount();
     await waitFor(() =>
       expect(screen.getByTestId('reported').textContent).toBe(`${A.address},${B.address}`),
@@ -265,9 +272,8 @@ describe('what the provider reports about the wallet', () => {
   });
 
   it('signs as the account the kit reports as current', async () => {
-    currentWallet = WALLET;
+    currentWallet = walletWith([A]);
     currentAccount = A;
-    accounts = [A];
     mount();
     await waitFor(() => expect(screen.getByTestId('address').textContent).toBe(A.address));
   });
@@ -279,9 +285,8 @@ describe('a deployment that does not know its network signs nothing', () => {
     value for that, and the failure a guess produces is a signature valid on a chain nobody chose.
   */
   it('builds no signer, even with a wallet and an account connected', async () => {
-    currentWallet = WALLET;
+    currentWallet = walletWith([A]);
     currentAccount = A;
-    accounts = [A];
     mount(null);
     await waitFor(() => expect(screen.getByTestId('reported').textContent).toBe(A.address));
     expect(screen.getByTestId('address').textContent).toBe('none');
@@ -297,9 +302,8 @@ describe('a deployment that does not know its network signs nothing', () => {
 
 describe('signing out', () => {
   it('disconnects the wallet, clears the Google session, and tells the server', async () => {
-    currentWallet = WALLET;
+    currentWallet = walletWith([A]);
     currentAccount = A;
-    accounts = [A];
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, '{"maxEpoch":1}');
     mount();
     await press('sign out');

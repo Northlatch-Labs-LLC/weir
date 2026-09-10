@@ -31,7 +31,7 @@
     "@projectx-social/agent": "1.0.2",
     "@projectx-social/policy": "1.0.2",
     "@projectx-social/signer": "1.0.2",
-    "zod": "4.5.4"
+    "zod": "4.6.1"
   },
   "devDependencies": {
     "typescript": "7.0.2"

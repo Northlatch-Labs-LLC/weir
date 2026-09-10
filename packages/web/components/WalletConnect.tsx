@@ -4,11 +4,10 @@
 /**
  * # What was wrong with the row of buttons
  *
- * The header listed a button per installed wallet. `protocolx.io` use
- * dapp-kit's `<ConnectButton />` — as did `suins.protocolx.io` before it was retired: a single
- * control that opens a window listing the wallets. Somebody moving between the properties met a
- * different idea of connecting
- * on this one, which is the sort of difference that reads as this site being the broken one.
+ * The header listed a button per installed wallet. `protocolx.io` uses one control that opens a
+ * window listing the wallets — as did `suins.protocolx.io` before it was retired. Somebody moving
+ * between the properties met a different idea of connecting on this one, which is the sort of
+ * difference that reads as this site being the broken one.
  *
  * # The bug the row of buttons was hiding
  *
@@ -26,13 +25,13 @@
  * Putting the window in the header fixes that structurally rather than by adding a second copy of
  * the picker: the control that starts the flow now also finishes it, on every route.
  *
- * # Not dapp-kit itself
+ * # Why the window is still ours
  *
- * The other properties get this window from `@mysten/dapp-kit`, whose `WalletProvider` owns the
- * connection. This application's `SignerProvider` also carries zkLogin sessions, the account choice
- * above and the signing seam, so adopting dapp-kit's provider would mean either two wallet stacks
- * in one application or rewriting the half that already works. The window is the part that was
- * wrong; it is small, and it is built here against the provider that exists.
+ * The connection itself is `@mysten/dapp-kit-core`'s — `SignerProvider` holds its kit. What is not
+ * the kit's is the account choice above and zkLogin sitting beside a wallet as an equal way to sign,
+ * and both of those appear in this window. The kit ships its own connect modal; taking it would mean
+ * either two windows that disagree about what "signed in" means, or losing the half that is this
+ * product's.
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';

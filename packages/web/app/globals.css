@@ -2283,7 +2283,7 @@ footer {
 
 /* ------------------------------------------------------------- the connect window
 
-   One button opens this, matching dapp-kit's `<ConnectButton />` on the other four properties.
+   One button opens this, matching the single connect control on the other four properties.
    Somebody who has connected at suins or raffle already knows what to expect here.
 */
 
