@@ -1,682 +1,322 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude
 /**
- * Which address a wallet session binds to.
+ * What `SignerProvider` still decides about wallets, now that it does not implement them.
  *
- * # The defect these pin
+ * # What moved, and why this file is shorter than it was
  *
- * The failure is quiet in the worst way: a signature comes back, the transaction executes, and the
- * money moves from the wrong account. Nothing errors.
+ * Discovery, connecting, disconnecting, autoconnect, the remembered wallet and the extension's own
+ * `standard:events` account changes are `@mysten/dapp-kit`'s. Eighteen assertions in the previous
+ * version of this file tested that plumbing against a hand-built mock of `standard:connect` and
+ * `standard:events` — they were testing an implementation this repository no longer has, and
+ * keeping them would have meant maintaining a second, worse copy of dapp-kit's own suite.
  *
- * # Why the fake wallet is here rather than a stub of `connectWallet`
+ * They are not dropped quietly. Each is named below with what now covers it:
  *
- * The bug lives in the shape of what a real wallet returns — a list, of which we used one. A stub
- * that hands back a single account cannot express it. `wallet()` below behaves like a Wallet
- * Standard wallet: `standard:connect` resolves `{ accounts }`, and `standard:events` hands out a
- * `change` listener that can be fired, and counted, so "unsubscribed on cleanup" is a fact rather
- * than a claim about a line of code.
+ *   reconnecting from a stored record, and not reconnecting from a stale one
+ *     -> `WalletProvider autoConnect` and its `storageKey`
+ *   following the extension when the bound address stops being authorised, re-binding when one
+ *   address remains, signing out when access is revoked, ignoring an empty change
+ *     -> dapp-kit's wallet store, which subscribes to `standard:events` itself
+ *   reading the authorised set from the wallet object rather than only from `connect()`
+ *     -> `useAccounts`, which reports the wallet's set rather than a connect result
  *
- * # Assertions are plain DOM
+ * # What is left is the part nobody else can test for us
  *
- * `@testing-library/jest-dom` is not installed here. `textContent` and `toBeNull()` say the same
- * thing against the same tree.
+ * Whether several authorised addresses produce a QUESTION rather than a guess; that choosing one
+ * switches to that one; that re-authorising asks the extension from nothing rather than accepting
+ * its cached answer; that signing out reaches the server; and that no signature is ever requested
+ * against a chain this deployment did not name. Those are product decisions, and they are here.
  */
 
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { Wallet, WalletAccount } from '@mysten/wallet-standard';
 
-/** Wallets the browser reports. Swapped per test. */
-let registered: unknown[] = [];
-/*
-  The registry's own listeners, kept firable rather than stubbed out.
+const account = (address: string, label?: string) => ({
+  address,
+  label,
+  publicKey: new Uint8Array(),
+  chains: ['sui:mainnet'],
+  features: [],
+});
 
-  Restoring a session races wallet registration. An extension announces itself well after first
-  paint, so a restore attempted once at mount looks at an empty registry and concludes there is no
-  wallet. `announceWallets` below is that late arrival, and it is the only way to state as a fact
-  that the restore waits for it.
-*/
-const registryListeners = new Set<() => void>();
-vi.mock('@mysten/wallet-standard', () => ({
-  getWallets: () => ({
-    get: () => registered,
-    on: (_event: string, listener: () => void) => {
-      registryListeners.add(listener);
-      return () => registryListeners.delete(listener);
+const A = account('0x' + 'a'.repeat(64), 'Trading');
+const B = account('0x' + 'b'.repeat(64));
+
+const WALLET = {
+  name: 'Test Wallet',
+  chains: ['sui:mainnet'],
+  features: {
+    'standard:connect': {},
+    'sui:signTransaction': {},
+    'sui:signPersonalMessage': {},
+  },
+};
+
+/* What the kit reports. Set per test, before rendering. */
+let currentWallet: unknown = null;
+let currentAccount: unknown = null;
+let accounts: unknown[] = [];
+let connectResult: { accounts: unknown[] } = { accounts: [] };
+const connect = vi.fn(async () => connectResult);
+const disconnect = vi.fn(async () => undefined);
+const switchAccount = vi.fn();
+const order: string[] = [];
+
+vi.mock('@mysten/dapp-kit', () => ({
+  SuiClientProvider: ({ children }: { children: React.ReactNode }) => children,
+  WalletProvider: ({ children }: { children: React.ReactNode }) => children,
+  useWallets: () => [WALLET],
+  useCurrentAccount: () => currentAccount,
+  useCurrentWallet: () => ({ currentWallet }),
+  useAccounts: () => accounts,
+  useConnectWallet: () => ({
+    mutateAsync: async () => {
+      order.push('connect');
+      return connect();
     },
   }),
+  useDisconnectWallet: () => ({
+    mutateAsync: async () => {
+      order.push('disconnect');
+      return disconnect();
+    },
+  }),
+  useSwitchAccount: () => ({ mutate: switchAccount }),
+}));
+vi.mock('@tanstack/react-query', () => ({
+  QueryClient: class {},
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-// `SignIn` reads the current route to decide where Google should return the reader to. Nothing
-// under test here depends on the value.
-vi.mock('next/navigation', () => ({ usePathname: () => '/join' }));
+const { SignerProvider, useSigner } = await import('../components/SignerProvider');
+const { SESSION_STORAGE_KEY } = await import('../lib/zklogin');
 
-import { SignerProvider, useSigner } from '@/components/SignerProvider';
-import { SignIn } from '@/components/SignIn';
-
-/*
-  Three synthetic addresses, deliberately unmistakable for each other at a glance and equally
-  unmistakable for anything on chain. The repeated nibble is the point: an assertion that passes on
-  the wrong one of these is impossible to misread in a failure message.
-*/
-const FIRST = '0x1111111111111111111111111111111111111111111111111111111111111111';
-const SECOND = '0x2222222222222222222222222222222222222222222222222222222222222222';
-const THIRD = '0x3333333333333333333333333333333333333333333333333333333333333333';
-
-type ChangeProperties = { accounts?: readonly WalletAccount[] };
-type ChangeListener = (properties: ChangeProperties) => void;
-
-/**
- * The smallest thing shaped like a wallet account. Only `address` and `label` are read, so the cast
- * stays confined here rather than spreading across every case.
- */
-function account(address: string, label?: string): WalletAccount {
-  return { address, label, chains: ['sui:mainnet'], features: [] } as unknown as WalletAccount;
-}
-
-/**
- * A wallet that behaves like a real one: it authorises a list of accounts, it keeps that list on
- * itself where the Wallet Standard says it lives, and it can announce that the list changed the way
- * an extension does when the user switches account inside it.
- */
-function wallet(
-  accounts: readonly WalletAccount[],
-  options: {
-    events?: boolean;
-    /*
-      What `standard:connect` resolves with, when that differs from what the wallet object holds.
-    */
-    returns?: readonly WalletAccount[];
-    /** A wallet that refuses `{ silent: true }`. Several do, and that is not a failure. */
-    silentThrows?: boolean;
-  } = {},
-) {
-  const listeners = new Set<ChangeListener>();
-  // Mutable, because `announce` has to move it: an extension that switches account changes what
-  // `wallet.accounts` reports from that moment on, and a restore reading a frozen list would pass
-  // for the wrong reason.
-  const held = { accounts };
-
-  const connect = vi.fn(async (input?: { silent?: boolean }) => {
-    if (input?.silent === true && options.silentThrows === true) {
-      throw new Error('this wallet cannot connect without asking');
-    }
-    return { accounts: options.returns ?? held.accounts };
-  });
-
-  const events = {
-    version: '1.0.0',
-    on: (event: string, listener: ChangeListener) => {
-      if (event !== 'change') return () => undefined;
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
-
-  const features: Record<string, unknown> = {
-    'standard:connect': { version: '1.0.0', connect },
-    'sui:signTransaction': { version: '2.0.0', signTransaction: vi.fn() },
-    'sui:signPersonalMessage': { version: '1.1.0', signPersonalMessage: vi.fn() },
-  };
-  // Off by request, so the "wallet has no events feature" case is exercised rather than assumed.
-  if (options.events !== false) features['standard:events'] = events;
-
-  return {
-    handle: {
-      name: 'Slush',
-      chains: ['sui:mainnet'],
-      // A getter, not a snapshot: the real property tracks the extension, and code that caches it
-      // at connect time would go stale exactly when the reader switches account.
-      get accounts() {
-        return held.accounts;
-      },
-      features,
-    } as unknown as Wallet,
-    connect,
-    /** Fire what a wallet fires when its authorised accounts change. */
-    announce(properties: ChangeProperties) {
-      if (properties.accounts !== undefined) held.accounts = properties.accounts;
-      act(() => listeners.forEach((listener) => listener(properties)));
-    },
-    /** Must reach zero on cleanup, or every mount of the app leaks a listener into the extension. */
-    listening: () => listeners.size,
-  };
-}
-
-/** What the browser does when an extension registers itself after the page has already painted. */
-function announceWallets(handles: unknown[]) {
-  registered = handles;
-  act(() => registryListeners.forEach((listener) => listener()));
-}
-
-/** Renders whatever the provider currently reports, so assertions read off the DOM. */
+/** Renders what the provider reports, and exposes its actions as buttons. */
 function Probe() {
-  const { signer } = useSigner();
-  return <span data-testid="bound">{signer?.address ?? 'none'}</span>;
-}
-
-function mockSession(body: Record<string, unknown>) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({ ok: true, status: 200, json: async () => body })),
+  const s = useSigner();
+  return (
+    <div>
+      <span data-testid="address">{s.signer?.address ?? 'none'}</span>
+      <span data-testid="choice">{s.accountChoice === null ? 'closed' : 'open'}</span>
+      <span data-testid="choice-accounts">
+        {(s.accountChoice?.accounts ?? []).map((a) => a.address).join(',')}
+      </span>
+      <span data-testid="reported">
+        {s.walletAccounts === null ? 'null' : s.walletAccounts.map((a) => a.address).join(',')}
+      </span>
+      <span data-testid="error">{s.error ?? 'none'}</span>
+      <button type="button" onClick={() => void s.connectWallet(WALLET as never)}>
+        connect
+      </button>
+      <button type="button" onClick={() => s.chooseAccount(B as never)}>
+        choose B
+      </button>
+      <button type="button" onClick={() => s.cancelAccountChoice()}>
+        cancel
+      </button>
+      <button type="button" onClick={() => s.reopenAccountChoice()}>
+        reopen
+      </button>
+      <button type="button" onClick={() => void s.reauthorizeWallet()}>
+        reauthorize
+      </button>
+      <button type="button" onClick={() => s.signOut()}>
+        sign out
+      </button>
+    </div>
   );
 }
 
-/*
-  Google is switched off in every case here. It is a second button with nothing to do with which
-  address a wallet binds to, and leaving it on puts an irrelevant control in every query.
-*/
-function mount(children: React.ReactNode) {
-  mockSession({ network: 'mainnet', available: false, reason: 'not set: GOOGLE_CLIENT_ID' });
-  return render(<SignerProvider>{children}</SignerProvider>);
+function mount(network: string | null = 'mainnet') {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ network: 'mainnet', available: false }),
+    })),
+  );
+  return render(
+    <SignerProvider network={network} rpcUrl="http://127.0.0.1:9000">
+      <Probe />
+    </SignerProvider>,
+  );
 }
 
-/*
-  The panel renders nothing on its first pass, and the button it eventually renders is DISABLED
-  until `/api/zklogin/session` has answered — the chain to bind to comes from that answer and
-  there is nothing safe to guess before it.
-
-  So waiting for the button to EXIST is not enough, and that under-synchronisation is what made
-  this file look intermittent: it failed once in CI and passed on a re-run of the identical tree.
-  It is not intermittent. Delay the session fetch by 25ms and it fails every time — CI was simply
-  slow enough, once, to land inside a window that is always there. `findByRole` with
-  `{ hidden: false }` still matches a disabled button, so the wait has to be for `enabled`.
-*/
-async function clickWallet() {
-  const button = await screen.findByRole('button', { name: 'Slush' });
-  // `@testing-library/jest-dom` is not installed here (see the note at the top of this file), so
-  // this reads the property rather than using `toBeEnabled()`.
-  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(button);
-}
-
-function bound(): string | null {
-  return screen.getByTestId('bound').textContent;
-}
-
-/** What a wallet session is remembered as between reloads. Mirrors `lib/signer.ts`. */
-const REMEMBERED = 'projectx.wallet';
-
-/*
-  Both web storages for the test environment, because there is only one here.
-
-  happy-dom implements `sessionStorage` but `window.localStorage` reads as `undefined`: Node ships
-  its own experimental `localStorage` global that is inert unless the process was started with
-  `--localstorage-file`, and it shadows the one happy-dom would otherwise provide.
-
-  So these are not mocks standing in for behaviour under test — they are the missing half of the
-  DOM. Map-backed and exact, so `getItem` on an absent key returns `null` the way the real API does
-  rather than `undefined`, which is the distinction every assertion below turns on.
-
-  TWO maps, not one shared. The wallet record lives in `sessionStorage` and `lib/signer.ts` deletes
-  any older permanent copy out of `localStorage` on the way past; backing both with one map would
-  make that deletion erase the record it is about to read.
-*/
-function webStorage(stored: Map<string, string>): Storage {
-  return {
-    getItem: (key: string) => stored.get(key) ?? null,
-    setItem: (key: string, value: string) => void stored.set(key, value),
-    removeItem: (key: string) => void stored.delete(key),
-    clear: () => stored.clear(),
-    key: (index: number) => [...stored.keys()][index] ?? null,
-    get length() {
-      return stored.size;
-    },
-  } as Storage;
-}
-
-const stored = new Map<string, string>();
-const sessionStored = new Map<string, string>();
-Object.defineProperty(window, 'localStorage', { configurable: true, value: webStorage(stored) });
-Object.defineProperty(window, 'sessionStorage', { configurable: true, value: webStorage(sessionStored) });
-
-function remember(walletName: string, address: string) {
-  window.sessionStorage.setItem(REMEMBERED, JSON.stringify({ wallet: walletName, address }));
-}
+const press = async (label: string) => {
+  screen.getByText(label).click();
+  await waitFor(() => undefined);
+};
 
 beforeEach(() => {
-  registered = [];
-  registryListeners.clear();
-  stored.clear();
-  sessionStored.clear();
+  currentWallet = null;
+  currentAccount = null;
+  accounts = [];
+  connectResult = { accounts: [] };
+  connect.mockClear();
+  disconnect.mockClear();
+  switchAccount.mockClear();
+  order.length = 0;
+  window.sessionStorage.clear();
 });
-
-/*
-  Explicit, because this config does not set `globals: true` — so React Testing Library's automatic
-  cleanup never registers. Without it every render stays in the document and the second test onwards
-  fails with "found multiple elements", which reads as a duplicate-rendering bug in the component
-  rather than as the harness leaking between tests.
-*/
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
 
-/*
-  The signed-out view has to be reachable.
-
-  While the wallet record lived in `localStorage`, anybody who had ever connected was reconnected
-  silently on every load, in every tab, forever. There was no way back to the guest state — not for
-  a reader who wanted to disconnect, and not for the person trying to see what a visitor sees. The
-  record is scoped to the tab now, and a leftover permanent copy is dropped rather than obeyed.
-*/
-describe('getting back to signed out', () => {
-  it('does not reconnect from a record left in localStorage', async () => {
-    stored.set(REMEMBERED, JSON.stringify({ wallet: 'Slush', address: FIRST }));
-    const slush = wallet([account(FIRST)]);
-    registered = [slush.handle];
-
-    mount(<><SignIn /><Probe /></>);
-
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Slush/ })).not.toBeNull());
-    expect(bound()).toBe('none');
-    // Not even a silent attempt: the record is not consulted, so nothing asks the extension.
-    expect(slush.connect).not.toHaveBeenCalled();
+describe('several authorised addresses are a question, not a guess', () => {
+  it('says nothing when the wallet authorised one', async () => {
+    connectResult = { accounts: [A] };
+    mount();
+    await press('connect');
+    expect(screen.getByTestId('choice').textContent).toBe('closed');
   });
 
-  it('clears the stale permanent copy rather than leaving it to fire again', async () => {
-    stored.set(REMEMBERED, JSON.stringify({ wallet: 'Slush', address: FIRST }));
-    const slush = wallet([account(FIRST)]);
-    registered = [slush.handle];
-
-    mount(<><SignIn /><Probe /></>);
-
-    await waitFor(() => expect(stored.has(REMEMBERED)).toBe(false));
+  it('asks which, when the wallet authorised several', async () => {
+    /*
+      dapp-kit binds the first account it is handed. That is the wrong answer here: which address
+      is bound decides whose vault, whose earnings and whose messages are on screen, and picking
+      one silently is how somebody reads the wrong account's money.
+    */
+    connectResult = { accounts: [A, B] };
+    currentWallet = WALLET;
+    accounts = [A, B];
+    mount();
+    await press('connect');
+    expect(screen.getByTestId('choice').textContent).toBe('open');
+    expect(screen.getByTestId('choice-accounts').textContent).toBe(`${A.address},${B.address}`);
   });
 
-  it('remembers the connection for this tab, so a reload does not sign you out', async () => {
-    const slush = wallet([account(FIRST)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await waitFor(() => expect(bound()).toBe(FIRST));
-    expect(sessionStored.get(REMEMBERED)).toContain(FIRST);
-  });
-});
-
-describe('choosing which address a wallet session uses', () => {
-  /*
-    One account is not a choice. Making somebody confirm the only answer to a question they were not
-    asked is a step that exists for the implementation's convenience, not theirs.
-  */
-  it('connects straight through when the wallet authorises one address', async () => {
-    const slush = wallet([account(FIRST)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await waitFor(() => expect(bound()).toBe(FIRST));
-    expect(screen.queryByText(/Which Slush address/)).toBeNull();
+  it('switches to the address the reader picked, and closes the question', async () => {
+    connectResult = { accounts: [A, B] };
+    currentWallet = WALLET;
+    accounts = [A, B];
+    mount();
+    await press('connect');
+    await press('choose B');
+    expect(switchAccount).toHaveBeenCalledWith({ account: B });
+    expect(screen.getByTestId('choice').textContent).toBe('closed');
   });
 
-  it('asks which address when the wallet authorises several, and binds to none until told', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await screen.findByText(/Which Slush address/);
-    expect(bound()).toBe('none');
-    for (const address of [FIRST, SECOND, THIRD]) {
-      expect(screen.queryByRole('button', { name: new RegExp(address) })).not.toBeNull();
-    }
-  });
-
-  /*
-    The defect itself. Picking the third address and getting the first is the live report, and it is
-    invisible: the wallet signs, the chain accepts, and the money leaves an account nobody chose.
-  */
-  it('binds to the address the reader picked, not the first the wallet returned', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(THIRD) }));
-
-    await waitFor(() => expect(bound()).toBe(THIRD));
-  });
-
-  /*
-    Addresses are shown in full. A picker is the one place truncation cannot be tolerated: `0x1111…`
-    and `0x1111…` are the same six characters, and choosing between two of those is choosing blind.
-  */
-  it('shows each address in full, and the wallet’s own name for it when there is one', async () => {
-    const slush = wallet([account(FIRST, 'Everyday'), account(SECOND)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    const labelled = await screen.findByRole('button', { name: new RegExp(FIRST) });
-    expect(labelled.textContent).toContain(FIRST);
-    expect(labelled.textContent).toContain('Everyday');
-    // No invented name for the one the wallet did not name — "Account 2" is data nobody measured.
-    const plain = screen.getByRole('button', { name: new RegExp(SECOND) });
-    expect(plain.textContent).toBe(SECOND);
-  });
-
-  it('lets the reader back out of the choice without binding to anything', async () => {
-    const slush = wallet([account(FIRST), account(SECOND)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-
-    await waitFor(() => expect(screen.queryByText(/Which Slush address/)).toBeNull());
-    expect(bound()).toBe('none');
-    // Back to the wallet list, rather than a panel with nothing on it.
-    expect(screen.queryByRole('button', { name: 'Slush' })).not.toBeNull();
-  });
-
-  it('says the wallet authorised nothing rather than binding to an absent account', async () => {
-    const slush = wallet([]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await screen.findByText('the wallet returned no accounts');
-    expect(bound()).toBe('none');
+  it('lets the reader back out without switching to anything', async () => {
+    connectResult = { accounts: [A, B] };
+    currentWallet = WALLET;
+    accounts = [A, B];
+    mount();
+    await press('connect');
+    await press('cancel');
+    expect(screen.getByTestId('choice').textContent).toBe('closed');
+    expect(switchAccount).not.toHaveBeenCalled();
   });
 });
 
-describe('following the account the wallet is on', () => {
-  async function connectAndPick(address: string) {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(address) }));
-    await waitFor(() => expect(bound()).toBe(address));
-    return slush;
-  }
-
-  /*
-    The extension is the other half of this control. Switching account inside Slush and leaving the
-    page bound to the old one produces a signature request the wallet answers from a different
-    address than the page is showing.
-  */
-  it('moves with the wallet when the bound address is no longer authorised', async () => {
-    const slush = await connectAndPick(SECOND);
-
-    slush.announce({ accounts: [account(THIRD)] });
-
-    await waitFor(() => expect(bound()).toBe(THIRD));
+describe('reopening the choice', () => {
+  it('offers every address the wallet currently authorises', async () => {
+    currentWallet = WALLET;
+    currentAccount = A;
+    accounts = [A, B];
+    mount();
+    await press('reopen');
+    expect(screen.getByTestId('choice-accounts').textContent).toBe(`${A.address},${B.address}`);
   });
 
-  /*
-    The other direction, and the one that is easy to get wrong. A wallet re-announcing its whole list
-    has not asked us to change anything, and taking the first entry there would silently undo the
-    reader's explicit choice — reintroducing the original defect through the back door.
-  */
-  it('keeps the picked address when the wallet still authorises it', async () => {
-    const slush = await connectAndPick(THIRD);
-
-    slush.announce({ accounts: [account(FIRST), account(SECOND), account(THIRD)] });
-
-    expect(bound()).toBe(THIRD);
-  });
-
-  /*
-    The bound address is gone and there is more than one candidate left. There is no answer to be
-    read off that list — picking one is guessing, and `accounts[0]` is the exact guess this whole
-    change exists to delete. So the reader is asked again, and nothing signs in the meantime.
-  */
-  it('asks again rather than guessing when several addresses remain and none is the bound one', async () => {
-    const slush = await connectAndPick(SECOND);
-
-    slush.announce({ accounts: [account(FIRST), account(THIRD)] });
-
-    await waitFor(() => expect(bound()).toBe('none'));
-    expect(screen.queryByText(/Which Slush address/)).not.toBeNull();
-    for (const address of [FIRST, THIRD]) {
-      expect(screen.queryByRole('button', { name: new RegExp(address) })).not.toBeNull();
-    }
-  });
-
-  /*
-    The list on the sign-in surface is only worth having if it tracks the extension. A wallet that
-    authorises a third address while the page is open must say so there, or the reader checks a
-    stale list against a live wallet and concludes we lost one.
-  */
-  it('updates the reported addresses when the wallet authorises another', async () => {
-    const slush = await connectAndPick(SECOND);
-
-    slush.announce({ accounts: [account(FIRST), account(SECOND), account(THIRD)] });
-
-    await waitFor(() => expect(screen.queryByText(/Slush reports 3 addresses/)).not.toBeNull());
-    expect(bound()).toBe(SECOND);
-  });
-
-  /*
-    An empty list is a revocation: the reader took this site's access away in the extension. Leaving
-    the address on screen would show a session that cannot sign, and they would find that out at the
-    end of a checkout.
-  */
-  it('signs out, and says so, when the wallet revokes access', async () => {
-    const slush = await connectAndPick(FIRST);
-
-    slush.announce({ accounts: [] });
-
-    await waitFor(() => expect(bound()).toBe('none'));
-    expect(screen.queryByText(/Slush is no longer sharing/)).not.toBeNull();
-  });
-
-  /*
-    `accounts` absent means the wallet changed something else — its chains, its features. "We were
-    not told" is not "there are none", and treating the two alike drops a working session.
-  */
-  it('ignores a change that carries no accounts at all', async () => {
-    const slush = await connectAndPick(SECOND);
-
-    slush.announce({});
-
-    expect(bound()).toBe(SECOND);
-  });
-
-  it('stops listening when the provider goes away', async () => {
-    const slush = await connectAndPick(FIRST);
-    expect(slush.listening()).toBe(1);
-
-    cleanup();
-
-    expect(slush.listening()).toBe(0);
-  });
-
-  /*
-    `standard:events` is not among the features this application requires, so a wallet without it
-    must still connect and sign. It simply cannot tell us when it moves.
-  */
-  it('connects to a wallet that announces nothing', async () => {
-    const slush = wallet([account(FIRST)], { events: false });
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await waitFor(() => expect(bound()).toBe(FIRST));
+  it('says so rather than opening an empty question when no wallet is connected', async () => {
+    mount();
+    await press('reopen');
+    expect(screen.getByTestId('choice').textContent).toBe('closed');
+    expect(screen.getByTestId('error').textContent).toContain('no wallet is connected');
   });
 });
 
-/*
-  What the wallet said, on screen, permanently.
-*/
-describe('reporting what the wallet actually returned', () => {
-  it('says how many addresses the wallet reports, and shows every one in full', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(SECOND) }));
-    await waitFor(() => expect(bound()).toBe(SECOND));
-
-    expect(screen.queryByText(/Slush reports 3 addresses/)).not.toBeNull();
-    // In full, all of them — an address abbreviated to six characters cannot be checked against
-    // the one the extension is showing, which is the entire comparison being made here.
-    //
-    // Read off the report's own list rather than the document, because `Probe` renders the bound
-    // address too and a document-wide query cannot tell which of the two it found.
-    const reported = screen.getByRole('list').textContent;
-    for (const address of [FIRST, SECOND, THIRD]) {
-      expect(reported).toContain(address);
-    }
+describe('asking the extension again', () => {
+  it('disconnects first, because a connected wallet answers from cache and shows nothing', async () => {
+    currentWallet = WALLET;
+    currentAccount = A;
+    accounts = [A];
+    connectResult = { accounts: [A] };
+    mount();
+    await press('reauthorize');
+    expect(order).toEqual(['disconnect', 'connect']);
   });
 
-  it('marks which of the reported addresses this session signs with', async () => {
-    const slush = wallet([account(FIRST), account(SECOND)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
+  it('says so when there is no wallet to ask', async () => {
+    mount();
+    await press('reauthorize');
+    expect(screen.getByTestId('error').textContent).toContain('no wallet is connected');
+    expect(connect).not.toHaveBeenCalled();
+  });
+});
 
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(SECOND) }));
-    await waitFor(() => expect(bound()).toBe(SECOND));
+describe('what the provider reports about the wallet', () => {
+  it('reports no addresses at all when no wallet is connected', async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId('reported').textContent).toBe('null'));
+  });
 
-    const rows = screen.getAllByRole('listitem');
-    expect(rows.find((row) => row.textContent?.includes(SECOND))?.textContent).toContain(
-      'signing with this one',
-    );
-    expect(rows.find((row) => row.textContent?.includes(FIRST))?.textContent).not.toContain(
-      'signing with this one',
+  it('reports every address the wallet authorises, not only the bound one', async () => {
+    currentWallet = WALLET;
+    currentAccount = A;
+    accounts = [A, B];
+    mount();
+    await waitFor(() =>
+      expect(screen.getByTestId('reported').textContent).toBe(`${A.address},${B.address}`),
     );
   });
 
-  it('reports a single shared address rather than staying silent about it', async () => {
-    const slush = wallet([account(FIRST)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-    await waitFor(() => expect(bound()).toBe(FIRST));
-
-    expect(screen.queryByText(/Slush reports 1 address/)).not.toBeNull();
-    expect(screen.getByRole('list').textContent).toContain(FIRST);
+  it('signs as the account the kit reports as current', async () => {
+    currentWallet = WALLET;
+    currentAccount = A;
+    accounts = [A];
+    mount();
+    await waitFor(() => expect(screen.getByTestId('address').textContent).toBe(A.address));
   });
 });
 
-/*
-  Where the authorised set is read from.
-
-  The Wallet Standard keeps the authorised accounts on `wallet.accounts`. `connect()` resolving with
-  one entry does not mean one is authorised — several wallets answer with the currently-active
-  account and leave the rest on the wallet object. Reading only the return value is how a wallet
-  holding three addresses produces a session that never once offered a choice, which is the report.
-*/
-describe('reading the authorised set from the wallet, not only from connect()', () => {
-  it('offers every address the wallet object holds, not just the one connect() returned', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)], {
-      returns: [account(FIRST)],
-    });
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await screen.findByText(/Which Slush address/);
-    expect(bound()).toBe('none');
-    for (const address of [FIRST, SECOND, THIRD]) {
-      expect(screen.queryByRole('button', { name: new RegExp(address) })).not.toBeNull();
-    }
-  });
-
+describe('a deployment that does not know its network signs nothing', () => {
   /*
-    The other direction. A wallet that authorises an address during this very connect can return it
-    before its own `accounts` property has caught up, and dropping it would lose the address the
-    reader just approved.
+    A wallet is asked to sign for `sui:<network>`. With the configuration unread there is no honest
+    value for that, and the failure a guess produces is a signature valid on a chain nobody chose.
   */
-  it('keeps an address connect() returned that the wallet object had not listed yet', async () => {
-    const slush = wallet([account(FIRST)], { returns: [account(FIRST), account(SECOND)] });
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-
-    await screen.findByText(/Which Slush address/);
-    expect(screen.queryByRole('button', { name: new RegExp(SECOND) })).not.toBeNull();
+  it('builds no signer, even with a wallet and an account connected', async () => {
+    currentWallet = WALLET;
+    currentAccount = A;
+    accounts = [A];
+    mount(null);
+    await waitFor(() => expect(screen.getByTestId('reported').textContent).toBe(A.address));
+    expect(screen.getByTestId('address').textContent).toBe('none');
   });
 
-  /*
-    A reader whose other addresses were never authorised cannot be left at a dead end. Re-invoking
-    connect is what makes several wallets show their own account picker, which is the only surface
-    that can widen an authorisation — nothing on this page can.
-  */
-  it('offers a way back to the wallet’s own authorisation when it shared one address', async () => {
-    const slush = wallet([account(FIRST)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-    await waitFor(() => expect(bound()).toBe(FIRST));
-    expect(slush.connect).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole('button', { name: /Ask Slush/ }));
-
-    await waitFor(() => expect(slush.connect).toHaveBeenCalledTimes(2));
-  });
-
-  it('lets a reader reopen the choice between addresses already authorised', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    mount(<><SignIn /><Probe /></>);
-
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(FIRST) }));
-    await waitFor(() => expect(bound()).toBe(FIRST));
-
-    fireEvent.click(screen.getByRole('button', { name: /different address/ }));
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(THIRD) }));
-
-    await waitFor(() => expect(bound()).toBe(THIRD));
-    // Reopening asks us, not the extension. The wallet was already told what to authorise.
-    expect(slush.connect).toHaveBeenCalledTimes(1);
+  it('refuses to connect, and says why, rather than connecting into nothing', async () => {
+    mount(null);
+    await press('connect');
+    expect(connect).not.toHaveBeenCalled();
+    expect(screen.getByTestId('error').textContent).toContain('which network it is on');
   });
 });
 
-describe('the choice outliving the panel that offered it', () => {
-  /*
-    `SignIn` is rendered by twelve components and unmounts on every navigation. A pending choice held
-    in its own state would vanish when the reader moved, leaving a connected wallet and no address —
-    which is why this state belongs to the provider at the root, not to the panel.
+describe('signing out', () => {
+  it('disconnects the wallet, clears the Google session, and tells the server', async () => {
+    currentWallet = WALLET;
+    currentAccount = A;
+    accounts = [A];
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, '{"maxEpoch":1}');
+    mount();
+    await press('sign out');
 
-    Changing the key is how a route change is expressed here: React unmounts the old element and
-    mounts a fresh one, exactly as a navigation between two pages that each render `SignIn` does.
-  */
-  it('keeps the pending choice when the panel that opened it is replaced', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    const { rerender } = mount(<><SignIn key="/join" /><Probe /></>);
-
-    await clickWallet();
-    await screen.findByText(/Which Slush address/);
-
-    rerender(<SignerProvider><><SignIn key="/earnings" /><Probe /></></SignerProvider>);
-
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(SECOND) }));
-    await waitFor(() => expect(bound()).toBe(SECOND));
-  });
-
-  it('keeps the chosen address when the panel is replaced', async () => {
-    const slush = wallet([account(FIRST), account(SECOND), account(THIRD)]);
-    registered = [slush.handle];
-    const { rerender } = mount(<><SignIn key="/join" /><Probe /></>);
-
-    await clickWallet();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(THIRD) }));
-    await waitFor(() => expect(bound()).toBe(THIRD));
-
-    rerender(<SignerProvider><><SignIn key="/earnings" /><Probe /></></SignerProvider>);
-
-    expect(bound()).toBe(THIRD);
-    // And the fresh panel shows the session rather than offering to start another one.
-    expect(await screen.findByRole('button', { name: 'Sign out' })).not.toBeNull();
+    expect(disconnect).toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    /*
+      The DELETE is the part that matters. Clearing this browser leaves a cookie that still proves
+      a reader for as long as it has left to live, so signing out without it means the server has
+      not agreed that anybody signed out.
+    */
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    expect(
+      calls.some(
+        ([url, init]) =>
+          url === '/api/session' && (init as { method?: string } | undefined)?.method === 'DELETE',
+      ),
+    ).toBe(true);
   });
 });
-

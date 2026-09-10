@@ -1,6 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude
 import type { Metadata, Viewport } from 'next';
 import { geist, geistMono, inter, jetbrainsMono, sourceSerif } from './fonts';
+import { fold } from '@projectx-social/sdk';
+import { siteConfig } from '@/lib/chain';
 import { SignerProvider } from '@/components/SignerProvider';
 import { SessionBridge } from '@/components/SessionBridge';
 import { AppShell } from '@/components/shell/AppShell';
@@ -235,7 +237,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           the application frame and still offers to connect a wallet, so the provider has to be
           above both.
         */}
-        <SignerProvider>
+        {/*
+          The network is read here and handed down, rather than assumed in the wallet layer.
+
+          A wallet is asked to sign for `sui:<network>`. This deployment's network is configuration,
+          and a default in the browser would be a signature requested against a chain nobody chose.
+        */}
+        <SignerProvider
+          network={fold(siteConfig(), (config) => config.network as string, () => null)}
+          rpcUrl={fold(siteConfig(), (config) => config.grpcUrl, () => null)}
+        >
           {/*
             The session handshake, above every route.
 

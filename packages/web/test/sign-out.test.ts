@@ -66,7 +66,8 @@ describe('signing out', () => {
   it('clears the browser first, so the UI never waits on the network', () => {
     // A sign-out that appears to do nothing until a request returns is a sign-out people click
     // twice, then distrust.
-    const local = SIGN_OUT.indexOf('setSigner(null)');
+    // `setZkSigner`, since the wallet half is dapp-kit's `disconnect()` and no longer local state.
+    const local = SIGN_OUT.indexOf('setZkSigner(null)');
     const remote = SIGN_OUT.indexOf("fetch('/api/session'");
     expect(local).toBeGreaterThan(-1);
     expect(remote).toBeGreaterThan(local);

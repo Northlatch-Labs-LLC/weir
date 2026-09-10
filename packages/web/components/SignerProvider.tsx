@@ -1,30 +1,42 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude
-
 /**
- * Who is signed in, and how they sign.
+ * Who is signing, and how they came to be signing.
  *
- * One provider at the root of the application. Components call `useSigner()` and get an
- * `ActiveSigner` or `null`; none of them discovers a wallet, none of them knows what zkLogin is,
- * and none of them decides what "signed in" means.
+ * # What changed, and why it is worth the churn
  *
- * # Two ways in, one way out
+ * The wallet half of this file used to be written by hand: `getWallets()`, a `register` /
+ * `unregister` subscription, `standard:connect` called directly, a `standard:events` `change`
+ * listener, a remembered-wallet record in `localStorage` and a silent reconnect on load. Nine
+ * hundred lines, of which roughly half was a re-implementation of `@mysten/dapp-kit` — Mysten's own
+ * React layer, which had never been installed in this repository.
  *
- * A browser wallet and a Google sign-in produce the same object. The only place the difference is
- * visible is the label shown to the user, which is the one place it *should* be visible.
+ * Discovery, connecting, disconnecting, autoconnect, account switching and the extension's own
+ * change events are now dapp-kit's. They are not this product's problem and never were.
  *
- * # The session survives a redirect and nothing else
+ * # What stays ours, and has to
  *
- * zkLogin needs an ephemeral private key to exist before the user leaves for Google and still exist
- * when they come back, so it goes in `sessionStorage`. Not `localStorage`: closing the tab should
- * end the session, because the key is a spending key for as long as `maxEpoch` has not passed and
- * leaving it on disk turns a two-day window into an indefinite one.
+ * dapp-kit has no concept of the two things this application actually depends on:
  *
- * # Expiry is measured against the chain, not the clock
+ *   - **zkLogin as a peer of a browser wallet.** A Google sign-in and an extension produce the same
+ *     {@link ActiveSigner}, and every consumer is written against that one shape. dapp-kit knows
+ *     only about wallets.
+ *   - **A proved read session.** Connecting is the extension sharing an address. It grants nothing
+ *     here. What grants anything is a signature over the read-content statement, which mints a
+ *     server session — see `SessionBridge`. dapp-kit has no opinion on that, correctly.
  *
- * A restored session is checked against the epoch the server reports. Sui epochs do not advance on
- * a schedule, so a wall-clock estimate would either offer a dead session — which fails after the
- * user has typed an amount and read a quote — or discard a live one for no reason.
+ * # The contract is unchanged on purpose
+ *
+ * Thirty-three components call `useSigner()`. {@link SignerContextValue} keeps every member it had,
+ * with the same meaning, so this is one file changing rather than thirty-four.
+ *
+ * # dapp-kit's client is not this application's client
+ *
+ * `SuiClientProvider` exists because `WalletProvider` needs it. It builds a JSON-RPC client, and
+ * this deployment reads the chain over gRPC — see `lib/chain`. Nothing here reads chain state
+ * through dapp-kit, and nothing should start: the network named below is for the wallet layer's own
+ * bookkeeping, and it is passed in from the server rather than assumed, so a deployment pointed at
+ * one network can never hand a wallet a chain identifier belonging to another.
  */
 
 import {
@@ -33,17 +45,22 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  getWallets,
-  type StandardConnectFeature,
-  type StandardEventsFeature,
-  type Wallet,
-  type WalletAccount,
-} from '@mysten/wallet-standard';
+  SuiClientProvider,
+  WalletProvider,
+  useAccounts,
+  useConnectWallet,
+  useCurrentAccount,
+  useCurrentWallet,
+  useDisconnectWallet,
+  useSwitchAccount,
+  useWallets,
+} from '@mysten/dapp-kit';
+import type { Wallet, WalletAccount } from '@mysten/wallet-standard';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   generateNonce,
@@ -59,11 +76,7 @@ import {
   type PendingSession,
 } from '@/lib/zklogin';
 import {
-  authorisedAccounts,
-  forgetWallet,
   isUsableWallet,
-  readRememberedWallet,
-  rememberWallet,
   walletSupport,
   walletSigner,
   zkLoginSignerAdapter,
@@ -71,7 +84,6 @@ import {
   type SuiChain,
 } from '@/lib/signer';
 
-/** What the sign-in endpoint tells the browser. Mirrors `/api/zklogin/session`. */
 interface SessionInfo {
   network: string;
   available: boolean;
@@ -82,13 +94,6 @@ interface SessionInfo {
   maxEpoch?: number;
 }
 
-/**
- * What a user needs to reach their zkLogin address without this platform.
- *
- * All five values, together. A salt on its own recovers nothing — the address is a function of
- * `iss`, `aud`, `sub` *and* the salt, so somebody who kept only the number kept a quarter of what
- * they need, and would find that out with no working deployment left to ask.
- */
 export interface RecoveryDetails {
   salt: string;
   iss: string;
@@ -99,94 +104,38 @@ export interface RecoveryDetails {
   note: string;
 }
 
+/** A wallet that announced itself but is missing a feature this application requires. */
 export interface UnusableWallet {
-  /** The wallet's own name, as it registered itself. */
   name: string;
-  /** Plain-language capabilities it lacks, e.g. ['signing messages']. */
   missing: string[];
 }
 
-/**
- * A connected wallet holding more than one address, waiting to be told which.
- *
- * This lives on the provider rather than inside the panel that started the connection. `SignIn` is
- * rendered by twelve components and unmounts on every navigation, so a pending choice held there
- * would evaporate the moment the reader moved — leaving an authorised wallet and no address.
- */
+/** A connected wallet holding more than one address, waiting to be told which. */
 export interface AccountChoice {
   wallet: Wallet;
-  /** Every address the wallet authorised, in the order it gave them. Never truncated to one. */
   accounts: readonly WalletAccount[];
 }
 
 interface SignerContextValue {
   signer: ActiveSigner | null;
-  /** Wallets present in this browser that can do everything the application needs. */
   wallets: Wallet[];
-  /** Detected Sui wallets we cannot offer, with the reason. Never silently dropped. */
   unusableWallets: UnusableWallet[];
-  /** `null` while the server has not answered yet — distinct from "zkLogin is unavailable". */
   session: SessionInfo | null;
-  /** Set when a connected wallet returned several addresses. `null` the rest of the time. */
   accountChoice: AccountChoice | null;
-  /**
-   * Every address the connected wallet currently reports as authorised, and which one is bound.
-   *
-   * Kept and published rather than consumed and dropped. When an address the reader expects is not
-   * here, the wallet did not share it — and that is a different problem, with a different fix, from
-   * this application losing it. Nothing on screen could tell those apart before, and working out
-   * which one was happening cost a day.
-   *
-   * `null` when no wallet is connected, which is not the same as a wallet that shared nothing.
-   */
   walletAccounts: readonly WalletAccount[] | null;
-  /** Answer an open `accountChoice`. Ignored — with a reason — when nothing is pending. */
   chooseAccount: (account: WalletAccount) => void;
-  /** Abandon an open choice without binding to anything. */
   cancelAccountChoice: () => void;
-  /**
-   * Choose again between addresses the wallet has already authorised. Asks us, not the extension.
-   *
-   * The existing session is left alone until an answer arrives, so cancelling leaves the reader
-   * exactly where they were rather than signed out for having looked.
-   */
   reopenAccountChoice: () => void;
-  /**
-   * Ask the wallet to authorise again, from scratch.
-   *
-   * The only route out of "my other address is not in this list". Nothing on this page can
-   * authorise an address — that decision lives in the extension — and connecting again is not
-   * enough on its own: an already-connected wallet answers instantly with what it authorised
-   * before and shows the reader nothing. This disconnects first, which is what makes the wallet
-   * ask again.
-   */
   reauthorizeWallet: () => Promise<void>;
   connectWallet: (wallet: Wallet) => Promise<void>;
   signInWithGoogle: (returnTo: string) => Promise<void>;
   signOut: () => void;
-  /**
-   * Fetch this user's own recovery details.
-   *
-   * Lives on the provider rather than in a component because it spends the stored identity token,
-   * and that token should not be readable by every component that happens to want an address. The
-   * provider holds it; components get the answer.
-   *
-   * `null` when there is nothing to export — a wallet session is already self-custodial and has no
-   * salt at all, which is a different thing from a failed lookup.
-   */
   exportRecovery: () => Promise<RecoveryDetails | null>;
   error: string | null;
 }
 
 const SignerContext = createContext<SignerContextValue | null>(null);
 
-/**
- * Build a signer from a completed session.
- *
- * Shared by the restore path and the callback path so both produce an identical object. Two
- * constructions would eventually disagree about `legacyAddress`, which does not throw — it silently
- * yields a signer for a different, empty address.
- */
 function signerFromSession(session: ActiveSession): ActiveSigner {
   const ephemeral = Ed25519Keypair.fromSecretKey(session.ephemeralSecretKey);
   const signer = new ZkLoginSigner({
@@ -199,17 +148,9 @@ function signerFromSession(session: ActiveSession): ActiveSigner {
       addressSeed: session.addressSeed,
     } as never,
     legacyAddress: false,
-    // Passing the address makes the constructor re-derive it from the proof inputs and throw on a
-    // mismatch. Without it a wrong `legacyAddress` produces a working signer for an address the
-    // user does not control, and the first sign would simply fail on chain with nothing explaining
-    // why. The SDK documents this parameter as exactly that guard; it is not optional here.
     address: session.address,
   });
-  return zkLoginSignerAdapter({
-    address: session.address,
-    label: 'Google',
-    signer,
-  });
+  return zkLoginSignerAdapter({ address: session.address, label: 'Google', signer });
 }
 
 function readStoredSession(): ActiveSession | PendingSession | null {
@@ -228,79 +169,152 @@ function isComplete(session: ActiveSession | PendingSession): session is ActiveS
   return 'address' in session && 'addressSeed' in session;
 }
 
-export function SignerProvider({ children }: { children: ReactNode }) {
-  const [signer, setSigner] = useState<ActiveSigner | null>(null);
-  // The zkLogin session behind `signer`, when that is how this user signed in. Kept out of the
-  // ActiveSigner interface deliberately: components sign, they do not read identity tokens.
-  const [zkSession, setZkSession] = useState<ActiveSession | null>(null);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  /*
-    Wallets we found and cannot offer, kept rather than discarded.
+/**
+ * One query client for the life of the document.
+ *
+ * Built lazily and kept, rather than constructed in render: a new client on every render throws
+ * away every cache dapp-kit keeps and re-runs the queries behind autoconnect on each pass.
+ */
+let queryClient: QueryClient | null = null;
+function sharedQueryClient(): QueryClient {
+  queryClient ??= new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  });
+  return queryClient;
+}
 
-    Discarding them made an installed wallet indistinguishable from no wallet: the section rendered
-    nothing, and the user was left to conclude we had not implemented their wallet. Carrying the
-    reason turns that into one sentence naming what is missing.
+export function SignerProvider({
+  children,
+  network,
+  rpcUrl,
+}: {
+  children: ReactNode;
+  /**
+   * The network this deployment is pointed at, read from configuration on the server.
+   *
+   * `null` when the configuration could not be read. A wallet is asked to sign for `sui:<network>`,
+   * so an unknown network means no wallet signer is built at all and connecting says why. It does
+   * not mean a plausible guess: a signature requested against a chain nobody chose is the failure
+   * this refuses to have.
+   */
+  network: string | null;
+  /**
+   * The node URL this deployment is configured with.
+   *
+   * Handed to dapp-kit only because `SuiClientProvider` will not construct without one. Nothing in
+   * this application queries through that client — chain reads go through `lib/chain` — so this is
+   * the configured endpoint rather than a public node nobody chose. If dapp-kit ever does call it,
+   * it calls the node this deployment already uses, and fails loudly if that node cannot answer.
+   */
+  rpcUrl: string | null;
+}) {
+  /*
+    One entry, named for the network this deployment is on.
+
+    `SuiClientProvider` will not construct without a URL, so the configured endpoint is given
+    rather than a public node nobody chose. Where the configuration could not be read, the entry
+    points at a closed port: dapp-kit gets its object, and anything that tried to query through it
+    would fail loudly instead of silently reaching a network this deployment is not on.
   */
-  const [unusableWallets, setUnusableWallets] = useState<UnusableWallet[]>([]);
+  const networks = {
+    [network ?? 'mainnet']: {
+      url: rpcUrl ?? 'http://127.0.0.1:0',
+      network: (network ?? 'mainnet') as 'mainnet',
+    },
+  };
+
+  return (
+    <QueryClientProvider client={sharedQueryClient()}>
+      {/*
+        dapp-kit's own client, for dapp-kit's own bookkeeping. Nothing in this application reads
+        the chain through it — see the note at the top of this file — so its network falling back
+        here changes nothing anybody signs. What must never be guessed is the chain identifier
+        handed to a wallet, and that is built below from `network` alone.
+      */}
+      <SuiClientProvider
+        networks={networks}
+        network={network ?? 'mainnet'}
+      >
+        <WalletProvider
+          autoConnect
+          storageKey="projectx.wallet"
+          /*
+            The same requirement the hand-written layer enforced: a wallet that cannot sign a
+            personal message or a transaction cannot be used here, and offering it would produce a
+            connect that succeeds and a sign-in that cannot.
+          */
+          walletFilter={isUsableWallet}
+          /*
+            dapp-kit ships its own button and modal, styled with vanilla-extract. This application
+            has its own, so the theme is turned off rather than loaded and overridden — that also
+            keeps `@mysten/dapp-kit/dist/index.css` out of the bundle entirely.
+          */
+          theme={null}
+        >
+          <SignerBridge network={network}>{children}</SignerBridge>
+        </WalletProvider>
+      </SuiClientProvider>
+    </QueryClientProvider>
+  );
+}
+
+/**
+ * The product's own signer, assembled from dapp-kit's wallet state and this application's zkLogin.
+ *
+ * Everything that follows is either zkLogin, which dapp-kit does not know about, or a translation
+ * from dapp-kit's shape into the {@link ActiveSigner} that thirty-three components already read.
+ */
+function SignerBridge({ children, network }: { children: ReactNode; network: string | null }) {
+  const wallets = useWallets();
+  const currentAccount = useCurrentAccount();
+  const { currentWallet } = useCurrentWallet();
+  const accounts = useAccounts();
+  const { mutateAsync: connect } = useConnectWallet();
+  const { mutateAsync: disconnect } = useDisconnectWallet();
+  const { mutate: switchAccount } = useSwitchAccount();
+
+  const [zkSigner, setZkSigner] = useState<ActiveSigner | null>(null);
+  const [zkSession, setZkSession] = useState<ActiveSession | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /*
-    A connect that came back with several addresses and has not been answered yet.
+  /** Open only when the reader asked for it, or when a connect returned more than one address. */
+  const [choiceOpen, setChoiceOpen] = useState(false);
 
-    `connect()` returns every address the reader authorised. The previous code took `accounts[0]`
-    and dropped the rest, so a Slush wallet holding three addresses bound to whichever one the
-    extension happened to list first and offered no way to change it. That failure is silent: the
-    wallet signs, the chain accepts, and the money leaves an account nobody chose.
-  */
-  const [accountChoice, setAccountChoice] = useState<AccountChoice | null>(null);
+  const chain: SuiChain | null = network === null ? null : `sui:${network}`;
+
   /*
-    The wallet and chain behind a wallet `signer`, kept because `ActiveSigner` deliberately exposes
-    neither. Only the `change` subscription below needs them, and it needs them to rebuild the
-    signer for a different account without re-running the connect prompt.
+    The wallet's signer, derived rather than stored.
+
+    The hand-written version held the bound account in state and kept it in step with the
+    extension through a `standard:events` subscription — the source of the "no longer sharing that
+    address" branch, the re-bind, and the forget. dapp-kit's store already tracks all of that, so
+    the signer is now a function of what it reports and cannot drift from it.
   */
-  const [walletBinding, setWalletBinding] = useState<{ wallet: Wallet; chain: SuiChain } | null>(
-    null,
+  const walletActiveSigner = useMemo<ActiveSigner | null>(() => {
+    if (currentWallet === null || currentAccount === null || chain === null) return null;
+    return walletSigner({ wallet: currentWallet, account: currentAccount, chain });
+  }, [currentWallet, currentAccount, chain]);
+
+  /*
+    A wallet outranks a Google session when both are present.
+
+    Only one can be true at a time in practice — `signOut` clears both, and connecting a wallet
+    clears the zkLogin session below — but the order is written down rather than left to whichever
+    state updated last.
+  */
+  const signer = walletActiveSigner ?? zkSigner;
+
+  /* Wallets that announced themselves but cannot do what this application needs. */
+  const unusableWallets = useMemo<UnusableWallet[]>(
+    () =>
+      wallets
+        .map((wallet) => ({ name: wallet.name, support: walletSupport(wallet) }))
+        .filter((entry) => !entry.support.ok && entry.support.missing.length > 0)
+        .map((entry) => ({ name: entry.name, missing: entry.support.missing })),
+    [wallets],
   );
-  /*
-    Everything the connected wallet says it has authorised, held so it can be shown.
 
-    Separate state rather than a field on `walletBinding` because the `change` subscription below is
-    keyed on the binding: folding the list in would tear the listener down and rebuild it on every
-    announcement, which is an unsubscribe in the middle of handling the event that caused it.
-  */
-  const [walletAccounts, setWalletAccounts] = useState<readonly WalletAccount[] | null>(null);
-  /*
-    The bound address, mirrored where the `change` listener can read it.
-
-    A ref rather than a dependency for the same reason: an effect keyed on the address would
-    resubscribe every time the address moved, including the moves this very listener makes.
-  */
-  const boundAddress = useRef<string | null>(null);
-  useEffect(() => {
-    boundAddress.current = signer !== null && signer.kind === 'wallet' ? signer.address : null;
-  }, [signer]);
-
-  // Wallets register asynchronously — an extension can announce itself well after hydration, so a
-  // list taken once at first paint is usually empty on a cold load.
-  useEffect(() => {
-    const registry = getWallets();
-    const refresh = () => {
-      const found = registry.get();
-      setWallets(found.filter(isUsableWallet));
-      setUnusableWallets(
-        found
-          .map((wallet) => ({ name: wallet.name, support: walletSupport(wallet) }))
-          // `missing` empty on a failure means "not a Sui wallet at all" — nothing to report, and
-          // complaining about somebody's Ethereum-only extension would be noise, not information.
-          .filter((entry) => !entry.support.ok && entry.support.missing.length > 0)
-          .map((entry) => ({ name: entry.name, missing: entry.support.missing })),
-      );
-    };
-    refresh();
-    const off = [registry.on('register', refresh), registry.on('unregister', refresh)];
-    return () => off.forEach((cancel) => cancel());
-  }, []);
-
+  /* This deployment's zkLogin configuration, and a Google session restored from the tab. */
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -309,9 +323,6 @@ export function SignerProvider({ children }: { children: ReactNode }) {
         const info = (await response.json()) as SessionInfo;
         if (cancelled) return;
         setSession(info);
-
-        // Restore an existing zkLogin session, but only after the epoch is known. Restoring first
-        // and validating later would briefly offer a signer that cannot sign.
         const stored = readStoredSession();
         if (stored === null || !isComplete(stored)) return;
         if (info.currentEpoch !== undefined && sessionExpired(stored, BigInt(info.currentEpoch))) {
@@ -319,7 +330,7 @@ export function SignerProvider({ children }: { children: ReactNode }) {
           setError('Your sign-in expired. Sign in again to continue.');
           return;
         }
-        setSigner(signerFromSession(stored));
+        setZkSigner(signerFromSession(stored));
         setZkSession(stored);
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
@@ -330,344 +341,77 @@ export function SignerProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  /** Commit to one address of one wallet. The single place a wallet `signer` is built. */
-  const bindAccount = useCallback(
-    (wallet: Wallet, account: WalletAccount, accounts: readonly WalletAccount[]) => {
-      // The network comes from the server's configuration. If it has not answered yet there is
-      // nothing safe to assume, so the connection is refused rather than guessed at.
-      if (session === null) throw new Error('still reading this deployment’s network');
-      const chain: SuiChain = `sui:${session.network}`;
-      setSigner(walletSigner({ wallet, account, chain }));
-      setWalletBinding({ wallet, chain });
-      setWalletAccounts(accounts);
-      setAccountChoice(null);
-      // A wallet session has no salt and needs none. Cleared rather than left stale, so a user
-      // who switches from Google to a wallet cannot be shown the previous account's recovery.
-      setZkSession(null);
-      /*
-        Written here, at the one place a wallet session begins, rather than at each caller. Connect,
-        a picked address, a wallet that moved and a restored reload all pass through this line, so
-        there is one answer to "what will the next reload come back as" instead of four.
-      */
-      /*
-        The wallet and the chosen address, so a reload comes back signed in.
-
-        This was removed for a day and that was an overcorrection. Remembering was never the defect:
-        the defect was remembering with no way to change it, so one address was welded to the
-        control and navigating anywhere re-bound it. Removing it fixed that by making everybody sign
-        in on every single page, which is worse.
-
-        What makes it safe now is the account picker and the `change` subscription that did not
-        exist then. The remembered address is restored only if the wallet still authorises it,
-        `signOut` forgets it, revocation forgets it, and switching account in the extension moves
-        the app rather than being overridden by what was stored.
-
-        Only a wallet name and a public address. No secret — which is why this may live in
-        `localStorage`, where zkLogin's ephemeral spending key may not.
-      */
-      rememberWallet({ wallet: wallet.name, address: account.address });
-    },
-    [session],
-  );
-
-  /*
-    Coming back to the same address after a reload.
-
-    # Why this is keyed off the registry rather than run once at mount
-
-    Restoration races wallet registration. Extensions announce themselves through the registry well
-    after first paint, so a single attempt at first paint reads an empty list, finds no wallet, and
-    leaves a reader who is signed in looking at a sign-in button for the rest of the page's life.
-    Keyed off `wallets` instead, it runs again each time the registry moves, and gets its answer the
-    moment the extension arrives.
-
-    # And why it can only fire once
-
-    The registry announces on every registration and unregistration, and a page can see several. A
-    connect per announcement is a connect per extension the reader happens to have installed, and on
-    any wallet that ignores the `silent` hint that is an approval prompt each time. The ref is what
-    makes "at most one attempt" true rather than likely.
-  */
-  const restoreAttempted = useRef(false);
-  /*
-    Silent restore is gone, and this clears what it left behind.
-
-    # What it did to a real person
-
-    It remembered the wallet and address, then called `connect({ silent: true })` on every load. The
-    intent was that a reload should not sign you out. The effect was a trap: the wallet never
-    opened, the same address came back every time, and nothing reachable in the interface changed
-    it — because the restore re-ran on the next load and overwrote whatever had just been chosen.
-
-    Two of those were the point of `silent`, so they did not look like a defect from in here. From
-    the outside it read as an address welded to the button, and it survived clearing everything the
-    reader knew how to clear, because the state was ours and the reader had never been told it
-    existed.
-
-    # Why removed rather than repaired
-
-    Nobody asked for it. It was folded into an account-selection fix as a convenience, and it cost
-    more than the inconvenience it removed. Connecting a wallet is one click and it shows the reader
-    exactly which address they are binding — the thing that was actually broken. A session that
-    survives a reload can come back when it is asked for, designed rather than assumed, with a
-    visible way to reset it.
-
-    # This runs once, on purpose
-
-    Anyone who loaded the build that wrote `projectx.wallet` still has it in `localStorage`, and it
-    would sit there unread forever. Clearing it here means their next load fixes them, rather than
-    a console command they should never have needed to be told.
-  */
-  useEffect(() => {
-    if (restoreAttempted.current) return;
-    // The network decides the chain a signer is bound to. Nothing safe to assume before it answers.
-    if (session === null) return;
-
-    const remembered = readRememberedWallet();
-    if (remembered === null) {
-      restoreAttempted.current = true;
-      return;
-    }
-
-    const wallet = wallets.find((candidate) => candidate.name === remembered.wallet);
-    // Extensions announce themselves after hydration. "Not yet" and "uninstalled" look identical at
-    // this instant, and waiting costs nothing.
-    if (wallet === undefined) return;
-
-    restoreAttempted.current = true;
-    const feature = wallet.features['standard:connect'] as
-      | StandardConnectFeature['standard:connect']
-      | undefined;
-    if (feature === undefined) return;
-
-    void (async () => {
-      let accounts: readonly WalletAccount[];
-      try {
-        // Asks for what was already authorised without prompting. Some wallets ignore the flag and
-        // some throw on it; both mean "not restored", which is the signed-out state already on
-        // screen. Not reported, because nobody asked for anything yet.
-        const returned = await feature.connect({ silent: true });
-        accounts = authorisedAccounts(wallet, returned.accounts);
-      } catch {
-        return;
-      }
-
-      const exact = accounts.find((account) => account.address === remembered.address);
-      if (exact === undefined) {
-        // Never `accounts[0]`. Returning somebody as a different address of the same wallet looks
-        // like a successful restore, and is the original stuck-address defect with a reload in
-        // front of it. Signed out is the honest answer.
-        forgetWallet();
-        return;
-      }
-      bindAccount(wallet, exact, accounts);
-    })();
-  }, [wallets, session, bindAccount]);
-
-  /*
-    The wallet is the other half of this control, and it can move on its own.
-
-    Switching account inside the extension changes which address it will sign with. A page still
-    bound to the previous one keeps showing that address and keeps asking the wallet to sign as it —
-    a disagreement neither side reports, and one the reader only discovers from the explorer.
-
-    Subscribed per binding rather than per wallet: the listener has to be gone once this provider
-    unmounts, or every mount leaves another one attached inside the extension.
-  */
-  useEffect(() => {
-    if (walletBinding === null) return;
-    const { wallet, chain } = walletBinding;
-
-    const events = wallet.features['standard:events'] as
-      | StandardEventsFeature['standard:events']
-      | undefined;
-    // Not among the features `walletSupport` requires, so a wallet without it must still work. It
-    // simply cannot tell us when it moves.
-    if (events === undefined) return;
-
-    return events.on('change', ({ accounts }) => {
-      // Absent means the wallet changed something else — its chains, its features. "We were not
-      // told" is not "there are none", and collapsing the two throws away a live session.
-      if (accounts === undefined) return;
-
-      if (accounts.length === 0) {
-        /*
-          A revocation: the reader took this site's access away in the extension. Keeping the
-          address on screen would offer a session that cannot sign, discovered at the end of a
-          checkout rather than at the moment it stopped being true.
-        */
-        setSigner(null);
-        setWalletBinding(null);
-        setWalletAccounts(null);
-        setAccountChoice(null);
-        // Forgotten too, or every reload from here on tries to restore an address the reader
-        // deliberately took away, and explains afresh why it could not.
-        forgetWallet();
-        setError(`${wallet.name} is no longer sharing an address with this site.`);
-        return;
-      }
-
-      // Published first, so the list on screen matches the extension even when nothing rebinds.
-      setWalletAccounts(accounts);
-
-      const current = boundAddress.current;
-      if (current === null) {
-        // Nothing bound — a choice is open, or this is a wallet session that has ended. Either way
-        // the open question is now about a different list, and asking it about the old one would
-        // offer addresses the wallet has stopped authorising.
-        setAccountChoice((pending) => (pending === null ? null : { wallet, accounts }));
-        return;
-      }
-
-      /*
-        The reader's pick wins whenever the wallet still authorises it. A wallet re-announcing its
-        whole list has not asked us to change anything, and following its idea of "active" would
-        quietly undo their choice — the original defect, reintroduced from the other end.
-      */
-      if (accounts.some((account) => account.address === current)) return;
-
-      /*
-        The bound address is gone. With one address left there is only one answer and taking it is
-        not a guess. With several there is no answer to be read off the list at all — so the reader
-        is asked, and nothing signs in the meantime. `accounts[0]` here would be the whole defect
-        restored: an address nobody chose, bound silently, discovered on an explorer.
-      */
-      const only = accounts.length === 1 ? accounts[0] : undefined;
-      if (only !== undefined) {
-        bindAccount(wallet, only, accounts);
-        return;
-      }
-
-      setSigner(null);
-      forgetWallet();
-      setAccountChoice({ wallet, accounts });
-      setError(
-        `${wallet.name} stopped sharing ${current}. Choose which address this site should use.`,
-      );
-    });
-  }, [walletBinding, bindAccount]);
-
   const connectWallet = useCallback(
     async (wallet: Wallet) => {
       setError(null);
-      setAccountChoice(null);
+      setChoiceOpen(false);
+      if (chain === null) {
+        setError('this deployment has not been told which network it is on, so nothing can be signed here');
+        return;
+      }
       try {
-        const feature = wallet.features['standard:connect'] as
-          | StandardConnectFeature['standard:connect']
-          | undefined;
-        if (feature === undefined) throw new Error('this wallet does not support connecting');
-
-        const returned = await feature.connect();
+        const result = await connect({ wallet: wallet as never });
         /*
-          Both sources, not just the return value.
+          Several authorised addresses is a question, not a default.
 
-          `connect()` resolving with one account does not mean one is authorised — the standard puts
-          the authorised set on `wallet.accounts` and several wallets answer here with the active
-          account alone. Reading only this result is why Slush and Phantom each bound one fixed
-          address no matter which account was selected inside them.
+          dapp-kit binds the first account it is given. Where the reader authorised more than one,
+          the previous behaviour — and the one this product wants — is to ask which, rather than
+          pick and be silently wrong about whose vault is on screen.
         */
-        const accounts = authorisedAccounts(wallet, returned.accounts);
-        if (accounts.length === 0) throw new Error('the wallet returned no accounts');
-
-        const only = accounts.length === 1 ? accounts[0] : undefined;
-        if (only !== undefined) bindAccount(wallet, only, accounts);
-        else setAccountChoice({ wallet, accounts });
+        if (result.accounts.length > 1) setChoiceOpen(true);
       } catch (cause) {
-        // Shown verbatim. A wallet's own "User rejected the request" is more useful than anything
-        // this component could invent, and inventing one risks describing a refusal as a fault.
         setError(cause instanceof Error ? cause.message : String(cause));
       }
     },
-    [bindAccount],
+    [connect, chain],
   );
 
-  /**
-   * Ask the connected wallet to share more than it has.
-   *
-   * A reader whose second address was never authorised cannot get to it from this page — the
-   * decision belongs to the extension. Connecting again is the standard's own way of asking, and it
-   * is what makes most wallets show their account picker.
-   */
-  /**
-   * Ask the wallet to authorise again, from scratch.
-   *
-   * # Why connecting again is not enough
-   *
-   * `standard:connect` on an already-connected wallet returns immediately with the accounts it has
-   * already authorised, and shows the reader nothing. So the previous version of this — which only
-   * called connect — was a button that could not do the one thing it existed for: somebody holding
-   * several addresses in Slush had no way to reach any but the first they approved.
-   *
-   * Disconnecting first is what makes the wallet ask again. `standard:disconnect` drops the
-   * authorisation, and the connect that follows opens the wallet's own account chooser, where the
-   * decision actually belongs — a site cannot enumerate addresses a wallet has not shared.
-   *
-   * # The session is dropped deliberately
-   *
-   * Signing out first, rather than swapping the binding underneath a signed-in session. A wallet
-   * that disconnects and reconnects may come back with a different address, and leaving the old
-   * signer in place while that happens is how somebody ends up signing from an account they think
-   * they have left.
-   */
+  /*
+    Ask the extension again, from nothing.
+
+    A wallet already connected answers a second connect instantly with whatever it authorised
+    before and shows the reader no prompt. Disconnecting first is what makes the extension open its
+    own window, which is the only place an address can actually be added or removed.
+  */
   const reauthorizeWallet = useCallback(async () => {
-    const wallet = walletBinding?.wallet ?? accountChoice?.wallet;
-    if (wallet === undefined) {
+    const wallet = currentWallet;
+    if (wallet === null) {
       setError('no wallet is connected to ask');
       return;
     }
-
     setError(null);
-    setAccountChoice(null);
-    setSigner(null);
-    setWalletBinding(null);
-    setWalletAccounts(null);
-    forgetWallet();
-
-    const feature = wallet.features['standard:disconnect'] as
-      | { disconnect: () => Promise<void> }
-      | undefined;
+    setChoiceOpen(false);
     try {
-      // Not every wallet implements it. Where it is missing, connecting again is all that can be
-      // done — and it is no worse than before, rather than an error the reader can act on.
-      await feature?.disconnect();
+      await disconnect();
     } catch {
-      // A refused or failed disconnect still leaves the connect below worth attempting.
+      /* An extension that refuses to disconnect is still worth trying to connect again. */
     }
-
     await connectWallet(wallet);
-  }, [walletBinding, accountChoice, connectWallet]);
+  }, [currentWallet, disconnect, connectWallet]);
 
   const reopenAccountChoice = useCallback(() => {
-    if (walletBinding === null || walletAccounts === null) {
+    if (currentWallet === null || accounts.length === 0) {
       setError('no wallet is connected to choose from');
       return;
     }
     setError(null);
-    // The session is deliberately left standing. Cancelling has to put the reader back where they
-    // were, not sign them out for having opened a list.
-    setAccountChoice({ wallet: walletBinding.wallet, accounts: walletAccounts });
-  }, [walletBinding, walletAccounts]);
+    setChoiceOpen(true);
+  }, [currentWallet, accounts]);
 
   const chooseAccount = useCallback(
     (account: WalletAccount) => {
       setError(null);
-      if (accountChoice === null) {
-        // Said out loud rather than returned as a no-op. A button that silently does nothing reads
-        // as a broken wallet, and sends the reader to reinstall an extension that is fine.
-        setError('that choice is no longer open — connect the wallet again');
-        return;
-      }
-      try {
-        bindAccount(accountChoice.wallet, account, accountChoice.accounts);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      }
+      setChoiceOpen(false);
+      /* Choosing a wallet address ends a Google session; one signer at a time. */
+      setZkSigner(null);
+      setZkSession(null);
+      switchAccount({ account: account as never });
     },
-    [accountChoice, bindAccount],
+    [switchAccount],
   );
 
   const cancelAccountChoice = useCallback(() => {
-    setAccountChoice(null);
+    setChoiceOpen(false);
     setError(null);
   }, []);
 
@@ -684,13 +428,9 @@ export function SignerProvider({ children }: { children: ReactNode }) {
         ) {
           throw new Error(session.reason ?? 'signing in with Google is not available here');
         }
-
-        // Generated here, in the browser, and never sent anywhere. A server that minted this would
-        // be able to sign for the user for the life of the session.
         const ephemeral = Ed25519Keypair.generate();
         const randomness = generateRandomness();
         const nonce = generateNonce(ephemeral.getPublicKey(), session.maxEpoch, randomness);
-
         const pending: PendingSession = {
           ephemeralSecretKey: ephemeral.getSecretKey(),
           jwtRandomness: randomness,
@@ -699,7 +439,6 @@ export function SignerProvider({ children }: { children: ReactNode }) {
           returnTo,
         };
         window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(pending));
-
         window.location.assign(
           buildAuthUrl({
             clientId: session.googleClientId,
@@ -714,46 +453,26 @@ export function SignerProvider({ children }: { children: ReactNode }) {
     [session],
   );
 
+  /*
+    Signing out ends both halves and the server's session.
+
+    The `DELETE` is what actually revokes: clearing this browser leaves a cookie that still proves
+    a reader for as long as it has left to live, and "I signed out" has to mean the server agrees.
+  */
   const signOut = useCallback(() => {
     window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    // The wallet half too. A remembered address would be silently restored on the next load, which
-    // makes signing out look like it did not take.
-    forgetWallet();
-    setSigner(null);
+    setZkSigner(null);
     setZkSession(null);
-    // Dropped together with the signer, so the `change` subscription cannot resurrect an address
-    // for somebody who has just signed out.
-    setWalletBinding(null);
-    setWalletAccounts(null);
-    setAccountChoice(null);
+    setChoiceOpen(false);
     setError(null);
-
-    /*
-      Tell the *server*, which is the half this was missing.
-
-      Everything above forgets the browser's copy of the session. None of it touched the read-session
-      cookie, so the server went on treating the visitor as a proved reader: reported as signing out
-      and still landing in the dashboard, because `AppFrame` asks `provenReader()` and `provenReader`
-      still said yes.
-
-      The dashboard was the visible symptom and the smaller half of the problem. Entitlement is
-      resolved from that same proved session, so a reader who believed they had signed out still had
-      their paid bodies released — on a shared machine, to whoever sat down next.
-
-      `DELETE /api/session` revokes by address and clears the cookie. It existed, tested, and nothing
-      called it.
-
-      Deliberately not awaited, and the local state is already cleared above: the browser must look
-      signed out immediately whether or not the network cooperates. A failure here leaves a cookie
-      that expires on its own, which is the same place we were before — never worse.
-    */
+    void disconnect().catch(() => undefined);
     void fetch('/api/session', { method: 'DELETE' })
       .catch(() => undefined)
       .finally(() => {
         /*
           Then leave, with a real navigation.
 
-          Server components decided guest-or-dashboard on the *previous* request. Without this the
+          Server components decided guest-or-dashboard on the PREVIOUS request. Without this the
           frame keeps rendering the signed-in shell until something else happens to navigate, which
           is exactly what "I signed out and stayed in the dashboard" looks like.
 
@@ -762,19 +481,10 @@ export function SignerProvider({ children }: { children: ReactNode }) {
         */
         window.location.assign('/');
       });
-  }, []);
+  }, [disconnect]);
 
-  /**
-   * This user's own recovery details, from the route that derives them.
-   *
-   * Costs a fresh, nonce-bound, Google-signed token — the same proof of control that signing in
-   * required, spent again for this one purpose. Google identity tokens are short-lived, so a
-   * session left open for an hour will need signing in again; that is said in those words rather
-   * than reported as a failure, because it is not one.
-   */
   const exportRecovery = useCallback(async (): Promise<RecoveryDetails | null> => {
     if (zkSession === null) return null;
-
     /*
       The commitment goes with the token, not the nonce.
 
@@ -795,7 +505,6 @@ export function SignerProvider({ children }: { children: ReactNode }) {
       }),
     });
     const body = (await response.json()) as Partial<RecoveryDetails> & { error?: string };
-
     if (response.status === 401) {
       throw new Error(
         'Your Google sign-in has expired, which is what protects this. Sign in again, then ask for your recovery details.',
@@ -807,31 +516,50 @@ export function SignerProvider({ children }: { children: ReactNode }) {
     return body as RecoveryDetails;
   }, [zkSession]);
 
+  const accountChoice = useMemo<AccountChoice | null>(
+    () => (choiceOpen && currentWallet !== null ? { wallet: currentWallet, accounts } : null),
+    [choiceOpen, currentWallet, accounts],
+  );
+
   const value = useMemo<SignerContextValue>(
     () => ({
-      signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount,
-      cancelAccountChoice, reopenAccountChoice, reauthorizeWallet, connectWallet, signInWithGoogle,
-      signOut, exportRecovery, error,
+      signer,
+      wallets: [...wallets],
+      unusableWallets,
+      session,
+      accountChoice,
+      walletAccounts: currentWallet === null ? null : accounts,
+      chooseAccount,
+      cancelAccountChoice,
+      reopenAccountChoice,
+      reauthorizeWallet,
+      connectWallet,
+      signInWithGoogle,
+      signOut,
+      exportRecovery,
+      error,
     }),
-    [signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount,
-      cancelAccountChoice, reopenAccountChoice, reauthorizeWallet, connectWallet, signInWithGoogle,
-      signOut, exportRecovery, error],
+    [
+      signer,
+      wallets,
+      unusableWallets,
+      session,
+      accountChoice,
+      currentWallet,
+      accounts,
+      chooseAccount,
+      cancelAccountChoice,
+      reopenAccountChoice,
+      reauthorizeWallet,
+      connectWallet,
+      signInWithGoogle,
+      signOut,
+      exportRecovery,
+      error,
+    ],
   );
 
   return <SignerContext.Provider value={value}>{children}</SignerContext.Provider>;
-}
-
-/**
- * The current signer, and the ways to get one.
- *
- * Throws when used outside the provider. That is a wiring mistake the developer must see at once,
- * not a runtime condition to degrade around — returning `null` here would render every signed
- * action as "not connected" on a page where the user is, in fact, connected.
- */
-export function useSigner(): SignerContextValue {
-  const value = useContext(SignerContext);
-  if (value === null) throw new Error('useSigner must be used inside <SignerProvider>');
-  return value;
 }
 
 /**
@@ -893,4 +621,10 @@ export async function completeGoogleSignIn(idToken: string): Promise<ActiveSessi
   };
   window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(complete));
   return complete;
+}
+
+export function useSigner(): SignerContextValue {
+  const value = useContext(SignerContext);
+  if (value === null) throw new Error('useSigner must be used inside a SignerProvider');
+  return value;
 }

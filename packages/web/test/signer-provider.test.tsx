@@ -25,12 +25,45 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 /** Wallets the browser reports. Swapped per test. */
 let registered: unknown[] = [];
-vi.mock('@mysten/wallet-standard', () => ({
-  getWallets: () => ({
-    get: () => registered,
-    // Registration is asynchronous in a real browser; nothing here needs to exercise that.
-    on: () => () => undefined,
-  }),
+
+/*
+  dapp-kit stands in for the browser here, and that is the boundary this file tests.
+
+  Wallet discovery, connecting and account switching belong to `@mysten/dapp-kit` now. What this
+  provider still owns is the translation: which wallets it passes on, which it reports as unusable,
+  and when it builds a zkLogin signer. So the kit is mocked at its hooks and `registered` is what it
+  reports.
+
+  This replaces a mock of `@mysten/wallet-standard`'s `getWallets`, which stopped reaching anything
+  the moment discovery moved: dapp-kit resolves its own copy of that package, so the mock applied to
+  a module nobody called and the three tests below passed against an empty list — they would have
+  passed with discovery entirely broken. `walletFilter` is asserted directly instead, because that
+  is now the whole of what this provider says about which wallets are offered.
+*/
+let lastWalletFilter: ((wallet: unknown) => boolean) | undefined;
+vi.mock('@mysten/dapp-kit', () => ({
+  SuiClientProvider: ({ children }: { children: React.ReactNode }) => children,
+  WalletProvider: ({
+    children,
+    walletFilter,
+  }: {
+    children: React.ReactNode;
+    walletFilter?: (wallet: unknown) => boolean;
+  }) => {
+    lastWalletFilter = walletFilter;
+    return children;
+  },
+  useWallets: () => registered.filter((w) => lastWalletFilter?.(w) ?? true),
+  useCurrentAccount: () => null,
+  useCurrentWallet: () => ({ currentWallet: null }),
+  useAccounts: () => [],
+  useConnectWallet: () => ({ mutateAsync: vi.fn() }),
+  useDisconnectWallet: () => ({ mutateAsync: vi.fn(async () => undefined) }),
+  useSwitchAccount: () => ({ mutate: vi.fn() }),
+}));
+vi.mock('@tanstack/react-query', () => ({
+  QueryClient: class {},
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 /*
@@ -109,13 +142,13 @@ describe('an unconfigured deployment is not a broken one', () => {
      * zkLogin up.
      */
     mockSession({ network: 'mainnet', available: false, reason: 'not set: …' });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
   });
 
   it('signs nobody in on its own', async () => {
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1220', maxEpoch: 1222 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
     expect(screen.getByTestId('address').textContent).toBe('none');
   });
@@ -125,7 +158,7 @@ describe('restoring a stored zkLogin session', () => {
   it('restores one that is still inside its epoch window', async () => {
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1220', maxEpoch: 1222 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('address').textContent).toBe(ADDRESS));
     expect(screen.getByTestId('label').textContent).toBe('Google');
   });
@@ -134,7 +167,7 @@ describe('restoring a stored zkLogin session', () => {
     // Inclusive. Treating maxEpoch as expired throws away the last valid day of every session.
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1222', maxEpoch: 1224 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('address').textContent).toBe(ADDRESS));
   });
 
@@ -145,7 +178,7 @@ describe('restoring a stored zkLogin session', () => {
      */
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1223', maxEpoch: 1225 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
     expect(screen.getByTestId('address').textContent).toBe('none');
     expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
@@ -156,7 +189,7 @@ describe('restoring a stored zkLogin session', () => {
     // control, and the first signature fails on chain with nothing explaining why.
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1220', maxEpoch: 1222 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(constructed).toHaveBeenCalled());
     const options = constructed.mock.calls[0]?.[0] as { address: string; legacyAddress: boolean };
     expect(options.address).toBe(ADDRESS);
@@ -170,7 +203,7 @@ describe('restoring a stored zkLogin session', () => {
       JSON.stringify({ ephemeralSecretKey: Ed25519Keypair.generate().getSecretKey(), jwtRandomness: '1', maxEpoch: 1222, nonce: 'n', returnTo: '/' }),
     );
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1220', maxEpoch: 1222 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
     expect(screen.getByTestId('address').textContent).toBe('none');
   });
@@ -178,7 +211,7 @@ describe('restoring a stored zkLogin session', () => {
   it('discards unparseable storage rather than failing to start', async () => {
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, 'not json');
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1220', maxEpoch: 1222 });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
     expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
@@ -198,7 +231,7 @@ describe('wallets the browser offers', () => {
   it('offers a wallet that can do everything the application asks', async () => {
     registered = [usable];
     mockSession({ network: 'mainnet', available: false });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('wallets').textContent).toBe('1'));
   });
 
@@ -210,7 +243,7 @@ describe('wallets the browser offers', () => {
      */
     registered = [{ ...usable, features: { 'standard:connect': {}, 'sui:signTransaction': {} } }];
     mockSession({ network: 'mainnet', available: false });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
     expect(screen.getByTestId('wallets').textContent).toBe('0');
   });
@@ -218,7 +251,7 @@ describe('wallets the browser offers', () => {
   it('hides one that supports no Sui chain', async () => {
     registered = [{ ...usable, chains: ['ethereum:1'] }];
     mockSession({ network: 'mainnet', available: false });
-    render(<SignerProvider><Probe /></SignerProvider>);
+    render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
     expect(screen.getByTestId('wallets').textContent).toBe('0');
   });
