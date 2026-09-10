@@ -2107,7 +2107,12 @@
     display: block;
     margin-bottom: 6px;
     font-family: var(--w-mono);
-    font-size: 11px;
+    /*
+      12px, not 11. This shipped at 11px and put two elements on `/creator`
+      under this application's floor for text a reader is expected to read —
+      caught by measuring the rendered page, not by reading the rule back.
+    */
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
