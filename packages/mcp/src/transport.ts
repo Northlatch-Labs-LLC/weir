@@ -1097,6 +1097,19 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
     The prefix check in `resolveOptions` does NOT already cover this: it accepts anything beginning
     `suiprivkey1`, and a mistyped or truncated key clears that gate and fails here.
   */
+  /*
+    Decoded here to prove the secret is a usable key before anything else runs, and then discarded.
+
+    `createAgent` declares `keypair: AgentKey | string` — a loaded key or the bech32 secret. It was
+    handed this `Ed25519Keypair` instead, which is neither: the agent package took the object branch,
+    wrapped it unchanged, and `normaliseAddress(key.address)` then read `.address` off a keypair that
+    has no such property. Every stdio start with a key died on `undefined.trim()` before a single tool
+    was registered, which is why a keyless server was the only one that ever came up.
+
+    The decode stays because it is the only check that catches a truncated or mistyped secret — the
+    prefix test in `resolveOptions` accepts anything beginning `suiprivkey1`. What crosses to the
+    agent is the string the contract asks for.
+  */
   let keypair: Ed25519Keypair | null = null;
   if (options.secretKey !== null) {
     try {
@@ -1123,8 +1136,10 @@ export async function openWeir(options: ServerOptions): Promise<WeirBinding> {
   const signer = await bindSigner(options);
   const policyBinding = await bindPolicy(options, signer);
 
+  // The secret itself, not the decoded keypair. See the note above the decode.
+  void keypair;
   const created: unknown = await (createAgent as (input: unknown) => unknown)({
-    keypair,
+    keypair: options.secretKey,
     baseUrl: options.baseUrl,
     // The projection, never `process.env`. See `AGENT_ENVIRONMENT`.
     config: options.agentEnvironment,
