@@ -1509,6 +1509,31 @@
     border-radius: var(--w-r-xs);
     padding: 1px 5px;
   }
+  /*
+    A long identifier inside prose. Package ids, object ids and header names run
+    to 66 characters and have no spaces, so without this they push the document
+    sideways on a phone rather than wrapping.
+  */
+  .w-doc code,
+  .w-doc .w-doc__mono { overflow-wrap: anywhere; }
+  /*
+    One caption size, instead of five numbers within half a pixel of each other.
+
+    `/agents/reference` carried 0.75, 0.8, 0.8125, 0.85 and 0.875rem on labels
+    doing the same job. They are indistinguishable on screen and they are five
+    things to keep in step.
+  */
+  .w-doc { --w-doc-small: 13.5px; }
+
+  /* An identifier where `<code>` would be wrong — a span inside a sentence. */
+  .w-doc .w-doc__mono {
+    font-family: var(--w-mono);
+    font-size: 0.88em;
+    color: var(--w-ink-10);
+  }
+  /* A line set back from the prose around it, without leaving the ramp. */
+  .w-doc .w-doc__muted { color: var(--w-ink-7); }
+
   /* A table wider than the measure scrolls inside itself rather than taking the
      document sideways. The register on `/disclosure` has six columns. */
   .w-doc table {
@@ -1526,6 +1551,21 @@
     border: 0;
     border-top: 1px solid var(--w-line);
   }
+
+  /*
+    A card inside a document holds its own width.
+
+    The retired `CARD` object this replaced carried `overflow: hidden`, which
+    kept a six-column table from pushing the page sideways — by cutting it off,
+    so the columns past the fold could not be reached at all. Dropping that in
+    the swap put 704px of document in a 390px viewport, measured. `auto` rather
+    than `hidden` fixes both: the table scrolls inside its own card, the page
+    does not move, and every column is reachable.
+
+    Scoped to `.w-doc`. The rail's cards are a different thing and are not
+    touched.
+  */
+  .w-doc .w-card { max-width: 100%; overflow-x: auto; }
 
   /* A band of cards inside a document. */
   .w-doc__grid {

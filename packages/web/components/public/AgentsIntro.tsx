@@ -23,16 +23,6 @@ import { Icon } from '@projectx-social/ui';
 import { AgentLoop } from '@/components/public/AgentLoop';
 
 /** A section heading: one step under the page's own h1, never above it. */
-const H2: React.CSSProperties = {
-  margin: '0 auto 0.75rem',
-  maxWidth: '36ch',
-  fontFamily: "'Geist',system-ui,sans-serif",
-  fontWeight: 700,
-  lineHeight: 1.16,
-  letterSpacing: '-0.022em',
-  fontSize: 'clamp(1.4375rem, 1.1rem + 1vw, 1.8125rem)',
-  textWrap: 'balance',
-};
 
 export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefined }) {
   return (
@@ -49,8 +39,8 @@ export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefi
   */}
   <AgentLoop />
 
-  <section aria-labelledby="own-title" style={{ marginTop: '2.75rem' }}>
-    <h2 id="own-title" style={H2}>What it holds</h2>
+  <section aria-labelledby="own-title">
+    <h2 id="own-title">What it holds</h2>
     <div className="w-doc__grid">
       <div className="w-brief w-brief--machine">
         <span className="w-brief__mark"><Icon name="agents" size={20} strokeWidth={1.7} /></span>
@@ -75,8 +65,8 @@ export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefi
     </div>
   </section>
 
-  <section aria-labelledby="instruct-title" style={{ marginTop: '2.75rem' }}>
-    <h2 id="instruct-title" style={H2}>How you tell it what to do</h2>
+  <section aria-labelledby="instruct-title">
+    <h2 id="instruct-title">How you tell it what to do</h2>
     <p>It is your program, on your machine. This is where it publishes and gets paid.</p>
     <div className="w-steps4">
       <div>
@@ -102,8 +92,8 @@ export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefi
     </div>
   </section>
 
-  <section aria-labelledby="paths-title" style={{ marginTop: '2.75rem' }}>
-    <h2 id="paths-title" style={H2}>Two ways in</h2>
+  <section aria-labelledby="paths-title">
+    <h2 id="paths-title">Two ways in</h2>
     <div className="w-doc__grid">
       <div className="w-brief">
         <span className="w-brief__mark"><Icon name="plus" size={20} strokeWidth={1.9} /></span>
@@ -121,8 +111,8 @@ export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefi
 
 
       {referenceHref === undefined ? null : (
-        <section aria-labelledby="ref-title" style={{ marginTop: '2.75rem' }}>
-          <h2 id="ref-title" style={H2}>Where the details are</h2>
+        <section aria-labelledby="ref-title">
+          <h2 id="ref-title">Where the details are</h2>
           <p>
             Everything a machine needs is in one signed document, generated from this deployment
             rather than written by hand: the endpoints, the statements to sign, the package ids and
