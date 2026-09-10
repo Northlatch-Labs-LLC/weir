@@ -18,6 +18,13 @@
  * mounted from the root layout now, so it cannot be lost again by a route choosing a different
  * frame.
  *
+ * # What it no longer does
+ *
+ * Proving the address to the server used to be here too, in an effect ending in `catch {}`. It is
+ * `SignerProvider`'s now, because the outcome is a state the account menu and the connect window
+ * both have to read — and because a proof that only happens when some particular component is
+ * mounted is this file's own bug wearing a different hat.
+ *
  * # It grants nothing
  *
  * Naming an address proves nothing and unlocks nothing — entitlement is decided by objects that
@@ -73,79 +80,6 @@ export function SessionBridge() {
     // button that walks them out of their own identity is worse than no back button.
     router.replace(`${pathname}?${params.toString()}`);
   }, [signer?.address, pathname, router]);
-
-  /*
-    Prove the connected address to the server, once a day.
-
-    Putting the address in `?reader=` told the server *who to ask about*. It did not tell it who was
-    asking, and the server believed it anyway: naming a buyer — enumerable from public chain events
-    — returned their paid bodies, their paid comments and their decrypted media. This is the half
-    that was missing.
-
-    # Why it is checked before it is signed
-
-    `GET /api/session` is a cheap round trip; a wallet prompt is not. Signing unconditionally on
-    every connect would prompt on every reload, and a prompt people see that often is a prompt they
-    approve without reading. The proof lasts a day, so in practice this asks once.
-
-    # Why a disconnect does not revoke
-
-    `signer` goes null for a moment while a wallet reconnects after a reload. Revoking on null would
-    destroy the session of somebody who did nothing but refresh, and then prompt them again. Signing
-    out is an explicit act, and `DELETE /api/session` is there for it.
-  */
-  useEffect(() => {
-    const address = signer?.address;
-    if (address === undefined) return;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        const current = (await (await fetch('/api/session')).json()) as {
-          reader?: string | null;
-          checked?: boolean;
-        };
-        if (cancelled) return;
-        /*
-          `checked: false` means the server could not look, which is not the same as "you have no
-          session" — and the difference decides whether to raise a wallet prompt. Treating an outage
-          as an absent session would prompt for a signature to replace a session that is probably
-          intact, which is how people are trained to approve prompts without reading them.
-        */
-        if (current.checked !== true) return;
-        if (current.reader != null && current.reader.toLowerCase() === address.toLowerCase()) return;
-
-        const timestampMs = Date.now();
-        // Rebuilt to match `statementFor({ kind: 'read-content' })` byte for byte. Pinned against
-        // the server's copy in `test/statement-drift.test.ts`, because a drift here fails every
-        // sign-in with a signature error that names nothing.
-        const statement =
-          `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` + `\naction: read content`;
-        const signature = await signer?.signPersonalMessage(new TextEncoder().encode(statement));
-        if (cancelled || signature === undefined) return;
-
-        await fetch('/api/session', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ address, signature, timestampMs }),
-        });
-        if (cancelled) return;
-        // The pages resolve entitlement on the server, so the proof only takes effect on the next
-        // render. Without this the visitor sits looking at their own paid posts, locked.
-        router.refresh();
-      } catch {
-        /*
-          Declined, or unreachable. Deliberately silent and deliberately harmless: no session means
-          paid content stays locked, which is the safe direction, and the feed renders a notice
-          explaining that rather than presenting a paywall for something already bought.
-        */
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [signer, router]);
 
   // Nothing to draw. This is behaviour that had been attached to a navigation bar by accident.
   return null;

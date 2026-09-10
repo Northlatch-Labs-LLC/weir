@@ -95,7 +95,18 @@ export async function FeedView({
   );
 
 
-  const following = reader === undefined ? [] : await listFollowing(reader);
+  /*
+    Whose follows these are, and why it is not `reader`.
+
+    `reader` is a query parameter. Anyone can type one, and links carry it — so reading the follow
+    list from it meant a copied URL showed the person who opened it the *sender's* following feed.
+    Nothing paid leaked, because entitlement has always required proof; but who somebody follows is
+    theirs, and it was being handed out on a claim.
+
+    `viewer` is the proved session. An unproved reader gets discovery, which is what a stranger
+    should see anyway.
+  */
+  const following = viewer === null ? [] : await listFollowing(viewer);
 
   /*
     Which feed to show when nothing was asked for.

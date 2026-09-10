@@ -2287,53 +2287,20 @@ footer {
    Somebody who has connected at suins or raffle already knows what to expect here.
 */
 
-.wc-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-20);
-  background: var(--alpha-black-70);
-  backdrop-filter: blur(4px);
-}
+/* The scrim, panel, head, title and close control that used to live here are `Dialog`'s now — one
+   dialog for the whole product, on Radix, which is also what gave this window a focus trap, a
+   scroll lock and focus restored to the trigger. What is left below is what is INSIDE the window
+   and is genuinely this window's: the wallet rows, the address rows, and the confirm step. */
 
-.wc-panel {
-  width: 100%;
-  max-width: 380px;
+/* The confirm step's action row. One control, full width, because there is exactly one thing to
+   do here and offering it at button width beside empty space reads as optional. */
+.wc-actions {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-16);
-  padding: var(--space-20);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  box-shadow: var(--elevation-overlay);
+  gap: var(--space-10);
+  margin-top: var(--space-4);
 }
-
-.wc-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-12);
-}
-.wc-title {
-  font-size: var(--text-h4);
-  margin: 0;
-}
-.wc-close {
-  flex: none;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  color: var(--text-tertiary);
-  font-size: var(--text-body);
-  line-height: 1;
-  padding: var(--space-4);
-}
-.wc-close:hover {
-  color: var(--text-primary);
+.wc-actions__wide {
+  flex: 1;
 }
 
 .wc-list {
@@ -3053,4 +3020,21 @@ footer {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--w-ink-7);
+}
+
+/* The way out of a connected-but-unconfirmed session, inside the account menu's own head, because
+   that is where somebody looks when they believe they are signed in and the page disagrees. */
+.account-pop__confirm {
+  margin-top: var(--space-10);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-raised);
+  color: var(--text-primary);
+  font-size: var(--text-body-sm);
+  cursor: pointer;
+}
+.account-pop__confirm:hover {
+  border-color: var(--border-strong);
 }

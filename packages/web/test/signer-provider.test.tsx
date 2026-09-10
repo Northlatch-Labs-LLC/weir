@@ -41,6 +41,20 @@ let registered: unknown[] = [];
   `WalletProvider` prop that the rewrite deleted. Filtering is this provider's own line now, so what
   is asserted is the output: how many wallets it passes on.
 */
+/*
+  The app router, which this provider now touches.
+
+  `proveSession` calls `router.refresh()` after the server accepts a signature: entitlement is
+  resolved on the server, so without it the reader sits looking at their own paid posts, locked.
+  `useRouter` throws outside a router context, so it is stubbed here rather than the refresh being
+  dropped to keep a test quiet.
+*/
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock('@mysten/dapp-kit-react', () => ({
   DAppKitProvider: ({ children }: { children: React.ReactNode }) => children,
   useDAppKit: () => ({

@@ -23,10 +23,13 @@
     "@testing-library/react": "^16.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "happy-dom": "^20.14.3"
+    "happy-dom": "^20.14.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "license": "UNLICENSED",
   "dependencies": {
     "@radix-ui/react-dialog": "1.1.23"
-  }
+  },
+  "devDependencyComment": "react and react-dom are peers for consumers (^19) and pinned here as devDependencies at the version the application runs. Without the pin, pnpm auto-installs the peer for this package and is free to satisfy ^19 from whatever copy the lockfile already holds \u2014 it chose 19.2.8 while packages/web ran 19.3.0, which put TWO Reacts in one bundle. That is invisible until a component from here uses a hook: the second React's dispatcher is null and every render through it dies on `Cannot read properties of null (reading 'useRef')`. The pin is what keeps the workspace on one copy."
 }

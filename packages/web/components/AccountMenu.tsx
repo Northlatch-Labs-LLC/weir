@@ -72,7 +72,8 @@ const CREATOR_ITEMS = [
 
 export function AccountMenu() {
   const pathname = usePathname();
-  const { signer, signOut, reopenAccountChoice, reauthorizeWallet } = useSigner();
+  const { signer, signOut, reopenAccountChoice, reauthorizeWallet, proof, proveSession } =
+    useSigner();
   const [open, setOpen] = useState(false);
   /**
    * The handle this address holds on chain.
@@ -325,7 +326,23 @@ export function AccountMenu() {
           onKeyDown={onMenuKeyDown}
         >
           <div className="account-pop__head">
-            <span className="k">Signed in with {signer.label}</span>
+            {/*
+              What this said before, and why it was wrong.
+
+              It read "Signed in with Slush" the moment an extension shared an address, which is not
+              what signing in is here — the server answers as nobody until a signature proves the
+              address. So this menu could say "signed in" beside a page rendering the reader as a
+              guest, on the same screen, and both were reporting honestly about different things.
+              One of them had to stop guessing, and it is this one: the label now names the state
+              the SERVER is in, because that is the one that decides what opens.
+            */}
+            <span className="k">
+              {proof === 'proved'
+                ? `Signed in with ${signer.label}`
+                : proof === 'checking'
+                  ? `Confirming your ${signer.label} account…`
+                  : `${signer.label} connected — not confirmed`}
+            </span>
             {typeof suiName === 'string' && (
               <span className="account-pop__name">{suiName}</span>
             )}
@@ -335,6 +352,20 @@ export function AccountMenu() {
               can be checked against an explorer.
             */}
             <span className="mono account-pop__addr">{signer.address}</span>
+            {/*
+              The way out of the state, in the place somebody looks when they think they are signed
+              in and the site disagrees. Without this the only recovery was a page reload, which
+              does not re-ask.
+            */}
+            {(proof === 'unproved' || proof === 'declined') && (
+              <button
+                type="button"
+                className="account-pop__confirm"
+                onClick={() => void proveSession()}
+              >
+                Confirm this account
+              </button>
+            )}
           </div>
 
           {/*

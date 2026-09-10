@@ -25,6 +25,20 @@
  * Putting the window in the header fixes that structurally rather than by adding a second copy of
  * the picker: the control that starts the flow now also finishes it, on every route.
  *
+ * # Connecting is not signing in, and this window now says so
+ *
+ * A wallet sharing an address grants nothing. What grants anything is a signature over the
+ * read-content statement, which mints a session the server can answer as. That signature was asked
+ * for once, silently, from an effect that ended in `catch {}` — so a reader who declined it, or
+ * whose wallet errored, was left connected and unproved with no control anywhere that would ask
+ * again. Their own paid posts rendered locked and the only recovery was to guess that reloading
+ * might help.
+ *
+ * So the window has three states rather than two: choose a wallet, choose an address, and confirm
+ * the account. The third is reached whenever a reader is connected without a session, and the
+ * trigger stays on screen saying `Confirm account` rather than disappearing the moment an address
+ * arrives.
+ *
  * # Why the window is still ours
  *
  * The connection itself is `@mysten/dapp-kit-core`'s — `SignerProvider` holds its kit. What is not
@@ -34,10 +48,10 @@
  * product's.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Dialog } from '@projectx-social/ui';
 import { useSigner } from '@/components/SignerProvider';
 
 export function WalletConnect({
@@ -61,33 +75,36 @@ export function WalletConnect({
     chooseAccount,
     cancelAccountChoice,
     signer,
+    proof,
+    proveSession,
     error,
   } = useSigner();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  const close = useCallback(() => {
+  /** Connected, and the server does not have this address. The state that used to be invisible. */
+  const unconfirmed = signer !== null && (proof === 'unproved' || proof === 'declined');
+  const confirming = proof === 'checking';
+
+  const close = () => {
+    if (confirming) return;
     setOpen(false);
     cancelAccountChoice();
-    triggerRef.current?.focus();
-  }, [cancelAccountChoice]);
+  };
 
   /*
-    Closes itself the moment there is a signer. The window's purpose is gone at that point, and one
-    left open over a completed action is a second thing to dismiss for no reason.
+    Closes itself once there is a signer the server has accepted.
+
+    It used to close on `signer` alone, which is what made the missing confirmation invisible: the
+    window vanished at the moment the address arrived, and the fact that no session had been proved
+    had nowhere left to appear. Two exceptions, and both are states the reader is mid-way through:
+    an address choice pending, and an account not yet confirmed.
   */
   useEffect(() => {
-    /*
-      …unless an address choice is pending. A connected reader asking to switch address is the one
-      case where both are true at once, and closing on the signer alone slammed the picker shut the
-      instant it opened — so switching address was impossible while signed in.
-    */
-    if (signer !== null && accountChoice === null) setOpen(false);
-  }, [signer, accountChoice]);
+    if (signer !== null && accountChoice === null && proof === 'proved') setOpen(false);
+  }, [signer, accountChoice, proof]);
 
   /*
     A wallet can hand back several addresses long after this window was dismissed — the reader
@@ -99,186 +116,189 @@ export function WalletConnect({
     if (accountChoice !== null) setOpen(true);
   }, [accountChoice]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, close]);
-
-  // Focus moves into the window, or a keyboard reader is left standing on the page behind it.
-  useEffect(() => {
-    if (open) dialogRef.current?.querySelector('button')?.focus();
-  }, [open, accountChoice]);
-
   return (
     <>
       {/*
-        The trigger belongs to the signed-out state only. Mounted while connected as well, this
-        component is the one place the address picker is implemented — the account menu renders it
-        so that "use a different address" has something to open. A second "Connect wallet" button
-        next to a connected address would be nonsense, so only the window comes along.
+        The trigger, and the state it used to hide.
+
+        This rendered only while `signer === null`, so the instant a wallet shared an address the
+        control disappeared — including when the signature that actually signs you in had been
+        declined. There was then nothing on any screen to press. A connected-but-unconfirmed reader
+        now keeps a control, and it says what is left to do.
       */}
-      {signer === null && (
+      {(signer === null || unconfirmed) && (
         <button
-          ref={triggerRef}
           type="button"
           className={triggerClassName}
           aria-haspopup="dialog"
           aria-expanded={open}
           onClick={() => setOpen(true)}
         >
-          {triggerLabel ?? (
-            <>
-              <span className="account-signin__label">Connect&nbsp;</span>wallet
-            </>
+          {signer !== null ? (
+            'Confirm account'
+          ) : (
+            triggerLabel ?? (
+              <>
+                <span className="account-signin__label">Connect&nbsp;</span>wallet
+              </>
+            )
           )}
         </button>
       )}
 
       {/*
-        The window is portalled to `document.body`, and that is load-bearing rather than tidiness.
+        One window, on the shared `Dialog`.
 
-        `.appbar` carries `backdrop-filter`, and a filtered ancestor becomes the containing block
-        for `position: fixed` descendants — the same rule that applies to `transform` and `filter`.
-        Rendered in place, this window's `inset: 0` therefore resolved against a 60px-tall header
-        instead of the viewport: the modal opened inside the bar and was clipped out of sight. No
-        z-index or inset value fixes that from within, because the geometry is already wrong by the
-        time it is painted.
-
-        Portalling escapes the header's containing block entirely, so the scrim covers the page it
-        is actually modal over. React keeps the event and context tree intact through a portal, so
-        `useSigner` and the Escape handler behave exactly as if it were still rendered here.
+        This used to be a hand-drawn portal: its own scrim, its own Escape listener, its own focus
+        call, and `aria-modal="true"` declared over a page that `Tab` walked straight out of — a
+        screen reader told the rest of the page was inert while it was fully reachable, which is
+        worse than claiming nothing. The portal itself was load-bearing and still is: `.appbar`
+        carries `backdrop-filter`, and a filtered ancestor becomes the containing block for
+        `position: fixed`, so rendered in place this window's `inset: 0` resolved against a 60px
+        header and opened inside the bar. `Dialog` portals to the body, traps focus, locks the
+        background scroll and gives focus back — none of which this file has to remember any more.
       */}
-      {open && mounted && createPortal(
-        <div className="wc-scrim" role="presentation" onClick={close}>
-          {/*
-            `stopPropagation` rather than a separate backdrop element: a click landing inside the
-            window must not also count as a click outside it, and the two overlap.
-          */}
-          <div
-            className="wc-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label={accountChoice === null ? 'Connect a wallet' : 'Choose an address'}
-            ref={dialogRef}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {accountChoice === null ? (
-              <>
-                <div className="wc-head">
-                  <h2 className="wc-title">Connect a wallet</h2>
-                  <button className="wc-close" type="button" aria-label="Close" onClick={close}>
-                    ✕
-                  </button>
-                </div>
+      {open && mounted && (
+        <Dialog
+          open
+          onOpenChange={(next) => {
+            if (!next) close();
+          }}
+          title={
+            unconfirmed || confirming
+              ? 'Confirm this account'
+              : accountChoice === null
+                ? 'Connect a wallet'
+                : `Which ${accountChoice.wallet.name} address should this site use?`
+          }
+          busy={confirming}
+          width={440}
+        >
+          {unconfirmed || confirming ? (
+            /*
+              The state that had no screen.
 
-                {wallets.length === 0 ? (
-                  <p className="wc-note">
-                    No Sui wallet in this browser. On a phone, open weir.social inside your wallet app's own browser — Slush and Phantom both have one. On a computer, install one and reload.
-                  </p>
-                ) : (
-                  <div className="wc-list">
-                    {wallets.map((wallet) => (
-                      <button
-                        key={wallet.name}
-                        className="wc-wallet"
-                        type="button"
-                        onClick={() => void connectWallet(wallet)}
-                      >
-                        {/*
-                          The wallet's own icon, which it supplies as a data URI. A plain `img`
-                          rather than `next/image`: the source is a string handed over by an
-                          extension at runtime, not an asset in this build.
-                        */}
-                        {wallet.icon !== undefined && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            className="wc-wallet__icon"
-                            src={wallet.icon}
-                            alt=""
-                            width={28}
-                            height={28}
-                          />
-                        )}
-                        <span className="wc-wallet__name">{wallet.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Found and not offered, with the reason. Never silently dropped. */}
-                {unusableWallets.map((wallet) => (
-                  <p className="wc-note" key={wallet.name}>
-                    {wallet.name} is out of date — it cannot {wallet.missing.join(' or ')}. Update
-                    the extension and reload.
-                  </p>
-                ))}
-
-                {/*
-                  Verbatim, and never replaced with wording of our own. "User rejected the request"
-                  is a different instruction to the reader than "connection failed", and only the
-                  wallet knows which of the two happened. Until now this went nowhere on the two
-                  routes with no sign-in panel.
-                */}
-                {error !== null && <p className="wc-error">{error}</p>}
-
-                <p className="wc-foot">
-                  No wallet?{' '}
-                  <Link
-                    href={
-                      pathname === '/signin'
-                        ? '/signin'
-                        : `/signin?next=${encodeURIComponent(pathname)}`
-                    }
-                    onClick={() => setOpen(false)}
-                  >
-                    Continue with Google
-                  </Link>
+              Connecting shares an address; it does not sign you in. The server decides what opens,
+              and it will not answer as somebody who has not signed for it — so a reader stuck here
+              saw their own paid posts locked with nothing to press. This is the thing to press.
+            */
+            <>
+              <p className="wc-note">
+                Your wallet is connected. One signature confirms the account is yours — it costs
+                nothing and sends no transaction. Until then, anything you have already paid for
+                stays locked.
+              </p>
+              {proof === 'declined' && (
+                <p className="wc-error">
+                  That signature was not completed. Nothing was sent and nothing was spent.
                 </p>
-              </>
-            ) : (
-              <>
-                <div className="wc-head">
-                  <h2 className="wc-title">
-                    Which {accountChoice.wallet.name} address should this site use?
-                  </h2>
-                  <button className="wc-close" type="button" aria-label="Close" onClick={close}>
-                    ✕
-                  </button>
-                </div>
-
+              )}
+              {error !== null && <p className="wc-error">{error}</p>}
+              <div className="wc-actions">
+                <button
+                  type="button"
+                  className="w-btn w-btn--primary wc-actions__wide"
+                  disabled={confirming}
+                  onClick={() => void proveSession()}
+                >
+                  {confirming ? 'Waiting for your wallet…' : 'Sign to confirm'}
+                </button>
+              </div>
+            </>
+          ) : accountChoice === null ? (
+            <>
+              {wallets.length === 0 ? (
+                <p className="wc-note">
+                  No Sui wallet in this browser. On a phone, open weir.social inside your wallet
+                  app&rsquo;s own browser — Slush and Phantom both have one. On a computer, install
+                  one and reload.
+                </p>
+              ) : (
                 <div className="wc-list">
-                  {accountChoice.accounts.map((account) => (
+                  {wallets.map((wallet) => (
                     <button
-                      key={account.address}
-                      className="wc-account"
+                      key={wallet.name}
+                      className="wc-wallet"
                       type="button"
-                      onClick={() => chooseAccount(account)}
+                      onClick={() => void connectWallet(wallet)}
                     >
                       {/*
-                        The wallet's own label when it gave one, and nothing when it did not. An
-                        invented "Account 2" is a name nobody chose, sitting beside the one thing on
-                        this screen that has to be checked character by character.
+                        The wallet's own icon, which it supplies as a data URI. A plain `img`
+                        rather than `next/image`: the source is a string handed over by an
+                        extension at runtime, not an asset in this build.
                       */}
-                      {account.label !== undefined && (
-                        <span className="wc-account__label">{account.label}</span>
+                      {wallet.icon !== undefined && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          className="wc-wallet__icon"
+                          src={wallet.icon}
+                          alt=""
+                          width={28}
+                          height={28}
+                        />
                       )}
-                      {/*
-                        In full. Two addresses abbreviated to the same six characters are the same
-                        button, and choosing between them is choosing blind.
-                      */}
-                      <span className="mono wc-account__addr">{account.address}</span>
+                      <span className="wc-wallet__name">{wallet.name}</span>
                     </button>
                   ))}
                 </div>
-              </>
-            )}
-          </div>
-        </div>,
-        document.body,
+              )}
+
+              {/* Found and not offered, with the reason. Never silently dropped. */}
+              {unusableWallets.map((wallet) => (
+                <p className="wc-note" key={wallet.name}>
+                  {wallet.name} is out of date — it cannot {wallet.missing.join(' or ')}. Update
+                  the extension and reload.
+                </p>
+              ))}
+
+              {/*
+                Verbatim, and never replaced with wording of our own. "User rejected the request"
+                is a different instruction to the reader than "connection failed", and only the
+                wallet knows which of the two happened.
+              */}
+              {error !== null && <p className="wc-error">{error}</p>}
+
+              <p className="wc-foot">
+                No wallet?{' '}
+                <Link
+                  href={
+                    pathname === '/signin'
+                      ? '/signin'
+                      : `/signin?next=${encodeURIComponent(pathname)}`
+                  }
+                  onClick={() => setOpen(false)}
+                >
+                  Continue with Google
+                </Link>
+              </p>
+            </>
+          ) : (
+            <div className="wc-list">
+              {accountChoice.accounts.map((account) => (
+                <button
+                  key={account.address}
+                  className="wc-account"
+                  type="button"
+                  onClick={() => chooseAccount(account)}
+                >
+                  {/*
+                    The wallet's own label when it gave one, and nothing when it did not. An
+                    invented "Account 2" is a name nobody chose, sitting beside the one thing on
+                    this screen that has to be checked character by character.
+                  */}
+                  {account.label !== undefined && (
+                    <span className="wc-account__label">{account.label}</span>
+                  )}
+                  {/*
+                    In full. Two addresses abbreviated to the same six characters are the same
+                    button, and choosing between them is choosing blind.
+                  */}
+                  <span className="mono wc-account__addr">{account.address}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Dialog>
       )}
     </>
   );

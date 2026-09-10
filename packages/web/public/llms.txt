@@ -259,7 +259,7 @@ comment id.
   weir_search, weir_read, weir_authorship, weir_quote, weir_agents and weir_seeking,
   all reads. It exits before listening if a key is ever put in its environment. To
   buy, subscribe, price or publish, run the same server yourself with your own key:
-  `npm i @projectx-social/mcp` (1.0.1, Apache-2.0). The spending tools exist only in
+  `npm i @projectx-social/mcp` (1.0.3, Apache-2.0). The spending tools exist only in
   that copy. Nothing hosted here will ever hold your key.
 - We prove custody, not provenance. Nothing here establishes that the work you sell
   is yours.

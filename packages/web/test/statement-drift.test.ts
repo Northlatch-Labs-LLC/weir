@@ -160,13 +160,14 @@ const copies: Array<{ file: string; kind: string; expected: string }> = [
       Pinned like the rest, and the failure it guards against is the loudest of them: a drift here
       rejects every sign-in, so nobody can see anything they have paid for.
 
-      Moved out of `components/Shell.tsx`. The handshake was a side effect of rendering the
-      navigation rail, so it ran on the twelve routes inside `app/(app)/` and nowhere else — and
-      when the design port moved the feed, explore and the creator pages onto their own chrome, they
-      silently stopped proving sessions at all. It lives in `SessionBridge` now, mounted from the
-      root layout, where no route can lose it.
+      Moved twice, and this test caught the second move — which is what it is for. First out of
+      `components/Shell.tsx`, where the handshake was a side effect of rendering the navigation rail,
+      so it ran on the twelve routes inside `app/(app)/` and nowhere else. Then out of
+      `SessionBridge` into `SignerProvider`, because the proof is a STATE the account menu and the
+      connect window both read: a reader who declines the signature has to be able to see that and
+      try again, and a `catch {}` inside an effect gave them neither.
     */
-    file: 'components/SessionBridge.tsx',
+    file: 'components/SignerProvider.tsx',
     kind: 'read-content',
     expected: `action: read content`,
   },
@@ -512,7 +513,7 @@ describe('the head', () => {
     'components/Messages.tsx',
     'components/Notifications.tsx',
     'components/PerksEditor.tsx',
-    'components/SessionBridge.tsx',
+    'components/SignerProvider.tsx',
     'components/StudioComposer.tsx',
   ];
 

@@ -47,6 +47,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DAppKitProvider,
   useCurrentAccount,
@@ -116,6 +117,26 @@ export interface AccountChoice {
   accounts: readonly UiWalletAccount[];
 }
 
+/**
+ * How far a connected address has got towards being somebody the server will answer as.
+ *
+ * The whole defect this replaces is that there was no such value. Connecting was one fact, held by
+ * the wallet kit in the browser; being proved was another, held by a cookie the server reads; and
+ * nothing in the application could see both. So the account menu could show an address while the
+ * page beside it rendered a guest, and a reader whose signature failed had no way to know that had
+ * happened, let alone try again.
+ *
+ * - `unknown`    — nothing connected, or not looked at yet.
+ * - `checking`   — asking the server what it already has, or waiting on the wallet.
+ * - `proved`     — the server holds a session for this exact address. This is the only state that
+ *                  opens paid content.
+ * - `unproved`   — connected, and the server does not have it. Recoverable: {@link proveSession}.
+ * - `declined`   — the reader refused the signature, or the wallet failed it. Also recoverable, and
+ *                  kept distinct because a refusal is a decision and should not be retried at them
+ *                  automatically.
+ */
+export type SessionProof = 'unknown' | 'checking' | 'proved' | 'unproved' | 'declined';
+
 interface SignerContextValue {
   signer: ActiveSigner | null;
   wallets: UiWallet[];
@@ -129,6 +150,17 @@ interface SignerContextValue {
   reauthorizeWallet: () => Promise<void>;
   connectWallet: (wallet: UiWallet) => Promise<void>;
   signInWithGoogle: (returnTo: string) => Promise<void>;
+  /** How far the connected address has got. One value, read by every part of the chrome. */
+  proof: SessionProof;
+  /** The address the server currently holds a session for, which may not be the connected one. */
+  provenAddress: string | null;
+  /**
+   * Ask the wallet to sign the read-content statement and hand it to the server.
+   *
+   * Safe to call at any time: it re-reads what the server has first, so a reader pressing a
+   * "confirm" control that is already satisfied gets no wallet prompt.
+   */
+  proveSession: () => Promise<void>;
   signOut: () => void;
   exportRecovery: () => Promise<RecoveryDetails | null>;
   error: string | null;
@@ -235,6 +267,7 @@ export function SignerProvider({
  * from the kit's shape into the {@link ActiveSigner} that thirty-three components already read.
  */
 function SignerBridge({ children, network }: { children: ReactNode; network: string | null }) {
+  const router = useRouter();
   const kit = useDAppKit();
   const registered = useWallets();
   const currentAccount = useCurrentAccount();
@@ -263,6 +296,8 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   const [error, setError] = useState<string | null>(null);
   /** Open only when the reader asked for it, or when a connect returned more than one address. */
   const [choiceOpen, setChoiceOpen] = useState(false);
+  const [proof, setProof] = useState<SessionProof>('unknown');
+  const [provenAddress, setProvenAddress] = useState<string | null>(null);
 
   /*
     The wallet's signer, derived rather than stored.
@@ -292,6 +327,27 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
     state updated last.
   */
   const signer = walletActiveSigner ?? zkSigner;
+
+  /*
+    A different address is a different session, and saying otherwise is the whole defect.
+
+    Switching account inside the extension changes who `signer` is while the server's cookie still
+    names the previous address. Left alone, the chrome would keep reporting "signed in" about
+    somebody who is no longer connected — which is exactly how a reader ends up looking at another
+    of their own accounts' pages and being told the posts they paid for are locked.
+  */
+  useEffect(() => {
+    const address = signer?.address;
+    if (address === undefined) {
+      setProof('unknown');
+      return;
+    }
+    setProof((was) =>
+      provenAddress !== null && provenAddress.toLowerCase() === address.toLowerCase()
+        ? was
+        : 'unknown',
+    );
+  }, [signer?.address, provenAddress]);
 
   /* Wallets that announced themselves but cannot do what this application needs. */
   const unusableWallets = useMemo<UnusableWallet[]>(
@@ -443,6 +499,117 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   );
 
   /*
+    Prove the connected address to the server.
+
+    # What this is for
+
+    Connecting tells the browser who you are. It tells the server nothing, and the server is what
+    decides whether a paid post opens — naming an address proves nothing, because every buyer's
+    address is enumerable from public chain events. A signature over the read-content statement is
+    the proof, and it mints a session that lasts a day.
+
+    # Why it is checked before it is signed
+
+    `GET /api/session` is a cheap round trip; a wallet prompt is not. Signing unconditionally would
+    prompt on every reload, and a prompt people see that often is a prompt they approve without
+    reading. So this is also safe to call from a control the reader presses: if the server already
+    has them, nothing opens.
+
+    # Why the failure is a state rather than a swallowed exception
+
+    It used to be `catch {}` inside an effect nothing could see. A reader who declined, or whose
+    wallet errored, got no signal at all: their own paid posts rendered locked, the account menu
+    showed them signed in, and there was no control anywhere that would ask again. The whole
+    recovery path was to guess that reloading might help. That is what `declined` and `unproved`
+    exist for — they are what the chrome renders, and what a retry control is enabled by.
+  */
+  const proveSession = useCallback(async () => {
+    const address = signer?.address;
+    if (address === undefined) {
+      setProof('unknown');
+      setProvenAddress(null);
+      return;
+    }
+    setProof('checking');
+    try {
+      const current = (await (await fetch('/api/session')).json()) as {
+        reader?: string | null;
+        checked?: boolean;
+      };
+      /*
+        `checked: false` means the server could not look, which is not the same as "you have no
+        session" — and the difference decides whether to raise a wallet prompt. Treating an outage
+        as an absent session would prompt for a signature to replace a session that is probably
+        intact, which is how people are trained to approve prompts without reading them.
+      */
+      if (current.checked !== true) {
+        setProof('unproved');
+        return;
+      }
+      if (current.reader != null && current.reader.toLowerCase() === address.toLowerCase()) {
+        setProvenAddress(current.reader);
+        setProof('proved');
+        return;
+      }
+
+      const timestampMs = Date.now();
+      // Rebuilt to match `statementFor({ kind: 'read-content' })` byte for byte. Pinned against
+      // the server's copy in `test/statement-drift.test.ts`, because a drift here fails every
+      // sign-in with a signature error that names nothing.
+      const statement =
+        `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
+        `\naction: read content`;
+      const signature = await signer?.signPersonalMessage(new TextEncoder().encode(statement));
+      if (signature === undefined) {
+        setProof('unproved');
+        return;
+      }
+
+      const response = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ address, signature, timestampMs }),
+      });
+      if (!response.ok) {
+        setProof('unproved');
+        return;
+      }
+      setProvenAddress(address);
+      setProof('proved');
+      /*
+        The pages resolve entitlement on the server, so the proof only takes effect on the next
+        render. Without this the reader sits looking at their own paid posts, locked.
+      */
+      router.refresh();
+    } catch {
+      /*
+        Declined, or the wallet failed, or the server is unreachable. Recorded rather than
+        swallowed: `declined` is what puts a "confirm your account" control on the screen instead
+        of leaving the reader with a sentence and no button.
+      */
+      setProof('declined');
+    }
+  }, [signer, router]);
+
+  /*
+    Ask once, as soon as an address appears.
+
+    This lives here rather than in `SessionBridge` on purpose. The proof is this provider's state,
+    and a session that only gets proved when some other component happens to be mounted is the
+    original defect in a different costume — that is exactly how the handshake came to be a side
+    effect of rendering a navigation bar, and how every route without that bar left a connected
+    reader anonymous to the server.
+
+    Only `unknown` triggers it. `declined` deliberately does not: a refusal is a decision, and
+    re-prompting somebody who just said no is how a wallet prompt becomes something people dismiss
+    without reading.
+  */
+  useEffect(() => {
+    if (signer === null || proof !== 'unknown') return;
+    void proveSession();
+  }, [signer, proof, proveSession]);
+
+  /*
     Signing out ends both halves and the server's session.
 
     The `DELETE` is what actually revokes: clearing this browser leaves a cookie that still proves
@@ -454,6 +621,8 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
     setZkSession(null);
     setChoiceOpen(false);
     setError(null);
+    setProof('unknown');
+    setProvenAddress(null);
     void kit.disconnectWallet().catch(() => undefined);
     void fetch('/api/session', { method: 'DELETE' })
       .catch(() => undefined)
@@ -524,6 +693,9 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
       reauthorizeWallet,
       connectWallet,
       signInWithGoogle,
+      proof,
+      provenAddress,
+      proveSession,
       signOut,
       exportRecovery,
       error,
@@ -542,6 +714,9 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
       reauthorizeWallet,
       connectWallet,
       signInWithGoogle,
+      proof,
+      provenAddress,
+      proveSession,
       signOut,
       exportRecovery,
       error,
