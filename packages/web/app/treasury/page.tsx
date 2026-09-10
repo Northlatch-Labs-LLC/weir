@@ -29,5 +29,5 @@ export default async function TreasuriesPage() {
           () => null,
         );
 
-  return <TreasuriesData signedIn={viewer !== null} myHandle={handle} />;
+  return <TreasuriesData viewerAddress={viewer} myHandle={handle} />;
 }

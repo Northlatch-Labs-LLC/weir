@@ -56,6 +56,8 @@ const FRAMED_EXACT: readonly string[] = [
   '/messages',
   '/studio',
   '/vault',
+  /* Rebuilt onto `packages/ui`, so it draws its own frame — see `TreasuryScreen`. */
+  '/treasury',
 ];
 
 /* Handle and post pages: every path beneath these roots is a framed screen. */

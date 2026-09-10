@@ -756,6 +756,14 @@
     line-height: 1.6;
     color: var(--w-ink-7);
   }
+  /*
+     A note about a failed read, still a note.
+
+     `.w-unread` is 15px italic rose, drawn for a figure standing where a number would be. Applied
+     to a two-line sentence across the column it shouted, on the page whose job is to show that
+     money moves here. The colour is what says the read failed; the size and face stay the note's.
+  */
+  .w-colnote--bad { color: var(--w-rose); }
   .w-colnote a { color: var(--w-mint-dim); text-decoration: none; }
   .w-colnote a:hover { color: var(--w-mint); text-decoration: underline; }
 
@@ -2047,5 +2055,206 @@
     font-weight: 700;
     letter-spacing: -0.01em;
     color: var(--w-ink-10);
+  }
+  /*
+    The label a `.note` carries instead of a heading — "Your fee rate", "Where
+    the money comes from". It was mono and uppercase and nothing else, so it
+    took its size and colour from whatever body text it sat next to, and read
+    as a sentence that had been shouted rather than as a label.
+  */
+  .w-column .note .lbl,
+  .w-column .card .lbl {
+    display: block;
+    margin-bottom: 6px;
+    font-family: var(--w-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--w-ink-7);
+  }
+  .w-column .note p:last-child,
+  .w-column .card p:last-child { margin-bottom: 0; }
+
+  /* --------------------------------------------------------------------
+     The parts a money screen is made of.
+
+     Added for /treasury, which was the last page still drawn in the retired
+     teal system — 47 font sizes and 6 colours typed into its elements, inside
+     a 72rem band rendered in a 640px column. Everything here is generic on
+     purpose: a lede, a row, a figure grid, a ladder, a definition list, a
+     form control and a numbered explanation are what the remaining money
+     screens are made of too, so /earnings and /purchases assemble from these
+     rather than growing their own.
+     -------------------------------------------------------------------- */
+  /*
+     The rule under a lede belongs to the column, not to the sentence.
+
+     This carried `max-width: 62ch` for the text measure, which shortened its own border-bottom and
+     left a rule that stopped two-thirds of the way across — reading as a border that failed rather
+     than as a divider. Padding is inside the border box, so the right padding sets the measure and
+     the rule still spans.
+  */
+  .w-lede {
+    margin: 0;
+    padding: 12px 5rem 12px 22px;
+    border-bottom: 1px solid var(--w-line);
+    font-family: var(--w-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--w-ink-7);
+    text-wrap: pretty;
+  }
+
+  .w-block { padding: 20px 22px 22px; border-bottom: 1px solid var(--w-line); }
+  .w-block > h2 {
+    margin: 0 0 5px;
+    font-family: var(--w-sans);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--w-ink-10);
+  }
+  .w-block__sub {
+    margin: 0 0 16px;
+    max-width: 62ch;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--w-ink-7);
+    text-wrap: pretty;
+  }
+  .w-block > p:last-child { margin-bottom: 0; }
+
+  .w-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--w-line);
+  }
+  .w-row__body { flex: 1; min-width: 14rem; }
+  .w-row__who { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+  .w-row__who .w-name { font-size: 16px; }
+  .w-row__meta {
+    margin: 10px 0 0;
+    font-family: var(--w-mono);
+    font-size: 12px;
+    color: var(--w-ink-7);
+  }
+
+  .w-figs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+    max-width: 30rem;
+  }
+  .w-figs .w-figure__value { font-size: 17px; }
+  .w-figs .w-none, .w-figs .w-unread { font-size: 15px; }
+
+  /*
+     The withdrawal ladder. A rung is open, maturing, or unplaced — and unplaced
+     is the epoch failing to read, which is why it carries the alert colour and
+     never the mint one. Nothing here ever draws a rung as open on a guess.
+  */
+  .w-ladder { display: grid; gap: 10px; }
+  .w-ladder__row { display: flex; align-items: center; gap: 14px; }
+  .w-ladder__name {
+    width: 4.5rem;
+    flex-shrink: 0;
+    font-family: var(--w-mono);
+    font-size: 12px;
+    color: var(--w-ink-7);
+  }
+  .w-ladder__track {
+    flex: 1;
+    height: 8px;
+    border-radius: var(--w-r-full);
+    border: 1px solid var(--w-line);
+    background: var(--w-ground);
+    overflow: hidden;
+  }
+  .w-ladder__fill { display: block; height: 100%; background: var(--w-line-strong); }
+  .w-ladder__fill--open { background: var(--w-mint); }
+  /*
+     An unplaced rung draws nothing.
+
+     This filled rose to the rung's place in the cycle, so a failed epoch read painted seven ramped
+     red bars — a progress chart in the alert colour, for a position nobody knows. The empty track
+     claims nothing, which is the whole of what is known, and `epochLabel` says why once.
+  */
+  .w-ladder__fill--unplaced { display: none; }
+  .w-ladder__state {
+    width: 5.5rem;
+    flex-shrink: 0;
+    text-align: right;
+    font-family: var(--w-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--w-ink-7);
+  }
+  .w-ladder__state--open { color: var(--w-mint); }
+
+  /* One vault's rungs, small enough to sit in a row. */
+  .w-bars { display: flex; align-items: flex-end; gap: 3px; height: 24px; }
+  .w-bars > span { width: 5px; border-radius: 2px; background: var(--w-line-strong); }
+  .w-bars > span[data-funded='true'] { background: var(--w-mint-dim); }
+
+  .w-defs { display: grid; gap: 10px; }
+  .w-defs__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--w-line);
+  }
+  .w-defs__row:last-child { padding-bottom: 0; border-bottom: 0; }
+  .w-defs__k { min-width: 13rem; font-family: var(--w-sans); font-size: 13px; color: var(--w-ink-7); }
+  .w-defs__v {
+    font-family: var(--w-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+    color: var(--w-ink-10);
+  }
+  .w-defs__v--money { color: var(--w-mint); }
+  .w-defs__v--said { font-family: var(--w-sans); color: var(--w-ink-9); }
+  .w-defs__v--bad { font-family: var(--w-sans); font-style: italic; color: var(--w-rose); }
+
+  .w-field { display: flex; flex-direction: column; gap: 8px; }
+  .w-field > label { font-family: var(--w-sans); font-size: 13px; color: var(--w-ink-7); }
+  .w-input,
+  .w-select {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: var(--w-r-md);
+    border: 1px solid var(--w-line-strong);
+    background: var(--w-ground);
+    color: var(--w-ink-10);
+    font-family: var(--w-sans);
+    font-size: 15px;
+  }
+  .w-input { font-family: var(--w-mono); font-variant-numeric: tabular-nums; }
+
+  .w-order { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+  .w-order > li { display: grid; grid-template-columns: 1.75rem 1fr; gap: 0 12px; align-items: start; }
+  .w-order__n { padding-top: 2px; font-family: var(--w-mono); font-size: 12px; color: var(--w-mint-dim); }
+  .w-order__what {
+    margin: 0;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--w-ink-10);
+  }
+  .w-order__why {
+    margin: 3px 0 0;
+    font-family: var(--w-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--w-ink-7);
+    text-wrap: pretty;
   }
 }
