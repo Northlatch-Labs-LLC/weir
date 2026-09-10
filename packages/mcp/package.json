@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@mysten/sui": "2.27.1",
+    "@mysten/sui": "2.30.0",
     "@projectx-social/agent": "workspace:*",
     "@projectx-social/policy": "workspace:*",
     "@projectx-social/signer": "workspace:*",
