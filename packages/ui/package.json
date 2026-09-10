@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./weir-ui.css": "./src/theme/weir-ui.css"
@@ -23,5 +25,8 @@
     "@types/react-dom": "19.2.5",
     "happy-dom": "^20.11.12"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@radix-ui/react-dialog": "1.1.23"
+  }
 }

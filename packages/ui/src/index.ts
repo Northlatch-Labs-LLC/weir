@@ -28,6 +28,7 @@ export {
   type Viewer,
   type LinkComponent,
 } from './layout/AppShell';
+export { Dialog, DialogClose } from './overlay/Dialog';
 export { PostCard, type PostView, type PostAuthor, type PostAccess } from './post/PostCard';
 export { ExpandableText } from './post/ExpandableText';
 export {

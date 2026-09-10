@@ -21,8 +21,7 @@
  * going to appear.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
-import { Avatar, Icon } from '@projectx-social/ui';
+import { Avatar, Dialog, Icon } from '@projectx-social/ui';
 import { SignIn } from '@/components/SignIn';
 import { useUnlock } from '@/components/app/use-unlock';
 
@@ -56,22 +55,19 @@ export function UnlockDialog({
     expectedPrice,
   });
 
-  const panel = useRef<HTMLDivElement>(null);
   const signingInFlight = stage === 'submitting';
 
-  const close = useCallback(() => {
+  /*
+    Closing, with the one condition that matters.
+
+    `Dialog` holds Escape, the scrim and the close control behind `busy`, so this is only reached
+    when closing is actually allowed. The guard stays anyway: `onClose` is a prop, and a caller
+    that ever renders this without `busy` should still not be able to drop a signature in flight.
+  */
+  const close = () => {
     if (signingInFlight) return;
     onClose();
-  }, [signingInFlight, onClose]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') close();
-    }
-    document.addEventListener('keydown', onKey);
-    panel.current?.focus();
-    return () => document.removeEventListener('keydown', onKey);
-  }, [close]);
+  };
 
   const STAGE_NOTE: Record<string, string> = {
     idle: 'Nothing has been sent yet.',
@@ -85,67 +81,21 @@ export function UnlockDialog({
   };
 
   return (
-    <div
-      role="presentation"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) close();
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) close();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 50,
-        background: 'var(--w-scrim)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-      }}
+      title={`Unlock ${creatorName}'s post`}
+      busy={signingInFlight}
     >
-      <div
-        ref={panel}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Unlock ${creatorName}'s post`}
-        tabIndex={-1}
-        style={{
-          width: 460,
-          maxWidth: '100%',
-          border: '1px solid var(--w-line-strong)',
-          borderRadius: 'var(--w-r-xl)',
-          background: 'var(--w-panel)',
-          padding: '26px 26px 22px',
-          boxShadow: '0 32px 80px -16px rgba(0,0,0,0.7)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <Avatar address={creatorAddress} isAgent={creatorIsAgent} size={44} />
-          <span style={{ display: 'flex', flexDirection: 'column' }}>
-            <strong style={{ fontFamily: 'var(--w-sans)', fontSize: 15, fontWeight: 700, color: 'var(--w-ink-10)' }}>
-              Unlock {creatorName}&rsquo;s post
-            </strong>
-            <span style={{ fontFamily: 'var(--w-mono)', fontSize: 12, color: 'var(--w-ink-7)' }}>
-              @{creatorHandle}
-              {assets === undefined ? '' : ` · ${assets} ${assets === 1 ? 'image' : 'images'}`}
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            disabled={signingInFlight}
-            style={{
-              marginLeft: 'auto',
-              border: 0,
-              background: 'transparent',
-              color: 'var(--w-ink-7)',
-              cursor: signingInFlight ? 'not-allowed' : 'pointer',
-              minWidth: 44,
-              minHeight: 44,
-            }}
-          >
-            <Icon name="close" size={20} />
-          </button>
-        </div>
+      <div className="w-dialog__who">
+        <Avatar address={creatorAddress} isAgent={creatorIsAgent} size={44} />
+        <span className="w-handle">
+          @{creatorHandle}
+          {assets === undefined ? '' : ` · ${assets} ${assets === 1 ? 'image' : 'images'}`}
+        </span>
+      </div>
 
         {stage === 'signing-in' ? (
           <>
@@ -308,8 +258,7 @@ export function UnlockDialog({
             </p>
           </>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
