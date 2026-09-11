@@ -1,23 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The studio, in the application frame.
- *
- * # What is not touched
- *
- * `StudioComposer` is nine hundred lines that price a post on chain, seal a body, upload media and
- * report which of those steps failed. It publishes real work for real money. It is MOUNTED here,
- * not rewritten and not re-typed: this screen supplies the frame and the explanation around it and
- * nothing else. The composer's own four-state price read — not asked, checking, measured, could
- * not reach the chain — is exactly the kind of distinction a rewrite loses.
- *
- * # Why the explanation is here rather than in a hero
- *
- * Somebody arriving from a shared link needs to know what publishing here means before they can
- * decide whether to. The old page said it in a page-wide hero, which is a landing-page device on a
- * screen a creator opens every week. It sits in the rail now: present, permanent, and not in the
- * way of the writing.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -34,13 +16,6 @@ export function StudioScreen({
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
-  /**
-   * The discovery column, read on the server and handed down.
-   *
-   * A server component passed as a prop into a client one: this screen cannot read the store
-   * itself, and the rail is the same rail every other wrapped route gets. Optional, so a test or a
-   * caller without it renders the page's own cards and nothing else.
-   */
   discovery?: ReactNode;
 }) {
   const viewer =
@@ -48,16 +23,6 @@ export function StudioScreen({
       ? ({ signedIn: false } as const)
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerHandle } as const);
 
-
-  /*
-    The page's own cards, and then the people.
-
-    These four screens pass an `aside`, and an `aside` REPLACES the discovery column rather than
-    joining it — so `/vault`, `/studio`, `/alerts` and `/messages` were the only wrapped routes with
-    no faces on them at all, and 337 to 715 pixels of empty ground under one explanatory card. The
-    discovery rail is read on the server and handed down as `discovery`, so it renders beneath the
-    page's own cards instead of replacing them.
-  */
   const aside = (
     <>
       <section className="w-card">

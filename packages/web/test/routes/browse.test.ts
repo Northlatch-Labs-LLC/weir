@@ -1,26 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The shop window shows what is for sale and nothing that was bought.
- *
- * # What this pins
- *
- * `GET /api/browse` is the one public read that answers "what is here" to a caller who names
- * nothing. Three properties make it safe to leave open, and each is asserted against the real
- * database rather than a stub, because two of them are about what the SQL returns:
- *
- *   1. The page size is not a parameter. A caller asking for a thousand gets twenty. `truncated`
- *      is measured by fetching one row past the page, not inferred from a full page.
- *   2. Nothing gated leaves. A subscribers-only post's words are stored in plaintext and are not
- *      shown; a paid post's sealed material — blob id, nonce, wrapped key — is not a field the
- *      response has. This is asserted on the serialised JSON, not on the object, so a key that
- *      leaks by any path fails.
- *   3. The cursor continues the listing it came from. A cursor issued for one creator's posts is
- *      refused for the whole feed, and a cursor that was not issued at all is refused.
- *
- * Posts are seeded through `addPost`, the writer the rest of the application uses, so the rows
- * here have the shape production rows have.
- */
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -52,7 +31,6 @@ async function seedProfiles(): Promise<void> {
   );
 }
 
-/** `n` posts for `alice`, oldest first, one of each access kind in rotation. */
 async function seedPosts(n: number, handle = 'alice', vaultId = VAULT_A): Promise<string[]> {
   const ids: string[] = [];
   for (let i = 0; i < n; i += 1) {
@@ -117,8 +95,6 @@ describe('what it refuses', () => {
   });
 
   it("a cursor issued for one creator's posts, presented against the whole feed", async () => {
-    // The cursor is a position in ONE ordering. Accepting it elsewhere would let a caller splice
-    // a page boundary from a narrow listing into a wide one and skip or repeat rows.
     const scoped = encodeCursor({ k: 'posts', h: 'alice', t: 1_756_700_000_000, id: 'palice000' });
     expect((await browse({ kind: 'posts', cursor: scoped })).status).toBe(400);
     expect((await browse({ kind: 'posts', cursor: scoped, handle: 'alice' })).status).toBe(200);
@@ -141,7 +117,6 @@ describe('the page size', () => {
   it('reports truncated only when a further page actually exists', async () => {
     await seedPosts(BROWSE_PAGE);
     const body = (await (await browse({ kind: 'posts' })).json()) as { items: unknown[]; truncated: boolean; nextCursor: string | null };
-    // Exactly one page: a full page is not evidence of a next one, and this says so.
     expect(body.items).toHaveLength(BROWSE_PAGE);
     expect(body.truncated).toBe(false);
     expect(body.nextCursor).toBeNull();
@@ -220,7 +195,7 @@ describe('paging', () => {
 
 describe('what leaves', () => {
   it("shows a public post's words, and never a gated post's", async () => {
-    await seedPosts(3); // public, subscribers, paid — in that order of creation
+    await seedPosts(3);
     const body = (await (await browse({ kind: 'posts' })).json()) as {
       items: Array<{ id: string; access: { kind: string }; body?: string; preview: string }>;
     };
@@ -228,7 +203,6 @@ describe('what leaves', () => {
     expect(byKind.get('public')?.body).toBe('the words of post 0');
     expect(byKind.get('subscribers')?.body).toBeUndefined();
     expect(byKind.get('paid')?.body).toBeUndefined();
-    // The window still shows the goods: every post has its preview and its access.
     for (const p of body.items) expect(p.preview.length).toBeGreaterThan(0);
   });
 
@@ -251,12 +225,6 @@ describe('what leaves', () => {
   });
 
   it('builds the shown post field by field rather than spreading the row', () => {
-    /*
-      The property behind the previous two assertions. A `{ ...post }` would show every field the
-      Post type has today AND every field added to it later, by default. Building it means a new
-      field is hidden until somebody decides otherwise — which is the only safe default for a
-      public window over a table that holds sealed keys.
-    */
     const source = readFileSync(join(import.meta.dirname, '..', '..', 'app', 'api', 'browse', 'route.ts'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/^\s*\/\/.*$/gm, ' ');

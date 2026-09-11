@@ -1,16 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * # Nothing here is gated by this component
- *
- * The controls are hidden from somebody without a `PlatformCap`, and that hiding is a courtesy
- * rather than a defence. Every administrative function in `platform.move` takes the capability by
- * reference, so the chain refuses a caller who does not hold it whatever this interface renders.
- *
- * # A failed read is not "you are not an administrator"
- */
-
 import { useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -35,10 +25,8 @@ type State =
   | { name: 'read'; isAdmin: boolean; capId: string | null; platform: PlatformView | null }
   | { name: 'unmeasured'; detail: string };
 
-/** Mist to SUI. String arithmetic — `Number` loses precision above 2^53, and this is a treasury. */
 const sui = formatSui;
 
-/** Basis points as a percentage, without floating point. 250 → "2.5%". */
 function pct(bps: string): string {
   const value = BigInt(bps);
   const whole = value / 100n;

@@ -5,21 +5,8 @@ import { resolve } from 'node:path';
 import { FOOTER } from '../lib/site-map';
 
 const source = readFileSync(resolve(process.cwd(), 'proxy.ts'), 'utf8');
-/*
-  The list moved to `lib/front-door.ts` on 2026-09-04, when the agent manifest became its second
-  reader. This still parses the SOURCE rather than importing the array, for the reason it always
-  did: importing it would assert that a value equals itself. What changed is which file is read,
-  and the assertion below that the proxy actually uses the module — without it, the list could be
-  correct in one file and ignored in the other.
-*/
 const doorSource = readFileSync(resolve(process.cwd(), 'lib/front-door.ts'), 'utf8');
 const alwaysOpen = (() => {
-  /*
-    Comments are stripped before the list is split on commas. They were not, and a comment whose
-    last sentence ran straight into the next entry glued that entry to the comment's tail — so
-    `/agents`, `/robots.txt` and `/explore` were each absent from this list while present in the
-    real one, and an assertion that one of them was closed would have passed against a lie.
-  */
   const bare = doorSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const match = /const ALWAYS_OPEN = \[([^\]]+)\]/.exec(bare);
   return (match?.[1] ?? '').split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean);
@@ -27,19 +14,12 @@ const alwaysOpen = (() => {
 
 describe('the closed-door exemptions', () => {
   it('found the list at all', () => {
-    // Guards the guard: a rename would make every assertion below vacuous.
     expect(alwaysOpen.length).toBeGreaterThanOrEqual(4);
   });
 
   it('is the list the proxy actually consults', () => {
-    /*
-      The list and the gate are in two files now, so "the array is right" and "the gate reads the
-      array" are two claims. This is the second one. Without it the exemptions below could be
-      asserted against a module the door never imports.
-    */
     expect(source).toContain("from '@/lib/front-door'");
     expect(source).toContain('isAlwaysOpen(pathname)');
-    // And the one rule lives with the list, rather than being re-implemented beside it.
     expect(doorSource).toContain('export function isAlwaysOpen');
   });
 
@@ -59,14 +39,6 @@ describe('the closed-door exemptions', () => {
   });
 
   it('keeps the share card reachable, or every shared link previews as nothing', () => {
-    /*
-      `og:image` and `twitter:image` both point at `/opengraph-image`. Gated, it answered 307 to the
-      waiting list and the scraper got a redirect where a picture should be — so a link pasted into
-      a chat client rendered with no preview at all, which reads as broken rather than closed.
-
-      Asserted against the path the metadata actually emits rather than a remembered one: Next
-      serves this route with a cache-busting query, and the exemption is matched on the pathname.
-    */
     expect(alwaysOpen).toContain('/opengraph-image');
   });
 
@@ -77,13 +49,6 @@ describe('the closed-door exemptions', () => {
   });
 
   it('opens the two directories the funnel points at, and only those', () => {
-    /*
-      `/explore` was in the list above until the waiting-list page grew a funnel with two doors,
-      "Explore creators" and "Explore AI agents". A door that 307s back to the page it is on is not
-      a door. The directories are what a visitor may see before committing; what they show is
-      already public by design (profiles, pools, the declaration register). The pages a card leads
-      to stay closed — asserted above.
-    */
     for (const path of ['/explore', '/explore/agents']) {
       expect(alwaysOpen.some((prefix) => path === prefix || path.startsWith(prefix)), path).toBe(true);
     }
@@ -96,12 +61,6 @@ describe('the pass', () => {
     const admin = source.indexOf('isSiteAdmin(viewer)');
     const pass = source.indexOf('passIsValid(');
     const redirect = source.indexOf('NextResponse.redirect(');
-    /*
-      The open-site early return. It reads `letThrough(request)` rather than `NextResponse.next()`
-      since 2026-09-09: every pass-through now carries the request path on a header, so the layout
-      can tell whether the screen beneath it draws its own frame. What this asserts is the ORDER —
-      an open site returns before the pass is consulted — and that is unchanged.
-    */
     const open = source.indexOf('if (!mode.waitlistMode) return letThrough(request);');
     expect(admin).toBeGreaterThan(-1);
     expect(pass).toBeGreaterThan(admin);

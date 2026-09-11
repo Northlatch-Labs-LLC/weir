@@ -1,14 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The money arithmetic.
- *
- * Small, and the most-used code in the product: every price, balance, gas figure and earnings
- * number passes through it. It had no test at all until this file, having been written three times
- * in three components and once in a `server-only` module none of them could import.
- *
- * The float cases below are the reason it is string arithmetic. They are not hypothetical — they
- * are what `parseFloat(x) * 1e6` actually returns.
- */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -20,10 +10,6 @@ import {
   USDC_DECIMALS,
 } from '../lib/units';
 
-/**
- * The two SUI helpers replaced eight private copies, which had already drifted apart in what they
- * printed. These assertions are the contract those eight are now held to.
- */
 describe('formatSui', () => {
   it('reads MIST at nine decimals', () => {
     expect(formatSui(1_000_000_000n)).toBe('1');
@@ -37,11 +23,6 @@ describe('formatSui', () => {
   });
 
   it('keeps the sign', () => {
-    /*
-      Two of the eight copies stripped a leading minus before dividing — one by `startsWith('-')`,
-      one by comparing the string against `'0'` — so a negative balance rendered as its opposite.
-      On an earnings screen that is the difference between owing and being owed.
-    */
     expect(formatSui(-1_500_000_000n)).toBe('-1.5');
     expect(formatSui('-1500000000')).toBe('-1.5');
   });
@@ -57,8 +38,6 @@ describe('formatSuiShort', () => {
   });
 
   it('truncates rather than rounds', () => {
-    // A displayed balance must never exceed the real one: the number shown is the number somebody
-    // will try to withdraw, and rounding up invents funds that are not there.
     expect(formatSuiShort(1_999_999_999n)).toBe('1.9999');
   });
 
@@ -76,25 +55,17 @@ describe('parseUnits', () => {
   });
 
   it('gets 1.001 exactly right, where a float does not', () => {
-    /*
-      A price built from the float is one unit short, which either aborts an exact-amount call or
-      leaves dust behind forever. The error appears only for particular values a person would
-      plausibly type, so it survives every round-number test somebody writes first.
-    */
     expect(Number.isInteger(parseFloat('1.001') * 1e6)).toBe(false);
     expect(parseUnits('1.001', 6)).toEqual({ ok: true, value: 1_001_000n });
   });
 
   it('is exact far above 2^53, where Number is not', () => {
-    // A balance this large is where `Number` silently starts rounding — the worst possible
-    // schedule for a rounding error in somebody's earnings.
     const huge = '9007199254740993.123456';
     const parsed = parseUnits(huge, 6);
     expect(parsed.ok && parsed.value).toBe(9_007_199_254_740_993_123_456n);
   });
 
   it('refuses more precision than the coin has, rather than truncating', () => {
-    // Silently dropping a digit charges somebody a different price from the one they typed.
     expect(parseUnits('1.2345678', 6)).toEqual({
       ok: false,
       problem: { kind: 'too-precise', decimals: 6, given: 7 },
@@ -102,7 +73,6 @@ describe('parseUnits', () => {
   });
 
   it('accepts exactly the coin’s precision', () => {
-    // The last accepted value, next to the first rejected one above.
     expect(parseUnits('1.234567', 6).ok).toBe(true);
   });
 
@@ -130,7 +100,6 @@ describe('formatUnits', () => {
   it('drops trailing zeros but never significant ones', () => {
     expect(formatUnits(1_500_000n, 6)).toBe('1.5');
     expect(formatUnits(1_000_000n, 6)).toBe('1');
-    // The zero here is between two significant digits and must survive.
     expect(formatUnits(1_050_000n, 6)).toBe('1.05');
     expect(formatUnits(1n, 6)).toBe('0.000001');
   });
@@ -140,7 +109,6 @@ describe('formatUnits', () => {
   });
 
   it('formats a measured zero as zero', () => {
-    // Distinct from "not measured", which callers render separately — this is a real balance.
     expect(formatUnits(0n, 6)).toBe('0');
   });
 

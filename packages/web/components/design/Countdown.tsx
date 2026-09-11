@@ -1,36 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The clock, and the only thing on this site that is a claim about the future.
- *
- * # It renders nothing unless somebody set a date
- *
- * The date and its label come from `site_mode`, set by the site administrator. There is no default,
- * no fallback and no "launching soon" — a countdown with an invented target would be the single
- * fabricated number in a product whose whole argument is that its figures are read rather than
- * asserted. `null` renders `null`, at the call site.
- *
- * # Why the label is not optional
- *
- * A bare clock on a page is a promise whose content the reader supplies themselves, and they supply
- * "launch". Weir is already live — creators are posting, vaults are staking — so that is the one
- * meaning it must never carry. The label says what actually happens on the date, and the schema
- * enforces that the two travel together (`db/016_waitlist_growth.sql`).
- *
- * # Hydration
- *
- * The server renders at one instant and the browser hydrates at another, so a countdown computed in
- * both places disagrees with itself and React replaces the markup with a warning. The first paint is
- * therefore the *date*, which is the same string everywhere, and the ticking figures appear after
- * mount. Without JavaScript the date stays — which is the more useful half anyway.
- *
- * # It does not count past zero
- *
- * When the date arrives the clock is replaced by a sentence saying so. Negative time rendered as
- * "-3 days" is the classic tell of a page nobody looked at after its own deadline.
- */
-
 import { useEffect, useState } from 'react';
 
 const CREST = 'var(--crest,#8be3c6)';
@@ -38,13 +8,6 @@ const SAND = 'var(--sand,#d9c9a3)';
 const DIM = 'var(--dim,#a3bcb8)';
 const LINE = 'rgba(var(--crest-rgb,139,227,198),0.18)';
 
-/**
- * The date as an unambiguous string.
- *
- * Exported since 2026-09-04: `/agents` and the waiting list's own agent line print the same date
- * from the same reading, and two formatters would eventually disagree about a month name or a time
- * zone on two pages describing one number.
- */
 export function absoluteDate(atMs: number): string {
   return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
@@ -78,7 +41,6 @@ function Cell({ value, unit }: { value: number; unit: string }) {
           fontWeight: 600,
           lineHeight: 1,
           color: CREST,
-          // Digits that change every second must not shift the cells beside them.
           fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -100,16 +62,7 @@ function Cell({ value, unit }: { value: number; unit: string }) {
   );
 }
 
-/**
- * `gated` is required, like `label`, because the sentence under the clock is a statement about what
- * is open today and the two states of the door make opposite statements. Defaulting it would let a
- * closed site say the feed is open — the one claim this component exists to never make.
- */
 export function Countdown({ atMs, label, gated }: { atMs: number; label: string; gated: boolean }) {
-  /*
-    `null` until mounted, which is also what the server renders. The two agree by construction rather
-    than by the clocks happening to be close enough, and the date below is painted either way.
-  */
   const [remaining, setRemaining] = useState<Remaining | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -169,7 +122,6 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
       )}
 
       {passed ? (
-        // Not a negative clock, and not silence either: the date is still the answer to "when".
         <p style={{ margin: 0, color: 'var(--ink,#dce9e6)', fontSize: '0.9375rem', textWrap: 'pretty' }}>
           That date has arrived: {date}.
         </p>

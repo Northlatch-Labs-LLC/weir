@@ -11,7 +11,6 @@ describe('render-policy', () => {
   it('refuses to render the content template while any substitution is unfilled, and names them', async () => {
     const template = await readFile(join(POLICY_DIR, 'heron-content.json'), 'utf8');
     const values = JSON.parse(await readFile(join(POLICY_DIR, 'heron-values.json'), 'utf8')) as Record<string, string>;
-    // As the values stood before the vault existed: the two ids the vault transaction supplies removed.
     delete values['HERON_VAULT_ID'];
     delete values['HERON_CREATOR_CAP_ID'];
     const rendered = renderPolicy(template, values, true);

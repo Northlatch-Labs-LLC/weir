@@ -1,25 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import 'server-only';
-/**
- * The platform's side of an agent's mind: bounds, the row, the Walrus store.
- *
- * What this module never has: a plaintext, or a key that opens one. It takes a ciphertext the
- * agent already encrypted to its own registered key, checks that the ONE envelope names the agent
- * that signed, pays the WAL, and records where the bytes went. `packages/agent/src/mind.ts` is the
- * other half and carries the design; `db/036_agent_minds.sql` says what a row is.
- *
- * # Configuration, all of it required, none of it defaulted
- *
- * The platform fronts WAL for every blob stored here (the estate's measured cost is
- * `lib/storage-retention.ts`'s ~0.347 WAL per durable blob). Three numbers bound that spend and a
- * deployment that has not set them has not decided to pay — so the route answers 501 until it has:
- *
- *   PROJECTX_SOCIAL_MIND_MAX_BYTES            the ciphertext ceiling per blob
- *   PROJECTX_SOCIAL_MIND_QUOTA_CAPACITY       blobs an address may store at once (burst)
- *   PROJECTX_SOCIAL_MIND_QUOTA_MS_PER_TOKEN   then one more every this many milliseconds
- *
- * The desk's recommendation (MIND-DESIGN.md, MD-2): 1 MiB, capacity 1, one per six hours.
- */
 import { fail, ok, type Envelope, type Reading } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 import { grantUpload } from '@/lib/publisher-token';
@@ -44,7 +24,6 @@ function positiveInteger(env: Record<string, string | undefined>, name: string):
   return ok(Number(raw));
 }
 
-/** The three numbers, or which one is missing. Read per call, so an operator's change lands on the next request. */
 export function mindConfig(env: Record<string, string | undefined> = process.env as Record<string, string | undefined>): Reading<MindConfig> {
   const maxBytes = positiveInteger(env, MIND_ENV.maxBytes);
   if (!maxBytes.ok) return maxBytes;
@@ -55,13 +34,11 @@ export function mindConfig(env: Record<string, string | undefined> = process.env
   return ok({ maxBytes: maxBytes.value, quota: { capacity: capacity.value, msPerToken: msPerToken.value } });
 }
 
-/** A label names one mind. Mirrors `agent_minds_label_is_short` in 036 and `LABEL` in the agent. */
 export const LABEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 export interface MindPayload {
-  /** Base64 ciphertext, as `encryptBytes` produced it. */
   ciphertext: string;
   nonce: string;
   envelope: Envelope;
@@ -75,13 +52,6 @@ export interface MindSubmission {
   payload: MindPayload;
 }
 
-/**
- * Shape and ownership, before any signature is checked.
- *
- * Exactly one envelope, and it names the signer. A payload with two envelopes is a mind a second
- * key can open; one whose envelope names somebody else is a blob the signer could never recall.
- * Both are refused as malformed rather than stored as somebody's memory.
- */
 export function validateMindSubmission(input: Record<string, unknown>): { ok: true; submission: MindSubmission } | { ok: false; why: string } {
   const rawAddress = input['address'];
   if (typeof rawAddress !== 'string') return { ok: false, why: 'address is required' };
@@ -175,13 +145,6 @@ function toRecord(row: MindRow): MindRecord {
   };
 }
 
-/**
- * Pay for and store the ciphertext, the agent owning the Blob object.
- *
- * `durable`, always — a mind that evaporates in a fortnight is not a memory. The grant and the
- * store are the same two calls a sealed post body makes (`body-storage.ts`); a mind is bytes the
- * platform cannot read, exactly as a paid body is.
- */
 export async function storeMind(input: { owner: string; ciphertext: Uint8Array }): Promise<Reading<{ blobId: string; endEpoch: number }>> {
   const grant = await grantUpload({ owner: input.owner, size: input.ciphertext.length, tier: 'durable' });
   if (!grant.ok) return grant;
@@ -190,10 +153,6 @@ export async function storeMind(input: { owner: string; ciphertext: Uint8Array }
   return ok({ blobId: stored.value.blobId, endEpoch: stored.value.endEpoch });
 }
 
-/**
- * Write the row. `runner` is the route's transaction, so the signature is spent and the row is
- * written together or neither is — the pairing `lib/identity.ts` documents on `spendSignature`.
- */
 export async function recordMind(
   input: Omit<MindRecord, 'createdAtMs'> & { createdAtMs?: number },
   runner: { query: ReturnType<typeof db>['query'] } = db(),
@@ -219,7 +178,6 @@ export async function recordMind(
   return toRecord(row);
 }
 
-/** The newest blob under a label, or null when the agent has never remembered under it. */
 export async function latestMind(address: string, label: string): Promise<MindRecord | null> {
   const { rows } = await db().query<MindRow>(
     `SELECT * FROM agent_minds WHERE address = $1 AND label = $2 ORDER BY created_at_ms DESC LIMIT 1`,

@@ -1,17 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The page carried `target` and `targetState` and nothing ever assigned to either: there was no
- * fetch. So `target` was `null` for every visitor, `canPublish` was false for every visitor, and
- * the publish button could not render at all. The studio composed posts and filed none, and the
- * three status notes explaining why were unreachable for the same reason.
- *
- * The load is asserted here rather than the button's styling, because the failure was invisible:
- * every field rendered, nothing threw, and the only symptom was a button that was never there.
- *
- * The other thing worth pinning is that a failed read and an empty result stay apart. Telling a
- * creator they have no vault because the chain was unreachable sends them to open a second one.
- */
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +10,6 @@ vi.mock('@/components/SignIn', () => ({ SignIn: () => <div>sign in</div> }));
 
 const { StudioComposer } = await import('../components/StudioComposer');
 
-/** Mirrors what `/api/creator` answers with, narrowed to the fields publishing reads. */
 function vault(handle: string | null, vaultId = '0xvault') {
   return { vaultId, coinType: '0x2::sui::SUI', handle };
 }
@@ -46,7 +33,6 @@ describe('StudioComposer', () => {
     render(<StudioComposer />);
 
     expect(screen.getByText('sign in')).toBeTruthy();
-    // The composer is withheld, not disabled: a form that cannot submit explains nothing.
     expect(screen.queryByLabelText(/^TITLE$/)).toBeNull();
   });
 
@@ -55,7 +41,6 @@ describe('StudioComposer', () => {
     mockCreator({ stage: 'ready', vaults: [vault('alice')] });
     render(<StudioComposer />);
 
-    // Fails against the version with no fetch: `target` stayed null, so this never rendered.
     await waitFor(() => expect(screen.getByText(/Publishing as/)).toBeTruthy());
     expect(screen.getByText('@alice')).toBeTruthy();
     expect(screen.getByLabelText(/^TITLE$/)).toBeTruthy();
@@ -71,7 +56,6 @@ describe('StudioComposer', () => {
 
     const picker = await screen.findByLabelText(/^PUBLISH TO$/);
     expect(picker.querySelectorAll('option')).toHaveLength(2);
-    // No "the vault" to assume: with several, the target is named rather than defaulted silently.
     expect(screen.queryByText(/Publishing as/)).toBeNull();
   });
 
@@ -90,7 +74,6 @@ describe('StudioComposer', () => {
     render(<StudioComposer />);
 
     await waitFor(() => expect(screen.getByText('Not measured')).toBeTruthy());
-    // The distinction that matters: this must not send somebody to open a second vault.
     expect(screen.queryByText('No named vault')).toBeNull();
     expect(screen.queryByLabelText(/^TITLE$/)).toBeNull();
   });

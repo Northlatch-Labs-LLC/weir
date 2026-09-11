@@ -2,23 +2,12 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-/*
-  The authorisation on the one write no contract enforces.
-
-  Everywhere else, a forged request fails on chain: a payment that was not signed does not settle.
-  These promises are published in a creator's name and checked by nobody, so the route is the only
-  thing standing between a captured signature and an offer somebody never made. It is tested
-  directly, with the chain and the store mocked, because the interesting cases are the refusals.
-*/
-
 const verifyAction = vi.fn();
 const accountHandle = vi.fn();
 const setPerks = vi.fn();
 const setSupportersFirst = vi.fn();
 
 vi.mock('@/lib/rate-limit', () => ({
-  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
-  // these files are about what the route decides and not about how often it may be asked.
   simulateLimit: async () => null, rateLimit: () => null }));
 vi.mock('@/lib/identity', () => ({ verifyAction: (...a: unknown[]) => verifyAction(...a) }));
 vi.mock('@/lib/accounts', () => ({ accountHandle: (...a: unknown[]) => accountHandle(...a) }));
@@ -60,7 +49,6 @@ describe('who may write a creator’s promises', () => {
   });
 
   it('refuses an address that holds a different handle', async () => {
-    // The signature is real and the caller is who they say — they are simply not this creator.
     verifyAction.mockResolvedValue({ ok: true, value: ADDRESS });
     accountHandle.mockResolvedValue({ ok: true, value: 'someone-else' });
     const response = await POST(post({ address: ADDRESS, handle: 'nova', perks: [PERK] }));
@@ -96,10 +84,6 @@ describe('who may write a creator’s promises', () => {
 
 describe('what the signature is checked against', () => {
   it('is the digest of the list the server will store, never one the caller sent', async () => {
-    /*
-      The defect this prevents: a caller-supplied digest lets a signature cover one list while a
-      different one is written. The signature verifies, and it authorised nothing that happened.
-    */
     verifyAction.mockResolvedValue({ ok: true, value: ADDRESS });
     accountHandle.mockResolvedValue({ ok: true, value: 'nova' });
     await POST(

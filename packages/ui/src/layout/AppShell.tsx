@@ -1,18 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The frame that never leaves.
- *
- * Rail on the left, one 640px column in the middle, discovery on the right. Navigating swaps the
- * middle column and nothing else — which is the whole difference between an application and a set
- * of pages that happen to share a header. Under 1280px the right rail goes; under 834px the rail
- * becomes a bottom bar and the column is the screen.
- *
- * # Framework-neutral, deliberately
- *
- * Nothing here imports from `next/*`. The host passes `pathname`, a `Link` and an `Image`, so this
- * same shell renders in the Next application and in any gallery that wants to show it. That is
- * what keeps one implementation of the design instead of two.
- */
 
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
 import { Icon, type IconName } from '../base/Icon';
@@ -32,37 +18,10 @@ export type NavItem = {
   href: string;
   label: string;
   icon: IconName;
-  /** A count the reader has not seen yet. `null` means we could not read it — nothing is shown. */
   badge?: number | null | undefined;
 };
 
-/**
- * The destinations, in the order they appear.
- *
- * Vault sits in the rail rather than inside a settings page. Money was the first thing this
- * product did, so it is a place you go, not a preference you find.
- *
- * # This list is the rail
- *
- * `packages/web/lib/site-map.ts` declares the same destinations again with different labels and a
- * different icon set. Nothing renders that copy — `SiteHeader` and `MobileBar` are imported by no
- * page — so a label changed there changes nothing a visitor sees. Changed here.
- *
- * `/creators` is "Earn", not "Creators": `/explore` is where the creators are, and this is the
- * surface a creator earns on. The front door's nav calls `/explore` Creators, so one word pointing
- * at two destinations depending on which shell you were in is what this removes.
- */
 export const NAV: readonly NavItem[] = [
-  /*
-    "Feed", not "Home".
-
-    It pointed at `/feed` and was labelled Home, while `/` — the actual home — served the feed to
-    anybody signed in and the landing page to everybody else. So the product had two addresses for
-    one page, the one people reached first was named after a different page, and the page that
-    explains what this place is could not be reached at all once you had an account.
-
-    `/` is the landing now. This is the feed, and it says so.
-  */
   { href: '/feed', label: 'Feed', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'explore' },
   { href: '/creators', label: 'Earn', icon: 'creators' },
@@ -73,7 +32,6 @@ export const NAV: readonly NavItem[] = [
   { href: '/studio', label: 'Studio', icon: 'studio' },
 ];
 
-/** What fits on a phone. Five, and the fifth is you. */
 export const BOTTOM: readonly NavItem[] = [
   { href: '/feed', label: 'Feed', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'explore' },
@@ -85,7 +43,6 @@ export type Viewer =
   | { signedIn: false }
   | { signedIn: true; address: string; handle: string | null; displayName: string | null; avatarUrl?: string | null };
 
-/** `/feed` is current when the path is `/feed` or below it, so a post keeps Feed lit. */
 function isCurrent(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -136,15 +93,7 @@ export function LeftRail({
   nav?: readonly NavItem[] | undefined;
   viewer: Viewer;
   onPublish?: (() => void) | undefined;
-  /**
-   * The control that connects a wallet, supplied by the host.
-   *
-   * It lives in the rail rather than on a sign-in page because the rail is on every route: a reader
-   * who lands on a post, a creator or the feed can connect from where they are. When the host
-   * passes nothing, the rail falls back to a link to `/signin`, which is a page and not a dead end.
-   */
   connect?: ReactNode;
-  /** The host's account menu, rendered in place of a link to your own page. */
   account?: ReactNode;
 }) {
   return (
@@ -237,16 +186,6 @@ export function LeftRail({
   );
 }
 
-/**
- * The foot of the column.
- *
- * Says where you are, what it settles on, and what the place is called.
- *
- * The third slot held "2.9% at settlement". A fee is a term somebody agrees to, and it is stated
- * where they are agreeing to it — the landing page, `/earnings`, `/security` — not under every
- * page they read. The tagline goes there instead; `packages/web/lib/site-meta.ts` is where it is
- * canonical for the document title, and this package cannot import from that one.
- */
 export function ColumnFooter({ Link }: { Link: LinkComponent }) {
   return (
     <footer className="w-foot">
@@ -301,7 +240,6 @@ export function BottomBar({
   );
 }
 
-/** The column header: the name of where you are, and the tabs that narrow it. */
 export function ColumnHeader({
   title,
   sub,
@@ -315,14 +253,6 @@ export function ColumnHeader({
   tabs?: ReadonlyArray<{ href: string; label: string }> | undefined;
   Link?: LinkComponent | undefined;
   pathname?: string | undefined;
-  /**
-   * Where this page sits under, when it sits under something.
-   *
-   * The rail reaches the eight top-level destinations and nothing else, so a page below one of them
-   * — a creator, a post, a vault, an agent's record — had no route back except the browser's own
-   * button. On a phone, where the rail is four icons, it had none at all. Given a destination, the
-   * header carries an arrow to it, left of the title, the way every application of this shape does.
-   */
   back?: { href: string; label: string } | undefined;
 }) {
   return (
@@ -376,11 +306,8 @@ export function AppShell({
   children: ReactNode;
   onPublish?: (() => void) | undefined;
   connect?: ReactNode;
-  /** The host's account menu, rendered in place of a link to your own page. */
   account?: ReactNode;
-  /** What the results page was asked for, so the field still holds it. See `SearchBox`. */
   searchQuery?: string | undefined;
-  /** Frame state the search submit must carry — `reader`, today. See `SearchBox`. */
   searchHidden?: Readonly<Record<string, string>> | undefined;
 }) {
   return (

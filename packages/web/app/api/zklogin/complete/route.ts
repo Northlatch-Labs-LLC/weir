@@ -7,46 +7,12 @@ import { deriveUserSalt, requestProof, verifyGoogleIdToken, zkLoginConfig } from
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Turn a Google identity token into a usable Sui account.
- *
- * Verify the token → derive the salt → derive the address → get a proof. One round trip, because
- * every step after the first depends on the one before it and splitting them would only give the
- * browser more chances to hold a half-finished session.
- *
- * # The salt does not come back
- *
- * The response carries the *address seed*, not the salt. The seed is what `ZkLoginSigner` needs and
- * it is already public — it is embedded in every zkLogin signature this account will ever produce.
- * The salt is not, and it stays here.
- *
- * A user who wants their salt can have it, from `/api/zklogin/export`, deliberately and knowingly.
- * That is the difference between a secret being available on request and a secret being handed to
- * every page that happens to sign in.
- *
- * # Legacy address derivation is off, permanently
- *
- * `legacyAddress: false` on both derivations. The flag selects between two incompatible ways of
- * hashing the same inputs, so it is not a preference — it decides which address a given Google
- * account maps to. Flipping it later would not migrate anybody; it would silently point every
- * existing user at an empty address that looks exactly as legitimate as their real one.
- */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json()) as Record<string, unknown>;
 
-  /*
-    `nonce` is deliberately NOT required, and is not read at all.
-
-    The browser used to send it and the server used to compare the JWT's nonce against it — a
-    comparison between a value and a copy of itself, supplied by the same request. The nonce is
-    now derived from the three commitment fields below. Leaving the field required would keep a
-    security-shaped input on this route that decides nothing, which is how the original mistake
-    reads to anybody auditing it.
-  */
-  // Named individually so the message says which one is missing, rather than "bad request".
   const required = ['jwt', 'extendedEphemeralPublicKey', 'jwtRandomness'] as const;
   const missing = required.filter((key) => typeof body[key] !== 'string' || body[key] === '');
   if (missing.length > 0) {
@@ -65,14 +31,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // Everything downstream trusts these claims completely, so nothing downstream runs until the
-  // signature, the audience, the issuer, the expiry and the nonce have all been checked.
   const claims = await verifyGoogleIdToken({
     jwt: body['jwt'] as string,
     clientId: config.value.googleClientId,
-    // The nonce is derived from these three, not taken from the request. A token issued for a
-    // different sign-in carries a nonce that commits to a different ephemeral key, and no longer
-    // verifies here however it is presented.
     commitment: {
       extendedEphemeralPublicKey: body['extendedEphemeralPublicKey'] as string,
       maxEpoch,
@@ -93,15 +54,6 @@ export async function POST(request: Request) {
     sub: claims.value.sub,
   });
 
-  /*
-   * @mysten/sui 2.24.0, quoted verbatim so review is a comparison rather than a memory exercise:
-   *
-   *   genAddressSeed(salt: string | bigint, name: string, value: string, aud: string, …): bigint
-   *   computeZkLoginAddressFromSeed(addressSeed: bigint, iss: string, legacyAddress: boolean): string
-   *
-   * `name` is the claim name and `value` is that claim's value — two same-typed strings, adjacent,
-   * where swapping them yields a valid-looking seed for an address nobody controls.
-   */
   const addressSeed = genAddressSeed(salt, KEY_CLAIM_NAME, claims.value.sub, claims.value.aud);
   const address = computeZkLoginAddressFromSeed(addressSeed, claims.value.iss, false);
 
@@ -126,9 +78,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // A prover can answer 200 with something that is not a proof — a proxy error page, an HTML
-  // challenge, a truncated body. Checked here, where the cause is still visible, rather than
-  // several steps later inside BCS serialisation.
   const checked = checkProveResponse(proof.value);
   if (!checked.ok) {
     return NextResponse.json(

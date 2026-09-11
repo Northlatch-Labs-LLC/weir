@@ -1,26 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * A paid post's words, opened in the reader's own tab.
- *
- * # Why this exists
- *
- * A gated body is no longer a column. It is ciphertext on Walrus, sealed to the same
- * `unlock_identity(vault, contentKey)` as the post's media, so the `Unlock` that opens the picture
- * opens the sentence under it. The server cannot render these words because it cannot read them —
- * which is the point, and is what Creator Terms §4.3 has claimed since the first commit.
- *
- * # Why it is not `SealedMedia` with a different content type
- *
- * `SealedMedia` fetches through `/api/media/…`, which resolves an *asset* row and re-checks
- * entitlement per request. A body is not an asset: it has no asset id, it is named by columns on
- * the post, and its ciphertext is fetched straight from a public Walrus aggregator. The reader
- * needs no permission to hold those bytes — they are unreadable — so there is no route to ask.
- *
- * The two components share everything that matters: the same identity derivation from the SDK, the
- * same key server, the same settling-window patience, and the same refusal to render bytes whose
- * hash does not match what the creator uploaded.
- */
 
 import { useEffect, useState } from 'react';
 import { SealClient } from '@mysten/seal';
@@ -39,15 +18,7 @@ export interface SealedBodyRef {
   sha256: string;
 }
 
-/**
- * Which `seal_approve_*` opens this body, and the object it is judged against.
- *
- * Restated structurally rather than imported from `@/lib/entitlement`, which is `server-only`. The
- * shape is checked by the compiler at the one place the two meet — `PostCard` passes a
- * `SealApprover` straight into this prop — so they cannot drift silently.
- */
 export type Approver =
-  /** `contentKey` is the key the `Unlock` carries — the human key or `<key>#machine`. */
   | { kind: 'unlock'; objectId: string; contentKey: string }
   | { kind: 'subscription'; objectId: string; tier: string; period: string };
 
@@ -66,13 +37,6 @@ const SESSION_TTL_MIN = 10;
 const SETTLING_ATTEMPTS = 4;
 const SETTLING_BACKOFF_MS = [1500, 3500, 6000];
 
-/**
- * Public Walrus read endpoints, tried in order.
- *
- * A blob is public, so this needs no credential and no route of ours. More than one is listed
- * because an aggregator being unreachable is a fact about that operator, not about the reader's
- * entitlement, and a paid post should not be unreadable because one public gateway is down.
- */
 const AGGREGATORS = [
   'https://aggregator.walrus-mainnet.walrus.space',
   'https://walrus.globalstake.io',
@@ -103,17 +67,9 @@ export function SealedBody({
 }: {
   sealed: SealedBodyRef;
   preview: string;
-  /** Every Seal identity in this system begins with the vault's bytes. */
   vaultId: string;
-  /** The vault's coin type, when the caller knows it; otherwise it is read from the vault on chain. */
   coinType?: string | null;
-  /** The post's content key. Present on a paid post; a subscriber post has none and needs none. */
   contentKey?: string;
-  /**
-   * The entitlement this reader presents. Absent means they hold none that covers this post — for
-   * a subscriber post that includes holding a live subscription which simply began after the
-   * period this post was published in, which is the deliberate under-grant the contract makes.
-   */
   approver?: Approver;
 }) {
   const { signer } = useSigner();
@@ -136,7 +92,6 @@ export function SealedBody({
         }
 
         const suiClient = createClient(config);
-        // One session per signer per tab, shared with every other sealed card (`lib/seal-session.ts`).
         const sessionKey = await sessionKeyFor({ signer, packageId: config.packageId, ttlMin: SESSION_TTL_MIN, suiClient });
         if (cancelled) return;
 
@@ -149,17 +104,6 @@ export function SealedBody({
           verifyKeyServers: true,
         });
 
-        /*
-          Built by `approvalFor`, not here.
-
-          `lib/seal-open.ts` already owns the mapping from an entitlement to the transaction the key
-          servers dry-run, and `SealedMedia` has used it since the sealed path existed. Hand-rolling
-          a second copy in this component is precisely what the estate's own rule forbids — never
-          re-derive what another module builds — and the failure mode is not a compile error: an
-          identity with the tag and the vault the wrong way round is the right length and the wrong
-          bytes, and the key server refuses it in a way that reads exactly like having no
-          entitlement. That mistake has already cost this desk an afternoon once.
-        */
         const resolvedCoinType =
           approver.kind === 'subscription'
             ? (coinType ?? (await (async () => {
@@ -172,13 +116,6 @@ export function SealedBody({
           config,
           approver.kind === 'unlock'
             ? (() => {
-                /*
-                  The approver's key, not the post's. `seal_approve_unlock` asserts the identity
-                  equals `unlock_identity(unlock.vault, unlock.content_key)` for the object named,
-                  so a machine buyer's `Unlock` (key `<key>#machine`) must be asked for the machine
-                  identity — the post's own key would be a MoveAbort that reads as "no access" on
-                  a post they paid for. `sealed` is already the matching edition (`visiblePost`).
-                */
                 const key = approver.contentKey ?? contentKey;
                 if (key === undefined) {
                   throw new Error('this post is unlock-gated but carries no content key');
@@ -188,10 +125,7 @@ export function SealedBody({
             : {
                 kind: 'subscription' as const,
                 vaultId,
-                // `creator::seal_approve_subscription<T>` names the vault's coin (v5).
                 coinType: resolvedCoinType!,
-                // `bigint`, never `number`: both are `u64`, and a rounded period builds a valid
-                // approval for the wrong month.
                 tier: BigInt(approver.tier),
                 period: BigInt(approver.period),
                 subscriptionId: approver.objectId,
@@ -232,8 +166,6 @@ export function SealedBody({
           nonce: Uint8Array.from(atob(sealed.nonce), (c) => c.charCodeAt(0)),
         });
 
-        // Checked here because here is where the plaintext appears. These bytes travelled through
-        // storage nobody here operates and came back reassembled from slivers held by many nodes.
         if ((await sha256Hex(bytes)) !== sealed.sha256) {
           throw new Error('the words returned do not match the hash recorded at publish');
         }
@@ -252,9 +184,6 @@ export function SealedBody({
   }, [
     sealed.blobId, sealed.nonce, sealed.sealWrappedKey, sealed.sha256,
     signer, vaultId, contentKey,
-    // Depended on field by field rather than by identity: `approver` is rebuilt on every server
-    // render, so an object comparison would re-run this effect — and re-prompt the reader for a
-    // signature — on every navigation that changed nothing.
     approver?.kind, approver?.objectId,
     approver?.kind === 'subscription' ? approver.tier : undefined,
     approver?.kind === 'subscription' ? approver.period : undefined,

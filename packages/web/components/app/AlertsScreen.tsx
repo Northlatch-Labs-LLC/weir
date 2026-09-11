@@ -1,28 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What happened while you were away, in the application frame.
- *
- * # This component reads nothing
- *
- * `/alerts` reads the chain and the store and hands this component rows that are already words. A
- * payment arrives here as text, not as a `bigint` and a decimals field, because deciding what a
- * figure means is the page's job and formatting one at a guessed scale is the specific bug that
- * showed a creator paid in a nine-decimal coin a figure a thousand times too large.
- *
- * # An empty list and a failed read are drawn differently
- *
- * `failure` is set when the feed could not be read at all. Then no list is drawn — not an empty
- * one. An empty inbox says nothing has happened to you, which is a claim a timed-out node has not
- * earned.
- *
- * # Kind reads as colour, and only where the data supports it
- *
- * Money is mint, a machine is violet, everything else is plain ink. There is no violet on this
- * screen today: `readNotifications` has no agent event kind, so nothing here can honestly claim
- * one. The tone travels with an icon and with words as well, so the meaning survives the colour
- * being invisible to the reader.
- */
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -30,24 +7,14 @@ import NextLink from 'next/link';
 import { ColumnHeader, EmptyState, ErrorState, Icon, type IconName } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
 
-/** Money, a machine, or neither. Never a guess: the page sets this from the event's own kind. */
 export type AlertTone = 'money' | 'agent' | 'plain';
 
 export type AlertView = {
   id: string;
   tone: AlertTone;
   icon: IconName;
-  /** The lead line. Already formatted; this component adds no figures of its own. */
   text: string;
-  /** The second line. Absent when there is nothing measured to say — never an empty string. */
   detail?: string | undefined;
-  /**
-   * How long ago, when the event has a clock.
-   *
-   * Payments do not have one. `PaymentSettled` carries a checkpoint and no time, and neither the
-   * transaction nor its effects hold one either — so a payment row shows its checkpoint in `detail`
-   * and no relative time at all, rather than a plausible-looking figure nobody measured.
-   */
   when?: string | undefined;
 };
 
@@ -72,17 +39,8 @@ export function AlertsScreen({
   viewerHandle: string | null;
   reader?: string | undefined;
   alerts: readonly AlertView[];
-  /** True when the walk over payment events hit its ceiling. These are recent, not complete. */
   truncated: boolean;
-  /** Set when the feed itself could not be read. Then no list is drawn. */
   failure?: string | undefined;
-  /**
-   * The discovery column, read on the server and handed down.
-   *
-   * A server component passed as a prop into a client one: this screen cannot read the store
-   * itself, and the rail is the same rail every other wrapped route gets. Optional, so a test or a
-   * caller without it renders the page's own cards and nothing else.
-   */
   discovery?: ReactNode;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
@@ -94,16 +52,6 @@ export function AlertsScreen({
 
   const shown = filter === 'all' ? alerts : alerts.filter((a) => a.tone === 'money');
 
-
-  /*
-    The page's own cards, and then the people.
-
-    These four screens pass an `aside`, and an `aside` REPLACES the discovery column rather than
-    joining it — so `/vault`, `/studio`, `/alerts` and `/messages` were the only wrapped routes with
-    no faces on them at all, and 337 to 715 pixels of empty ground under one explanatory card. The
-    discovery rail is read on the server and handed down as `discovery`, so it renders beneath the
-    page's own cards instead of replacing them.
-  */
   const aside: ReactNode = (
     <>
       <section className="w-card">

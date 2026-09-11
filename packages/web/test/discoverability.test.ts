@@ -1,22 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What this site tells crawlers and registries about itself is derived, not typed, and says what
- * the owner decided.
- *
- * # The three files
- *
- * `robots.txt` is generated from the site map, so the pages it hides are the pages that are
- * private, and it carries the owner's content signal — `search=yes, ai-input=yes, ai-train=no`,
- * findable and usable in answers, not trained on. That line is a decision; the test below pins
- * each of its three values by name so a future edit that quietly flips one fails saying which.
- *
- * `sitemap.xml` lists only pages a stranger can read, derived from the proxy's own open list.
- *
- * `/.well-known/agent-registration.json` is the ERC-8004 registration file, derived from the
- * signed manifest and registered nowhere yet — and it says so with an empty `registrations`
- * rather than an entry nobody made.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 import { ADMIN, CREATOR, MEMBER } from '../lib/site-map';
@@ -27,8 +10,6 @@ vi.mock('../lib/agent-manifest', async (importOriginal) => {
   const real = await importOriginal<typeof import('../lib/agent-manifest')>();
   return {
     ...real,
-    // The registration file derives from the manifest; the manifest's own builder is tested in
-    // agent-manifest.test.ts and reaches configuration this test has no business depending on.
     servedManifest: async () => ({
       manifest: {
         manifest: 'weir-agent/1',
@@ -115,15 +96,6 @@ describe('robots.txt', () => {
   });
 
   it('names the discovery documents as DIRECTIVES, not inside a comment', () => {
-    /*
-      This assertion used to look for the absolute URLs, which were present — inside a
-      `# The discovery documents an agent should read first:` block. Every robots parser discards
-      comments before it reads a word, so the file said nothing a machine could act on except the
-      sitemap, and `llms.txt` was invisible to the readers it exists for. Measured 2026-09-03.
-
-      `Allow:` takes a PATH, so these lines are deliberately not origin-qualified; the origin
-      assertion above still holds for the sitemap, which is the one line that takes a URL.
-    */
     const directives = text.split('\n').filter((line) => !line.trimStart().startsWith('#'));
     for (const path of ['/llms.txt', AGENT_MANIFEST_PATH, '/.well-known/mcp.json', '/agents', '/register-agent.mjs']) {
       expect(directives, `${path} must be reachable outside a comment`).toContain(`Allow: ${path}`);
@@ -137,32 +109,16 @@ describe('robots.txt', () => {
   });
 
   it('carries exactly one `User-agent: *` group', () => {
-    /*
-      A second `User-agent: *` block used to hold the discovery-document `Allow` lines further down
-      the file. Parsers do not agree on what two groups for the same agent mean — some merge them,
-      some keep only the first and drop the second — so `llms.txt` was unreachable to whichever kind
-      it was serving. Found and merged into one group 2026-09-06.
-    */
     expect(lines.filter((line) => line === 'User-agent: *')).toHaveLength(1);
   });
 
   it('allows the exact reads `llms.txt` sends an agent to, ahead of `Disallow: /api/`', () => {
-    /*
-      `llms.txt` tells every agent to call `GET /api/agents/sponsor` and `GET
-      /api/posts/{id}/authorship` (and, by the same reasoning two paragraphs later,
-      `GET /api/comments/{id}/authorship`) before trusting what it reads. `Disallow: /api/` used to
-      tell a robots-respecting agent not to fetch any of them — told to verify and told not to fetch
-      the endpoint that verifies. Found 2026-09-06.
-    */
     for (const path of AGENT_READABLE_API_PATHS) {
       const allowAt = lines.indexOf(`Allow: ${path}`);
       const disallowApi = lines.indexOf('Disallow: /api/');
       expect(allowAt, `Allow: ${path} must be present`).toBeGreaterThan(-1);
-      // Ahead of the broad disallow, for a first-match parser; a most-specific-match parser
-      // (this file's stated target) would pick the longer `Allow` regardless of order.
       expect(allowAt).toBeLessThan(disallowApi);
     }
-    // The rest of `/api/` stays disallowed — this is an exception, not an opening of the prefix.
     expect(text).toContain('Disallow: /api/');
   });
 });
@@ -178,17 +134,10 @@ describe('sitemap.xml', () => {
   });
 
   it('the sitemap itself carries the agent documents, even though they are not pages', () => {
-    /*
-      `openPages()` is pages a person reads and stays that way. The sitemap is a machine-readable
-      index of what is worth fetching, and the three documents written for machines were in no
-      sitemap, in no page's HTML, and only inside a robots comment — reachable by guessing a
-      filename and nothing else.
-    */
     const urls = sitemap().map((entry) => entry.url);
     for (const doc of ['/llms.txt', '/.well-known/weir-agent.json', '/.well-known/mcp.json']) {
       expect(urls, `${doc} must be in the sitemap`).toContain(`https://weir.social${doc}`);
     }
-    // And the pages are still there: the documents are an addition, never a replacement.
     for (const page of openPages()) expect(urls).toContain(`https://weir.social${page}`);
   });
 
@@ -197,16 +146,11 @@ describe('sitemap.xml', () => {
   });
 
   it('lists the homepage, and only once', () => {
-    // `/` isn't in `ALWAYS_OPEN` — it's added in `sitemap()` directly, since the default site mode
-    // is open and the root answers 200 without an account. Found missing 2026-09-06.
     const urls = sitemap().map((entry) => entry.url);
     expect(urls.filter((u) => u === 'https://weir.social/')).toHaveLength(1);
   });
 
   it('never lists the same page twice', () => {
-    // `/disclosure` was in `ALWAYS_OPEN` under two separate comments and so appeared twice here.
-    // Found and fixed at the source (`lib/front-door.ts`) 2026-09-06; `openPages()` also dedupes
-    // defensively now, the same way `privatePaths()` in `robots.txt/route.ts` always has.
     const urls = sitemap().map((entry) => entry.url);
     expect(new Set(urls).size).toBe(urls.length);
   });
@@ -232,11 +176,6 @@ describe('/.well-known/agent-registration.json', () => {
   });
 
   it('describes the service from measured facts, not from the manifest disclaimer', async () => {
-    /*
-      The first draft used `manifest.note` as the description. That field is the manifest's
-      disclaimer about null sections — it reads as prose and says nothing about the service. Found
-      by fetching the route, not by reading the code.
-    */
     const r = await registrationFor(ORIGIN);
     expect(r.description).not.toContain('null section');
     expect(r.description).toContain('2 documented HTTP endpoints');
@@ -281,8 +220,6 @@ describe('/.well-known/security.txt', () => {
   });
 
   it('uses the abuse address already published in /legal/terms, not a new mailbox', () => {
-    // content/legal/terms.md §14.5 publishes abuse@weir.social; minting a fresh security@
-    // mailbox nobody watches yet would be a contact nobody answers.
     expect(SECURITY_TXT).toContain('Contact: mailto:abuse@weir.social');
   });
 

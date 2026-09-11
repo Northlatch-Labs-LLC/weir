@@ -1,28 +1,5 @@
 #!/usr/bin/env -S npx tsx
 // Built-by: @projectx.sui
-/**
- * The brake sweep, and its drill: move SUI out of Heron's address with the brake key alone.
- *
- * Two commands, run minutes apart, by two different hands:
- *
- *   prepare --multisig <doc> --chain <doc> --to <address> --amount-mist <n> --out <file>
- *     The desk's half. Derives Heron's address from the multisig document, builds one transfer of
- *     the amount from Heron's address balance to the recipient, simulates it against the node,
- *     and writes the transaction bytes (base64) to the file. No key is read. It prints the
- *     sender, the recipient, the amount, the simulated gas, the epochs the bytes stay valid for,
- *     and the file's sha256.
- *
- *   send --multisig <doc> --chain <doc> --to <address> --amount-mist <n> --bytes <file> [--dry-run]
- *     The operator's half, in a terminal. Reads the bytes back and refuses them unless they are
- *     exactly that sweep (`inspectSweep`); asks for the brake key at a hidden prompt on the
- *     terminal, and nowhere else: not argv, not the environment, not a file; refuses a key that
- *     is not the brake member; re-simulates; signs; wraps the signature in the multisig envelope;
- *     verifies it; sends it; waits; prints the digest and the effects' status. With --dry-run it
- *     stops after the verified envelope and sends nothing.
- *
- * The key exists in this process's memory from the prompt to the exit and is written nowhere.
- * That is the bound this tool offers and the one it claims; a hardware signer would be stronger.
- */
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -89,20 +66,10 @@ function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-/*
-  The three control characters the prompt reacts to, by code so the source stays printable:
-  end-of-text (Ctrl-C), end-of-transmission (Ctrl-D), and delete, which a Mac's backspace sends.
-*/
 const CTRL_C = String.fromCharCode(3);
 const CTRL_D = String.fromCharCode(4);
 const DEL = String.fromCharCode(127);
 
-/**
- * One line from the terminal with echo off. Refuses when stdin is not a terminal: a pipe or a
- * file would be a second place the key had been, and the point of the prompt is that there is
- * none. Raw mode so a paste arrives whole and nothing is echoed; Ctrl-C and Ctrl-D end the
- * prompt without a key.
- */
 async function hiddenLine(prompt: string): Promise<string | null> {
   if (!process.stdin.isTTY) return null;
   process.stderr.write(prompt);
@@ -193,7 +160,6 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // --- send -----------------------------------------------------------------------------------
   let bytes: Uint8Array;
   try {
     bytes = fromBase64(readFileSync(args.bytes!, 'utf8').trim());

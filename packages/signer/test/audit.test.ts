@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The audit chain, and the proof that tampering is detected.
- *
- * A hash chain nobody has tried to break is a hash chain that has not been shown to detect
- * anything. Each test below performs a specific, realistic edit — change a field, reorder, delete
- * from the middle, forge an append — and asserts the chain names the first entry that no longer
- * holds. The last test asserts the limitation as loudly as the guarantees: a full rewrite is NOT
- * detected, and pretending otherwise would be the dishonest half of this file.
- */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -67,8 +58,6 @@ describe('an intact chain', () => {
   });
 
   it('records denials, not only successes', () => {
-    // A log of allowed spends says what an agent bought. A log that also records what it tried
-    // and was refused says when someone started steering it.
     const denials = chainOfThree().entries.filter((e) => e.decision === 'deny');
     expect(denials).toHaveLength(1);
     expect(denials[0]!.reason).toContain('claim_earnings');
@@ -85,7 +74,6 @@ describe('an intact chain', () => {
 describe('tampering', () => {
   it('is detected when a single field is edited', () => {
     const entries = [...chainOfThree().entries];
-    // The most valuable edit an attacker could make: turn a refusal into an approval.
     entries[1] = { ...entries[1]!, decision: 'allow', reason: '' };
 
     const verdict = verifyChain(entries);
@@ -110,7 +98,6 @@ describe('tampering', () => {
     const verdict = verifyChain(entries);
     expect(verdict.intact).toBe(false);
     if (verdict.intact) throw new Error('unreachable');
-    // The sequence number is part of the hash, so a reorder cannot be silent.
     expect(verdict.index).toBe(0);
     expect(verdict.reason).toContain('seq');
   });
@@ -143,9 +130,6 @@ describe('tampering', () => {
   });
 
   it('is NOT detected when the whole chain is recomputed — the stated limitation', () => {
-    // An attacker who can rewrite the entire file can recompute every hash after their edit. A
-    // hash chain is tamper-EVIDENT against partial edits, not tamper-PROOF. Closing this needs an
-    // anchor outside the file: `headHash`, written somewhere the attacker does not control.
     const honest = chainOfThree();
     const rewritten = new AuditLog();
     rewritten.append({
@@ -161,7 +145,6 @@ describe('tampering', () => {
       address: AGENT,
       txDigest: 'digest-two',
       policyHash: HASH,
-      // The refusal, rewritten as an approval, in a chain that verifies perfectly.
       decision: 'allow',
       reason: '',
     });
@@ -175,15 +158,12 @@ describe('tampering', () => {
     });
 
     expect(rewritten.verify().intact).toBe(true);
-    // The only thing that gives it away is the head hash differing from an external anchor.
     expect(rewritten.headHash).not.toBe(honest.headHash);
   });
 });
 
 describe('the preimage', () => {
   it('length-prefixes every field, so a crafted reason cannot forge a field boundary', () => {
-    // Two entries whose fields differ only in where a boundary falls. Without length prefixes a
-    // separator-joined encoding would give them the same preimage and therefore the same hash.
     const a = entryPreimage(
       { ts: 1, address: 'aa', txDigest: 'bb', policyHash: 'cc', decision: 'allow', reason: 'x y' },
       0,

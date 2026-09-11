@@ -1,17 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Open or close the front door.
- *
- * # What this is not
- *
- * Saying so on screen matters as much as implementing it. Somebody arriving at a page with both
- * controls needs to know which one can cost money.
- *
- * # Optimism is refused here
- */
-
 import { useState } from 'react';
 
 export interface SiteModeView {
@@ -20,7 +9,6 @@ export interface SiteModeView {
   updatedAtIso: string | null;
 }
 
-/** A short, honest rendering of who last touched it. */
 function provenance(mode: SiteModeView): string {
   if (mode.updatedAtIso === null) {
     return 'Never changed — this deployment has always been open.';

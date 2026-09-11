@@ -1,27 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Shape tests for constructed transactions.
- *
- * A programmable transaction is an untyped, positional boundary — no compiler checks that
- * `moveCall` arguments are in the right order. Swapping two same-typed `u64`s builds, signs, and
- * then does the wrong thing.
- *
- * So these tests read the constructed transaction back and assert its shape: the target, the
- * argument count, the type parameters, and — where two same-typed arguments sit next to each other
- * — the actual encoded values, in order.
- */
 
 import { describe, expect, it } from 'vitest';
 import { Transaction } from '@mysten/sui/transactions';
 import type { ProjectXSocialConfig } from '../src/config.js';
 import * as tx from '../src/tx.js';
 
-/*
-  `packageId` and `latestPackageId` are deliberately DIFFERENT here, matching mainnet after the
-  key-registry upgrade. Setting them equal would make every assertion below pass whichever field a
-  builder used — and the whole point of the split is that a call target must be the latest package
-  while a type tag must stay the original.
-*/
 const CONFIG: ProjectXSocialConfig = {
   network: 'mainnet',
   grpcUrl: 'https://example.invalid',
@@ -60,20 +43,11 @@ function kinds(t: Transaction): string[] {
   return parse(t).transactions.map((c) => c.kind);
 }
 
-/** The module and function halves of a fully-qualified target. */
 function split(target: string): { package: string; module: string; function: string } {
   const [pkg, module, fn] = target.split('::');
   return { package: pkg!, module: module!, function: fn! };
 }
 
-/**
- * Decode the pure input referenced by argument `argIndex` of move call `callIndex` as a u64.
- *
- * A serialized pure input carries **no type tag**, so nothing here can verify that the bytes at a
- * position really are a u64; the length check below only rejects an obviously wrong width. Position
- * is the whole contract, which is why the Move signature is quoted at every builder and why the
- * layout is asserted argument by argument below rather than by scanning.
- */
 function u64Arg(t: Transaction, callIndex: number, argIndex: number): bigint {
   const parsed = parse(t);
   const call = parsed.transactions.filter((c) => c.kind === 'MoveCall')[callIndex] as
@@ -108,7 +82,6 @@ describe('openAccount', () => {
   });
 
   it('passes five arguments: platform, registry, handle, referrer, clock', () => {
-    // The Move signature takes five before `ctx`, which the runtime supplies.
     expect(call.arguments).toHaveLength(5);
   });
 
@@ -118,9 +91,8 @@ describe('openAccount', () => {
 });
 
 describe('addTier', () => {
-  // price and periodMs are adjacent u64s — the exact swap this file exists to catch.
   const PRICE = 10_000_000n;
-  const PERIOD = 2_592_000_000n; // 30 days
+  const PERIOD = 2_592_000_000n;
   const t = tx.addTier(
     { config: CONFIG },
     {
@@ -141,23 +113,16 @@ describe('addTier', () => {
   });
 
   it('encodes price before period, not the other way round', () => {
-    // add_tier(vault, cap, name, price, period_ms) — price is argument 3, period argument 4.
-    // If these were swapped the transaction would still build and sign, and would sell a
-    // subscription priced at 2.59 billion units lasting 10 milliseconds.
     expect(u64Arg(t, 0, 3)).toBe(PRICE);
     expect(u64Arg(t, 0, 4)).toBe(PERIOD);
   });
 
   it('places the tier name at argument 2, before both numbers', () => {
-    // Pins the whole layout rather than only the two numbers. If an argument were inserted or
-    // removed, the price and period assertions above could still pass against the wrong slots
-    // while this one fails — which is the point of checking a third position.
     const parsed = parse(t);
     const call = parsed.transactions.filter((c) => c.kind === 'MoveCall')[0] as MoveCall;
     const nameArg = call.arguments[2] as { kind: string; index: number };
     const bytes = parsed.inputs[nameArg.index]!.value!.Pure!;
 
-    // BCS string: a ULEB128 length followed by UTF-8 bytes.
     expect(bytes[0]).toBe('Monthly'.length);
     expect(Buffer.from(bytes.slice(1)).toString('utf8')).toBe('Monthly');
   });
@@ -186,13 +151,10 @@ describe('subscribe', () => {
   it('targets creator::subscribe with six arguments', () => {
     const call = moveCalls(t)[0]!;
     expect(split(call.target).function).toBe('subscribe');
-    // platform, vault, account, tier_index, payment, clock
     expect(call.arguments).toHaveLength(6);
   });
 
   it('returns the change to the sender rather than dropping it', () => {
-    // `subscribe` returns Coin<T>. An unused return value aborts the transaction, so the builder
-    // must dispose of it — this asserts it actually does.
     expect(kinds(t).filter((k) => k === 'TransferObjects')).toHaveLength(1);
   });
 });
@@ -204,13 +166,11 @@ describe('withdrawStake', () => {
   );
 
   it('includes SuiSystemState even though the buffer might have covered it', () => {
-    // Omitting it would make exactly the large withdrawals fail — the ones that matter most.
     const call = moveCalls(t)[0]!;
     expect(split(call.target).function).toBe('withdraw');
     expect(call.arguments).toHaveLength(4);
 
     const serialized = JSON.stringify(parse(t).inputs);
-    // Normalised to the full 32-byte form by the builder.
     expect(serialized).toContain(
       '0x0000000000000000000000000000000000000000000000000000000000000005',
     );
@@ -228,7 +188,6 @@ describe('harvest', () => {
     const call = moveCalls(t)[0]!;
     expect(split(call.target).module).toBe('stake_vault');
     expect(split(call.target).function).toBe('harvest');
-    // No capability argument. Anyone may call it; that is the liveness guarantee.
     expect(call.arguments).toHaveLength(2);
   });
 });
@@ -249,18 +208,6 @@ describe('composing into one transaction', () => {
 });
 
 describe('every builder targets the latest package, never the original', () => {
-  /*
-    The trap this closes, found while upgrading mainnet to add `key_registry`.
-
-    Sui does not resolve a package id to its newest version. A `moveCall` at the ORIGINAL address
-    executes the ORIGINAL bytecode — so a module added in an upgrade is simply absent, and a
-    behaviour changed in an upgrade silently does not apply. Meanwhile struct and event type tags
-    keep the original address forever, so both ids are needed and they are one character apart in
-    the config object.
-
-    A builder that reached for `packageId` would keep working today, against last version's code,
-    and would break the day a fix shipped. This asserts the target instead of trusting the reader.
-  */
   const builders: Array<[string, () => Transaction]> = [
     ['openAccount', () => tx.openAccount({ config: CONFIG }, { handle: 'someone' })],
     [
@@ -306,7 +253,6 @@ describe('every builder targets the latest package, never the original', () => {
 });
 
 describe('publishEncryptionKey', () => {
-  // public fun publish(registry: &mut KeyRegistry, x25519_public: vector<u8>, clock: &Clock, ctx)
   it('passes the registry, the key and the clock, in that order and nothing else', () => {
     const key = new Uint8Array(32).map((_, i) => i + 1);
     const t = tx.publishEncryptionKey({ config: CONFIG }, { keyRegistryId: VAULT, x25519Public: key });
@@ -315,15 +261,11 @@ describe('publishEncryptionKey', () => {
     expect(call!.arguments).toHaveLength(3);
     expect(call!.typeArguments).toEqual([]);
 
-    // The key is serialised as a 32-byte vector, not as an address or a string. A `vector<u8>`
-    // carries a length prefix, so the pure input is 33 bytes.
     const pure = parse(t).inputs.map((i) => i.value?.Pure).filter((p): p is number[] => Array.isArray(p));
     expect(pure.some((p) => p.length === 33 && p[0] === 32 && p[1] === 1 && p[32] === 32)).toBe(true);
   });
 
   it('takes no sender or owner argument — the contract reads ctx.sender()', () => {
-    // If this ever gained an address argument, the substitution attack the on-chain registry
-    // exists to prevent would be reachable from this client.
     const t = tx.publishEncryptionKey(
       { config: CONFIG },
       { keyRegistryId: VAULT, x25519Public: new Uint8Array(32).fill(9) },
@@ -333,7 +275,6 @@ describe('publishEncryptionKey', () => {
 });
 
 describe('the stake vault builders', () => {
-  // public fun claim_creator_yield(vault: &mut StakeVault, cap: &StakeCap, amount: u64, ctx)
   it('claimCreatorYield passes vault, cap and amount, then transfers the coin back', () => {
     const t = tx.claimCreatorYield(
       { config: CONFIG },
@@ -342,11 +283,9 @@ describe('the stake vault builders', () => {
     const [call] = moveCalls(t);
     expect(call!.target).toBe(`${CONFIG.latestPackageId}::stake_vault::claim_creator_yield`);
     expect(call!.arguments).toHaveLength(3);
-    // The returned Coin must be dealt with or the transaction aborts on an unused value.
     expect(kinds(t)).toContain('TransferObjects');
   });
 
-  // public fun set_rebate_bps(vault: &mut StakeVault, cap: &StakeCap, rebate_bps: u64)
   it('setRebateBps passes vault, cap and bps — and returns nothing to transfer', () => {
     const t = tx.setRebateBps({ config: CONFIG }, { vaultId: VAULT, capId: CAP, rebateBps: 500n });
     const [call] = moveCalls(t);

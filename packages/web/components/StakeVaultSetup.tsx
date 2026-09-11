@@ -1,21 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The creator's side of the support vault: open it, set the supporters' share, take the yield.
- *
- * # Choosing a validator is permanent, and the commission is not shown
- *
- * The validator is stamped into the vault and cannot be changed afterwards. Its commission comes
- * off yield before the vault ever sees it, so this choice sets a floor on what supporters can ever
- * generate here.
- *
- * No commission figure appears below, deliberately. Sui's gRPC system state does not carry the
- * validator set, and a number read once would be right for about a day — validators can change it
- * at any epoch boundary, and a stale figure on a permanent decision is worse than none because it
- * gets believed. The page says what commission does and where to check it live instead.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { MIN_STAKE_MIST, RUNGS, ladderHealth, sui as suiOf } from '@/lib/ladder';
 import { useSigner } from '@/components/SignerProvider';
@@ -34,15 +19,8 @@ interface VaultView {
 export function StakeVaultSetup({ accountId }: { accountId: string }) {
   const { signer } = useSigner();
   const [caps, setCaps] = useState<Array<{ capId: string; vaultId: string }> | 'unknown'>('unknown');
-  /** Which of them is on screen. `null` until the list arrives, or when there are none. */
   const [selected, setSelected] = useState<string | null>(null);
 
-  /*
-    Kept as the same three-state value the rest of this component already reads: 'unknown' while
-    the chain has not answered, `null` for "no vault", and the cap itself otherwise. Deriving it
-    means the branches below did not have to change, and there is only one place that decides which
-    vault is current.
-  */
   const cap: { capId: string; vaultId: string } | null | 'unknown' =
     caps === 'unknown' ? 'unknown' : (caps.find((c) => c.vaultId === selected) ?? null);
   const [vault, setVault] = useState<VaultView | null>(null);
@@ -55,8 +33,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
     void fetch('/api/stake/suggested')
       .then((r) => (r.ok ? r.json() : null))
       .then((b: { validator?: { address: string; name: string } | null } | null) => {
-        // Only prefills an empty field. Overwriting something the creator has typed because a
-        // fetch landed late would change a permanent choice under them.
         if (!cancelled && b?.validator != null) {
           setSuggested(b.validator);
           setValidator((current) => (current === '' ? b.validator!.address : current));
@@ -72,14 +48,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /*
-    Every vault this address holds a cap for, not the first one.
-
-    The endpoint used to answer with a single cap or null, so a creator with two support vaults was
-    shown one and told that was all — while `/c/<handle>` listed both, because that page reads them
-    from events instead. The selection survives a refresh when the chosen vault is still there, so
-    acting on the second vault does not silently bounce back to the first.
-  */
   const refresh = useCallback(async (owner: string) => {
     try {
       const r = await fetch(`/api/stake?owner=${encodeURIComponent(owner)}`);
@@ -100,7 +68,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
     }
   }, []);
 
-  /* The chosen vault's state, refetched whenever the choice changes. */
   useEffect(() => {
     if (selected === null) { setVault(null); return; }
     let cancelled = false;
@@ -112,7 +79,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
   }, [selected]);
 
   useEffect(() => { if (signer !== null) void refresh(signer.address); }, [signer, refresh]);
-
 
   async function simulate(what: string, url: string, payload: Record<string, string>) {
     if (signer === null) return;
@@ -176,15 +142,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
   }
 
   if (cap === 'unknown') {
-    /*
-     * A failed read leaves `cap` on 'unknown', so without this branch the screen said "Reading the
-     * chain…" forever while the error sat in state, rendered only by the two branches that are
-     * never reached. Waiting indefinitely with no explanation is worse than a stated failure.
-     *
-     * It deliberately does not fall through to the open form. 'unknown' is not 'they have no
-     * vault' — offering `open` here would let a creator create a second vault they did not know
-     * they already had, which the contract permits and nobody wants.
-     */
     return (
       <div className="panel">
         {error === null ? (
@@ -254,7 +211,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
             value={selected ?? ''}
             onChange={(e) => {
               setSelected(e.target.value);
-              // A quote and a digest belong to the vault they were made for.
               setQuote(null);
               setDigest(null);
             }}
@@ -407,8 +363,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
               onClick={() => {
                 const typed = rebate.trim();
                 if (!/^\d+(\.\d{1,2})?$/.test(typed)) { setError('Enter a percentage, for example 20'); return; }
-                // Percent to basis points, by string arithmetic — 12.34% is 1234 bps exactly, where
-                // Math.round(12.34 * 100) is a coin flip on the last unit.
                 const [whole = '0', frac = ''] = typed.split('.');
                 const bps = BigInt(whole + frac.padEnd(2, '0'));
                 if (bps > 10_000n) { setError('The share cannot exceed 100%'); return; }

@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * ProjectX Social SDK.
- *
- * Two rules govern everything exported here:
- *
- *  1. A failed read is never a value. Chain reads return `Reading<T>`; there is no `unwrapOr`.
- *  2. Nothing signs without simulating first. Builders return transactions; `simulate()` gates them.
- */
 export {
   type Reading,
   type Failure,
@@ -136,11 +128,6 @@ export {
 
 export { decodeObjectBytes, decodeObjectBytesAtLeast } from './objectbytes.js';
 
-/*
-  The end-to-end scheme, hoisted from `packages/web/lib/e2e.ts` on 2026-09-02 for the same reason
-  the statements were: an agent encrypting its own memory must use the one implementation the
-  browser uses to encrypt a message, or the two drift and a memory becomes unopenable.
-*/
 export {
   KEY_STATEMENT,
   type Envelope,
@@ -168,16 +155,6 @@ export {
   readVaultCoinType,
 } from './creator.js';
 
-/*
-  The signed-statement format.
-
-  Exported from the SDK rather than from the web app because three different processes must produce
-  identical bytes: the Next server that verifies, the browser that signs, and a headless agent that
-  signs without a browser at all. It lived in `packages/web/lib/identity.ts` and was hand-copied
-  into `packages/agent`; the copies drifted, and this is the removal of the duplicate rather than a
-  better test for it. `verifyAction` stayed behind — it spends rows in `used_signatures` and reads
-  `siteConfig()`, neither of which belongs in a package a browser imports.
-*/
 export {
   HEAD_LINES,
   type Action,

@@ -1,17 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `weir_authorship`, the tool.
- *
- * What is being protected here is the shape of the answer, because the whole feature turns on two
- * distinctions a careless tool would erase:
- *
- *   a proof that is absent  is not  a proof that failed;
- *   a handle that moved     is not  a forgery.
- *
- * And the tool must never claim to have verified anything. A verification performed by the party
- * selling you the post is not a verification, so the answer carries the bytes and the instructions
- * and no verdict.
- */
 import assert from 'node:assert/strict';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -44,13 +31,6 @@ const PROOF = {
   issuedAtMs: 1788376431390,
 };
 
-/**
- * A keyless server with the authorship reader bound, reached over a real MCP transport.
- *
- * Through the client rather than by reaching into the server's registry: the schemas are enforced
- * on the way out, so a tool whose answer does not match its own outputSchema fails here rather than
- * in somebody's runtime.
- */
 async function connect(answer: WeirAuthorship): Promise<{ client: Client; registered: string[] }> {
   const port: WeirPort = { authorship: async () => answer, commentAuthorship: async () => answer };
   const binding = { port, signer: { kind: 'none' }, policyAvailable: false } as unknown as WeirBinding;
@@ -84,7 +64,6 @@ await check('it hands back the exact bytes and never a verdict', async () => {
   const out = await call(keyless.client, { postId: 'p1' });
   assert.deepEqual(out['proof'], PROOF);
   assert.equal(out['reason'], null);
-  // No verified/valid/ok field anywhere: the caller decides, not us.
   for (const forbidden of ['verified', 'valid', 'ok', 'trusted']) {
     assert.ok(!(forbidden in out), `the answer must not carry a "${forbidden}" verdict`);
   }
@@ -113,7 +92,6 @@ await check('an unknown handle resolution stays null rather than becoming false'
   assert.equal(out['handleStillResolvesToSigner'], null);
 });
 
-
 await check('it answers for a comment as well as a post', async () => {
   const out = await call(keyless.client, { commentId: 'c1' });
   assert.deepEqual(out['proof'], PROOF);
@@ -133,7 +111,6 @@ await check('neither id, or both, is refused rather than half-answered', async (
 await check('a server missing either reader does not offer the tool at all', async () => {
   const { registered } = await connect({ proof: PROOF, handleStillResolvesToSigner: null });
   assert.ok(registered.includes('weir_authorship'));
-  // And with only one of the two, it must be absent rather than half-honouring its schema.
   const { McpServer: S } = await import('@modelcontextprotocol/sdk/server/mcp.js');
   const { registerTools: reg } = await import('../src/tools.js');
   const half = reg(new S({ name: 'h', version: '0' }), {

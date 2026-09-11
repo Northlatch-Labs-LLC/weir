@@ -1,15 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The read session: bearer preferred, cookie fallback, and never invented.
- *
- * A session grants reads only, only of what the address already owns on chain, for a day, and it is
- * revocable. That containment is why a bearer token is acceptable at all. The assertions that
- * matter most here are the refusals: a client that quietly continues without a session reads as an
- * anonymous caller while believing it is authenticated, which surfaces as a paywall shown to
- * somebody who paid.
- *
- * Ported from the unrerunnable scratchpad harness. No network: `fetchImpl` is injected.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -41,8 +30,6 @@ describe('which credential is taken', () => {
   });
 
   it('emits exactly one space after `Bearer` and no whitespace in the credential', async () => {
-    // `provenReaderFor` in read-session.ts refuses a credential containing ANY whitespace. This
-    // client satisfies that by construction, and this is the assertion that keeps it true.
     const reading = await open(() => respond({ address: key.address, token: 'TOK123' }));
     expect(reading.ok).toBe(true);
     if (reading.ok) {
@@ -53,8 +40,6 @@ describe('which credential is taken', () => {
   });
 
   it('falls back to the cookie when the body carries no token', async () => {
-    // Not dead code kept for symmetry: this is what runs against a deployment that has not shipped
-    // the body token yet, and it replays the same token, the same row and the same revocation.
     const reading = await open(() => respond({ address: key.address }, COOKIE));
     expect(reading.ok && reading.value.kind).toBe('cookie');
     if (reading.ok) expect(reading.value.headers()['cookie']).toBe('projectx_read=COOKIEVAL');
@@ -87,9 +72,6 @@ describe('reading the cookie off a response', () => {
 
 describe('what a failure says', () => {
   it('passes a 401 message through unmodified', async () => {
-    // A 401 has several causes that look identical from outside — an expired statement, a spent
-    // signature, a clock a minute fast — and only the route can tell them apart. A friendlier
-    // sentence would discard the one piece of information naming which.
     const reading = await openSession({
       key,
       baseUrl: BASE,
@@ -123,8 +105,6 @@ describe('the credential cannot be mutated by the caller who holds it', () => {
     if (reading.ok) {
       const first = reading.value.headers();
       first['Authorization'] = 'Bearer TAMPERED';
-      // Returning the stored object would let a caller edit the credential they were handed, which
-      // is a bug that presents as an intermittent 401.
       expect(reading.value.headers()['Authorization']).toBe('Bearer TOK123');
     }
   });
@@ -136,8 +116,6 @@ describe('the credential cannot be mutated by the caller who holds it', () => {
     expect(expired.ok && expired.value.isExpired()).toBe(true);
 
     const unknown = await open(() => respond({ address: key.address, token: 'T' }));
-    // `false` because the session may well be live; the caller handles a 401 by opening a new one,
-    // which is the only reliable expiry check against a server that can revoke.
     expect(unknown.ok && unknown.value.expiresAtMs).toBeNull();
     expect(unknown.ok && unknown.value.isExpired()).toBe(false);
   });

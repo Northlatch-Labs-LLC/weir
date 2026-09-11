@@ -1,20 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Your money.
- *
- * The product's central claim is that backing somebody costs you nothing — your SUI stays yours,
- * it earns while it sits behind them, the earnings are theirs, and the principal comes back
- * whenever you ask. This is the page where that stops being a claim and becomes a figure you can
- * look at. Until now it existed nowhere: a reader who had backed three creators had to visit each
- * of them in turn and remember.
- *
- * # Every number here is read, or says it was not
- *
- * A failed read renders as a refusal with what it cost stated — never as a zero. Telling somebody
- * their money is not there because a node timed out is the worst thing this page could do, and it
- * is the specific failure the whole `Reading<T>` discipline exists to prevent.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -25,7 +10,6 @@ export type BackingRowView = {
   vaultId: string;
   creator: string;
   handle: string | null;
-  /** Formatted for reading; the raw MIST sits beside it for anyone checking an explorer. */
   principal: string;
   principalMist: string;
   rebate: string | null;
@@ -54,17 +38,8 @@ export function VaultScreen({
   totalPending: string | null;
   truncated: boolean;
   unreadable: number;
-  /** Set when the index itself could not be read. Then nothing below is shown as a figure. */
   failure?: string | undefined;
-  /** The support vault this address owns, when it owns one. */
   ownVaultId?: string | null;
-  /**
-   * The discovery column, read on the server and handed down.
-   *
-   * A server component passed as a prop into a client one: this screen cannot read the store
-   * itself, and the rail is the same rail every other wrapped route gets. Optional, so a test or a
-   * caller without it renders the page's own cards and nothing else.
-   */
   discovery?: ReactNode;
 }) {
   const viewer =
@@ -72,16 +47,6 @@ export function VaultScreen({
       ? ({ signedIn: false } as const)
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerHandle } as const);
 
-
-  /*
-    The page's own cards, and then the people.
-
-    These four screens pass an `aside`, and an `aside` REPLACES the discovery column rather than
-    joining it — so `/vault`, `/studio`, `/alerts` and `/messages` were the only wrapped routes with
-    no faces on them at all, and 337 to 715 pixels of empty ground under one explanatory card. The
-    discovery rail is read on the server and handed down as `discovery`, so it renders beneath the
-    page's own cards instead of replacing them.
-  */
   const aside: ReactNode = (
     <>
       <section className="w-card">

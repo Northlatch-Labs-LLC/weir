@@ -1,19 +1,10 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Follow a creator. Free, signed, no gas.
- *
- * The statement is built here for the wallet to display and rebuilt on the server from the
- * request. Flipping `following` client-side without re-signing therefore fails verification —
- * which is the point: an unproven follow is a follower count that means nothing.
- */
-
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignInPrompt } from '@/components/SignInPrompt';
 
-/** Must match `statementFor` in lib/identity.ts exactly. */
 function statement(handle: string, following: boolean, address: string, timestampMs: number): string {
   return (
     `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
@@ -35,7 +26,6 @@ export function FollowButton({
   const { signer } = useSigner();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
 
   async function toggle() {
     if (signer === null) return;
@@ -65,8 +55,6 @@ export function FollowButton({
       if (body.following === undefined) {
         setError(body.error ?? 'could not update');
       } else {
-        // The server's answer, not the optimistic one — a race with another tab should show what
-        // is actually true rather than what this tab attempted.
         setFollowing(body.following);
         setCount(body.followers ?? count);
       }

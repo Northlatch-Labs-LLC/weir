@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The chain, and what breaking it looks like.
- *
- * The proof that a hash chain is worth having is not that it verifies — an empty function verifies.
- * It is that a single edited field is caught, at the line it was edited, with everything before it
- * still sound.
- */
 
 import { describe, expect, it } from 'vitest';
 import { readFile, stat, writeFile } from 'node:fs/promises';
@@ -164,8 +157,6 @@ describe('a chain somebody edited', () => {
 
 describe('the encoding', () => {
   it('cannot be forged from inside a field', async () => {
-    // `reason` carries text a model can influence. Length prefixes are what stop a crafted reason
-    // impersonating a field boundary and making two different lines hash alike.
     const dir = await temporaryDirectory();
     const opened = await AuditFile.open(join(dir, 'audit.jsonl'));
     if (!opened.ok) throw new Error(opened.reason);

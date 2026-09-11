@@ -1,15 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What can be checked about zkLogin without a Google project.
- *
- * Run: `pnpm tsx scripts/verify-zklogin.ts`
- *
- * The unit suite covers the pure logic. This covers the parts that need the network: that the
- * epoch a session is bound to comes from the chain, and — the important one — that the token
- * verifier actually refuses a token this machine made up. That check is the only thing standing
- * between a stranger and another user's salt, so it is worth exercising against the real Google
- * key set rather than a mock that returns whatever the test wants.
- */
 
 import { createHash, generateKeyPairSync, sign as nodeSign } from 'node:crypto';
 import { createClient, readCurrentEpoch } from '@projectx-social/sdk';
@@ -32,7 +21,6 @@ function expect(condition: boolean, description: string): void {
   }
 }
 
-/** A JWT signed by a key this process just generated. Google has never seen it. */
 function forgeToken(payload: Record<string, unknown>): string {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -44,7 +32,6 @@ function forgeToken(payload: Record<string, unknown>): string {
 async function main(): Promise<void> {
   console.log('\nzkLogin — what can be verified here\n');
 
-  // ---------------------------------------------------------------- configuration
   console.log('Configuration');
   const configured = zkLoginConfig();
   if (configured.ok) {
@@ -52,15 +39,12 @@ async function main(): Promise<void> {
     info(`client id  ${configured.value.googleClientId}`);
     info(`redirect   ${configured.value.redirectUri}`);
     info(`prover     ${configured.value.proverUrl}`);
-    // Never printed. Its digest is enough to tell two deployments apart in a log without putting
-    // the value that derives every address into one.
     info(`seed       ${createHash('sha256').update(configured.value.seed).digest('hex').slice(0, 16)}… (sha256 prefix)`);
   } else {
     info(`not configured: ${configured.failure.detail}`);
     info('The sign-in panel will offer wallets only. That is the designed behaviour, not a fault.');
   }
 
-  // ---------------------------------------------------------------- the epoch bound
   console.log('\nSession bound');
   const site = loadConfig(process.env as Record<string, string | undefined>);
   if (!site.ok) {
@@ -80,17 +64,9 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---------------------------------------------------------------- the security boundary
   console.log('\nToken verification (the only thing protecting the salt)');
   const clientId = configured.ok ? configured.value.googleClientId : 'test-client-id';
 
-  /*
-    A real commitment, because the verifier derives the nonce rather than being told it.
-
-    It used to be handed `expectedNonce: 'N'` alongside a token carrying `nonce: 'N'`, which is
-    precisely the shape the production callers had: the expected value came from the same place as
-    the token. That parameter no longer exists.
-  */
   const ephemeral = Ed25519Keypair.generate();
   const jwtRandomness = generateRandomness();
   const maxEpoch = 1222;
@@ -125,7 +101,6 @@ async function main(): Promise<void> {
   });
   expect(!garbage.ok, 'a malformed token is refused rather than throwing');
 
-  // ---------------------------------------------------------------- derivation
   console.log('\nSalt derivation');
   const seed = new Uint8Array(32).fill(3);
   const one = deriveUserSalt({ seed, iss: 'https://accounts.google.com', aud: 'a', sub: 'u1' });
@@ -135,7 +110,6 @@ async function main(): Promise<void> {
   expect(one !== two, 'two users derive different salts');
   expect(one < 2n ** 128n, 'the salt fits the field element the circuit takes');
 
-  // ---------------------------------------------------------------- the URL
   console.log('\nAuthorization URL');
   const url = new URL(buildAuthUrl({ clientId, redirectUri: 'https://example/cb', nonce: 'N' }));
   expect(url.searchParams.get('response_type') === 'id_token',
@@ -143,7 +117,6 @@ async function main(): Promise<void> {
   expect(url.searchParams.get('scope') === 'openid',
     'asks for identity only — no profile, no email, no API access');
 
-  // ---------------------------------------------------------------- honest gaps
   console.log('\nNot verified here, and why');
   info('A real Google sign-in — needs an OAuth client id from the operator’s own Google Cloud project.');
   info('A real proof — the mainnet prover requires Enoki allowlisting, or a self-hosted one.');

@@ -1,27 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Who has joined the list, for the person who runs the site.
- *
- * # A server component, on purpose
- *
- * There is no interaction here and nothing to fetch from the browser. Rendering on the server means
- * the query runs only inside the branch that has already checked `Publisher` — so for anybody who
- * is not the site administrator, the data is never read, never serialised and never sent. A client
- * component would have to be handed the rows as props, which puts them in the page's payload for
- * whoever can see the page.
- *
- * # What it does not show
- *
- * An email address. Not once, not masked, not on hover. `lib/waitlist-insight.ts` carries the
- * reasoning and the type has nowhere to put one.
- *
- * # No new styles
- *
- * `card`, `stats`, `stat`, `k`, `v`, `note`, `lbl`, `mono`, `pill` and the bare `table` rules are
- * the panel vocabulary `AdminPanel` and `SiteModeSwitch` already use on this page. The arrivals
- * strip is laid out with inline flex on existing tokens, which is the same thing `AdminPanel` does
- * for its status colours — nothing is added to a stylesheet.
- */
 
 import {
   identify,
@@ -36,12 +13,6 @@ function stamp(ms: number): string {
   return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-/**
- * A name, or an honest blank.
- *
- * Somebody who gave no handle and joined before codes existed has nothing we may call them, and the
- * row still counts. An em dash says that; an invented id would suggest we know more than we do.
- */
 function Who({ who }: { who: { handle: string | null; code: string | null } }) {
   const named = identify(who);
   if (named === null) {
@@ -66,14 +37,6 @@ function Breakdown({ title, rows }: { title: string; rows: readonly Tally[] }) {
   );
 }
 
-/**
- * Thirty days of arrivals.
- *
- * Heights are relative to the busiest day in the window, so the shape is readable whether the peak
- * is four signups or four hundred. A day with none is drawn as a floor rather than nothing at all:
- * an absent column and a zero column must not look the same, which is the whole reason `fillDays`
- * emits every day in the range.
- */
 function Arrivals({ daily }: { daily: readonly DayCount[] }) {
   const peak = daily.reduce((most, day) => Math.max(most, day.count), 0);
   const first = daily[0];

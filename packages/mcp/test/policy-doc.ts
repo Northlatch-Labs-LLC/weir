@@ -1,10 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The policy document an operator hands this server, checked for the two things a wrong file
-  would get past: shape, and whose policy it is.
-
-  Mutation predicted: drop the address comparison → "another agent's policy is refused" red.
-*/
 import assert from 'node:assert/strict';
 import { loadPolicyDoc, resolveOptions, ENV } from '../src/transport.js';
 

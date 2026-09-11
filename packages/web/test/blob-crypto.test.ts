@@ -1,20 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Blob encryption — the thing that makes a public storage network safe to put paid media on.
- *
- * # What these tests are actually defending
- *
- * A Walrus blob is readable by anyone holding its id, from any aggregator, with no check. The
- * entitlement gate this product already has is correct and is bypassed entirely by that fact: it
- * guards our door, and the bytes would also be behind somebody else's. Encryption is what makes the
- * second door open onto noise.
- *
- * So the failures worth pinning are not "does AES work" — Node's implementation is not on trial.
- * They are the integration mistakes that produce a blob which *looks* encrypted and is not, or one
- * that opens when it should have refused: a key silently padded to length, a tag not checked, a
- * nonce reused across blobs, an empty input sailing through.
- */
 
 import { describe, expect, it } from 'vitest';
 import { decryptBlob, encryptBlob, newBlobKey, sameKey } from '@/lib/blob-crypto';
@@ -28,11 +13,6 @@ describe('a blob survives the round trip', () => {
   });
 
   it('does not leave the plaintext visible in the ciphertext', () => {
-    /*
-      The check that catches a store path wired to the wrong variable. A "ciphertext" that still
-      begins with the PNG magic number is plaintext with extra steps, and it would look entirely
-      normal in a database column and on an aggregator.
-    */
     const sealed = encryptBlob(PLAINTEXT);
     expect(Buffer.from(sealed.ciphertext).includes(Buffer.from(PLAINTEXT))).toBe(false);
     expect(sealed.ciphertext.slice(0, 4)).not.toEqual(PLAINTEXT.slice(0, 4));
@@ -62,8 +42,6 @@ describe('nothing opens it but the right key', () => {
   });
 
   it('refuses a single altered byte', () => {
-    // GCM's whole reason for being here. Bytes come back from storage nobody in this project
-    // operates, and a silent corruption that decodes to *something* is the worst outcome.
     const sealed = encryptBlob(PLAINTEXT);
     const tampered = new Uint8Array(sealed.ciphertext);
     tampered[0] = (tampered[0] ?? 0) ^ 0x01;
@@ -79,11 +57,6 @@ describe('nothing opens it but the right key', () => {
 
 describe('key and nonce discipline', () => {
   it('never reuses a nonce across two encryptions', () => {
-    /*
-      A repeated nonce under a repeated key breaks GCM catastrophically — it leaks the XOR of the
-      two plaintexts and the authentication subkey. Both are random per call here, so this asserts
-      the property rather than a counter's correctness.
-    */
     const key = newBlobKey();
     const nonces = new Set(Array.from({ length: 200 }, () => encryptBlob(PLAINTEXT, key).nonce));
     expect(nonces.size).toBe(200);
@@ -101,8 +74,6 @@ describe('key and nonce discipline', () => {
   });
 
   it('rejects a key of the wrong length rather than padding it', () => {
-    // The silent-weakening case: a short key stretched to fit encrypts at a strength nobody chose,
-    // and every blob written with it would look exactly like a correct one.
     const short = Buffer.alloc(16).toString('base64');
     expect(() => encryptBlob(PLAINTEXT, short)).toThrow(/32 bytes/);
     expect(() =>
@@ -118,8 +89,6 @@ describe('key and nonce discipline', () => {
   });
 
   it('refuses to encrypt nothing', () => {
-    // An empty upload is already refused upstream; this makes a zero-length blob unrepresentable
-    // rather than storing an object that costs WAL and holds no content.
     expect(() => encryptBlob(new Uint8Array())).toThrow(/empty/);
   });
 

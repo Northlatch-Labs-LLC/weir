@@ -1,47 +1,11 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Type 2 registration: buy the name, open the account, land on your own page.
- *
- * # What makes this different from `/join`
- *
- * `/join` claims a handle and costs only gas. This buys a `.sui` through our registrar, and the
- * purchase *is* the signup — the name and the account are created in one transaction, and the check
- * mark follows from holding a name bought here.
- *
- * So this screen carries an obligation `/join` does not: it is asking for real money, usually from
- * somebody spending it on this platform for the first time. Every figure shown is measured —
- * SuiNS's own price, our fee read live from the registrar, and gas from simulating the exact bytes
- * that will be signed. Nothing here is an estimate typed into the source.
- *
- * # Why the two prices are shown apart
- *
- * The name price goes to SuiNS and the service fee goes to us. A single total would be honest
- * arithmetic and dishonest presentation: somebody weighing this against buying direct from SuiNS
- * deserves to see exactly what the difference is, rather than discovering it later and concluding
- * it had been hidden.
- *
- * # Nothing is signed that was not simulated
- *
- * The bytes returned by the prepare route are the bytes signed and the bytes submitted, never
- * rebuilt in between. A rebuilt transaction is a different transaction, and the signature would be
- * over something the reader was never shown.
- */
-
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
 import { formatSui } from '@/lib/units';
 
-/*
-  The response shape, mirrored from `/api/names/purchase/prepare`.
-
-  It carried a `handle` while this flow also opened an account. Nothing failed when the route
-  stopped sending it — this interface is the component's own claim about the response, and `tsc`
-  checks against the claim rather than the route. The field was silently `undefined` and would have
-  produced a link to `/c/undefined`.
-*/
 interface Quote {
   bytes: string;
   gasMist: string;
@@ -58,17 +22,8 @@ interface Quote {
   };
 }
 
-/** Mist to SUI. String arithmetic — `Number` loses precision above 2^53, and this is money. */
 const sui = formatSui;
 
-/*
-  No `referrer`, and no router.
-
-  Both existed because this used to open an account: `account::open` records a referrer, and a new
-  account was sent to its own page. Buying a name does neither. Keeping the prop would advertise an
-  attribution that nothing records — which is worse than not offering it, because somebody would
-  build a referral link on top of it and be paid nothing.
-*/
 export function VerifiedRegistration() {
   const { signer } = useSigner();
   const [label, setLabel] = useState('');
@@ -95,8 +50,6 @@ export function VerifiedRegistration() {
       });
       const body = (await response.json()) as { quote?: Quote; error?: string };
       if (body.quote === undefined) {
-        // The route's message names the actual cause — a taken handle, a hyphen, a paused
-        // registrar, too little SUI. Passing it through beats replacing it with a generic line.
         setError(body.error ?? 'the registration could not be simulated');
       } else {
         setQuote(body.quote);
@@ -118,19 +71,12 @@ export function VerifiedRegistration() {
       const response = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged. Nothing is rebuilt here.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       });
       const body = (await response.json()) as { digest?: string; error?: string };
       if (body.digest === undefined) {
         setError(body.error ?? 'the purchase was not accepted');
       } else {
-        /*
-          No profile write here any more.
-
-          This transaction buys a name and nothing else. It creates no account, so there is no page
-          to bring into existence — `/join` does that, and it does it for the account it opened.
-        */
         setDigest(body.digest);
       }
     } catch (cause) {
@@ -152,11 +98,6 @@ export function VerifiedRegistration() {
     );
   }
 
-  /*
-    Done. Deliberately not an automatic redirect: this transaction spent real money, and whisking
-    somebody off the one screen showing their digest means the receipt is gone before they have read
-    it. They go when they choose to.
-  */
   if (digest !== null && quote !== null) {
     return (
       <div className="card">
@@ -210,7 +151,6 @@ export function VerifiedRegistration() {
             spellCheck={false}
             onChange={(event) => {
               setLabel(event.target.value);
-              // The quote belongs to the old name. Left on screen it would price something else.
               setQuote(null);
               setError(null);
             }}

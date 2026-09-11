@@ -1,9 +1,3 @@
-// Proves scripts/check-ascii.py actually refuses non-ASCII input, unlike the `grep -P` guard it
-// replaces (verified on this laptop: macOS's system grep has no -P, exits 2, and inside an `if`
-// that exit is swallowed — the guard reported a file holding U+0080 as clean). A failing fixture
-// with the exact v1 byte (0x80) must fail this check; a clean ASCII fixture must pass.
-//
-// Run: node --test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,8 +18,6 @@ test('a file carrying the v1 byte (0x80) fails the check', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'check-ascii-'));
   try {
     const fixture = path.join(dir, 'bad.yaml');
-    // The exact defect: a comment holding U+0080 (encoded here as the raw byte 0x80, not a
-    // UTF-8 sequence — this is the single stray byte cloud-init's PyYAML choked on).
     const bytes = Buffer.concat([
       Buffer.from('#cloud-config\n# a comment with a stray byte: '),
       Buffer.from([0x80]),

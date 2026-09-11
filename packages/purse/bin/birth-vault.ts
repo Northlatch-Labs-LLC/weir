@@ -1,24 +1,5 @@
 #!/usr/bin/env -S npx tsx
 // Built-by: @projectx.sui
-/**
- * Open Heron's SocialAccount and CreatorVault<SUI> on the projectx_social package, as Heron's
- * 1-of-2 multisig address, with the hot key as the one member this laptop holds.
- *
- * Two transactions, because `creator::open_vault` takes the SocialAccount object that
- * `account::open` creates. Each is built with the SDK's own builders (packages/sdk/src/tx.ts),
- * simulated against the node, and only then signed and executed. Gas is paid from Heron's address
- * balance: an empty gas payment and a ValidDuring expiration, the shape @mysten/sui's own executor
- * uses for that mode, because Heron's address holds a balance and no coin object yet.
- *
- * The hot key is read through the purse's own loader (`--key-file`, 0600, no symlink, never argv,
- * never env). Nothing here prints a secret; it prints addresses, ids and digests.
- *
- * usage: birth-vault.ts --key-file <path> --multisig <doc> --chain <doc> --handle <handle>
- *                       [--referrer <address>] [--values <path>] [--values-prefix HERON] [--dry-run]
- * --dry-run builds and simulates both steps as far as the chain state allows and executes nothing.
- * --values merges <PREFIX>_VAULT_ID and <PREFIX>_CREATOR_CAP_ID into that JSON file when the vault
- * exists; the prefix is HERON unless --values-prefix names another agent's (WREN).
- */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Transaction } from '@mysten/sui/transactions';
@@ -79,11 +60,6 @@ function say(line: string): void {
   process.stderr.write(`birth-vault: ${line}\n`);
 }
 
-/**
- * An object's Move type, read over gRPC from the node the transaction was sent to. Not GraphQL:
- * the indexer behind it lags the node by seconds, and the first real run (2026-09-05) executed the
- * account transaction and then found none of its three created objects there.
- */
 async function typeOf(client: ReturnType<typeof createClient>, objectId: string): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
@@ -98,7 +74,6 @@ async function typeOf(client: ReturnType<typeof createClient>, objectId: string)
   return '';
 }
 
-/** An object's fields as JSON, from the GraphQL indexer, with a wait for it to catch up. */
 async function fieldsOf(objectId: string): Promise<Record<string, unknown>> {
   const query = `{ object(address: "${objectId}") { asMoveObject { contents { json } } } }`;
   for (let attempt = 0; attempt < 15; attempt += 1) {
@@ -191,7 +166,6 @@ async function main(): Promise<number> {
     return { digest, created };
   };
 
-  // --- step A: the SocialAccount -------------------------------------------------------------
   let accountId = await owned(accountType);
   const digests: Record<string, string> = {};
   if (accountId !== null) {
@@ -213,7 +187,6 @@ async function main(): Promise<number> {
     say(`account: SocialAccount ${accountId}`);
   }
 
-  // --- step B: the vault -----------------------------------------------------------------------
   let capId = await owned(capType);
   let vaultId: string | null = null;
   if (capId !== null) {

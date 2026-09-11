@@ -1,10 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The amount parser, and the two traps it exists for.
- *
- * `BigInt('')` is `0n` and `Number` loses precision above 2^53. Both turn a spend into a
- * non-spend, silently, in the direction nobody checks.
- */
 
 import { describe, expect, it } from 'vitest';
 import { outflowMagnitude, parseSignedAmount, parseUnsignedAmount } from '../src/index.js';
@@ -15,8 +9,6 @@ describe('parseSignedAmount', () => {
   });
 
   it('refuses the strings BigInt would silently accept', () => {
-    // Every one of these is `0n`, `16n` or a throw under a bare `BigInt(...)` call, and none of
-    // them is an amount.
     for (const bad of ['', ' ', '\n', '0x10', '1_000', '+1', '1.0', '1e3', '-0', '00', ' 1']) {
       expect(parseSignedAmount(bad), JSON.stringify(bad)).toBeNull();
     }
@@ -25,7 +17,6 @@ describe('parseSignedAmount', () => {
   it('is exact above Number.MAX_SAFE_INTEGER, where a number parse is not', () => {
     const overSafe = '10000000000000001';
     expect(parseSignedAmount(overSafe)).toBe(10_000_000_000_000_001n);
-    // The defect this guards: the same value through a float loses the final digit.
     expect(BigInt(Number(overSafe))).not.toBe(10_000_000_000_000_001n);
   });
 

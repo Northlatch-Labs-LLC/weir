@@ -4,25 +4,6 @@ import { rateLimit } from '@/lib/rate-limit';
 import { findComment } from '@/lib/content';
 import { statementFor } from '@/lib/identity';
 
-/**
- * `GET /api/comments/{id}/authorship` — the proof that a comment was signed, handed to anybody.
- *
- * The post version of this is `app/api/posts/[id]/authorship/route.ts` and its header carries the
- * full reasoning. The same three rules hold here and each one is a way this route could lie:
- *
- *  - It does NOT verify the signature for the caller. A verification performed by the party
- *    serving the content is another assertion of ours, which is the thing this route exists to
- *    stop needing.
- *  - A comment with no retained proof answers 200 with `proof: null` and a reason. It WAS signed;
- *    the signature was discarded. A 404 would say it does not exist and a 500 would say something
- *    broke, and both are false. What a reader needs is "unproven" kept apart from "forged".
- *  - The statement is rebuilt with `statementFor`, the same function every signer and verifier in
- *    this system uses, rather than stored whole — so a change to the format cannot make this route
- *    silently disagree with the one that took the signature.
- *
- * One difference from posts: a comment already stores the address that signed it, so there is no
- * handle to have moved and nothing to report about resolution.
- */
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {

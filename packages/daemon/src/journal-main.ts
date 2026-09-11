@@ -1,8 +1,5 @@
 #!/usr/bin/env node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Read the run journal. `pnpm journal`
- */
 
 import { fold } from '@projectx-social/sdk';
 import { assertJournalConfigured, loadDaemonConfig } from './config.js';
@@ -24,12 +21,6 @@ if (!url.ok) {
   process.exit(1);
 }
 
-/*
-  Opening the journal takes the single-instance lock, so this refuses to run while the daemon does.
-  That is the correct behaviour rather than an inconvenience: a reader that quietly took the lock
-  would make the daemon's next restart fail, and one that bypassed it would need a second code path
-  into the same database. Read the journal with psql if you need it while the daemon is live.
-*/
 const opened = await openJournal(url.value);
 if (!opened.ok) {
   console.error(opened.failure.detail);
@@ -58,8 +49,6 @@ fold(
   await journal.recentRuns(20),
   (runs) => {
     if (runs.length === 0) {
-      // A measured emptiness, said as such. An empty journal and an unreadable one look identical
-      // in any output that just prints nothing.
       console.log('the journal was read and holds no runs — the daemon has never completed a tick');
       return null;
     }
@@ -71,8 +60,6 @@ fold(
         `${when}  ${r.mode.padEnd(8)}  ${epoch.padStart(5)}  ${String(r.vaultsSeen).padStart(4)}  ` +
           `${String(r.harvested).padStart(4)}  ${String(r.skipped).padStart(4)}  ` +
           `${String(r.failed).padStart(4)}  ${r.outcome}${r.truncated ? ' (TRUNCATED)' : ''}` +
-          // The anchored chain head, so a reader can match a log to the run that produced it. A
-          // run with no anchor is older than db/002 or its anchor write failed; either is worth seeing.
           `  ${r.auditHead === null ? 'unanchored' : `${r.auditHead.headHash.slice(0, 12)}… ×${r.auditHead.entries}${r.auditHead.intact ? '' : ' BROKEN'}`}` +
           `${r.failureDetail === null ? '' : ` — ${r.failureDetail}`}`,
       );

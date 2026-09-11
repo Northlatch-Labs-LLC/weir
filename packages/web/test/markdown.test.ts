@@ -21,7 +21,6 @@ describe('inline', () => {
   });
 
   it('never drops characters', () => {
-    // The property that matters for a legal page: what goes in comes out.
     const samples = [
       '2.1 **Subscriptions.** The fee is 2.9%.',
       'See the [Terms](/legal/terms) and the [Privacy Policy](/legal/privacy).',
@@ -71,11 +70,6 @@ describe('blocks', () => {
   });
 });
 
-/*
-  The guard that matters more than any of the above: every line of every published document must
-  reach the page. A parser that silently skipped a clause would be the worst defect this file could
-  have, and it would look like nothing at all.
-*/
 describe('the published documents', () => {
   const dir = resolve(process.cwd(), 'content/legal');
   const files = readdirSync(dir).filter((f) => f.endsWith('.md'));
@@ -106,11 +100,6 @@ describe('the published documents', () => {
         })
         .join(' ');
 
-      /*
-        Compare word by word, ignoring punctuation entirely: wrapping, table pipes and the markers
-        themselves are formatting, and a diff that counted them would fail for reasons that are not
-        content. What must never differ is the words.
-      */
       const words = (s: string) =>
         s
           .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -134,7 +123,6 @@ describe('the header block every document opens with', () => {
   });
 
   it('leaves an ordinary wrapped paragraph joined', () => {
-    // The rule must not turn every bold sentence into its own line.
     const blocks = parseMarkdown('2.1 **Subscriptions.** A fee applies\nand it is deducted at settlement.');
     expect(blocks).toHaveLength(1);
   });

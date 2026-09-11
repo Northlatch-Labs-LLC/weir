@@ -1,29 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Becoming a creator: open a vault, name it, add a tier.
- *
- * # This did not exist, and the studio pretended otherwise
- *
- * The studio carried a hardcoded vault id, coin type and handle — so it was a studio for exactly
- * one creator, and everybody else got a form that published against somebody else's vault. Opening
- * a vault and adding a tier were command-line operations. The product could take a creator's money
- * and pay it out, and could not sign one up.
- *
- * # The order is the contract's
- *
- * `open_vault` takes a `&SocialAccount`; `add_tier` takes the vault and its cap; nobody can
- * subscribe until a tier exists. Each step is gated by the one before it in Move, so the steps are
- * presented in that order rather than as a form that aborts.
- *
- * # Every transaction is simulated before it can be signed
- *
- * Including the free ones. The creation fee is currently zero on this platform, and a zero-cost
- * transaction still costs gas and can still abort — on a paused platform, on a second account, on a
- * period the contract refuses.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -34,13 +11,10 @@ interface TierView { name: string; price: string; periodMs: string; active: bool
 interface VaultView {
   vaultId: string; capId: string; coinType: string; tiers: TierView[];
   accepting: boolean; handle: string | null;
-  /** From the coin's metadata. `null` when the vault has no coin type yet. */
   decimals: number | null;
-  /** Display only — see the note in `lib/creator-setup.ts`. */
   symbol: string;
 }
 
-/** Carried on every stage, because the vault form needs it before a vault exists. */
 type WithCoin = { vaultCoinTypes: string[] };
 
 type Setup =
@@ -57,23 +31,12 @@ type Load =
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * An amount in a coin's own scale.
- *
- * This was fixed at six decimals and named `usdc`, so every vault was formatted as though it held
- * USDC. A nine-decimal coin displayed its tier prices a thousand times too large, and the tier
- * *creation* path parsed them a thousand times too small — a creator asking for 5 got 0.005.
- */
 const amount = (raw: string, decimals: number) => {
   const scale = 10n ** BigInt(decimals);
   const n = BigInt(raw);
   const frac = (n % scale).toString().padStart(decimals, '0').replace(/0+$/, '');
   return `${n / scale}${frac === '' ? '' : `.${frac}`}`;
 };
-/*
-  Was a private copy that stripped a leading minus before dividing, so a negative balance rendered
-  as its own opposite. The shared one keeps the sign.
-*/
 const sui = formatSui;
 
 export function CreatorSetup() {
@@ -86,14 +49,6 @@ export function CreatorSetup() {
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [tier, setTier] = useState({ name: 'Monthly', price: '5', days: '30', vaultId: '' });
-  /*
-   * Which coin a new vault will be denominated in.
-   *
-   * `null` until the creator picks, and deliberately not pre-filled with the first offered coin. The
-   * coin type is the vault's type parameter, fixed at creation with no migration — a pre-selected
-   * radio button would be a permanent decision about someone's business made by whoever ordered the
-   * configuration variable.
-   */
   const [chosenCoin, setChosenCoin] = useState<string | null>(null);
 
   const refresh = useCallback(async (address: string) => {
@@ -115,8 +70,6 @@ export function CreatorSetup() {
     if (signer !== null) void refresh(signer.address);
   }, [signer, refresh]);
 
-
-  /** Simulate anything. The confirm button only exists once this has returned bytes. */
   async function simulate(what: string, url: string, payload: Record<string, unknown>) {
     setBusy(true); setError(null); setQuote(null);
     try {
@@ -139,7 +92,6 @@ export function CreatorSetup() {
       const signature = await signer.signTransaction(quote.bytes);
       const r = await fetch('/api/checkout/submit', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       });
       const b = (await r.json()) as { digest?: string; error?: string };
@@ -152,11 +104,6 @@ export function CreatorSetup() {
     } finally { setBusy(false); }
   }
 
-  /*
-    What a vault is and what it costs is stated by the page above, server-rendered, so a visitor
-    without a wallet reads it there. Repeating it here put the same paragraph on screen twice; what
-    is left to say at the button is what connecting reveals and that nothing is signed blind.
-  */
   if (signer === null) {
     return (
       <div className="panel">
@@ -187,11 +134,6 @@ export function CreatorSetup() {
   }
 
   const setup = load.setup;
-  /*
-   * The denominations a NEW vault may use, from the server rather than a literal here. Empty means
-   * the deployment configured none — and the vault form is then withheld rather than defaulted,
-   * because the coin type is the vault's type parameter and is fixed at creation.
-   */
   const offeredCoins = setup.vaultCoinTypes ?? [];
 
   if (setup.stage === 'no-account') {
@@ -227,10 +169,6 @@ export function CreatorSetup() {
         </p>
 
         {offeredCoins.length === 0 ? (
-          /*
-            Withheld rather than defaulted. A deployment that has configured no denomination has not
-            configured a safe one to guess, and the vault it would open cannot be changed afterwards.
-          */
           <p className="unmeasured">
             This site offers no vault denomination, so a vault cannot be opened here yet.
           </p>
@@ -293,8 +231,6 @@ export function CreatorSetup() {
             </div>
           </div>
         ) : (
-          // Disabled until a denomination is chosen. The alternative — enabling it and sending
-          // whatever happens to be selected — would open a permanent vault in a coin nobody picked.
           <button className="btn" type="button" disabled={busy || chosenCoin === null}
             onClick={() => void simulate('vault', '/api/creator/vault', {
               accountId: setup.accountId, coinType: chosenCoin, creationFeeMist: setup.creationFeeMist,
@@ -389,12 +325,6 @@ export function CreatorSetup() {
                     onClick={() => {
                       setBusy(true); setError(null);
                       void (async () => {
-                      /*
-                        Signed, with no gas and no transaction. The route used to compare an `owner`
-                        field against the vault's owner read from chain, which authorises nothing —
-                        a vault's owner is public, so anyone could send it and rename this vault.
-                        The statement must match `statementFor('name-vault')` exactly.
-                      */
                       const timestampMs = Date.now();
                       const statement =
                         `Weir\naddress: ${signer.address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
@@ -406,9 +336,6 @@ export function CreatorSetup() {
                         method: 'POST', headers: { 'content-type': 'application/json' },
                         body: JSON.stringify({
                           owner: signer.address, vaultId: vault.vaultId,
-                          // An existing vault's own type parameter. There is no fallback because there is
-            // nothing to fall back to: a vault that exists has a coin type, and guessing one for
-            // it would build a transaction against a different generic instantiation entirely.
             coinType: vault.coinType,
                           displayName, bio, signature, timestampMs,
                         }),
@@ -421,7 +348,6 @@ export function CreatorSetup() {
                         })
                         .finally(() => setBusy(false));
                       })().catch((e: unknown) => {
-                        // A refused or failed signature must not leave the button spinning.
                         setError(e instanceof Error ? e.message : String(e));
                         setBusy(false);
                       });
@@ -546,16 +472,7 @@ function TierForm({
         onChange={(e) => setTier({ ...tier, days: e.target.value })} />
       <button className="btn" type="button" disabled={busy}
         onClick={() => {
-          // Price by string manipulation, never parseFloat × 1e6 — 0.07 becomes
-          // 69999.99999999999 that way, and the tier would be listed at a price nobody chose.
           const t = tier.price.trim();
-          /*
-           * Scaled by the vault's own decimals. Fixed at six, a price of "5" on a nine-decimal coin
-           * became five thousandths of one — the tier is created, the transaction succeeds, and the
-           * creator sells at a thousandth of their intended price until somebody notices.
-           *
-           * A vault with no known decimals cannot price anything, so nothing is submitted.
-           */
           if (vault.decimals === null) return;
           const places = vault.decimals;
           if (!new RegExp(`^\\d+(\\.\\d{1,${places}})?$`).test(t)) return;
@@ -563,9 +480,6 @@ function TierForm({
           onSimulate({
             vaultId: vault.vaultId,
             capId: vault.capId,
-            // An existing vault's own type parameter. There is no fallback because there is
-            // nothing to fall back to: a vault that exists has a coin type, and guessing one for
-            // it would build a transaction against a different generic instantiation entirely.
             coinType: vault.coinType,
             name: tier.name,
             price: BigInt(whole + frac.padEnd(places, '0')).toString(),

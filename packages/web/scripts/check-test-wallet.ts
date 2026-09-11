@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Is the dedicated mainnet test wallet funded, and what does it hold?
- *
- * It holds no capability, no account and no vault beyond what these tests create, so mainnet
- * verification never signs with a key that governs anything that matters.
- *
- *   npx tsx scripts/check-test-wallet.ts
- */
 import { createClient, loadConfig } from '@projectx-social/sdk';
 
 export const TEST_WALLET =
@@ -28,7 +20,5 @@ for (const o of owned.objects ?? []) {
   console.log(`         ${String(o.type ?? '').split('::').slice(-2).join('::')}  ${o.objectId}`);
 }
 
-// A vault creation plus a tier is roughly 0.007 SUI at current prices, measured rather than
-// guessed — see the simulations recorded in STATUS.md. 0.05 leaves room for retries.
 const ENOUGH = 50_000_000n;
 console.log(mist >= ENOUGH ? '\nfunded — ready to sign' : `\nnot yet funded — needs about ${Number(ENOUGH) / 1e9} SUI`);

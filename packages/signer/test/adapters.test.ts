@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The four adapters.
- *
- * Every key here is generated in this process and discarded. Nothing reads the operator's real
- * `~/.sui/sui_config/sui.keystore`: a test that did would only pass on one machine and would pull
- * real private keys into a process whose output is captured.
- */
 
 import { describe, expect, it } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -54,8 +47,6 @@ describe('LocalKeypairSigner from a bech32 secret', () => {
     const signer = localKeypairSignerFromSecret(secret);
     expect(signer.ok).toBe(false);
     if (signer.ok) throw new Error('unreachable');
-    // The whole point: a crypto library's parse error routinely includes the offending value, and
-    // that value ends up in a log aggregator.
     expect(signer.failure.detail).not.toContain(secret);
     expect(signer.failure.detail).toContain('deliberately not shown');
   });
@@ -106,7 +97,6 @@ describe('LocalKeypairSigner from a Sui CLI keystore', () => {
     const signer = await localKeypairSignerFromKeystore({ path, address: missing });
     if (signer.ok) throw new Error('unreachable');
     expect(signer.failure.kind).toBe('not-found');
-    // A keystore inventory does not belong in a log.
     expect(signer.failure.detail).not.toMatch(/\b2\b/);
   });
 
@@ -116,7 +106,6 @@ describe('LocalKeypairSigner from a Sui CLI keystore', () => {
       address: `0x${'1'.repeat(64)}`,
     });
     if (signer.ok) throw new Error('unreachable');
-    // Retrying will not create the file.
     expect(signer.failure.kind).toBe('unconfigured');
   });
 });
@@ -157,8 +146,6 @@ describe('KmsSigner', () => {
   });
 
   it('still refuses when a transport is supplied, rather than returning a plausible signature', async () => {
-    // The honest state of the adapter. Returning something signature-shaped from an unimplemented
-    // path is the class of defect this repository documents rather than ships.
     const signer = kmsSigner({
       address: `0x${'2'.repeat(64)}`,
       transport: {
@@ -228,8 +215,6 @@ describe('MultiSigSigner configuration', () => {
     const b = multiSigSigner({ threshold: 1, members, available: [signerFor(cold)] });
     if (!a.ok || !b.ok) throw new Error('unreachable');
     expect(a.value.address).toBe(b.value.address);
-    // And it is not either member's own address — which is why the account, being soulbound,
-    // must be opened at the multisig address from the very beginning. See README.md.
     expect(a.value.address).not.toBe(hot.toSuiAddress());
     expect(a.value.address).not.toBe(cold.toSuiAddress());
   });

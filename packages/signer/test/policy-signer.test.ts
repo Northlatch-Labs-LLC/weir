@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The gate, end to end, with no network.
- *
- * The transaction is fully specified — explicit sender, gas payment, budget and price, and pure
- * inputs only — so `build()` resolves nothing remotely. The client is a stub that returns the
- * recorded mainnet response from `test/helpers.ts`. That means these tests exercise the real
- * build, the real translation, the real SDK gate and the real evaluator, and the only thing that
- * is not real is the node.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -28,7 +19,6 @@ const KEYPAIR = Ed25519Keypair.generate();
 const AGENT = KEYPAIR.toSuiAddress();
 const EMPTY: () => LedgerState = () => ({ nowMs: 1_788_000_000_000, spend: [] });
 
-/** A transaction that needs no chain read to build. */
 function localTransaction(): Transaction {
   const tx = new Transaction();
   tx.setSender(AGENT);
@@ -46,12 +36,10 @@ function localTransaction(): Transaction {
   return tx;
 }
 
-/** A client that answers the SDK gate with whatever response the test supplies. */
 function stubClient(response: unknown): SuiGrpcClient {
   return { simulateTransaction: async () => response } as unknown as SuiGrpcClient;
 }
 
-/** A simulation port that answers with a recorded response, without a network. */
 function stubPort(response: unknown, sender: string = AGENT): SimulationPort {
   return {
     observe: async ({ transactionBytes }) => {
@@ -178,19 +166,9 @@ describe('the policy gate', () => {
   });
 });
 
-/**
- * The operator's bar, at the boundary where a signature is actually produced.
- *
- * The evaluator's own tests prove the arithmetic. What has to be proved HERE is narrower and more
- * important: `policySigner` reads `decision.allow` and nothing else, so a verdict shape it has
- * never seen — a refusal carrying `approvalRequired` — must stop it exactly as any other refusal
- * does. A gate that returned a new kind of no and signed anyway would be the worst possible way to
- * add one.
- */
 describe('the approval threshold at the signing boundary', () => {
   const BARRED: PolicyDoc = {
     ...policyFor(AGENT),
-    // The transaction spends 1_088_000 of SUI. The operator is asked above 500_000.
     approvalThresholds: [{ coinType: SUI_TYPE, maxWithoutApproval: '500000' }],
   };
 
@@ -255,15 +233,12 @@ describe('the simulation gate', () => {
     const result = await signer.signTransaction(localTransaction());
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('unreachable');
-    // The whole reason the effects reader runs before the SDK gate.
     expect(result.failure.detail).toContain('would abort');
     expect(result.failure.detail).toContain('This content is not for sale.');
     expect(result.failure.detail).not.toContain('shape mismatch');
   });
 
   it('refuses when the SDK gate cannot confirm success, even though the effects reader could', async () => {
-    // The SDK gate reads only `Transaction.status`. Feed the port a success and the SDK client a
-    // shape it cannot read: the gate must veto. It can only ever refuse; it never grants alone.
     const good = mainnetSuccessResponse(AGENT);
     const signer = policySigner({
       inner: signerFor(KEYPAIR),
@@ -307,8 +282,6 @@ describe('the inner adapter', () => {
     expect(result.failure.kind).toBe('unconfigured');
 
     const entries = signer.audit.entries;
-    // Two entries: the policy permitted it, and then the signer could not act. Both are true, and
-    // deleting the first would make the chain a record of successes rather than of decisions.
     expect(entries.map((e) => e.decision)).toEqual(['allow', 'deny']);
     expect(entries[1]!.reason).toContain('the policy permitted this transaction');
     expect(signer.audit.verify().intact).toBe(true);
@@ -337,8 +310,6 @@ describe('the audit chain across a whole session', () => {
     if (!verdict.intact) throw new Error('unreachable');
     expect(verdict.length).toBe(3);
 
-    // Every entry names the policy that judged it, so a later widening is visible at the entry
-    // where it first took effect.
     for (const entry of signer.audit.entries) {
       expect(entry.policyHash).toBe(signer.policyHash);
     }
@@ -346,21 +317,6 @@ describe('the audit chain across a whole session', () => {
 });
 
 describe('a fault inside the gate is a recorded refusal, not an exception', () => {
-  /*
-   * The header of `policy-signer.ts` says refusals are values rather than exceptions, and until
-   * this block existed only the *expected* refusals honoured it.
-   *
-   * `evaluate()` does not catch a throwing rule, and `options.ledger()` is caller-supplied I/O — in
-   * production a file or a database, both of which fail. Either could escape `signTransaction` as
-   * a rejected promise.
-   *
-   * Failing closed was never in doubt: no signature is produced on that path. Two other things
-   * were wrong. An unattended loop that caught the rejection would retry, which is the behaviour
-   * the header explicitly exists to prevent. And `refuse()` is what appends a deny entry, so a
-   * throw bypassed the audit chain and left **zero** entries — no evidence that a signature had
-   * even been attempted, in the record whose entire purpose is to hold that evidence.
-   */
-
   const throwingLedger = (): LedgerState => {
     throw new Error('the ledger store is unreachable');
   };
@@ -372,7 +328,6 @@ describe('a fault inside the gate is a recorded refusal, not an exception', () =
   });
 
   it('and it is recorded as a denial', async () => {
-    // Measured before the fix: zero entries. The refusal existed only as an exception nobody kept.
     const signer = makeSigner({ ledger: throwingLedger });
     await signer.signTransaction(localTransaction());
     expect(signer.audit.entries).toHaveLength(1);
@@ -380,8 +335,6 @@ describe('a fault inside the gate is a recorded refusal, not an exception', () =
   });
 
   it('the recorded reason names the underlying fault', async () => {
-    // A denial reading "an error occurred" sends the operator to widen a policy that was never
-    // consulted. The reason has to distinguish a fault from a decision.
     const signer = makeSigner({ ledger: throwingLedger });
     await signer.signTransaction(localTransaction());
     expect(signer.audit.entries[0]?.reason).toContain('the ledger store is unreachable');
@@ -392,13 +345,10 @@ describe('a fault inside the gate is a recorded refusal, not an exception', () =
     const signer = makeSigner({ ledger: throwingLedger });
     const result = await signer.signTransaction(localTransaction());
     expect(result.ok).toBe(false);
-    // Nothing in the audit chain claims a signature was produced.
     expect(signer.audit.entries.some((e) => e.decision === 'allow')).toBe(false);
   });
 
   it('an inner signer that throws is caught too', async () => {
-    // A KMS or hardware adapter reaches a network or a device; it can throw rather than return a
-    // failure, and it does so *after* the allow entry has been written.
     const signer = makeSigner({
       inner: {
         address: AGENT,
@@ -409,8 +359,6 @@ describe('a fault inside the gate is a recorded refusal, not an exception', () =
     });
     const result = await signer.signTransaction(localTransaction());
     expect(result.ok).toBe(false);
-    // The allow entry stands and the denial follows it: the policy did permit this, and the signer
-    // then could not act. Two entries, in that order, is the honest record.
     expect(signer.audit.entries.map((e) => e.decision)).toEqual(['allow', 'deny']);
   });
 

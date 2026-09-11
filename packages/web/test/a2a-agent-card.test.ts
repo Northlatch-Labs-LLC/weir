@@ -3,16 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { agentCardFor } from '@/app/.well-known/agent-card.json/route';
 import { servedManifest } from '@/lib/agent-manifest';
 
-/**
- * `/.well-known/agent-card.json` must never disagree with the signed manifest, and must never
- * claim a protocol this deployment does not speak.
- *
- * A registry builds a public listing by fetching this file once and believing it. Two failures
- * would follow a wrong card and neither is visible from here: a client dials an endpoint that
- * answers nothing, or it believes a capability the endpoint refuses to have. Every assertion below
- * is against the manifest read in the same breath, so a change to one that forgets the other fails
- * here rather than in a stranger's agent runtime.
- */
 describe('the A2A agent card', () => {
   const ORIGIN = 'https://weir.social';
 
@@ -28,11 +18,6 @@ describe('the A2A agent card', () => {
   });
 
   it('declares the binding it actually serves, and never JSONRPC', async () => {
-    /*
-      The whole point of this file. This deployment speaks MCP over streamable HTTP and does not
-      implement A2A's JSON-RPC binding, so naming JSONRPC would publish an endpoint that answers
-      nothing. `protocol_binding` is an open-form string in the A2A spec precisely to allow this.
-    */
     const card = await agentCardFor(ORIGIN);
     expect(card.supportedInterfaces[0]?.protocolBinding).toBe('MCP');
     for (const iface of card.supportedInterfaces) {
@@ -47,7 +32,6 @@ describe('the A2A agent card', () => {
   });
 
   it('carries the manifest sentence saying the hosted endpoint holds no key', async () => {
-    // The one claim in here a reader might act on: that nothing reachable from this card can spend.
     const card = await agentCardFor(ORIGIN);
     const { manifest } = await servedManifest(ORIGIN);
     expect(card.description).toContain(manifest.mcp.note);
@@ -88,15 +72,8 @@ describe('the A2A agent card', () => {
   });
 
   it('refuses to publish a card that silently omits a registered tool', async () => {
-    /*
-      Guards the failure mode that would be invisible in production: a seventh tool is registered,
-      SKILL_COPY is not updated, and the card lists six capabilities while looking complete. The
-      route throws instead. Asserted through the real code path by asking for a manifest whose tool
-      list this test controls.
-    */
     const { manifest } = await servedManifest(ORIGIN);
     expect(manifest.mcp.tools.length).toBeGreaterThan(0);
-    // Every registered tool resolves today; that is what makes the throw a guard and not a bug.
     const card = await agentCardFor(ORIGIN);
     expect(card.skills.length).toBe(manifest.mcp.tools.length);
   });

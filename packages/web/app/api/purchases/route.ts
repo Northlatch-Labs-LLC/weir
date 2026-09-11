@@ -9,17 +9,6 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
-/**
- * What this address has bought.
- *
- * Read from the Subscription and Unlock objects the buyer owns. There is no orders table here, and
- * that is the point: those objects cannot be revoked by this platform, edited by it, or lost when
- * it is. The receipt is read from the thing that makes the claim true.
- *
- * Naming an address grants nothing — the objects are public and their contents are the buyer's
- * receipt, not their secret. Nothing is released by this route that entitlement does not already
- * decide independently.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -31,11 +20,6 @@ export async function GET(request: Request) {
 
   const purchases = await readPurchases(buyer);
 
-  /*
-    Decimals per coin, once per distinct coin type on this receipt, from the coin's own metadata.
-    A receipt used to scale every amount as USDC; a SUI vault's purchase read a thousand times too
-    large. An unreadable coin is `decimals: null` and the page says "not measured" — never a guess.
-  */
   const decimalsOf = new Map<string, number | null>();
   if (purchases.ok) {
     const config = siteConfig();
@@ -58,9 +42,6 @@ export async function GET(request: Request) {
     purchases,
     (p) =>
       NextResponse.json({
-        // bigint out as strings: JSON.stringify throws on one, and Number() above 2^53 loses
-        // precision silently — for large amounts only, the worst possible schedule.
-        // `decimals` per row, from the coin's own metadata; null when unread, never a guess.
         subscriptions: p.subscriptions.map((s) => ({ ...s, pricePaid: s.pricePaid.toString(), ...coinFields(s.coinType) })),
         unlocks: p.unlocks.map((u) => ({ ...u, pricePaid: u.pricePaid.toString(), ...coinFields(u.coinType) })),
         truncated: p.truncated,

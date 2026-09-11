@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The record renders every fact, and every missing fact as its sentence — never a blank, a dash or
-  a zero in the place a figure would sit.
-*/
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CreatorVaultState, Reading } from '@projectx-social/sdk';
@@ -61,7 +57,6 @@ describe('AgentRecordView', () => {
     expect(text).toContain('not measured: transport — node away');
     expect(text).not.toContain('1.5 SUI');
     expect(text).not.toContain('0 SUI');
-    // Six figures in the vault block (accepting, earnings, fees, tip, tiers) are each said as unavailable.
     expect(container.querySelectorAll('[data-unavailable="true"]').length).toBeGreaterThanOrEqual(5);
   });
 

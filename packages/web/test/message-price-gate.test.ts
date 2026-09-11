@@ -1,20 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A malformed price is refused before the signature is spent.
- *
- * # Why the ordering is the test
- *
- * `POST /api/messages` took `body.paid.price` and stored it. `POST /api/posts` cannot: it compares
- * the submitted price against the on-chain price and refuses a disagreement, so only digits get
- * through there. That asymmetry is the finding — the same value, guarded on one route and not the
- * other, and every consumer parses it with `BigInt()`.
- *
- * The refusal has to come BEFORE `verifyAction`, because signatures are single-use. Refusing after
- * it would consume the creator's signature on a request that was never going to be stored, so
- * somebody who typed "1.5" would have to sign again to discover it — which is the same reasoning
- * `POST /api/posts` already applies to its length checks.
- */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,8 +8,6 @@ const addMessage = vi.fn();
 const findProfile = vi.fn();
 
 vi.mock('@/lib/rate-limit', () => ({
-  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
-  // these files are about what the route decides and not about how often it may be asked.
   simulateLimit: async () => null, rateLimit: () => null, quotaLimit: async () => null, clientKey: () => 'x' }));
 vi.mock('@/lib/identity', () => ({ verifyAction: (...a: unknown[]) => verifyAction(...a) }));
 vi.mock('@/lib/content', () => ({
@@ -76,8 +59,6 @@ describe('a paid message whose price is not a whole number', () => {
     it(`does not spend a signature to refuse ${JSON.stringify(bad)}`, async () => {
       await POST(send(bad));
 
-      // The whole reason the check sits where it does. Signatures are single-use: verifying first
-      // would charge the sender a signature for a request that was never going to be stored.
       expect(verifyAction).not.toHaveBeenCalled();
     });
   }
@@ -95,8 +76,6 @@ describe('a paid message priced in whole units', () => {
 
     const response = await POST(send('250000'));
 
-    // Refused for the signature, NOT for the price — which is what proves the gate let it through
-    // rather than the request failing for some unrelated reason all along.
     expect(verifyAction).toHaveBeenCalledTimes(1);
     expect(response.status).toBe(401);
   });

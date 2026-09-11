@@ -1,22 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Connecting is not signing in, and the difference is what these pin.
- *
- * # The defect
- *
- * A wallet sharing an address grants nothing here. What grants anything is a signature over the
- * read-content statement, which mints a session the server can answer as. That signature was asked
- * for once, from an effect, ending in `catch {}` — so a reader who declined it, or whose wallet
- * errored, was left connected and unproved with NO trace of it anywhere in the application. Their
- * own paid posts rendered locked, the account menu said "signed in", and no control on any screen
- * would ask a second time. The whole recovery path was guessing that a reload might help.
- *
- * So the proof is a state now, and these are the transitions worth holding still: that a signature
- * is not requested when the server already has one, that a refusal is recorded rather than
- * swallowed, that pressing confirm asks again, and that switching address stops the previous
- * address's proof from speaking for the new one.
- */
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,7 +16,6 @@ const B = { address: `0x${'b'.repeat(64)}`, chains: ['sui:mainnet'], features: [
 let currentAccount: unknown = null;
 let currentWallet: unknown = null;
 
-/** What the kit's signer does when asked for a personal message. Swapped per test. */
 let signPersonalMessage: (bytes?: Uint8Array) => Promise<{ signature: string }> =
   vi.fn(async () => ({ signature: 'sig' }));
 let signCalls = 0;
@@ -78,10 +60,6 @@ function Probe() {
   );
 }
 
-/**
- * The server's answers, in order. `zklogin/session` is asked for first by the provider's own
- * startup effect, so every script begins with it.
- */
 function serve(...sessionAnswers: unknown[]) {
   let at = 0;
   const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
@@ -121,11 +99,6 @@ afterEach(() => {
 
 describe('a session the server already holds', () => {
   it('is proved without asking the wallet for anything', async () => {
-    /*
-      The reason the check comes before the signature. A wallet prompt on every reload is a prompt
-      people learn to approve without reading, and this application asks for exactly one signature
-      that matters.
-    */
     currentWallet = WALLET;
     currentAccount = A;
     serve({ checked: true, reader: A.address });
@@ -155,16 +128,10 @@ describe('a session the server does not hold', () => {
 
     await waitFor(() => expect(screen.getByTestId('proof').textContent).toBe('proved'));
     expect(signCalls).toBeGreaterThan(0);
-    // Entitlement is resolved on the server, so the proof only takes effect on the next render.
-    // Without this the reader sits looking at their own paid posts, locked.
     expect(refresh).toHaveBeenCalled();
   });
 
   it('records a refused signature instead of swallowing it', async () => {
-    /*
-      This is the whole defect. The old code was `catch {}` inside an effect: a reader who declined
-      got no signal at all, and there was no control anywhere that would ask again.
-    */
     currentWallet = WALLET;
     currentAccount = A;
     signPersonalMessage = vi.fn(async () => {
@@ -177,8 +144,6 @@ describe('a session the server does not hold', () => {
   });
 
   it('does not re-prompt a reader who refused', async () => {
-    // A refusal is a decision. Asking again on its own is how a wallet prompt becomes something
-    // people dismiss without reading, which is the opposite of what this signature is for.
     currentWallet = WALLET;
     currentAccount = A;
     signPersonalMessage = vi.fn(async () => {
@@ -194,8 +159,6 @@ describe('a session the server does not hold', () => {
   });
 
   it('asks again when the reader presses confirm', async () => {
-    // The recovery path that did not exist. Pressing it is the reader deciding, which is the only
-    // thing that should re-open a wallet prompt after a refusal.
     currentWallet = WALLET;
     currentAccount = A;
     let fail = true;
@@ -215,10 +178,6 @@ describe('a session the server does not hold', () => {
 
 describe('an unreadable session is not an absent one', () => {
   it('does not raise a wallet prompt when the server could not look', async () => {
-    /*
-      `checked: false` means the server failed to read its own store. Treating that as "you have no
-      session" would ask for a signature to replace a session that is probably intact.
-    */
     currentWallet = WALLET;
     currentAccount = A;
     serve({ checked: false });
@@ -231,16 +190,6 @@ describe('an unreadable session is not an absent one', () => {
 
 describe('switching address', () => {
   it('proves the new address rather than carrying the old one’s proof across', async () => {
-    /*
-      Switching account inside the extension changes who is connected while the server's cookie
-      still names the address before it. Carrying `proved` across is how a reader ends up on
-      another of their own accounts being told the posts they paid for are locked, with the chrome
-      insisting they are signed in.
-
-      What is asserted is the signature, not the label: the state passes through `unknown` too
-      quickly to catch, and "it asked the wallet again" is the thing that actually distinguishes a
-      fresh proof from a stale one being reused.
-    */
     currentWallet = WALLET;
     currentAccount = A;
     serve({ checked: true, reader: A.address });

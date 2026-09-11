@@ -1,54 +1,19 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The screen over what an agent brings to the onboarding door, and the three doors that run it.
-
-  What is being proved here is one property: a field the register stores and a wallet displays
-  cannot carry a character that makes the display disagree with the bytes. The sharp case is
-  CVE-2021-42574 — a bidirectional override reorders the glyphs in a signing prompt, so the operator
-  reads one sentence and signs another, and both the reader and the verifier are behaving correctly.
-
-  The second half of the file is the half that matters more over time: the characters that are
-  deliberately PERMITTED. A screen with false positives is a defect rather than extra safety, and
-  U+200C and U+200D are load-bearing in Persian, in several Indic scripts and in every multi-person
-  emoji sequence. Those tests exist so that a later tightening of the ranges has to argue with a red
-  suite rather than with a comment.
-
-  # Every codepoint here is built by number, and that is not a style choice
-
-  `cp()` below exists because this file's whole subject is characters that are invisible or that
-  reorder their neighbours. Written literally, they would make this file's own source display
-  differently from what it says — the attack, committed into the test for it, where the next reader
-  cannot see it either. This was not hypothetical: the first draft of this file was written with
-  literal characters, and a scan of it found twenty of them sitting in the source. A number cannot
-  do that, greps as itself, and cannot be pasted wrongly without changing.
-
-  Mutations predicted: widen the invisible band to 0x200b..0x200f → "a zero-width joiner is
-  permitted" and "a zero-width non-joiner is permitted" red; drop the bidi bands → "a right-to-left
-  override in purpose is refused" red; drop the C1 band → "a C1 control in model is refused" red;
-  drop 0x2028..0x2029 → "a Unicode line separator is refused" red; move the screen after the
-  signature checks in validateDeclaration → "the screen runs before the signature is looked at" red;
-  index by UTF-16 code unit instead of by codepoint → "the position counts characters, not code
-  units" red; remove the screen call from validateSeeking or validateOffer → the door tests red.
-*/
 import { describe, expect, it } from 'vitest';
 import { screenAgentText } from '@/lib/agent-screen';
 import { validateDeclaration } from '@/lib/agents';
 import { validateOffer, validateSeeking } from '@/lib/agent-seeking';
 
-/** One character, by number, so nothing invisible is ever written into this file. */
 const cp = (point: number): string => String.fromCodePoint(point);
 
-/** The override at the centre of CVE-2021-42574. */
 const RLO = cp(0x202e);
-/** The two the screen must never refuse, named so the permitted tests read as prose. */
 const ZWNJ = cp(0x200c);
 const ZWJ = cp(0x200d);
 
 const AGENT = `0x${'a1'.repeat(32)}`;
 const OPERATOR = `0x${'b2'.repeat(32)}`;
 
-/** A declaration that is correct in every respect, so a test can spoil exactly one field. */
 function declaration(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     address: AGENT,
@@ -67,12 +32,6 @@ describe('the screen itself', () => {
     expect(screenAgentText('purpose', 'post a daily summary of the protocol')).toBeNull();
   });
 
-  /*
-    Each refused class, one representative each, named by the codepoint a Unicode table is indexed
-    by. The assertion is on the returned sentence rather than merely on non-null, because the whole
-    argument for returning a sentence is that the caller cannot SEE the character — a refusal that
-    did not name it would send an honest caller to the wrong field.
-  */
   const refused: readonly (readonly [string, number, string])[] = [
     ['a NUL', 0x0000, 'U+0000'],
     ['a tab', 0x0009, 'U+0009'],
@@ -112,14 +71,6 @@ describe('the screen itself', () => {
     expect(screenAgentText('model', `a${RLO}b`)).toContain('model');
   });
 
-  /*
-    The position is counted in characters a person would count, not in UTF-16 code units.
-
-    An emoji is two code units and one character. With naive indexing the override below is reported
-    at 3 rather than at 2, and a caller who counts along their own string to find it lands one place
-    past it — on a string whose offending character is invisible, that is the difference between
-    finding it and concluding the error is wrong.
-  */
   it('the position counts characters, not code units', () => {
     expect(screenAgentText('purpose', `${cp(0x1f642)}${RLO}x`)).toContain('at character 2');
   });
@@ -130,10 +81,6 @@ describe('the screen itself', () => {
 });
 
 describe('what is deliberately permitted', () => {
-  /*
-    These are the judgement in the whole file, and they are the reason the invisible band is written
-    as two ranges around 0x200c..0x200d rather than as one range across them.
-  */
   it('a zero-width non-joiner is permitted — Persian needs it to spell', () => {
     expect(screenAgentText('purpose', `mi${ZWNJ}khahad`)).toBeNull();
   });
@@ -143,12 +90,6 @@ describe('what is deliberately permitted', () => {
     expect(screenAgentText('purpose', `a family: ${family}`)).toBeNull();
   });
 
-  /*
-    Right-to-left script itself, spelled by codepoint: Arabic "ana wakil" and Hebrew "ani sokhen".
-    The bidirectional algorithm orders these from the characters themselves, so they need none of
-    the explicit controls this screen refuses — which is why refusing those controls costs no
-    language anything it needs to say.
-  */
   it('right-to-left script itself is untouched — it needs no override', () => {
     const arabic = [0x0623, 0x0646, 0x0627, 0x0020, 0x0648, 0x0643, 0x064a, 0x0644]
       .map(cp)
@@ -170,14 +111,6 @@ describe('the declaration door', () => {
     expect(validateDeclaration(declaration()).ok).toBe(true);
   });
 
-  /*
-    The attack, made concrete rather than described.
-
-    The operator is shown `purpose: {purpose}` in a wallet dialog and signs the bytes underneath it.
-    With an override in the field, the glyphs after it render in reverse, so the sentence the
-    operator reads is not the sentence stored against their signature. The register then publishes
-    the reordered line to everybody else.
-  */
   it('a right-to-left override in purpose is refused', () => {
     const result = validateDeclaration(
       declaration({ purpose: `read only${RLO} sdrocer lla etirw dna` }),
@@ -195,14 +128,6 @@ describe('the declaration door', () => {
     expect(result.why).toContain('U+202E');
   });
 
-  /*
-    The door-disagreement this item was written to close.
-
-    `validateSeeking` has refused the whole C0 range since it was written. This function refused only
-    CR and LF, so a tab or an ESC could be filed through the door that writes the PERMANENT row and
-    not through the one that writes a listing that expires in a week. The weaker check was on the
-    stronger door.
-  */
   it('a tab in purpose is refused — the permanent door is no longer the weaker one', () => {
     const result = validateDeclaration(declaration({ purpose: `post${cp(0x09)}daily` }));
     expect(result.ok).toBe(false);
@@ -238,12 +163,6 @@ describe('the declaration door', () => {
     expect(result.why).toContain('U+200B');
   });
 
-  /*
-    The case the newline refusal was written for, kept because its argument is the sharpest one in
-    the file: `model: "a\npurpose: b"` with an empty purpose signs the same BYTES as `model: "a"`
-    with `purpose: "b"`. Both verify. Without this the pair filed against two good signatures can be
-    a different pair from the one that was signed.
-  */
   it('the statement-splitting newline is still refused', () => {
     const result = validateDeclaration(declaration({ model: `a${cp(0x0a)}purpose: b` }));
     expect(result.ok).toBe(false);
@@ -251,12 +170,6 @@ describe('the declaration door', () => {
     expect(result.why).toContain('U+000A');
   });
 
-  /*
-    Ordering, and it is not cosmetic: a caller learns the shape of what is wrong without spending a
-    signature to find out. With the screen moved below the signature checks, the declaration here
-    would be refused for the missing signature, and the caller would fix that, sign, and be refused
-    again for the character they still cannot see.
-  */
   it('the screen runs before the signature is looked at', () => {
     const result = validateDeclaration(
       declaration({ purpose: `a${RLO}b`, agentSignature: '', operatorSignature: '' }),
@@ -290,12 +203,6 @@ describe('the seeking door', () => {
     expect(validateSeeking(listing()).ok).toBe(true);
   });
 
-  /*
-    `words` is the field a stranger reads while deciding whether to answer for a machine they have
-    never met. It is the longest free-text field on the platform at 600 characters and it is an
-    advertisement aimed at a human, which makes it the most valuable place on the platform to put a
-    sentence that displays differently from the one that was signed.
-  */
   it('a right-to-left override in words is refused', () => {
     const result = validateSeeking(listing({ words: `I am honest${RLO} tsenohsid ma I` }));
     expect(result.ok).toBe(false);
@@ -333,11 +240,6 @@ describe('the offer door', () => {
     expect(validateOffer(offer()).ok).toBe(true);
   });
 
-  /*
-    The offer carries the model and purpose the OPERATOR signed. It is the half that becomes the
-    stored row when the agent answers it, so an override here reaches the register by the same route
-    as one at the declaration door — through a different function that had the same gap.
-  */
   it('a right-to-left override in the offer purpose is refused', () => {
     const result = validateOffer(offer({ purpose: `read only${RLO} etirw` }));
     expect(result.ok).toBe(false);

@@ -21,12 +21,6 @@ export async function POST(request: Request) {
     );
   }
 
-  /*
-    The coin type comes from the vault, not from the request. `tip<T>` is generic, so this argument
-    chooses which instantiation executes — taking it from the body let a caller name a coin the
-    vault does not hold. There is nothing to fall back to: a guessed type parameter builds a
-    transaction against a vault that does not exist.
-  */
   const profile = await findProfileByVault(b.vaultId);
   if (profile?.coinType == null || profile.coinType === '') {
     return NextResponse.json(

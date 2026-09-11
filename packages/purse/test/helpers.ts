@@ -1,15 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Test fixtures. Every key here is generated in this process and thrown away with the temp
- * directory; nothing reads `~/.sui`, nothing reads the pile, and nothing touches the network.
- *
- * The simulation responses are in the exact shape `@mysten/sui` 2.27.1's gRPC transport produces —
- * the same shape `packages/signer/test/helpers.ts` recorded from mainnet on 2026-08-31, with the
- * commands and inputs changed to the ones a `creator::set_content_price` call actually has. The
- * padded coin type, the signed decimal amount string, the two-level object input enum and the
- * digest living on `effects` rather than on the transaction are all kept, because a fixture that
- * "looks right" makes the translation assert against a fiction.
- */
 
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -36,7 +25,6 @@ export function throwawayKeypair(): Ed25519Keypair {
   return Ed25519Keypair.generate();
 }
 
-/** Wrap a raw keypair as one of the signer package's `Signer`s, without a secret string. */
 export function signerFor(keypair: Ed25519Keypair): Signer {
   return {
     address: keypair.toSuiAddress(),
@@ -61,7 +49,6 @@ export const CHAIN: ChainConfig = {
   registryId: `0x${'4'.repeat(64)}`,
 };
 
-/** A policy that permits exactly the `price`/`post` intent below, and nothing else. */
 export function policyFor(agentAddress: string, overrides: Partial<PolicyDoc> = {}): PolicyDoc {
   return {
     version: 1,
@@ -102,21 +89,12 @@ export function postIntentFor(): Intent {
 }
 
 export interface ResponseOverrides {
-  /** The agent's own SUI balance change, signed decimal. Gas by default. */
   readonly agentAmount?: string;
-  /** Append a TransferObjects command to a stranger. */
   readonly transferToStranger?: boolean;
   readonly gasBudget?: string;
   readonly sender?: string;
 }
 
-/**
- * A simulation response for a `creator::set_content_price` transaction.
- *
- * Inputs: the vault as a shared object (two-level enum, per FINDING 4 in `evidence.ts`), the cap as
- * an `ImmOrOwnedObject`, and two pure inputs — the content key and the price. Commands: the one
- * move call. The digest is on `effects`, per FINDING 3.
- */
 export function setPriceResponse(agentAddress: string, overrides: ResponseOverrides = {}) {
   const addressBytes = Buffer.from(agentAddress.slice(2), 'hex');
   const strangerBytes = Buffer.from(STRANGER.slice(2), 'hex');
@@ -202,12 +180,10 @@ export function setPriceResponse(agentAddress: string, overrides: ResponseOverri
   };
 }
 
-/** A client that answers the SDK gate with whatever response the test supplies. */
 export function stubClient(response: unknown): SuiGrpcClient {
   return { simulateTransaction: async () => response } as unknown as SuiGrpcClient;
 }
 
-/** A simulation port that answers with a recorded response, over the real reader, with no network. */
 export function stubPort(response: unknown, sender: string): SimulationPort {
   return {
     observe: async ({ transactionBytes }) => {
@@ -218,15 +194,6 @@ export function stubPort(response: unknown, sender: string): SimulationPort {
   };
 }
 
-/* ------------------------------------------------------- the LedgerCap arm, for the A3 fixtures */
-
-/**
- * The unpublished soul package, and the four objects `soul::settle_epoch` takes.
- *
- * These are fixture ids, not addresses: the soul package has no `Published.toml` and no object id
- * anywhere in the estate, which is exactly why `policy/heron-ledger.json` names its package as a
- * substitution the deploy fills. The Clock is `0x6` because that one really is fixed.
- */
 export const SOUL_PACKAGE = `0x${'0'.repeat(62)}5e`;
 export const SETTLE_EPOCH = `${SOUL_PACKAGE}::soul::settle_epoch`;
 export const RECORD_SPEND = `${SOUL_PACKAGE}::soul::record_spend`;
@@ -251,14 +218,6 @@ export function settleEpochIntentFor(
   };
 }
 
-/**
- * A simulation response for a `soul::settle_epoch` transaction.
- *
- * The same recorded shape as {@link setPriceResponse} — two-level object input enum, signed decimal
- * amount, digest on `effects` — with the inputs and the one command that `settle_epoch` actually
- * has. It exists so a content policy can be shown refusing a **well-formed** settlement rather than
- * a malformed one; a fixture that was rejected by the schema would prove nothing about the policy.
- */
 export function settleEpochResponse(agentAddress: string, overrides: ResponseOverrides = {}) {
   return {
     $kind: 'Transaction',

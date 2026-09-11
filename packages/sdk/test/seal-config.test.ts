@@ -1,18 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Seal deployment configuration.
- *
- * # Why every one of these is a failure test
- *
- * The cost of a wrong value here is asymmetric in a way that is worth stating. A missing key server
- * or a threshold nobody meant produces content encrypted to a committee that cannot or will not
- * reconstruct the key — and by the time anybody notices, the ciphertext is on Walrus, the plaintext
- * is gone, and there is no recovery. That is unlike the rest of this SDK, where a bad value
- * produces a failed transaction and a retry.
- *
- * So the loader has no defaults and no lenience, and this suite exists to prove the absence rather
- * than to exercise the happy path.
- */
 
 import { describe, expect, it } from 'vitest';
 import { loadSealConfig, SEAL_ENV } from '../src/index.js';
@@ -57,8 +43,6 @@ describe('loading the key server committee', () => {
   });
 
   it('leaves aggregatorUrl absent rather than empty for an independent server', () => {
-    // The Seal SDK distinguishes committee-mode servers from independent ones by whether this is
-    // set. An empty string is set.
     const config = loadSealConfig(env({ [SEAL_ENV.keyServers]: `${SERVER_A}||`, [SEAL_ENV.threshold]: '1' }));
     expect(config.ok).toBe(true);
     if (!config.ok) return;
@@ -91,8 +75,6 @@ describe('an unset or malformed value fails at load, naming the variable', () =>
   });
 
   it('refuses an object id that is not a full 32-byte id', () => {
-    // `0x1234` resolves to nothing at runtime and surfaces as an opaque "object does not exist"
-    // a long way from the typo.
     const config = loadSealConfig(env({ [SEAL_ENV.keyServers]: '0x1234' }));
     expect(config.ok).toBe(false);
     if (config.ok) return;
@@ -100,12 +82,6 @@ describe('an unset or malformed value fails at load, naming the variable', () =>
   });
 
   it('refuses the whole list when one entry is malformed, rather than dropping that entry', () => {
-    /*
-      The important half of this suite.
-
-      A dropped key server changes the committee content is encrypted to and still appears to work.
-      Refusing the list makes the typo visible while it is still only a typo.
-    */
     const config = loadSealConfig(env({ [SEAL_ENV.keyServers]: `${SERVER_A},oops,${SERVER_B}` }));
     expect(config.ok).toBe(false);
     if (config.ok) return;
@@ -113,8 +89,6 @@ describe('an unset or malformed value fails at load, naming the variable', () =>
   });
 
   it('refuses a duplicated key server', () => {
-    // The Seal SDK throws InvalidClientOptionsError on duplicates, so collapsing them here would
-    // turn a configuration mistake into a runtime crash far from the variable.
     const config = loadSealConfig(env({ [SEAL_ENV.keyServers]: `${SERVER_A},${SERVER_A}` }));
     expect(config.ok).toBe(false);
     if (config.ok) return;
@@ -134,7 +108,6 @@ describe('an unset or malformed value fails at load, naming the variable', () =>
     const config = loadSealConfig(
       env({ [SEAL_ENV.keyServers]: `${SERVER_A}|${weight}`, [SEAL_ENV.threshold]: '1' }),
     );
-    // An empty weight is the one that is allowed — `0x..|` means "no weight given", which is one.
     if (weight === '') {
       expect(config.ok).toBe(true);
       return;
@@ -148,13 +121,6 @@ describe('an unset or malformed value fails at load, naming the variable', () =>
   });
 
   it('refuses a threshold no committee could ever meet', () => {
-    /*
-      Checked against total weight, not entry count.
-
-      `SealClient.encrypt` would refuse this too, but only at the first upload — by which point the
-      operator has already told creators their media is protected. Failing at load moves that
-      discovery to deployment.
-    */
     const config = loadSealConfig(
       env({ [SEAL_ENV.keyServers]: `${SERVER_A},${SERVER_B}`, [SEAL_ENV.threshold]: '3' }),
     );
@@ -188,10 +154,6 @@ describe('an unset or malformed value fails at load, naming the variable', () =>
 });
 
 describe('credentials for a permissioned committee', () => {
-  /*
-    There are no open key servers on Sui mainnet. Every provider requires enrolment and issues an
-    API key, so a mainnet deployment that cannot express one cannot use Seal at all.
-  */
   it('attaches the credential to every configured server', () => {
     const config = loadSealConfig(
       env({
@@ -208,8 +170,6 @@ describe('credentials for a permissioned committee', () => {
   });
 
   it('leaves both absent for open servers, rather than setting them empty', () => {
-    // The Seal SDK refuses a config where one is present and the other is not, so "" is not a
-    // neutral value.
     const config = loadSealConfig(env({}));
     expect(config.ok).toBe(true);
     if (!config.ok) return;
@@ -232,12 +192,6 @@ describe('credentials for a permissioned committee', () => {
   });
 
   it('never puts the credential in a failure message', () => {
-    /*
-      The one property here that is about safety rather than correctness.
-
-      A configuration error that quotes the value it read is how a credential reaches a log
-      aggregator, and configuration errors are exactly the lines people paste into chat.
-    */
     const secret = 'super-secret-credential-value';
     const config = loadSealConfig(env({ [SEAL_ENV.apiKey]: secret }));
     expect(config.ok).toBe(false);

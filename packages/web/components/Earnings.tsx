@@ -1,30 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Creator earnings, and withdrawing them.
- *
- * # Three numbers, kept apart
- *
- * Gross volume is what buyers paid. Platform fees are what ProjectX took. Earnings is what the
- * contract will actually pay out now. A single "total" would blur all three, and the one a creator
- * needs before pressing a button is the third. They are shown together so the fee is visible rather
- * than inferred — a platform that hides its cut behind a net figure is choosing not to be checked.
- *
- * # Nothing is offered that cannot be done
- *
- * The withdraw control exists only when the chain read succeeded, the balance is above zero, and
- * this address holds the `CreatorCap` the contract requires. A failed read shows "not measured" and
- * no button: a creator told their balance is zero because a node was unreachable would reasonably
- * conclude nobody had paid them.
- *
- * # And nothing signs before it simulates
- *
- * Build, simulate, quote the gas, then offer to sign — the same gate as every payment in this
- * product. "It is your own money" is not a reason to skip it: a withdrawal quoted against a stale
- * balance aborts at the creator's expense.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -50,20 +26,8 @@ type Load =
   /** The chain could not be read. Not a zero balance, and no button. */
   | { state: 'unmeasured'; detail: string };
 
-/** USDC and every coin this product prices in. Read from metadata before ever assuming otherwise. */
-/**
- * Formatted with the vault's own decimals, never a constant.
- *
- * This read `USDC_DECIMALS` for every vault regardless of what it was denominated in, so a
- * SUI-denominated vault showed its earnings a thousand times too large. The figure was plausible,
- * which is why nobody caught it by looking.
- */
 const units = (raw: string, decimals: number) => formatUnits(BigInt(raw), decimals);
 
-/*
-  Was a private copy whose sign handling compared the string `mist` against `'0'` lexicographically,
-  so it stripped the minus and rendered a negative balance as positive. The shared one keeps it.
-*/
 const sui = formatSui;
 
 export function Earnings() {
@@ -94,7 +58,6 @@ export function Earnings() {
     if (signer !== null) void refresh(signer.address);
   }, [signer, refresh]);
 
-
   async function simulate(vault: VaultEarnings) {
     if (signer === null || vault.capId === null) return;
     setBusy(true);
@@ -102,7 +65,6 @@ export function Earnings() {
     setQuote(null);
     setDigest(null);
     try {
-      // Blank means "all of it", which is the commonest intent and must work to the last unit.
       const typed = (amounts[vault.vaultId] ?? '').trim();
       let amount = vault.earnings;
       if (typed !== '') {
@@ -111,17 +73,10 @@ export function Earnings() {
           return;
         }
         const [whole = '0', frac = ''] = typed.split('.');
-        /*
-         * The vault's decimals, not a constant. This path builds the amount that goes into the
-         * transaction, so the wrong scale here does not merely display wrongly — it claims the
-         * wrong sum, and on a nine-decimal coin parsed as six that is a factor of a thousand.
-         */
         if (frac.length > vault.decimals) {
           setError(`This coin has ${vault.decimals} decimal places; ${typed} has ${frac.length}`);
           return;
         }
-        // String arithmetic, never parseFloat × 1e6 — 1.001 becomes 1000999.9999999999 that way, and
-        // an exact-amount claim built from it either aborts or leaves dust behind forever.
         amount = BigInt(whole + frac.padEnd(vault.decimals, '0')).toString();
       }
 
@@ -156,7 +111,6 @@ export function Earnings() {
       const r = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged. Nothing is rebuilt here.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       });
       const body = (await r.json()) as { digest?: string; error?: string };
@@ -164,8 +118,6 @@ export function Earnings() {
       else {
         setDigest(body.digest);
         setQuote(null);
-        // Re-read rather than subtracting locally. The balance after a withdrawal is a fact on
-        // chain, and computing it here would show a number nothing measured.
         await refresh(signer.address);
       }
     } catch (e) {

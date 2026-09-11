@@ -1,35 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The composer half of the creator studio.
- *
- * # A paid post is priced on chain before it is published, never after
- *
- * `unlock` reads the price from the vault and refuses content that has none, so a post stored as
- * paid whose key was never priced would show a buy button that aborts every time. The composer
- * therefore refuses to publish until the pricing transaction has landed — the publish button does
- * not exist before then, in the same way the checkout's confirm button does not exist before a
- * simulation passes.
- *
- * Authorship is not asserted here either. The publish route reads the vault's owner from chain and
- * refuses anyone else, so a forged form field buys nothing.
- *
- * # The target was declared and never read
- *
- * The page this was split out of carried `target` and `targetState` and nothing ever assigned to
- * either: there was no fetch. `target` was therefore `null` for every visitor, `canPublish` was
- * false for every visitor, and the publish button could not render at all — the studio could
- * compose a post and never file one. The three status notes were unreachable for the same reason.
- * The load is now performed, and every state it can end in is shown.
- *
- * # Which vault, when there are several
- *
- * A creator may hold more than one vault, so "the" vault is not something this page can assume. The
- * published ones are offered and the choice is explicit; an unpublished vault is not offered at
- * all, because posts hang off a profile handle and a vault without one has nowhere to file them.
- */
-
 import { accessStatement } from '@projectx-social/sdk';
 import { useEffect, useState } from 'react';
 import { formatUnits } from '@/lib/units';
@@ -42,7 +13,6 @@ interface Target { vaultId: string; coinType: string; handle: string; tiers: { i
 
 type Access = 'public' | 'subscribers' | 'paid';
 
-/** What the target load ended in. `loading` and `none` are different answers and look different. */
 type TargetState = 'idle' | 'loading' | 'none' | 'failed' | 'ready';
 
 type Stage =
@@ -53,13 +23,6 @@ type Stage =
   | { name: 'published'; id: string }
   | { name: 'failed'; message: string };
 
-/**
- * What happened to an attached image, kept separate from `Stage`.
- *
- * A post that published and whose image failed to store is **not** a failed post — the words are
- * live and readable. Folding the two together would either roll back a good publish or hide a lost
- * upload, and a creator needs to be told exactly which half went wrong.
- */
 type MediaState =
   | { name: 'none' }
   | { name: 'storing' }
@@ -67,37 +30,18 @@ type MediaState =
   | { name: 'stored'; blobId: string; endEpoch: number }
   | { name: 'failed'; message: string };
 
-/**
- * SHA-256 as lower-case hex, from the browser's own crypto.
- *
- * Must agree byte for byte with `contentDigest` on the server, including the length prefixes —
- * those exist so that moving text between the preview and the body cannot produce the same digest.
- */
 async function sha256Hex(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * The same digest, over raw bytes rather than text.
- *
- * Separate from `sha256Hex` deliberately: putting a file through `TextEncoder` mangles every byte
- * above 0x7F, so the hash would never match the one the server computes over the same file, and the
- * signature would be refused with nothing on screen explaining why.
- */
 async function sha256HexBytes(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Filters the picker only. The real check is a magic-number sniff of the bytes, server-side. */
 const ACCEPTED_IMAGES = 'image/png,image/jpeg,image/gif,image/webp';
 
-/**
- * Decimal string → smallest units, by string manipulation, at the VAULT's decimals. No float
- * touches a price, and no constant decides the scale: a SUI vault has nine, USDC six, and the
- * tier form was fixed for exactly this while this file kept assuming six.
- */
 function toMinor(input: string, decimals: number): bigint | null {
   const t = input.trim();
   if (!new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`).test(t)) return null;
@@ -105,7 +49,6 @@ function toMinor(input: string, decimals: number): bigint | null {
   return BigInt(whole + frac.padEnd(decimals, '0'));
 }
 
-/** The shape `/api/creator` answers with, narrowed to what publishing needs. */
 interface CreatorBody {
   stage?: 'no-account' | 'no-vault' | 'ready';
   vaults?: { vaultId: string; coinType: string; handle: string | null; tiers?: { index: number; name: string; active: boolean }[]; decimals?: number; symbol?: string }[];
@@ -120,61 +63,22 @@ export function StudioComposer() {
   const [preview, setPreview] = useState('');
   const [text, setText] = useState('');
   const [access, setAccess] = useState<Access>('public');
-  /** Subscriber posts: the tier index the body is sealed to. 0 = every subscriber. */
   const [tier, setTier] = useState(0);
   const [contentKey, setContentKey] = useState('');
   const [price, setPrice] = useState('0.10');
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
-  /** Chosen before publishing, attached after — a post must exist for media to belong to. */
   const [image, setImage] = useState<File | null>(null);
   const [media, setMedia] = useState<MediaState>({ name: 'none' });
-  /**
-   * What the vault already charges for the key being typed.
-   *
-   * Four states, and the fourth is the reason this is not a boolean. `unknown` is "not asked yet",
-   * `checking` is in flight, `{ price }` is a measured price, `null` is a measured absence, and
-   * `unreadable` is a chain we could not reach. The last two look identical to a boolean and mean
-   * opposite things: absence means price it, unreadable means conclude nothing.
-   */
   const [keyPrice, setKeyPrice] = useState<
     { name: 'unknown' } | { name: 'checking' } | { name: 'known'; price: bigint | null } | { name: 'unreadable' }
   >({ name: 'unknown' });
-  /**
-   * The same four states, for the machine edition of the key being typed.
-   *
-   * Held separately rather than as a field on `keyPrice`, because the two reads can end
-   * differently — the human key is priced and the machine key's read failed — and a single state
-   * would have to pick one of those to report.
-   */
   const [machineKeyPrice, setMachineKeyPrice] = useState<
     { name: 'unknown' } | { name: 'checking' } | { name: 'known'; price: bigint | null } | { name: 'unreadable' }
   >({ name: 'unknown' });
-  /** What a machine buyer pays. Empty means the creator has not offered a machine edition. */
   const [machinePrice, setMachinePrice] = useState('');
-  /**
-   * Whether the machine edition of the key being typed can be DELIVERED, from `content-price`.
-   *
-   * `absent` is a post under this key that was sealed before machine editions were (migration 034):
-   * its plaintext is gone, so no machine body can ever exist for it and pricing it would sell an
-   * `Unlock` for nothing. The price field is withheld and the reason shown. `unknown` covers a read
-   * that has not happened or failed — never rendered as "can be sold".
-   */
   const [machineBody, setMachineBody] = useState<'unknown' | 'no-post' | 'sealed' | 'absent'>('unknown');
-  /**
-   * The machine edition's pricing transaction, kept out of `stage` deliberately.
-   *
-   * `needsPricing` below reads `stage.name !== 'priced'` to decide whether a paid post may be
-   * published at all. Reusing `stage` for the machine transaction would mean that pricing the
-   * machine edition *first* marks the post publishable while its human key still has no price on
-   * the vault — which puts a buy button on the feed that aborts with `EContentNotForSale` every
-   * time, the exact failure this composer was built to prevent.
-   */
   const [machineStage, setMachineStage] = useState<Stage>({ name: 'idle' });
 
-  /*
-    The load that was missing. A failure is kept distinct from an empty result: telling a creator
-    they have no vault because the chain was unreachable sends them to open a second one.
-  */
   useEffect(() => {
     const address = signer?.address;
     if (address === undefined) {
@@ -194,8 +98,6 @@ export function StudioComposer() {
       })
       .then((body) => {
         if (cancelled) return;
-        // Only a published vault can take a post: content is filed under the profile handle, and a
-        // vault without one has no page for it to appear on.
         const publishable = (body.vaults ?? []).flatMap((vault) =>
           vault.handle === null
             ? []
@@ -230,19 +132,9 @@ export function StudioComposer() {
     return body.digest;
   }
 
-  /*
-    Ask the chain what this key already costs, while it is being typed.
-  */
   useEffect(() => {
     const key = contentKey.trim();
     if (access !== 'paid' || target === null || key === '' || machineKeyProblem(key) !== null) {
-      /*
-        A key carrying the reserved marker is not asked about.
-
-        The route refuses it with a 400, and a 400 arriving in the `!response.ok` branch below would
-        be reported as `unreadable` — "we could not read the chain" — for a key the chain was never
-        asked about. The reservation is stated under the field instead, by `reservedKey`.
-      */
       setKeyPrice({ name: 'unknown' });
       setMachineKeyPrice({ name: 'unknown' });
       setMachineBody('unknown');
@@ -279,12 +171,6 @@ export function StudioComposer() {
             name: 'known',
             price: body.price == null ? null : BigInt(body.price),
           });
-          /*
-            `unreadable` unless the route said otherwise, and an absent `machine` block counts as
-            unreadable rather than unpriced. An older deployment of this endpoint answers without
-            one, and reading a missing field as "no price" would tell a creator their machine
-            edition is free at the moment we cannot see it.
-          */
           setMachineKeyPrice(
             body.machine?.state === 'priced' && body.machine.price != null
               ? { name: 'known', price: BigInt(body.machine.price) }
@@ -293,8 +179,6 @@ export function StudioComposer() {
                 : { name: 'unreadable' },
           );
         } catch (error) {
-          // An abort is this effect being replaced, not a failure. Reporting it as one would flash
-          // "could not read" on every keystroke.
           if (!(error instanceof Error) || error.name !== 'AbortError') {
             setKeyPrice({ name: 'unreadable' });
             setMachineKeyPrice({ name: 'unreadable' });
@@ -309,14 +193,6 @@ export function StudioComposer() {
     };
   }, [access, contentKey, target]);
 
-  /**
-   * Put one content key up for sale on the vault.
-   *
-   * Parameterised by key, amount and where to report, so that the human edition and the machine
-   * edition go through the *same* `set_content_price` call with the same simulation, the same
-   * signature path and the same failure handling. A second copy of this function for the machine
-   * edition is how the two would end up disagreeing about what a `no-creator-cap` answer means.
-   */
   async function priceKeyOnChain(input: {
     key: string;
     amount: string;
@@ -369,23 +245,6 @@ export function StudioComposer() {
     }
   }
 
-  /**
-   * Attach one image to a post that already exists.
-   *
-   * # Why this route had no caller until now
-   *
-   * `/api/studio/upload` was written, typed, tested and complete, and nothing in the interface ever
-   * called it — it was the last entry on the reachability guard's list. It also stored bytes to a
-   * per-instance serverless disk that vanished with the instance, so wiring it up earlier would
-   * have produced uploads that silently disappeared. Both halves are fixed now: the bytes go to
-   * Walrus, and this is the caller.
-   *
-   * # The signature covers the file, not just the intent
-   *
-   * The statement binds the post id **and a hash of the bytes**, so a captured signature cannot be
-   * replayed to attach a different image to the same post. It must match `statementFor` in
-   * lib/identity.ts exactly.
-   */
   async function attachMedia(postId: string, file: File) {
     if (signer === null) return;
     setMedia({ name: 'storing' });
@@ -405,8 +264,6 @@ export function StudioComposer() {
       form.set('signature', signature);
       form.set('timestampMs', String(timestampMs));
 
-      // No content-type header: the browser sets the multipart boundary, and naming it by hand
-      // produces a body the server cannot parse.
       const response = await fetch('/api/studio/upload', { method: 'POST', body: form });
       const body = (await response.json()) as {
         assetId?: string;
@@ -433,23 +290,8 @@ export function StudioComposer() {
     if (signer === null) return;
     setStage({ name: 'publishing' });
     try {
-      /*
-        Publishing is signed, with no gas and no transaction.
-
-        The route used to accept an `author` field and check it against the vault's owner from
-        chain — which authorises nothing, because a vault's owner is public and anyone could put it
-        in the body. The statement below must match `statementFor` in lib/identity.ts exactly, or
-        the signature will not verify.
-      */
       const timestampMs = Date.now();
       const contentSha256 = await sha256Hex(`${preview.length}:${preview}${text.length}:${text}`);
-      /*
-        Signed and sent must be the same values, so both come from here.
-
-        `signedKey` and `signedPrice` are what the body carries below. A post that is not paid
-        signs empty strings for both, matching what the server rebuilds — deriving them differently
-        on the two sides is how a statement stops verifying for reasons nobody can see.
-      */
       const signedKey = access === 'paid' ? contentKey.trim() : '';
       const signedPrice = access === 'paid' ? (effectivePrice?.toString() ?? '') : '';
       const statement =
@@ -482,18 +324,12 @@ export function StudioComposer() {
       }
       setStage({ name: 'published', id: body.post.id });
 
-      /*
-        Media is attached after the post exists, because the upload is signed against the post id.
-        Awaited rather than fired and forgotten: a creator who navigates away mid-store loses the
-        image with no record that it was ever chosen.
-      */
       if (image !== null) await attachMedia(body.post.id, image);
 
       setTitle('');
       setPreview('');
       setText('');
       setContentKey('');
-      // The machine edition belongs to the key that was just published under, not to the next post.
       setMachinePrice('');
       setMachineStage({ name: 'idle' });
       setImage(null);
@@ -502,31 +338,12 @@ export function StudioComposer() {
     }
   }
 
-  /*
-    What is stopping a publish, named rather than counted.
-
-    The button now always renders. Disabled, it says which field it is waiting for.
-  */
   const blockers = [
     title.trim() === '' ? 'a title' : null,
     preview.trim() === '' ? 'a preview' : null,
     text.trim() === '' ? 'a body' : null,
   ].filter((reason): reason is string => reason !== null);
 
-  /*
-    The price this post is actually sold at, in minor units.
-
-    Three sources, most-recently-true first: a price set in this session, then the price already on
-    the vault, then the form field. They genuinely differ — the field holds its default while the
-    key carries a price set weeks ago — and the contract charges whatever the table says. Sending
-    the form's number would advertise a price on the feed that the buy button does not honour.
-
-    No vault, no price. This used to read `target?.decimals ?? 6`, which turned a typed figure into
-    minor units at native USDC's scale for a coin nobody had read yet. It could not reach a buyer —
-    `canPublish` requires a target and the composer returns before rendering without one — but it is
-    the same literal the five shipped scale bugs were, wearing the shared formatter's clothes, and
-    it sat where the next person copies from. A missing vault is not a six-decimal vault.
-  */
   const onChainPrice = keyPrice.name === 'known' ? keyPrice.price : null;
   const effectivePrice =
     target === null
@@ -535,26 +352,8 @@ export function StudioComposer() {
         ? toMinor(price, target.decimals)
         : (onChainPrice ?? toMinor(price, target.decimals));
 
-  /*
-    A paid post is publishable only once its price is on chain. Anything else would ship a buy
-    button that aborts.
-  */
   const needsPricing = access === 'paid' && stage.name !== 'priced' && onChainPrice === null;
 
-  /*
-    The machine edition of the key being typed, and why the creator is shown it rather than asked
-    for it.
-
-    A second price for machine buyers needs no second post and no Move change: a paywall is keyed by
-    `content_key`, so a second key on the same vault is a second price, a second `Unlock` and a
-    second Seal identity over the same words. What it must never be is a key the creator invents,
-    because two hand-typed keys drift, and a machine edition whose key is one character off the one
-    the post was sealed under sells an `Unlock` that opens nothing. It is derived — see
-    `lib/machine-pricing.ts` for the rule and for why it cannot collide with a chosen key.
-
-    `reservedKey` is the other half of that: a creator who types the marker themselves is told, at
-    the field, before any transaction.
-  */
   const reservedKey = access === 'paid' && contentKey.trim() !== ''
     ? machineKeyProblem(contentKey)
     : null;
@@ -566,11 +365,6 @@ export function StudioComposer() {
   const canPublish =
     blockers.length === 0 && !needsPricing && signer !== null && target !== null;
 
-  /*
-    Signed out, the composer is withheld rather than shown disabled. A form that cannot submit
-    teaches nothing about why; the page above has already explained what publishing does, so what is
-    left to say here is that it needs to know who it would be publishing as.
-  */
   if (signer === null) {
     return (
       <div className="panel">
@@ -626,7 +420,6 @@ export function StudioComposer() {
             value={target.vaultId}
             onChange={(e) => {
               setSelected(e.target.value);
-              // A price signed against one vault means nothing on another.
               setStage({ name: 'idle' });
             }}
           >
@@ -711,8 +504,6 @@ export function StudioComposer() {
             </div>
           )}
           {media.name === 'failed' && (
-            // The post is live regardless. Saying so prevents a creator republishing the words to
-            // recover an image, which would leave two posts and still no image.
             <p className="unmeasured">
               The post published, but the image did not store: {media.message}
             </p>
@@ -727,7 +518,6 @@ export function StudioComposer() {
             value={access}
             onChange={(e) => {
               setAccess(e.target.value as Access);
-              // Changing access invalidates a price that was signed for a different shape.
               setStage({ name: 'idle' });
             }}
           >

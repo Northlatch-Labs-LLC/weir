@@ -1,23 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  `declaration` — one address's entry in the register, and the three answers it must keep apart.
-
-  This is the read a tether control turns on: `packages/mcp`'s `requireLiveTether` refuses to publish
-  or send unless this method reports a standing declaration. So the properties that matter are not
-  "it parses the happy case" but the ones a careless implementation collapses:
-
-    - a 404 is `ok(null)` — "not in the register", the answer for nearly every address — and is NOT
-      a failure;
-    - a failure is NOT `ok(null)`, because "we could not look" and "nobody has said" send a caller in
-      opposite directions;
-    - a WITHDRAWN declaration comes back with `revokedAtMs` set rather than being hidden, so the
-      caller is forced to read the field rather than inferring a tether from the row's existence;
-    - a malformed `revokedAtMs` reads as revoked, not as live.
-
-  Mutations predicted: map every failure to ok(null) → "a transport failure is not an empty answer"
-  red; drop the 404 branch → "an address nobody declared is null, not a failure" red; default a
-  missing revokedAtMs to null → "a revokedAtMs that is not a number reads as revoked" red.
-*/
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
 import { createAgent, MAINNET_RECORD } from '../src/index.js';
@@ -46,7 +27,6 @@ function keyless(answer: (url: string) => { status: number; body: unknown }) {
   return made.value;
 }
 
-/** What the route sends for a standing declaration. */
 const STANDING = {
   address: AGENT,
   operatorAddress: OPERATOR,
@@ -64,10 +44,6 @@ describe('declaration', () => {
       return { status: 200, body: { agent: STANDING } };
     });
     await agent.declaration({ address: AGENT });
-    /*
-      The list endpoint cannot answer this question — it filters revoked rows and caps its page —
-      so reading it here would be the defect wearing the shape of a fix.
-    */
     expect(asked).toBe(`https://weir.social/api/agents/${AGENT}`);
     expect(asked).not.toContain('?operator=');
   });
@@ -96,11 +72,6 @@ describe('declaration', () => {
   });
 
   it('a WITHDRAWN declaration is returned with revokedAtMs set, never hidden', async () => {
-    /*
-      The route deliberately answers 200 for a revoked row so a relationship that ended can be told
-      apart from one that never existed. A caller that reads the row's existence as a tether is
-      wrong, and it can only be wrong if this method passes the field through.
-    */
     const revokedAtMs = 1_788_500_000_000;
     const agent = keyless(() => ({ status: 200, body: { agent: { ...STANDING, revokedAtMs } } }));
     const r = await agent.declaration({ address: AGENT });
@@ -126,11 +97,6 @@ describe('declaration', () => {
   });
 
   it('a revokedAtMs that is not a number reads as revoked, never as live', async () => {
-    /*
-      The safe default, and the only field here that gets one. A renamed or dropped field would
-      otherwise turn every caller's tether check into a check that passes for everybody — a failure
-      that logs nothing and keeps answering "yes".
-    */
     const agent = keyless(() => ({ status: 200, body: { agent: { ...STANDING, revokedAtMs: 'yesterday' } } }));
     const r = await agent.declaration({ address: AGENT });
     expect(r.ok).toBe(true);

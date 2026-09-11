@@ -1,16 +1,5 @@
 #!/usr/bin/env -S npx tsx
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `verify-audit <path/to/audit.jsonl>` — walk the chain and report the first break.
- *
- * Exit 0 when it verifies, 1 when it does not, 2 when the file could not be read as a chain at all.
- * The three are kept apart because "the file is missing" and "line 412 was edited" call for
- * completely different next moves, and a single non-zero would send whoever is on call to the wrong
- * one.
- *
- * The first break is reported rather than a count, because everything before it still verifies and
- * that is where a reader has to start.
- */
 
 import { readAuditFile, verifyAuditLines } from '../src/audit-file.js';
 

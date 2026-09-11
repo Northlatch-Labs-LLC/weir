@@ -1,10 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * A second citizen runs the SAME purse, phase two, birth tool and renderer as Heron, told its name
- * by flag. These tests pin two things: that the flag does what a second citizen needs, and that
- * with no flag every default is Heron's, unchanged — the purse Heron runs under today must not
- * change behaviour because Wren exists.
- */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,14 +25,12 @@ describe('the credential name follows the agent', () => {
     const refused = refuseKeyInProcessSurface({ argv: [], env: { WREN_HOT_KEY: '/somewhere' }, credentialName: 'wren-hot' });
     expect(refused.ok).toBe(false);
     if (!refused.ok) expect(refused.refused.reason).toContain('WREN_HOT_KEY');
-    // And Heron's purse does not refuse Wren's name: the lists are per agent, not a union.
     expect(refuseKeyInProcessSurface({ argv: [], env: { WREN_HOT_KEY: '/somewhere' } }).ok).toBe(true);
   });
 
   it('loads the key from $CREDENTIALS_DIRECTORY/<agent>-hot', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'purse-agent-'));
     try {
-      // Not a real key: the loader must fail AFTER resolving the path, and the path is what is tested.
       await writeFile(join(dir, 'wren-hot'), 'not a key\n', { mode: 0o400 });
       const loaded = await loadHotKey({ credentialsDirectory: dir, credentialName: 'wren-hot', argv: [], env: {} });
       expect(loaded.ok).toBe(false);
@@ -98,15 +90,6 @@ describe('--agent and --profile-file on phase two', () => {
     expect(parseProfile(JSON.stringify({ name: 'Wren', bio: 'b'.repeat(281) })).ok).toBe(false);
     expect(parseProfile(JSON.stringify({ name: 'Wren\nnot', bio: 'x' })).ok).toBe(false);
   });
-  /*
-    Against a profile this package actually ships, not a synthetic one: a parser that only ever
-    sees its own test fixtures is a parser nobody has pointed at real data.
-
-    It used to read `../../wren/profile.json`. That reached across a package boundary into one
-    this repository's main line does not carry, so on main the assertion could not be measured at
-    all — and an unmeasurable gate is a failure, not a skip. Wren's own suite asserts her profile,
-    including the bio bound, where the file lives.
-  */
   it('accepts the profile this package ships as its default', () => {
     const parsed = parseProfile(JSON.stringify(DEFAULT_PROFILE));
     expect(parsed.ok).toBe(true);

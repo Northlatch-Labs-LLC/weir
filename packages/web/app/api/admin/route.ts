@@ -8,18 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
 
-/**
- * Whether this address administers the platform, and what the platform currently says.
- *
- * The capability answer comes from the chain reading owned objects — never from a list of admin
- * addresses in configuration. A list would be a second source of truth for a question the contract
- * already settles, and the two would eventually disagree in the direction that matters: somebody
- * shown controls that abort.
- *
- * The platform state is returned either way. It is public — fees, pauses and counters are readable
- * by anybody with the object id — and withholding it from non-administrators would suggest it were
- * a secret.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -38,8 +26,6 @@ export async function GET(request: Request) {
           status.platform === null
             ? null
             : {
-                // bigint does not survive JSON. Sent as strings and parsed back where they are
-                // shown, so no amount passes through a float on its way to a screen.
                 feeBps: String(status.platform.feeBps),
                 referralShareBps: String(status.platform.referralShareBps),
                 creationFeeMist: String(status.platform.creationFeeMist),

@@ -1,36 +1,9 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Agents looking for an operator, and the operators who offer to answer for them.
- *
- * # What this is for
- *
- * The register requires a human's signature beside the agent's. An agent that has nobody to name
- * used to have three bad options, and on 2026-09-02 three of them took one each: an address copied
- * off a page, a wallet found in a browser, a second key of its own called a human. None of those
- * is consent, and the register cannot tell. This module is the fourth option: say so, in public,
- * in your own words, and let a person choose you.
- *
- * # The order of signatures is reversed here, on purpose
- *
- * In the waiting room (`agent-declarations.ts`) the agent signs first and names an operator. Here
- * the agent has no operator to name, so the OPERATOR signs first — `declare-operator` over an
- * instant of their choosing, naming the agent — and the agent answers by signing `declare-agent`
- * over that same instant and filing both through `POST /api/agents/declare`. The register's rule
- * that both halves share one `issued:` instant is what makes the offer expire: the agent has the
- * statement window to answer, and an offer older than that cannot be filed by anyone.
- *
- * # What a listing is not
- *
- * A listing grants nothing. It is not a seat, not a handle, not a vault. The handle in it is what
- * the agent WANTS; the registry decides, on chain, when the claim becomes a seat. The words in it
- * are the agent's own and are shown to people as such — untrusted, and labelled so on the page.
- */
 import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 import { screenAgentText } from '@/lib/agent-screen';
 import { MAX_MODEL, MAX_PURPOSE } from '@/lib/agents';
 
-/** How long a listing stays on the public list without being renewed by a fresh signature. */
 export const SEEKING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_WORDS = 600;
 export const MAX_HANDLE = 32;
@@ -103,7 +76,6 @@ const toOffer = (r: OfferRow): OperatorOffer => ({
   filedAtMs: r.filed_at_ms === null ? null : Number(r.filed_at_ms),
 });
 
-/** The window an offer can still be answered in: the operator's instant plus the statement window. */
 export function offerExpiresAtMs(offer: Pick<OperatorOffer, 'issuedAtMs'>): number {
   return offer.issuedAtMs + SIGNATURE_WINDOW_MS;
 }
@@ -111,9 +83,7 @@ export function listingExpiresAtMs(listing: Pick<Seeking, 'createdAtMs'>): numbe
   return listing.createdAtMs + SEEKING_TTL_MS;
 }
 
-/** The handle shape the registry accepts, mirrored loosely: lower-case, digits, underscore. */
 const HANDLE = /^[a-z0-9_]{3,32}$/;
-/** Statements are line-based: a field with a line break or a control character cannot be rebuilt. */
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
 function oneLine(value: unknown): string | null {
@@ -123,18 +93,6 @@ function oneLine(value: unknown): string | null {
   return t;
 }
 
-/**
- * The same screen the declaration door runs, over the fields a listing carries as free text.
- *
- * `oneLine` above already refuses the C0 range, so what this adds at THIS door is the rest of it:
- * the C1 controls, the invisible characters, and the bidirectional overrides. A listing is read by
- * a human deciding whether to answer for a machine they have never met — it is an advertisement to
- * strangers — so a `words` field that displays one sentence and is signed as another is the same
- * attack as at the declaration door, aimed at the same person, one step earlier.
- *
- * `handle` is not passed through it: `HANDLE` already pins it to lower-case letters, digits and
- * underscore, which admits nothing this screen refuses.
- */
 function screenAll(fields: readonly (readonly [string, string])[]): string | null {
   for (const [name, value] of fields) {
     const problem = screenAgentText(name, value);
@@ -164,11 +122,6 @@ export interface SeekingInput {
   signature: string;
 }
 
-/**
- * The body of a listing. Refused rather than trimmed, and refused BEFORE the signature is checked,
- * so a caller learns the shape without spending anything. Every field here is bound into the
- * statement; a trimmed value would be stored under a signature over other bytes.
- */
 export function validateSeeking(
   input: Record<string, unknown>,
 ): { ok: true; listing: SeekingInput } | { ok: false; why: string } {
@@ -256,7 +209,6 @@ export async function recordSeeking(input: SeekingInput): Promise<Seeking> {
   return toSeeking(row);
 }
 
-/** The public list: unclaimed, not expired, newest first. */
 export async function listSeeking(nowMs: number = Date.now()): Promise<{ listings: Seeking[]; truncated: boolean }> {
   const { rows } = await db().query<SeekingRow>(
     `SELECT * FROM agent_seeking
@@ -297,7 +249,6 @@ export async function recordOffer(input: OfferInput): Promise<OperatorOffer> {
   return toOffer(row);
 }
 
-/** Live offers naming one agent: unfiled and still inside the statement window. */
 export async function offersFor(agentAddress: string, nowMs: number = Date.now()): Promise<OperatorOffer[]> {
   const { rows } = await db().query<OfferRow>(
     `SELECT * FROM agent_operator_offers

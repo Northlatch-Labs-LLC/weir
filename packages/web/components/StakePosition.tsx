@@ -1,28 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * A supporter's position in a vault: what they put in, what it has earned, and getting it back.
- *
- * # The withdraw button is what makes the no-loss guarantee real
- *
- * The contract's promise is that principal stays the depositor's and is redeemable in full at any
- * time; the creator earns only the yield it generates. That property is only as good as this
- * control, so the withdraw path is the one this component exists to get right.
- *
- * # Principal and yield are never added together
- *
- * They are different money with different owners. Principal is the supporter's and is redeemable
- * one for one; realised yield belongs to the creator, minus whatever share of it the creator has
- * chosen to hand back. A single "your balance" figure would blur the one guarantee worth making.
- *
- * # The rebate figure is a lower bound, and says so
- *
- * The contract accrues on interaction, so yield earned since the supporter last touched the vault
- * is not yet in `pending`. Presenting it as a total would overstate on a rising number, which is
- * the direction that eventually looks like a bug to the person reading it.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -71,8 +49,6 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
   useEffect(() => {
     if (signer === null) return;
     void refresh(signer.address);
-    // Withdrawing needs the SocialAccount object — the contract authenticates against it, so a
-    // supporter without one cannot withdraw and should be told before they try.
     void fetch(`/api/creator?owner=${encodeURIComponent(signer.address)}`)
       .then((r) => r.json())
       .then((b: { accountId?: string }) => setAccountId(b.accountId ?? null))
@@ -94,8 +70,6 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
         else {
           if (!/^\d+(\.\d{1,9})?$/.test(typed)) { setError('Enter an amount in SUI, for example 0.5'); return; }
           const [whole = '0', frac = ''] = typed.split('.');
-          // String arithmetic. A float here would be off by a unit on values people actually type,
-          // and an exact-amount withdrawal would either abort or strand dust forever.
           payload['amountMist'] = BigInt(whole + frac.padEnd(9, '0')).toString();
         }
       }
@@ -115,8 +89,6 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
     if (signer === null || quote === null) return;
     setBusy(true); setError(null);
     try {
-      // Whatever signed this — a browser extension or a zero-knowledge proof over a Google
-      // sign-in — the bytes submitted are the bytes simulated, unchanged.
       const signature = await signer.signTransaction(quote.bytes);
       const r = await fetch('/api/checkout/submit', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -127,7 +99,6 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
       setDigest(b.digest);
       setQuote(null);
       setAmount('');
-      // Re-read rather than subtracting locally: the balance after a withdrawal is a fact on chain.
       await refresh(signer.address);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

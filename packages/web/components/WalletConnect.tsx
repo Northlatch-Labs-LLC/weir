@@ -1,53 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * # What was wrong with the row of buttons
- *
- * The header listed a button per installed wallet. `protocolx.io` uses one control that opens a
- * window listing the wallets — as did `suins.protocolx.io` before it was retired. Somebody moving
- * between the properties met a different idea of connecting on this one, which is the sort of
- * difference that reads as this site being the broken one.
- *
- * # The bug the row of buttons was hiding
- *
- * `connectWallet` has two outcomes. A wallet authorising exactly one address binds it. A wallet
- * authorising several sets `accountChoice`, because picking on somebody's behalf is how an address
- * gets welded to a session nobody chose — and `SignIn` was the only component that rendered that
- * picker.
- *
- * So on the two routes carrying no sign-in panel anywhere on the page — the feed and `/explore` —
- * a wallet holding several addresses opened, was approved, and then nothing happened at all: the
- * picker had no host. A wallet holding one address bound immediately and looked fine. That is
- * exactly the reported shape — Slush failing where Phantom worked, on those two pages and nowhere
- * else.
- *
- * Putting the window in the header fixes that structurally rather than by adding a second copy of
- * the picker: the control that starts the flow now also finishes it, on every route.
- *
- * # Connecting is not signing in, and this window now says so
- *
- * A wallet sharing an address grants nothing. What grants anything is a signature over the
- * read-content statement, which mints a session the server can answer as. That signature was asked
- * for once, silently, from an effect that ended in `catch {}` — so a reader who declined it, or
- * whose wallet errored, was left connected and unproved with no control anywhere that would ask
- * again. Their own paid posts rendered locked and the only recovery was to guess that reloading
- * might help.
- *
- * So the window has three states rather than two: choose a wallet, choose an address, and confirm
- * the account. The third is reached whenever a reader is connected without a session, and the
- * trigger stays on screen saying `Confirm account` rather than disappearing the moment an address
- * arrives.
- *
- * # Why the window is still ours
- *
- * The connection itself is `@mysten/dapp-kit-core`'s — `SignerProvider` holds its kit. What is not
- * the kit's is the account choice above and zkLogin sitting beside a wallet as an equal way to sign,
- * and both of those appear in this window. The kit ships its own connect modal; taking it would mean
- * either two windows that disagree about what "signed in" means, or losing the half that is this
- * product's.
- */
-
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -58,12 +11,6 @@ export function WalletConnect({
   triggerClassName = 'btn account-connect',
   triggerLabel,
 }: {
-  /**
-   * The trigger's classes. The application frame wants the design's own button; the legacy header
-   * wants the one it already had. Only the trigger differs — the window, the wallet list and the
-   * address picker are the same code either way, which is the point of taking a class name rather
-   * than growing a second copy of this component.
-   */
   triggerClassName?: string | undefined;
   triggerLabel?: ReactNode;
 } = {}) {
@@ -84,7 +31,6 @@ export function WalletConnect({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  /** Connected, and the server does not have this address. The state that used to be invisible. */
   const unconfirmed = signer !== null && (proof === 'unproved' || proof === 'declined');
   const confirming = proof === 'checking';
 
@@ -94,24 +40,10 @@ export function WalletConnect({
     cancelAccountChoice();
   };
 
-  /*
-    Closes itself once there is a signer the server has accepted.
-
-    It used to close on `signer` alone, which is what made the missing confirmation invisible: the
-    window vanished at the moment the address arrived, and the fact that no session had been proved
-    had nowhere left to appear. Two exceptions, and both are states the reader is mid-way through:
-    an address choice pending, and an account not yet confirmed.
-  */
   useEffect(() => {
     if (signer !== null && accountChoice === null && proof === 'proved') setOpen(false);
   }, [signer, accountChoice, proof]);
 
-  /*
-    A wallet can hand back several addresses long after this window was dismissed — the reader
-    approves inside the extension, which takes as long as it takes. Opening on `accountChoice`
-    means the picker is never orphaned: it appears wherever the reader is, rather than being set on
-    state that nothing on the page is rendering.
-  */
   useEffect(() => {
     if (accountChoice !== null) setOpen(true);
   }, [accountChoice]);
@@ -175,13 +107,6 @@ export function WalletConnect({
           width={440}
         >
           {unconfirmed || confirming ? (
-            /*
-              The state that had no screen.
-
-              Connecting shares an address; it does not sign you in. The server decides what opens,
-              and it will not answer as somebody who has not signed for it — so a reader stuck here
-              saw their own paid posts locked with nothing to press. This is the thing to press.
-            */
             <>
               <p className="wc-note">
                 Your wallet is connected. One signature confirms the account is yours — it costs

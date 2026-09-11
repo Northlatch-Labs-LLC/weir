@@ -1,43 +1,6 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
-/**
- * A second price on the same post, for machines — proven against the deployed contract's own rules.
- *
- * # What these tests are actually asserting, and what they cannot
- *
- * They cannot ask a Seal key server for a key: the mainnet committee is permissioned, and a unit
- * suite that reaches the network fails for reasons unrelated to the code. So the key servers are
- * modelled, and the model is written to be *honest about the two things that decide the outcome*:
- *
- * 1. `entitlement::seal_approve_unlock` asserts `id == unlock_identity(unlock.vault,
- *    unlock.content_key)`. An `Unlock` therefore obtains exactly one identity's key and no other.
- *    {@link releaseKey} is that assert, transcribed.
- * 2. A Seal key is a deterministic function of the identity — that is what identity-based
- *    encryption means, and it is why `lib/seal.ts` can seal without ever holding a reader's
- *    signature. {@link releaseKey} models it as an HMAC over the identity bytes under a secret the
- *    test holds, which reproduces the only property the paywall depends on: **different identity,
- *    unrelated key.**
- *
- * The identities themselves are NOT modelled. They come from `@projectx-social/sdk`'s
- * `unlockIdentity`, which `packages/sdk/test/seal-identity.test.ts` and
- * `sui-contracts/tests/seal_tests.move` hold to the same byte vectors in both languages. And the
- * layout is re-derived by hand below, from `entitlement.move`, so that a change to either
- * implementation fails here too rather than quietly agreeing with itself.
- *
- * The AES layer is real: `node:crypto`, AES-256-GCM, the same construction `lib/blob-crypto.ts`
- * uses. A cross-edition open fails on GCM's authentication tag, which is a measurement, not a
- * model.
- *
- * # Zero Move changes, and the evidence for it
- *
- * Nothing in this suite needs a contract that does not exist today. `set_content_price` takes a
- * `vector<u8>` with no charset and no length ceiling, `content_prices` is a `Table` keyed by it,
- * and the live `@atlas` vault `0xa1f80da9…` carries two priced keys in one such table right now
- * (`sealed-on-walrus-001` at 10000, `mistakes-setting-up` at 250000 — read from mainnet, not
- * assumed). A machine edition is one more row of exactly that kind.
- */
-
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { unlockIdentity } from '@projectx-social/sdk';
@@ -51,10 +14,8 @@ import {
   sealBothEditions,
 } from '@/lib/machine-pricing';
 
-/** Synthetic, and shaped like a real vault id: 32 bytes of hex. */
 const VAULT = `0x${'a1'.repeat(32)}`;
 
-/** `entitlement.move`: `const SEAL_UNLOCK: u8 = 0;` */
 const SEAL_UNLOCK = 0x00;
 
 function hex(bytes: Uint8Array): string {
@@ -72,8 +33,6 @@ describe('the derivation rule', () => {
     const a = machineContentKey('sealed-on-walrus-001');
     const b = machineContentKey('  sealed-on-walrus-001  ');
     expect(a.ok && a.value).toBe('sealed-on-walrus-001#machine');
-    // Trimmed the same way the pricing routes trim, so the composer and the server derive one key
-    // rather than two that differ by a space nobody can see.
     expect(b.ok && b.value).toBe('sealed-on-walrus-001#machine');
   });
 
@@ -97,29 +56,17 @@ describe('the derivation rule', () => {
 });
 
 describe('why a machine key cannot collide with a creator-chosen key', () => {
-  /*
-    The collision, stated as the scenario it would be in production.
-
-    A creator prices `post-7` and its machine edition `post-7#machine`. A second post is then keyed
-    `post-7#machine` by hand. Both are one `Table` entry on one vault, so they are not two prices —
-    they are one, and one purchase opens two things that were sold separately. The `Unlock` objects
-    already minted cannot be withdrawn, so this is not a state anything can recover from.
-  */
   it('refuses the exact key that would collide with another post’s machine edition', () => {
     const machineOfPostSeven = machineContentKey('post-7');
     expect(machineOfPostSeven.ok).toBe(true);
     if (!machineOfPostSeven.ok) return;
 
-    // The collision candidate, offered as a HUMAN key. The door refuses it.
     const problem = machineKeyProblem(machineOfPostSeven.value);
     expect(problem).not.toBeNull();
     expect(problem).toContain(MACHINE_EDITION_MARKER);
   });
 
   it('refuses the marker anywhere in the key, not only at the end', () => {
-    // `a#machineb` would pass a suffix-only check, and then the set of keys carrying the marker
-    // would be larger than the set of derived keys — which is the invariant `isMachineContentKey`
-    // reports on.
     expect(machineKeyProblem('a#machineb')).not.toBeNull();
     expect(machineKeyProblem('#machine')).not.toBeNull();
     expect(machineKeyProblem('post-7')).toBeNull();
@@ -151,11 +98,8 @@ describe('why a machine key cannot collide with a creator-chosen key', () => {
       return reading.ok ? reading.value : '';
     });
 
-    // Injective: as many distinct machine keys as there are distinct human keys.
     expect(new Set(derived).size).toBe(new Set(accepted.map((k) => k.trim())).size);
 
-    // Disjoint: no machine key is a key the system would ever accept from a creator, so a machine
-    // edition can never be some other post's human edition.
     for (const machine of derived) {
       expect(machineKeyProblem(machine)).not.toBeNull();
     }
@@ -168,8 +112,6 @@ describe('the two Seal identities', () => {
     expect(identities.ok).toBe(true);
     if (!identities.ok) return;
 
-    // Rebuilt by hand from `entitlement.move`, not from the SDK, so that a change to the SDK's
-    // derivation fails here rather than passing by agreeing with itself.
     const vaultBytes = Uint8Array.from(Buffer.from(VAULT.slice(2), 'hex'));
     const expectedHuman = new Uint8Array([
       ...vaultBytes,
@@ -192,7 +134,6 @@ describe('the two Seal identities', () => {
     expect(identities.ok).toBe(true);
     if (!identities.ok) return;
     expect(hex(identities.value.human)).not.toBe(hex(identities.value.machine));
-    // And they differ by exactly the marker — the machine identity is the human one extended.
     expect(hex(identities.value.machine).startsWith(hex(identities.value.human))).toBe(true);
     expect(identities.value.machine.length - identities.value.human.length).toBe(
       MACHINE_EDITION_MARKER.length,
@@ -209,17 +150,6 @@ describe('the two Seal identities', () => {
     expect(new Set(all.map(hex)).size).toBe(4);
   });
 
-  /*
-    A finding, recorded where it was measured rather than in prose nobody reads.
-
-    `packages/sdk/src/seal.ts` says of a short vault id: "Refused rather than padded. A short id
-    that silently becomes a valid-looking 32 bytes is an identity nobody chose." It does not do
-    that. `normalizeSuiObjectId` LEFT-PADS, so `unlockIdentity('0x01', …)` returns a perfectly
-    well-formed identity beginning with 31 zero bytes, and `unlockIdentity('', …)` returns the zero
-    vault. Only genuinely malformed hex throws. Asserted here as it behaves, with the discrepancy
-    named — a test written to the comment instead of to the code would fail for the wrong reason,
-    and the SDK is not this module's to change.
-  */
   it('rejects malformed hex, and — noted, not endorsed — pads a short vault id', () => {
     expect(machineEditionIdentities('not-an-id', 'post-7').ok).toBe(false);
     expect(machineEditionIdentities(`0x${'a1'.repeat(33)}`, 'post-7').ok).toBe(false);
@@ -231,31 +161,21 @@ describe('the two Seal identities', () => {
   });
 });
 
-/*
-  The key server committee, modelled at exactly the fidelity that decides this question.
-
-  `MASTER` stands in for the committee's secret. `releaseKey` is `seal_approve_unlock` plus IBE
-  determinism: it will only ever produce a key for the identity the presented `Unlock` covers, and
-  the key is a deterministic, unrelated-per-identity function of the identity bytes.
-*/
 const MASTER = randomBytes(32);
 
 interface Unlock {
   vault: string;
-  /** `entitlement::Unlock.content_key` — the key the buyer actually paid for. */
   contentKey: string;
 }
 
 function releaseKey(unlock: Unlock, requestedIdentity: Uint8Array): Buffer {
   const covered = unlockIdentity(unlock.vault, new TextEncoder().encode(unlock.contentKey));
-  // `assert!(id == unlock_identity(unlock.vault, unlock.content_key), EWrongIdentity);`
   if (hex(covered) !== hex(requestedIdentity)) {
     throw new Error('EWrongIdentity');
   }
   return createHmac('sha256', MASTER).update(Buffer.from(requestedIdentity)).digest();
 }
 
-/** AES-256-GCM, the construction `lib/blob-crypto.ts` uses. */
 function encrypt(key: Buffer, plaintext: string): { nonce: Buffer; ciphertext: Buffer } {
   const nonce = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, nonce);
@@ -276,7 +196,6 @@ function decrypt(key: Buffer, nonce: Buffer, ciphertext: Buffer): string {
 describe('one Unlock cannot open the other edition', () => {
   const BODY = 'The same words, sold twice.';
 
-  /** Both editions of one post, sealed the way `storeBody` seals: same plaintext, two identities. */
   function publishBothEditions() {
     const identities = machineEditionIdentities(VAULT, 'post-7');
     if (!identities.ok) throw new Error('identities should derive');
@@ -297,7 +216,6 @@ describe('one Unlock cannot open the other edition', () => {
     const post = publishBothEditions();
     expect(post.human.ciphertext.equals(post.machine.ciphertext)).toBe(false);
 
-    // Each edition opens for its own buyer, so this is a paywall and not simply a broken key.
     expect(decrypt(releaseKey(post.humanUnlock, post.identities.human), post.human.nonce, post.human.ciphertext)).toBe(BODY);
     expect(decrypt(releaseKey(post.machineUnlock, post.identities.machine), post.machine.nonce, post.machine.ciphertext)).toBe(BODY);
   });
@@ -310,8 +228,6 @@ describe('one Unlock cannot open the other edition', () => {
 
   it('leaves a human buyer unable to open the machine edition even with the whole response', () => {
     const post = publishBothEditions();
-    // Everything a human buyer can obtain: the key their own Unlock releases, plus the machine
-    // edition's public ciphertext and nonce — both of which are on a public Walrus blob anyway.
     const humanKey = releaseKey(post.humanUnlock, post.identities.human);
     expect(() => decrypt(humanKey, post.machine.nonce, post.machine.ciphertext)).toThrow();
   });
@@ -376,34 +292,20 @@ describe('sealBothEditions', () => {
   });
 });
 
-/*
-  The route, with the chain mocked and everything below the handler real.
-
-  `readContentPrice` is answered per key, which is the whole point: the endpoint must ask about two
-  keys and report them apart. A mock that answered one value for both would agree with a handler
-  that read the human key twice.
-*/
 const TABLE = `0x${'c3'.repeat(32)}`;
 
-/** What the mocked chain says each key costs. Reassigned per test. */
 let priceOf: (contentKey: string) => { ok: true; value: bigint | null } | { ok: false; failure: { kind: string; source: string; detail: string } } =
   () => ({ ok: true, value: null });
 
-/** Whether the vault itself reads. */
 let vaultReadable = true;
 
 vi.mock('@/lib/rate-limit', () => ({
-  // The simulate-class guard: durable ceiling plus the per-process Map. Allowed here, because
-  // these files are about what the route decides and not about how often it may be asked.
   simulateLimit: async () => null, rateLimit: () => null }));
 
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({ ok: true, value: { network: 'mainnet' }, observedAtMs: 0 }),
 }));
 
-// The deliverability lookup is a database read; the real one, against real rows, is exercised in
-// `test/machine-edition.test.ts`. Here it answers "nothing published yet" so the pricing shape can
-// be pinned without a database.
 vi.mock('@/lib/content', () => ({
   machineBodyState: async () => 'no-post',
 }));
@@ -450,9 +352,6 @@ describe('GET /api/studio/content-price', () => {
       priced: true,
       price: '10000',
       machine: { contentKey: 'post-7#machine', state: 'priced', price: '250000' },
-      // Added with migration 034: whether a machine body was sealed for this post. This suite
-      // stubs no post row, so the only truthful answers are the two that mean "no row / could
-      // not read", never `sealed`.
       machineBody: 'no-post',
     });
   });
@@ -477,8 +376,6 @@ describe('GET /api/studio/content-price', () => {
       price: string | null;
       machine: { state: string; price: string | null };
     };
-    // The human price still arrives. A second read that failed must not take away a first that did
-    // not — and `unreadable` must never be rendered as free.
     expect(failed.price).toBe('10000');
     expect(failed.machine).toEqual({
       contentKey: 'post-7#machine',

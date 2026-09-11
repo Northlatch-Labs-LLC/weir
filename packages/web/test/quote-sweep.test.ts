@@ -1,13 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// The table that grew on one path and was reclaimed on another.
-//
-// Every `prepare` route writes a row to `issued_quotes`, and thirteen of them do so with no
-// session, no signature and no admin check. The sweep that deletes expired rows lived only inside
-// `submitSigned` — the path that CONSUMES a quote. So a caller who only ever prepares and never
-// submits inserted rows that nothing reclaimed until some unrelated caller happened to complete a
-// purchase. On a deployment where nobody buys anything for an hour, nothing is swept for an hour.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const query = vi.fn();
@@ -17,7 +9,6 @@ vi.mock('@/lib/db', () => ({
   normaliseAddress: (a: string) => a.toLowerCase(),
 }));
 
-/** The SQL of every statement issued, whitespace collapsed. */
 function statements(): string[] {
   return query.mock.calls.map((c) => String(c[0] ?? '').replace(/\s+/g, ' ').trim());
 }
@@ -42,7 +33,6 @@ describe('writing a quote reclaims expired ones', () => {
 
     await rememberQuote('AAAA');
 
-    // The property: an unauthenticated prepare pays for its own housekeeping.
     expect(deletes().length).toBe(1);
     expect(deletes()[0]).toMatch(/expires_at_ms < \$1/i);
   });
@@ -56,7 +46,6 @@ describe('writing a quote reclaims expired ones', () => {
   });
 
   it('still writes the quote', async () => {
-    // The sweep is housekeeping attached to the write; it must not replace it.
     const { rememberQuote } = await import('../lib/checkout');
 
     const returned = await rememberQuote('AAAA');
@@ -66,10 +55,6 @@ describe('writing a quote reclaims expired ones', () => {
   });
 
   it('throttles: a burst of quotes does not become a burst of deletes', async () => {
-    /*
-      Once a minute per instance. Without the throttle this turns every prepare into two statements
-      against a pool of three connections, which is a worse bill than the rows it reclaims.
-    */
     const { rememberQuote } = await import('../lib/checkout');
 
     await rememberQuote('A');
@@ -81,11 +66,6 @@ describe('writing a quote reclaims expired ones', () => {
   });
 
   it('a failed sweep does not fail the quote', async () => {
-    /*
-      The caller is in the middle of being quoted a price. Housekeeping that did not happen is not
-      their problem, and the next request tries again — but a sweep that threw would turn a
-      bookkeeping error into a refused purchase.
-    */
     const { rememberQuote } = await import('../lib/checkout');
     query.mockImplementation((sql: string) =>
       /^\s*DELETE FROM issued_quotes/i.test(sql)

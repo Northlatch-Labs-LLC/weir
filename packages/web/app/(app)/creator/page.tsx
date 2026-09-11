@@ -15,13 +15,6 @@ export const metadata: Metadata = { title: titleFor('/creator') };
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Basis points as a percentage, by integer arithmetic.
- *
- * `250n` reads as `2.5%`, `300n` as `3%`. Kept in integers for the same reason every other quantity
- * here is: a rate that renders as `2.4999999999999996%` is not wrong by enough to notice and not
- * right by enough to publish.
- */
 function percent(bps: bigint): string {
   const whole = bps / 100n;
   const frac = (bps % 100n).toString().padStart(2, '0').replace(/0+$/, '');
@@ -29,27 +22,8 @@ function percent(bps: bigint): string {
 }
 
 export default async function CreatorPage() {
-  /*
-    The terms, read from the Platform object rather than written here.
-
-    A signed-out visitor previously got one sentence and a wallet button: the page asked them to
-    become a creator without telling them what a vault charges or who can change that later. Those
-    are the two questions somebody actually has, and both have on-chain answers — so they are read
-    and shown, and a failed read says so rather than falling back to a number that looks official.
-  */
   const protocol = await readProtocol();
 
-  /*
-    Whose studio this is, and in what coin they settle.
-
-    Perks are priced in the creator's own vault coin because tips are, so the editor needs the same
-    scale the contract uses. Read here rather than in the editor: this page is already a server
-    component, and a client that fetched its own decimals would be a second answer to a question
-    with one authority.
-
-    Every failure lands on `null`, and the section below renders nothing rather than an editor
-    priced in a scale nobody confirmed.
-  */
   const viewer = fold(
     await provenReader(),
     (value) => value,
@@ -158,7 +132,6 @@ export default async function CreatorPage() {
             below, and the reason opening early is worth something.
           </p>
         </div>
-
 
         <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
           <span className="lbl">The fee is fixed into your vault, not looked up</span>

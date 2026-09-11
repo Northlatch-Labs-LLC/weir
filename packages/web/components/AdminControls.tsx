@@ -1,25 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The governing controls.
- *
- * # Two ways to sign, because of who holds the capability
- *
- * The `PlatformCap` for this deployment sits at an address with no browser wallet. A panel built
- * only around a sign button would be unusable by the one address that can act — so every action
- * ends in prepared bytes, and those bytes are either signed here or copied to whoever assembles
- * the multisig.
- *
- * # Nothing is offered before it has been simulated
- *
- * The same gate as everywhere else in this product, and it carries more weight here than anywhere:
- * these transactions change what every future vault charges and can move the treasury. A
- * simulation that passes proves the capability works, the ceiling is respected and the treasury
- * covers the amount — before anybody signs, and before a multisig collects signatures for
- * something that would abort.
- */
-
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { MultisigSubmit } from '@/components/MultisigSubmit';
@@ -53,8 +34,6 @@ export function AdminControls({
   paymentsPaused: boolean;
   treasuryMist: string;
 }) {
-  // Seeded from what the platform currently says, so submitting an untouched form is a no-op
-  // rather than an accidental reset to zero.
   const [fee, setFee] = useState(feeBps);
   const [share, setShare] = useState(referralShareBps);
   const [creation, setCreation] = useState(creationFeeMist);
@@ -68,15 +47,6 @@ export function AdminControls({
 
   const { signer } = useSigner();
 
-  /**
-   * Fetch that survives the edge. Both admin routes do fullnode work, and the platform in front of
-   * this deployment answers a slow upstream with an HTML error page — which `response.json()` used
-   * to surface verbatim as "Unexpected token '<'", reading like a broken console to the one person
-   * it must never fail. So: parse from text, and when the answer is not JSON (or is a 5xx), wait a
-   * beat and try again. Both calls are safe to repeat — prepare only simulates, and submit carries
-   * an already-signed transaction the chain will accept exactly once no matter how often it hears
-   * it. Three attempts, then an honest sentence instead of a stack trace.
-   */
   async function fetchJson(url: string, init: RequestInit): Promise<Record<string, unknown>> {
     let lastFailure = 'the server did not answer';
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -121,12 +91,10 @@ export function AdminControls({
     setBusy(true);
     setError(null);
     try {
-      // Sign once; the retries below resend the same signed bytes, never a new signature.
       const signature = await signer.signTransaction(quote.bytes);
       const body = (await fetchJson('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       })) as { digest?: string; error?: string };
       if (body.digest === undefined) setError(body.error ?? 'the transaction was not accepted');

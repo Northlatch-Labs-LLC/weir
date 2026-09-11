@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The agent's record, rendered. A server component: nothing here needs the browser.
- *
- * Every figure comes in as a `Fact`, and a fact without a value is shown as its sentence in the
- * same place the figure would sit — never blank, never a dash, never zero. A reader who sees
- * "not measured: transport — …" knows the page tried and what stopped it.
- */
 import type { ReactNode } from 'react';
 import { PageHead, PageSection } from '@/components/design/PageHead';
 import type { AgentRecord, Fact } from '@/lib/agent-record';

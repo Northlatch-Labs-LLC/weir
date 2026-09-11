@@ -1,31 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What the composer promises about storage must be what the storage actually does.
- *
- * # The defect this pins
- *
- * `studio/upload` chooses the lease from the access level:
- *
- *     tier: gated ? 'durable' : 'ephemeral'
- *
- * so a **public** post's image is bought for one epoch — fourteen days — and a **paid** post's for
- * fifty-three, a little over two years. The composer told the creator the opposite:
- *
- *     public — "readable by anyone from any Walrus aggregator, permanently and without this
- *     platform"
- *
- * Permanence was promised on precisely the tier with the shortest life, and the rest of the
- * sentence is true, which is what made it convincing. A creator reading it had no way to learn
- * that their free post's image would be deleted in a fortnight; nothing else in the interface says
- * so, and the post goes on rendering after the blob is gone, with only the image failing.
- *
- * # Why the durations are asserted rather than described
- *
- * The composer runs in the browser and `publisher-token.ts` is `server-only`, so the two cannot
- * share a value through an import — which is how the copy drifted from the code in the first
- * place. `lib/storage-retention.ts` exists to be the one place both may read, and these tests exist
- * so that changing the lease without changing the sentence fails here.
- */
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,21 +12,27 @@ const upload = readFileSync(join(root, 'app/api/studio/upload/route.ts'), 'utf8'
 
 describe('the lease the code buys', () => {
   it('is one epoch for free posts and the Walrus maximum for paid ones', () => {
-    // Pinned because every sentence asserted below is only true while this holds.
     expect(TIER_EPOCHS.ephemeral).toBe(1);
     expect(TIER_EPOCHS.durable).toBe(MAX_EPOCHS);
   });
 
-  it('is still chosen by whether the post is gated', () => {
+  it('is chosen from the post\u2019s access kind, never from whether the asset is encrypted', () => {
     /*
-      If this stops being the rule, the composer's per-access copy answers the wrong question.
+      This asserted the string `gated !== null ? 'durable' : 'ephemeral'` was present in the upload
+      route. That expression had already been replaced; what the assertion actually matched was a
+      comment saying so — so the test passed by finding a note about the defect it was written to
+      prevent, and would have gone on passing with the route rewritten around it.
 
-      `gated` became `{ vaultId, contentKey } | null` when media keys moved to Seal — sealing needs
-      to know what the key is released against, which a boolean cannot say. The rule this test
-      exists to pin is unchanged: the lease still follows gating and nothing else. Only the shape of
-      the expression moved, so the assertion moved with it rather than being deleted.
+      Deriving the lease from `gated` asks whether the asset is encrypted. That agrees with the
+      access kind today by coincidence, not construction, and it is how the route and
+      `tierForAccess` came to disagree about subscribers while both looked correct. So the mapping
+      is asserted where it lives, and the route is asserted to call it rather than re-derive.
     */
-    expect(upload).toContain("gated !== null ? 'durable' : 'ephemeral'");
+    expect(tierForAccess('public')).toBe('ephemeral');
+    expect(tierForAccess('subscribers')).toBe('durable');
+    expect(tierForAccess('paid')).toBe('durable');
+    expect(upload).toContain('tier: tierForAccess(post.access.kind)');
+    expect(upload).not.toContain("gated !== null ? 'durable'");
   });
 
   it('converts to the days a person can act on', () => {
@@ -65,34 +44,18 @@ describe('the lease the code buys', () => {
 
 describe('what the composer tells a creator before they publish', () => {
   it('never promises a stored image is permanent', () => {
-    /*
-      The exact regression, asserted across the whole file rather than inside one branch — the
-      branches were reordered while fixing this, and a test that depended on their order would have
-      passed by reading an empty slice.
-
-      "not permanence" is the one allowed use: the note shown after storing says storage *is* a
-      lease and is not permanence, which is the opposite claim.
-    */
     for (const match of composer.matchAll(/[^.]*permanen\w*[^.]*/gi)) {
       expect(match[0]).toMatch(/not permanence/i);
     }
   });
 
   it('takes both durations from the shared source rather than a copied number', () => {
-    /*
-      The heart of it. A literal "14 days" typed into the JSX would satisfy a reader and drift the
-      moment the tier changed — which is precisely how "permanently" survived next to a one-epoch
-      lease. Requiring the call means the sentence cannot disagree with the purchase.
-    */
     expect(composer).toContain("retentionDays('ephemeral')");
     expect(composer).toContain("retentionDays('durable')");
     expect(composer).toContain("from '@/lib/storage-retention'");
   });
 
   it('reaches the creator before they publish, not only after', () => {
-    // The copy sits in the block rendered as soon as a file is chosen, alongside the access level —
-    // the moment the decision is still changeable. The post-upload note is a confirmation, not a
-    // warning.
     const beforePublish = composer.slice(
       composer.indexOf('image !== null &&'),
       composer.indexOf("media.name === 'storing'"),
@@ -101,45 +64,22 @@ describe('what the composer tells a creator before they publish', () => {
   });
 
   it('says the free image is deleted, not merely that a lease exists', () => {
-    /*
-      "Storage is a lease" is true and abstract. What a creator needs to know is that the picture
-      goes away — so the word has to appear where they choose the access level, not only in the
-      confirmation shown after publishing, which is too late to change the decision.
-    */
     expect(composer).toMatch(/deleted|removed|disappears/i);
   });
 });
 
 describe('the mapping from access to lease', () => {
-  /*
-    `tierForAccess` said `ephemeral` for subscribers, nothing called it, and no test asserted it —
-    while `POST /api/studio/upload` derived the tier itself as `gated !== null ? 'durable' :
-    'ephemeral'`, and `gated` is non-null for paid AND subscribers. So live behaviour gave
-    subscriber media the durable lease and this function said one epoch.
-
-    Wiring it in as written would have cut subscriber media from fifty-three epochs to one: paid-for
-    pictures expiring off Walrus for exactly the people who subscribed to see them. It was a wrong
-    answer sitting where the right one is supposed to live, and `body-storage.ts` cites it BY NAME
-    as the rule media follows — so a second module already pointed a reader at it.
-  */
   it('gives an open post the short lease', () => {
     expect(tierForAccess('public')).toBe('ephemeral');
   });
 
   for (const access of ['subscribers', 'paid'] as const) {
     it(`gives ${access} media the durable lease`, () => {
-      /*
-        Asserted as the LITERAL tier rather than by comparing this function to the route. Comparing
-        the two passes when both are wrong together, which is the state this finding was found in.
-      */
       expect(tierForAccess(access)).toBe('durable');
     });
   }
 
   it('the durable lease is the one that outlives an entitlement', () => {
-    // The reason subscribers are durable, pinned as a number rather than left as an argument.
-    // `body-storage.ts` puts it in words: media that evaporates while the entitlement continues is
-    // a promise the storage cannot keep.
     expect(TIER_EPOCHS.durable).toBeGreaterThan(TIER_EPOCHS.ephemeral);
     expect(TIER_EPOCHS.ephemeral).toBe(1);
   });
@@ -154,17 +94,10 @@ describe('the upload route uses the mapping rather than its own', () => {
     .replace(/^\s*\/\/.*$/gm, ' ');
 
   it('calls tierForAccess', () => {
-    // Comments stripped first: the docblock above the call names the function while explaining why
-    // the old ternary was wrong, and a raw search would count that as the call.
     expect(route).toMatch(/tier:\s*tierForAccess\(/);
   });
 
   it('no longer decides a lease by asking whether the asset is encrypted', () => {
-    /*
-      The half that matters more. Without it, somebody reintroduces the ternary, this function goes
-      quiet again, and the two drift apart exactly as they did before — with every test above still
-      passing, because they only ever asked what the helper returns.
-    */
     expect(route).not.toMatch(/gated\s*!==\s*null\s*\?\s*'durable'/);
   });
 });

@@ -1,14 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The agent's key, and the one thing that must never appear in a log.
- *
- * The input to a key parser is a private key. Crypto libraries routinely include the offending
- * value in a parse error, so `keys.ts` writes its own message and discards the library's. Losing
- * the detail is the point: the only fact a caller needs is "that string is not a Sui Ed25519
- * secret", and the one fact they must never get in a log aggregator is the string itself.
- *
- * Ported from the unrerunnable scratchpad harness.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -29,9 +19,6 @@ describe('loading a key', () => {
   });
 
   it('raw hex is refused, however plausible it looks', () => {
-    // Deliberately not accepted: 32 bytes of hex is indistinguishable from a public key, an object
-    // id and a transaction digest by inspection, and a loader that accepts every 32-byte thing is
-    // a loader that will one day be handed the wrong one.
     expect(agentKeyFromSecret(`0x${'a'.repeat(64)}`).ok).toBe(false);
   });
 
@@ -42,8 +29,6 @@ describe('loading a key', () => {
   it('a missing environment variable names the variable', () => {
     const reading = agentKeyFromEnv({});
     expect(reading.ok).toBe(false);
-    // "The signing secret is empty" sends an operator through the code. Naming the variable sends
-    // them to the one line that fixes it.
     if (!reading.ok) expect(reading.failure.detail).toContain('PROJECTX_SOCIAL_AGENT_SECRET');
   });
 });
@@ -59,8 +44,6 @@ describe('a failed decode NEVER quotes its input', () => {
   });
 
   it('does not echo a CORRUPTED REAL secret either — the dangerous case', () => {
-    // The one that matters. A real key with three characters changed still contains almost the
-    // whole key, and it is exactly the string somebody pastes when it will not load.
     const { secret } = generateAgentKey();
     const corrupted = `${secret.slice(0, -3)}xyz`;
     const reading = agentKeyFromSecret(corrupted);
@@ -73,8 +56,6 @@ describe('a failed decode NEVER quotes its input', () => {
 
   it('an AgentKey exposes no accessor that returns the secret', () => {
     const { key } = generateAgentKey();
-    // A caller who logs an AgentKey prints an address. `secret` is returned once, as a separate
-    // field the caller has to destructure deliberately, and never lands on this object.
     expect(Object.keys(key).sort()).toEqual(['address', 'keypair']);
     expect(JSON.stringify(key)).not.toContain('suiprivkey');
   });
@@ -90,8 +71,6 @@ describe('addresses compare by value, not by spelling', () => {
   });
 
   it('treats padded and unpadded forms as the same account', () => {
-    // Comparing raw strings works until it does not, and the failure is "you cannot pay your own
-    // vault" shown to somebody who is not the owner.
     expect(sameAddress('0x2', `0x${'0'.repeat(63)}2`)).toBe(true);
   });
 

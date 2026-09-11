@@ -1,45 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The live-tether demand on the tools that cost the platform money.
- *
- * # What is protected here
- *
- * `weir_post` and `weir_send` are the two tools on this surface whose cost lands on the PLATFORM
- * rather than on the caller: one seals bodies and leases durable storage, the other stores a row,
- * and neither charges the agent gas. Both now refuse unless the bound signer's address is a live
- * entry in the agent register — the declaration exists AND `revokedAtMs` is null, which is the same
- * pair `POST /api/agents/mind` demands.
- *
- * Six properties, and "the happy path works" is only one of them:
- *
- *  1. **The address checked is the SIGNER's, never an argument.** `weir_post` takes a `handle`. A
- *     check keyed on a caller-supplied field would let whoever writes the arguments nominate whose
- *     declaration is consulted — and in this runtime the party writing the arguments is a model that
- *     has just read attacker-written text. Checks 5 and 6 assert the register was asked about the
- *     principal and about nothing else.
- *  2. **Nothing is written when the tether is refused.** The refusal is spent before the port call,
- *     so a refused publish reaches neither `post` nor `send`. Checks 4, 7, 9 and 11.
- *  3. **A revoked declaration refuses.** The route returns a withdrawn row rather than hiding it, so
- *     the row's existence proves nothing and only `revokedAtMs` does. A caller that forgets to read
- *     it passes every other check in this file. Checks 7 and 8.
- *  4. **An unreadable register refuses, and says so distinctly.** `not_declared`, `revoked` and
- *     `register_unread` are three different sentences because a model's next move differs for each.
- *     Checks 9 and 10.
- *  5. **The ungated tools are untouched.** `weir_declare` above all — it is how an undeclared agent
- *     stops being one, so gating it would be a door openable only from inside. Checks 12 to 15.
- *  6. **A tool that cannot check is absent, not present-and-refusing.** Check 2.
- *
- * # Predicted mutations, each of which must turn a check red
- *
- *   M1  key `requireLiveTether` on `args.handle` instead of `principal`   → checks 5, 6
- *   M2  drop the `revokedAtMs !== null` branch                            → checks 7, 8
- *   M3  return `null` (proceed) instead of refusing when the entry is null → checks 3, 4
- *   M4  let a thrown register read through instead of refusing (fail open) → checks 9, 10
- *   M5  move the check BELOW the `weir.post` / `weir.send` call            → checks 4, 11
- *   M6  drop `has('declaration')` from the two capability lines            → check 2
- *   M7  add `requireLiveTether` to `weir_declare`                          → check 12
- *   M8  add `requireLiveTether` to `weir_buy`                              → check 14
- */
 import assert from 'node:assert/strict';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -62,9 +21,7 @@ function check(what: string, fn: () => void): void {
   }
 }
 
-/** The bound signer's address: the one the tether must be checked against. */
 const AGENT = `0x${'1a'.repeat(32)}`;
-/** A DIFFERENT, and declared, address. Never the principal. Used to bait the argument-keyed bug. */
 const SOMEBODY_ELSE = `0x${'3c'.repeat(32)}`;
 const OPERATOR = `0x${'2b'.repeat(32)}`;
 
@@ -79,20 +36,12 @@ function live(address: string): WeirDeclaration {
   return { address, operatorAddress: OPERATOR, model: 'pi', purpose: 'writes', declaredAtMs: 1_788_400_000_000, revokedAtMs: null };
 }
 
-/** What the register is asked, and what the platform was asked to do. Reset between scenarios. */
 let asked: string[] = [];
 let posted: unknown[] = [];
 let sent: unknown[] = [];
 let bought: unknown[] = [];
 let declared: unknown[] = [];
 
-/**
- * The register the harness stands in for.
- *
- * `answer` is a function of the address so a scenario can make the PRINCIPAL undeclared while some
- * OTHER address is live — which is the only arrangement in which an argument-keyed check and an
- * address-keyed check give different verdicts, and therefore the only one that can tell them apart.
- */
 type Answer = (address: string) => WeirDeclaration | null;
 let answer: Answer = () => live(AGENT);
 let registerThrows: unknown = null;
@@ -149,7 +98,6 @@ async function connect(weir: WeirPort): Promise<{ client: Client; registered: st
 const parsed = (r: unknown): Record<string, any> =>
   JSON.parse(String((r as { content: Array<{ text: string }> }).content[0]?.text ?? '{}'));
 
-/** A well-formed public post: it clears every argument check, so only the tether can refuse it. */
 const A_POST = { handle: 'kaela', title: 'A title', preview: 'A preview', text: 'A body', access: 'public' as const };
 const A_MESSAGE = { to: 'someone', text: 'hello', preview: 'hello' };
 
@@ -162,8 +110,6 @@ function reset(): void {
   registerThrows = null;
 }
 
-/* ---- 1 and 2: the tools exist only where the tether can be checked ---------------------------- */
-
 reset();
 const armed = await connect(port());
 check('weir_post and weir_send register on an armed binding that can read the register', () => {
@@ -171,24 +117,15 @@ check('weir_post and weir_send register on an armed binding that can read the re
   assert.ok(armed.registered.includes('weir_send'), armed.registered.join(', '));
 });
 
-/*
-  The property is DELETED rather than set to `undefined`. Under this package's
-  `exactOptionalPropertyTypes` those are different types, and — more to the point — absence is what
-  `capabilitiesOf` actually reads (`typeof port[name] === 'function'`), so an explicitly undefined
-  property would be testing a state the binding cannot produce.
-*/
 const withoutRegister = port();
 delete withoutRegister.declaration;
 const noRegister = await connect(withoutRegister);
 check('a binding that cannot read the register offers neither tool, rather than one that always refuses', () => {
   assert.ok(!noRegister.registered.includes('weir_post'), noRegister.registered.join(', '));
   assert.ok(!noRegister.registered.includes('weir_send'), noRegister.registered.join(', '));
-  // The tools that do not need the register are still there, so this is the gate and not a broken harness.
   assert.ok(noRegister.registered.includes('weir_buy'), noRegister.registered.join(', '));
   assert.ok(noRegister.registered.includes('weir_declare'), noRegister.registered.join(', '));
 });
-
-/* ---- 3 and 4: an undeclared principal is refused, and nothing is written ---------------------- */
 
 reset();
 answer = () => null;
@@ -208,15 +145,7 @@ check('nothing reached the platform when the tether was refused', () => {
   assert.equal(asked.length, 1, `the register was consulted ${asked.length} time(s)`);
 });
 
-/* ---- 5 and 6: the address checked is the signer's, never an argument -------------------------- */
-
 reset();
-/*
-  The forged caller. The principal (AGENT) has NO declaration; SOMEBODY_ELSE has a live one. The
-  arguments name a handle the caller does not own, which is what a post body telling a model to
-  "publish as @kaela" produces. An argument-keyed check consults the wrong address and lets this
-  through; an address-keyed check refuses it.
-*/
 answer = (address) => (address === SOMEBODY_ELSE ? live(SOMEBODY_ELSE) : null);
 const forged = await armed.client.callTool({
   name: 'weir_post',
@@ -234,15 +163,8 @@ check('the register was asked about the bound signer and about nothing else', ()
   assert.ok(!asked.includes(SOMEBODY_ELSE), 'an argument decided which declaration was consulted');
 });
 
-/* ---- 7 and 8: revoked-but-present ------------------------------------------------------------- */
-
 reset();
 const REVOKED_AT = 1_788_500_000_000;
-/*
-  The defect this case exists for: `GET /api/agents/{address}` returns a WITHDRAWN declaration
-  rather than 404, so an implementation that treats "the register returned a row" as "tethered"
-  passes every other check in this file and is wrong here.
-*/
 answer = () => ({ ...live(AGENT), revokedAtMs: REVOKED_AT });
 const revoked = await armed.client.callTool({ name: 'weir_post', arguments: A_POST });
 check('a declaration the operator withdrew refuses, and is told apart from never having declared', () => {
@@ -256,8 +178,6 @@ check('a declaration the operator withdrew refuses, and is told apart from never
 check('a withdrawn declaration writes nothing either', () => {
   assert.equal(posted.length, 0, `post was called ${posted.length} time(s) for a revoked agent`);
 });
-
-/* ---- 9 and 10: an unreadable register fails closed, distinctly -------------------------------- */
 
 reset();
 registerThrows = new PortRefusal('transport', 'declaration', 'could not reach https://weir.social/api/agents/0x1a…');
@@ -274,8 +194,6 @@ check('nothing was written while the register was unreachable', () => {
   assert.equal(posted.length, 0, 'a publish went through on an unreadable register');
 });
 
-/* ---- 11: weir_send is gated on the same terms -------------------------------------------------- */
-
 reset();
 answer = () => null;
 const sendRefused = await armed.client.callTool({ name: 'weir_send', arguments: A_MESSAGE });
@@ -286,15 +204,8 @@ check('weir_send demands the same live tether and stores nothing without it', ()
   assert.deepEqual(asked, [AGENT]);
 });
 
-/* ---- 12 to 15: the tools that are deliberately NOT gated -------------------------------------- */
-
 reset();
 answer = () => null;
-/*
-  The one that matters most. `weir_declare` is how an agent with no declaration files for one, so a
-  tether requirement on it is a door that can only be opened from the inside. It must work for
-  exactly the caller every other gated tool refuses.
-*/
 const declaredOk = await armed.client.callTool({
   name: 'weir_declare',
   arguments: { operatorAddress: OPERATOR, model: 'pi', purpose: 'writes' },
@@ -329,8 +240,6 @@ check('weir_buy still spends the caller’s OWN coin while undeclared — the pl
   assert.equal(asked.length, 0, 'a purchase consulted the register; it must not');
 });
 
-/* ---- 16 and 17: the happy path, and that the check is per call rather than per process --------- */
-
 reset();
 answer = () => live(AGENT);
 const published = await armed.client.callTool({ name: 'weir_post', arguments: A_POST });
@@ -347,7 +256,6 @@ const second = await armed.client.callTool({ name: 'weir_send', arguments: A_MES
 check('the register is consulted on every gated call, not once at startup', () => {
   assert.equal(second.isError, undefined, JSON.stringify(second));
   assert.equal(sent.length, 1);
-  // One for the publish above, one for this message: a cached startup verdict would show fewer.
   assert.equal(asked.length, 2, `the register was consulted ${asked.length} time(s) across two gated calls`);
   assert.deepEqual(asked, [AGENT, AGENT]);
 });

@@ -1,19 +1,5 @@
 #!/usr/bin/env -S npx tsx
 // Built-by: @projectx.sui
-/**
- * Render a policy document from its template and a values file.
- *
- * `policy/heron-content.json` carries `<ANGLE_BRACKET>` substitutions the deploy fills. This is
- * the one place they are filled: every `<NAME>` in the template must be present in the values file
- * as a Sui id or address, and a rendered document that still carries a `<` is refused, never
- * written. `--pre-soul` drops the two entries that name the soul package and the soul object,
- * because the soul is not published yet; a target or object that exists nowhere is not a bound,
- * and a placeholder string in a product path is forbidden (the Master's rule).
- *
- * usage: render-policy.ts --template <path> --values <path> --out <path> [--pre-soul]
- *        render-policy.ts --template <path> --values <path> --stdout [--pre-soul]
- * Prints the rendered document's sha256 on stderr. Never a secret anywhere: ids and addresses only.
- */
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -21,15 +7,8 @@ import { loadPinnedPolicy } from '../src/policy-file.js';
 import { writeFileSync as _unused } from 'node:fs';
 
 const SUI_ID = /^0x[0-9a-fA-F]{1,64}$/;
-/** A u64 as a decimal string. JSON has no integer type that survives 2^53; a string does. */
 const U64_DECIMAL = /^(0|[1-9][0-9]{0,19})$/;
-/** A base58 object digest, bounded rather than decoded: a decoder here would be a second one. */
 const BASE58_DIGEST = /^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
-/**
- * The substitutions --pre-soul drops: the package, the registry, the ledger cap, and the agent's own
- * soul object under any agent's prefix (`<HERON_SOUL_ID>`, `<WREN_SOUL_ID>`). One pattern, so a
- * second citizen's template needs no change here.
- */
 const SOUL_MARKER = /<(SOUL_PACKAGE_ID|SOUL_REGISTRY_ID|LEDGER_CAP_ID|[A-Z][A-Z0-9_]*_SOUL_ID)>/;
 
 export interface RenderArgs {
@@ -59,10 +38,6 @@ export function parseRenderArgs(argv: readonly string[]): RenderArgs | string {
   return { template: map.get('--template')!, values: map.get('--values')!, out: map.get('--out') ?? null, stdout, preSoul };
 }
 
-/**
- * The rendering itself, as a function so the test can call it on strings.
- * Returns the rendered text or a refusal sentence.
- */
 export function renderPolicy(templateText: string, values: Readonly<Record<string, unknown>>, preSoul: boolean): { ok: true; text: string } | { ok: false; reason: string } {
   let doc: unknown;
   try {
@@ -75,19 +50,6 @@ export function renderPolicy(templateText: string, values: Readonly<Record<strin
   for (const [name, value] of Object.entries(values)) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name)) return { ok: false, reason: `values key "${name}" is not a substitution name.` };
     if (typeof value !== 'string') return { ok: false, reason: `values.${name} is not a string.` };
-    /*
-      Three shapes, chosen by the key's own suffix rather than by trying each in turn.
-
-      A values document used to hold nothing but object ids, so one test served. The settlement
-      arm needs an object REFERENCE — id, version and digest — because the purse is handed
-      fully-resolved references and never resolves an id against a fullnode itself. A version is a
-      u64 and a digest is base58, so a single shape can no longer cover the file.
-
-      Deciding by suffix, not by "whichever pattern matches", is the point. Accepting any of the
-      three for any key would let a digest sit where an id belongs and a version where a digest
-      does, and the transaction that resulted would name the wrong object with a well-formed
-      value. The suffix says what the field IS, and the check holds it to that.
-    */
     const shape = name.endsWith('_VERSION') || name.endsWith('_MIST')
       ? { re: U64_DECIMAL, what: 'a u64 written as a decimal string' }
       : name.endsWith('_DIGEST')
@@ -132,7 +94,6 @@ async function main(): Promise<number> {
     process.stdout.write(rendered.text);
   } else {
     writeFileSync(parsed.out!, rendered.text, { mode: 0o644 });
-    // Loaded back through the real loader, against its own hash: what was written is a policy.
     const loaded = await loadPinnedPolicy({ path: parsed.out!, expectedSha256: sha });
     if (!loaded.ok) {
       process.stderr.write(`render-policy: refused - the rendered document does not load: ${loaded.refused.reason}\n`);

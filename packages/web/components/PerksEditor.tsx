@@ -1,20 +1,10 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What a creator promises the people who tip them.
- *
- * The one surface here whose contents no contract enforces, so it says that in the panel rather
- * than in a footnote: the tip is on chain and permanent, the promise is the creator's word.
- *
- * The statement signed is the digest of the exact list — see `lib/perks-digest.ts`, which both this
- * and the route import so there is one definition of "canonical" rather than two that can drift.
- */
 import { useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { perksDigest, type DigestPerk } from '@/lib/perks-digest';
 import { MAX_DETAIL, MAX_PERKS, MAX_TITLE } from '@/lib/perks-limits';
 
-/** Must match `statementFor` in lib/identity.ts exactly. */
 function statement(
   handle: string,
   perksSha256: string,
@@ -22,13 +12,6 @@ function statement(
   address: string,
   timestampMs: number,
 ): string {
-  /*
-    The action in one template literal, deliberately.
-
-    `test/statement-drift.test.ts` compares this against `statementFor` by reading the source, and
-    it can only see one literal at a time — a statement split across concatenated strings is
-    matched in fragments and the tail goes unpinned. That is the half most likely to drift.
-  */
   const yesNo = supportersFirst ? 'yes' : 'no';
   return (
     `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
@@ -42,13 +25,6 @@ interface Draft {
   detail: string;
 }
 
-/**
- * A decimal the creator types, as the smallest unit.
- *
- * By string, never `parseFloat(x) * 10 ** decimals`, which is wrong in the last unit for most
- * inputs — and the last unit is exactly where a threshold decides whether somebody qualifies.
- * Returns null for anything that is not a plain non-negative decimal.
- */
 export function toUnits(amount: string, decimals: number): string | null {
   const text = amount.trim();
   if (!/^\d*(\.\d*)?$/.test(text) || text === '' || text === '.') return null;
@@ -59,7 +35,6 @@ export function toUnits(amount: string, decimals: number): string | null {
   return units === '' ? '0' : units;
 }
 
-/** The smallest unit back to a decimal, for showing what is already stored. */
 export function fromUnits(units: string, decimals: number): string {
   const padded = units.padStart(decimals + 1, '0');
   const whole = padded.slice(0, padded.length - decimals);
@@ -73,7 +48,6 @@ export function PerksEditor({
   decimals,
 }: {
   handle: string;
-  /** The creator's own vault coin — thresholds are in it, because settlements are. */
   symbol: string;
   decimals: number;
 }) {
@@ -105,8 +79,6 @@ export function PerksEditor({
         );
         setSupportersFirst(body.supportersFirst === true);
       } catch {
-        // Left empty, and `loaded` still flips: an unreachable store must not look like a creator
-        // who has set nothing, so the panel says so below rather than showing a confident blank.
         if (!cancelled) setError('Your saved perks could not be read just now.');
       } finally {
         if (!cancelled) setLoaded(true);

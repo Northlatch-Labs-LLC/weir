@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/** Process entrypoint. Kept separate from index.ts so importing the library runs nothing. */
 import { main } from './index.js';
 
 main(process.argv.slice(2), process.env)

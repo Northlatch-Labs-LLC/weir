@@ -1,36 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `heron-purse` — the process. One socket, one call, one key.
- *
- * Run it with `tsx src/server.ts --socket … --policy … --policy-sha256 … --chain … --audit …`.
- *
- * # The order of the checks at start is the design
- *
- *  1. Refuse if a key is in the environment or in argv. **Before anything else**, because a process
- *     started wrongly must die at its first instruction rather than after it has created a socket
- *     other things can connect to.
- *  2. Load the policy and check its pin. A purse whose policy does not match what the unit pinned
- *     never holds a key.
- *  3. Load the key.
- *  4. Open the audit chain and the spend ledger. A broken chain refuses to start; see
- *     `audit-file.ts` for why appending past a break is worse than stopping.
- *  5. Only then bind the socket, and only then tell systemd it is ready.
- *
- * # `Type=notify`
- *
- * The unit is `Type=notify` so `heron-beat.service`'s `After=` actually means the socket exists.
- * `Type=simple` would have systemd consider the purse started the instant it forked, and the first
- * beat after a reboot would race the bind and fail with `ENOENT` on a socket that appears a second
- * later. The notification is one datagram on `$NOTIFY_SOCKET`, which is the whole of the protocol
- * this needs; there is no library dependency for it.
- *
- * # What is never logged
- *
- * The key, obviously. Also: the intent's contents, and the value of anything that failed to parse.
- * The log lines are `purse: <kind> <outcome> <rule|digest> seq=<n>` and the startup line, which
- * carries the address, the two policy hashes and the socket path. An audit line has the reason in
- * full; the journal does not, because the journal goes places the audit file does not.
- */
 
 import { createServer, type Socket } from 'node:net';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -58,38 +26,18 @@ export interface ServerArgs {
   readonly audit: string;
   readonly spend: string;
   readonly keyFile?: string | undefined;
-  /**
-   * The multisig document (`policy/heron-multisig.json`). With it the purse signs AS the multisig
-   * address, the hot key being the one member it holds; without it the purse signs as the hot
-   * key's own address, which is what a single-key test deployment is and what Heron is not.
-   */
   readonly multisig?: string | undefined;
-  /** All three or none: the origin statements are issued for, how many a day, and Heron's own vault. */
   readonly apiOrigin?: string | undefined;
   readonly statementsPerDay?: number | undefined;
   readonly vault?: string | undefined;
-  /**
-   * The agent this purse signs for: `heron` when not given. It names the credential systemd places
-   * (`<agent>-hot`) and the prefix of every log line (`<agent>-purse`), and nothing else — the
-   * policy, the members document and the vault are still what bound it. A second citizen runs the
-   * same compiled server with `--agent wren`; Heron's unit passes nothing and behaves as it always has.
-   */
   readonly agent?: string | undefined;
 }
 
 export const DEFAULT_AGENT = 'heron';
-/** `^[a-z][a-z0-9-]{0,31}$`: the same shape --seal accepts for a credential name, for the same reason. */
 const AGENT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 
 const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day', '--vault', '--agent'] as const;
 
-/**
- * Parse argv.
- *
- * Written out rather than taken from a parser library for one reason: an unknown flag is a
- * refusal. A parser that ignores what it does not recognise turns `--policy-sha-256` (a typo) into
- * a purse running with no pin, and the typo is invisible in the unit file.
- */
 export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
   const values = new Map<string, string>();
   for (let i = 0; i < argv.length; i += 1) {
@@ -156,7 +104,6 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
   });
 }
 
-/** The credential name a purse for `agent` loads: `heron-hot`, `wren-hot`. */
 export function credentialNameFor(agent: string | undefined): string {
   return `${agent ?? DEFAULT_AGENT}-hot`;
 }
@@ -167,25 +114,11 @@ export interface RunningPurse {
   readonly stop: () => Promise<void>;
 }
 
-/**
- * Start the purse and listen.
- *
- * Exported so the socket tests drive the real server rather than a stand-in. A test that exercised
- * a different code path from the unit would prove nothing about the unit.
- */
 export async function startPurse(args: {
   readonly server: ServerArgs;
   readonly argv: readonly string[];
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly log?: ((line: string) => void) | undefined;
-  /**
-   * Supplied by the socket test with a recorded response and a pinned gas coin, so the whole
-   * server — argv, pin, key, socket, framing, purse, audit chain — runs with no network.
-   *
-   * The same seam `PolicySigner` offers for the same reason, and used the same way: a test that
-   * drove a different code path from the unit would prove nothing about the unit. Nothing in the
-   * product path passes it; the entry point below does not.
-   */
   readonly recorded?:
     | { readonly simulation: SimulationPort; readonly gas: GasPort; readonly client: SuiGrpcClient }
     | undefined;
@@ -214,11 +147,6 @@ export async function startPurse(args: {
   });
   if (!key.ok) return key;
 
-  /*
-    Heron signs AS its 1-of-2 multisig address. The hot key is the one member this process holds;
-    the document names both members and the threshold, and the address they derive is what the
-    policy below must be written for. See multisig-file.ts for why that one check is enough.
-  */
   let signer = key.value.signer;
   let signerLine = `key from ${key.value.path}`;
   if (args.server.multisig !== undefined) {
@@ -276,20 +204,6 @@ export async function startPurse(args: {
   await mkdir(dirname(args.server.socket), { recursive: true });
   await removeStaleSocket(args.server.socket);
 
-  /*
-    `allowHalfOpen: true` is load-bearing and was found by a failing test rather than by reading.
-
-    The client sends its request and calls `end()`, which is a FIN. With node's default
-    (`allowHalfOpen: false`) the server's socket answers that FIN by ending its OWN writable side
-    immediately — so by the time `purse.handle` has finished simulating and signing, there is
-    nothing left to write to, `connection.end(response)` throws ERR_STREAM_WRITE_AFTER_END, and the
-    client sees the connection close with no answer. The decision was made and recorded correctly
-    and the caller never learned it, which is the worst of the possible failures here: an
-    unattended beat would read "no answer" and could not tell it from a purse that was down.
-
-    With half-open allowed, the read side closes and the write side stays open until the answer is
-    written. `serve` then closes it itself.
-  */
   const server = createServer({ allowHalfOpen: true }, (connection) => {
     void serve(connection, purse);
   });
@@ -306,8 +220,6 @@ export async function startPurse(args: {
     return listening;
   }
 
-  // 0660: the purse's user owns it, the beat's group can speak to it, nobody else can. The socket
-  // is the only thing the container is given, and it is given the socket rather than a key.
   await chmod(args.server.socket, 0o660);
 
   log(
@@ -329,7 +241,6 @@ export async function startPurse(args: {
   });
 }
 
-/** One connection: read to end-of-input or a newline, answer once, close. */
 async function serve(connection: Socket, purse: Purse): Promise<void> {
   connection.setTimeout(30_000);
   const chunks: Buffer[] = [];
@@ -350,16 +261,6 @@ async function serve(connection: Socket, purse: Purse): Promise<void> {
     if (answered) return;
     received += chunk.byteLength;
     if (received > MAX_REQUEST_BYTES) {
-      /*
-        Answered without the bytes ever being assembled — and **recorded**, which it was not before
-        (Security's A2, 2026-09-05). A peer that streams at the socket without ever sending a
-        newline is the probe `audit-file.ts` says the purse keeps its own chain for, and it used to
-        be the one refusal that left no line at all.
-
-        `refuseUnread` records on the purse's own queue and answers with a value. The chunks
-        collected so far are dropped rather than parsed: reading them is exactly what the cap
-        exists to refuse.
-      */
       answered = true;
       chunks.length = 0;
       void purse
@@ -389,9 +290,6 @@ async function serve(connection: Socket, purse: Purse): Promise<void> {
     try {
       value = JSON.parse(text);
     } catch {
-      // Handed to the purse as `undefined` so that the refusal is produced, logged and **chained**
-      // by the one place that records — rather than short-circuited here, which would leave a
-      // probe of the socket with no line in the audit file.
       value = undefined;
     }
     await answer(value);
@@ -413,27 +311,6 @@ function normaliseAddress(address: string): string {
   return `0x${trimmed.slice(2).toLowerCase().padStart(64, '0')}`;
 }
 
-/**
- * `READY=1` to systemd, if systemd is listening.
- *
- * # Why this shells out instead of sending the datagram itself
- *
- * systemd's notify socket is a **unix datagram** socket. Node's `dgram` module opens UDP sockets
- * only and its `net` module opens stream sockets only; neither can address `AF_UNIX`/`SOCK_DGRAM`,
- * so there is no way to send this datagram from Node without a native addon. `systemd-notify` is
- * part of systemd itself and is on the host by definition — the unit that reads `$NOTIFY_SOCKET`
- * is the same package that ships the binary.
- *
- * The cost is named in the unit: `systemd-notify` is a **child** of this process, not the main
- * process, so the unit must carry `NotifyAccess=all`. That widens who may notify from "the main
- * process" to "anything in this unit's cgroup", and this unit's cgroup holds the purse and its
- * children and nothing else.
- *
- * **Not executed.** This laptop has no systemd. The shape is written from systemd's own
- * documentation for `sd_notify` and `NotifyAccess`; that it works is unverified until step 9 runs a
- * smoke beat on the droplet, and the deploy's assertion there is `systemctl show heron-purse
- * --property=ActiveState` reading `active` rather than `activating`.
- */
 function notifyReady(notifySocket: string | undefined): void {
   if (notifySocket === undefined || notifySocket === '') return;
   try {

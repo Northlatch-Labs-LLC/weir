@@ -6,13 +6,6 @@ import { verifyAction } from '@/lib/identity';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Follow or unfollow a creator.
- *
- * Free and off chain — following moves no money, so there is nothing to settle. But it is still
- * signed: an unproven follow is a follower count that means nothing, and a count that means
- * nothing is worse than no count at all.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;

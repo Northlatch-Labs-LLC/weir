@@ -6,13 +6,6 @@ import { prepareClaimEarnings, type CheckoutQuote } from '@/lib/checkout';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Build and simulate a withdrawal, without signing it.
- *
- * Submission goes through `/api/checkout/submit`, which returns the bytes unchanged — so what
- * executes is byte-identical to what was simulated and to what the wallet displayed. There is no
- * path here that both builds and submits.
- */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;

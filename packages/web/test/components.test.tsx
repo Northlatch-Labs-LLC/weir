@@ -1,17 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The two components that decide what a reader believes about a creator.
- *
- * `EntityType`
- * tells a reader whether clicking through will take their money or hold a deposit they get back.
- * Both are small, both are pure, and both are wrong in ways that do not throw:
- *
- *   A `Creator` marker on a vault selling nothing sends a reader to a page with nothing to buy.
- *   A missing `Free support` marker hides a vault whose principal is returnable in full.
- *
- * None of those raise an error. They render, and they are believed.
- */
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -25,8 +13,6 @@ describe('deciding what a profile is', () => {
   });
 
   it('a vault with no tiers sells nothing yet', () => {
-    // Marking it as a membership would send a reader to a page with nothing to buy. The vault
-    // existing is not the same as the vault being open for business.
     expect(entitiesOf({ tiers: 0 })).toEqual(['user']);
   });
 
@@ -42,7 +28,6 @@ describe('deciding what a profile is', () => {
   });
 
   it('an empty stake vault id is not a stake vault', () => {
-    // A blank column is absence, not a vault at address "".
     expect(entitiesOf({ tiers: 0, stakeVaultId: '' })).toEqual(['user']);
     expect(entitiesOf({ tiers: 0, stakeVaultId: null })).toEqual(['user']);
   });
@@ -52,7 +37,6 @@ describe('deciding what a profile is', () => {
   });
 
   it('does not add "user" alongside a real marker', () => {
-    // Two markers where one says nothing takes the room the useful one needs.
     expect(entitiesOf({ tiers: 1, stakeVaultId: '0xabc' })).not.toContain('user');
   });
 });
@@ -68,11 +52,6 @@ describe('the entity markers a reader sees', () => {
   });
 
   it('says what happens to your money, not what object it is', () => {
-    /*
-     * The distinction the whole component exists for. "StakeVault" teaches a reader nothing;
-     * "deposit and keep it" is the fact they need before clicking. Confusing free support with a
-     * membership is the most expensive mistake available here, in both directions.
-     */
     const { container } = render(<EntityType entity="free-support" />);
     const title = container.querySelector('.entity')?.getAttribute('title') ?? '';
     expect(title).toMatch(/keep it|withdraw/i);
@@ -85,7 +64,6 @@ describe('the entity markers a reader sees', () => {
   });
 
   it('gives each type its own class, so colour can carry the meaning', () => {
-    // Colour is the fastest signal in a feed. Three types sharing a class would make them one.
     const seen = new Set<string>();
     for (const entity of ['creator', 'free-support', 'user'] as const) {
       const { container } = render(<EntityType entity={entity} />);

@@ -18,32 +18,8 @@ import { siteConfig } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
 
-/** A ciphertext for a 4000-character message is ~5.4 KB of base64. This is generous, and bounded. */
 const MAX_CIPHERTEXT_CHARS = 16_384;
 
-/**
- * Send a direct message, encrypted or not.
- *
- * The signature proves the sender, and the statement includes the recipient and the content — so a
- * captured signature cannot be redirected to someone else or reused with different words. For an
- * encrypted message the statement binds the ciphertext's digest instead of the text, because the
- * server has no plaintext to rebuild the statement from.
- *
- * A paid message needs a vault and a priced content key, exactly like a paid post: `unlock` reads
- * the price from chain and refuses content that has none, so the price must already be set.
- *
- * # Encrypted and paid are mutually exclusive, and the refusal is deliberate
- *
- * Paid messages work because the server withholds the body until the buyer holds an Unlock object.
- * An encrypted body is one the server cannot withhold in any meaningful sense: the recipient's key
- * envelope travels with the message, so whoever can fetch the row can decrypt it. Accepting both
- * flags together would produce a message that charges for something it has already given away.
- *
- * The alternative — withholding the envelope until payment — puts the server back in charge of the
- * key, which is exactly the property end-to-end encryption exists to remove. So this combination
- * is refused rather than approximated, and the sender is told which one they are choosing.
- */
-/** Idempotent on `(from, Idempotency-Key)` when the header is sent; see `lib/idempotent-route.ts`. */
 export async function POST(request: Request): Promise<Response> {
   return idempotently(
     request,
@@ -110,22 +86,6 @@ async function sendOnce(request: Request) {
     );
   }
 
-  /*
-    A price is a whole number of the smallest unit, checked before the signature is.
-
-    Refusing after verification would spend a single-use signature on a request that was never
-    going to be stored, so a creator who typed "1.5" would have to sign again to find that out —
-    the same reason `POST /api/posts` bounds its lengths before it verifies.
-
-    `POST /api/posts` cannot reach this state at all: it compares the submitted price against the
-    on-chain price and refuses a disagreement, so only digits get through. This route took
-    `body.paid.price` and stored it. Every consumer then parses it with `BigInt()`, which throws on
-    '', '1.5' and '1,000' alike — and a stored row is read on every render, so one bad value breaks
-    that thread permanently rather than failing one request.
-
-    `db/032` carries the same rule as a column constraint. Both, deliberately: this one gives a
-    sentence a person can act on, and the column is the rule every other writer passes through.
-  */
   if (body.paid !== undefined && !/^[0-9]+$/.test(body.paid.price)) {
     return NextResponse.json(
       {
@@ -137,12 +97,6 @@ async function sendOnce(request: Request) {
     );
   }
 
-  /*
-    What the paid block commits to, as one field.
-
-    Rebuilt from the request in the order the client builds it, and empty when the message is not
-    for sale — so "free" is a value that gets signed rather than the absence of one.
-  */
   const paidStatement =
     body.paid === undefined
       ? ''
@@ -153,34 +107,13 @@ async function sendOnce(request: Request) {
     address: from,
     signature,
     timestampMs,
-    // `preview` as sent, not trimmed. The stored copy is trimmed below, but the statement must be
-    // the bytes the client signed — normalising one side and not the other is a signature that
-    // fails for a reason no error message can explain.
     action: { kind: 'send', to, text: trimmed, preview, paid: paidStatement },
   });
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
-  /*
-    The message quota, spent on the address the signature just proved rather than on `from` as it
-    arrived. The distinction is the whole guard: keyed on an unproven body field, anybody could
-    empty any sender's budget by posting unsigned messages in their name, so the control against
-    spam would double as a way to silence a person. `rateLimit` above is per process and therefore
-    per instance; this is the ceiling that is the same number wherever the request lands.
-  */
   const overQuota = await quotaLimit(from, 'message');
   if (overQuota !== null) return overQuota;
 
-  /*
-    A withdrawn declaration does not send. `lib/agent-standing.ts` holds the rule and the reasons.
-
-    After the proof, because `from` is a body field until the signature makes it a fact; before the
-    paid branch, which reads the vault off chain, and before `addMessage` writes the row.
-
-    The encrypted path in `sendEncrypted` carries the same two lines against its own proof, rather
-    than one check up here before the branch at the top of this function. That would be earlier than
-    the encrypted path's signature and would therefore be the exact ordering this rule forbids —
-    one call site fewer bought by keying the control on an unproven address.
-  */
   const withdrawn = await refuseWithdrawnDeclaration(from);
   if (withdrawn !== null) return withdrawn;
 
@@ -192,11 +125,6 @@ async function sendOnce(request: Request) {
     if (profile === null) {
       return NextResponse.json({ error: 'no such creator' }, { status: 404 });
     }
-    /*
-      A paid message settles against a vault, so charging for one without a vault is unrepresentable
-      rather than merely unwise: there is nowhere for the money to go. Refused here instead of
-      writing a row whose `vault_id` is null and discovering it at the point of payment.
-    */
     if (profile.vaultId === null) {
       return NextResponse.json(
         { error: 'a paid message needs a vault to settle into, and this profile has none' },
@@ -204,30 +132,17 @@ async function sendOnce(request: Request) {
       );
     }
 
-    /*
-      Authorship read from chain, not from the profile row.
-
-      This compared `profile.owner` — a Postgres column, derived from chain once at write time and
-      never again. A vault transferred on chain left the previous owner still able to price messages
-      against it, because the row still said they owned it. The identical check in `posts` and
-      `studio/upload` reads the vault, and the two disagreeing is how the database quietly becomes
-      the authority on something the chain decides.
-    */
     const config = siteConfig();
     if (!config.ok) return NextResponse.json({ error: config.failure.detail }, { status: 503 });
 
     const vault = await readCreatorVault(createClient(config.value), profile.vaultId);
     if (!vault.ok) {
-      // Unverified authorship is not authorship. Refused rather than falling back to the row, which
-      // would make an unreachable node the way around this check.
       return NextResponse.json(
         { error: `could not read the vault: ${vault.failure.detail}` },
         { status: 503 },
       );
     }
     if (vault.value.owner.toLowerCase() !== from.toLowerCase()) {
-      // Only a creator can charge for a message, and only against their own vault. Otherwise
-      // anyone could price a message against someone else's vault and collect nothing.
       return NextResponse.json(
         { error: 'only the vault owner may send a paid message from this profile' },
         { status: 403 },
@@ -256,25 +171,12 @@ async function sendOnce(request: Request) {
   return NextResponse.json({ message: { id: message.id, threadId: message.threadId } });
 }
 
-/**
- * Store an encrypted message.
- *
- * Everything checkable is checked, and the uncheckable part is named rather than pretended away:
- * this server cannot tell a correctly wrapped key from thirty-two random bytes, and no server can.
- * A sender who wraps garbage produces a message the recipient sees as undecryptable — which is a
- * sender lying to one person, not a hole in the scheme.
- *
- * What *is* checkable is that the envelope set covers both participants. Without that check the
- * commonest real bug — encrypting only to the recipient, or only to yourself — would be stored
- * happily and surface later as half a thread nobody can read.
- */
 async function sendEncrypted(input: {
   from: string;
   to: string;
   signature: string;
   timestampMs: number;
   encryption: MessageEncryption;
-  /** Threaded from the handler: this helper has no request to derive it from. */
   origin: string;
 }) {
   const { from, to, signature, timestampMs, encryption, origin } = input;
@@ -318,9 +220,6 @@ async function sendEncrypted(input: {
       );
     }
   }
-  // Extra envelopes are refused too. An envelope for a third address is a silent additional
-  // recipient, and a message with an unannounced reader is not the message the sender thought
-  // they were sending.
   for (const c of covered) {
     if (!participants.has(c)) {
       return NextResponse.json(
@@ -339,17 +238,8 @@ async function sendEncrypted(input: {
   });
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
-  /*
-    The same bucket as the unencrypted path, spent after the same proof.
-
-    One bucket rather than two, deliberately: the recipient's attention is the thing being spent and
-    it does not care which of the two shapes arrived, so a sender who could send sixty of each would
-    have twice the ceiling this file says they have. An encrypted flood is a flood.
-  */
   const overQuota = await quotaLimit(from, 'message');
   if (overQuota !== null) return overQuota;
-  // The same rule as the unencrypted path, against this path's own proof and before `addMessage`.
-  // An encrypted body is still a message published under a declaration somebody has withdrawn.
   const withdrawn = await refuseWithdrawnDeclaration(from);
   if (withdrawn !== null) return withdrawn;
 
@@ -359,8 +249,6 @@ async function sendEncrypted(input: {
     from,
     to,
     createdAtMs: Date.now(),
-    // Both empty, and the database rejects the row if they are not. An encrypted message with a
-    // plaintext preview leaks the opening of every message, which is most of what most messages say.
     preview: '',
     body: '',
     access: { kind: 'open' as const },

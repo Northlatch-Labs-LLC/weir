@@ -1,19 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// One failing fixture for EVERY refusal in bin/check-rules.ts — all forty of them, not one per
-// rule. The rule under the Heron v2 specification is the CTO's: *every refusal in this system
-// ships with a fixture that makes it fire* (§1). v1 had ten rules and 29 cases, so fourteen of its
-// refusals had never been seen to fire, and two of them could not have fired at all: the stdio
-// entry pinned the interpreter rather than the program, and the child's environment was never
-// scrubbed (§2.7a, §2.8a). Both are closed here, each with the shape that used to pass.
-//
-// Rules 1-4, 7-8 are the council's eight (minus 5-6, rewritten); rule 5 is an allow-list (finding
-// B4) now also closing hole A; rule 6 also asserts the skill-install switches (finding B6); rule 2
-// also asserts exec/web/spawn/subagent/heartbeat/read-write-paths (finding A8); rule 9 is the
-// model api_base allow-list (finding B5); rule 10 is the .security.yml key-path allow-list
-// (finding A4).
-//
-// Run: node --test  (no build step; node strips the types)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,10 +14,6 @@ import {
   parseSecurityYmlKeyPaths,
   RuleViolation,
 } from '../bin/check-rules.ts';
-
-// ---------------------------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------------------------
 
 function baseParts() {
   return {
@@ -87,7 +68,6 @@ function baseTools(overrides: Record<string, unknown> = {}): Record<string, unkn
   return { ...baseParts().tools, ...overrides };
 }
 
-/** A config whose only MCP server is the one stdio entry under test. */
 function withStdioServer(server: Record<string, unknown>): Record<string, unknown> {
   return baseConfig({
     tools: baseTools({ mcp: { enabled: true, servers: { keyed: server } } }),
@@ -130,7 +110,6 @@ function makeWorkspace(
   return { root, workspace };
 }
 
-/** A file that stands in for a shipped, self-contained stdio executable, with its real sha256. */
 function shippedExecutable(dir: string, name: string, body = 'ELF-not-really\n'): { path: string; sha256: string } {
   const file = path.join(dir, name);
   writeFileSync(file, body);
@@ -145,10 +124,6 @@ function refusal(ruleNumber: number, matching?: RegExp) {
     return true;
   };
 }
-
-// ---------------------------------------------------------------------------------------------
-// The shipped constants beat.sh and the image depend on
-// ---------------------------------------------------------------------------------------------
 
 test('shipped: ALLOWED_STDIO is empty until a binary and its hash land in the same commit', () => {
   assert.equal(ALLOWED_STDIO.size, 0);
@@ -170,10 +145,6 @@ test('shipped (hole B): nothing credential-shaped is on the env allow-list', () 
     assert.doesNotMatch(name, /KEY|TOKEN|SECRET|PASS|CRED/i);
   }
 });
-
-// ---------------------------------------------------------------------------------------------
-// Passing fixtures
-// ---------------------------------------------------------------------------------------------
 
 test('passing fixture: a config satisfying every rule does not throw', () => {
   const { root, workspace } = makeWorkspace();
@@ -206,10 +177,6 @@ test('passing fixture (hole A): a pinned, self-contained stdio executable with e
   rmSync(dir, { recursive: true, force: true });
 });
 
-// ---------------------------------------------------------------------------------------------
-// Rule 1 — one refusal
-// ---------------------------------------------------------------------------------------------
-
 test('rule 1: evolution.enabled must be exactly false', () => {
   const config = baseConfig({ evolution: { enabled: true, mode: 'observe' } });
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(1));
@@ -219,10 +186,6 @@ test('rule 1: evolution.mode "apply" with enabled true also refused', () => {
   const config = baseConfig({ evolution: { enabled: true, mode: 'apply' } });
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(1));
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 2 — five refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 2: restrict_to_workspace must be exactly true', () => {
   const config = baseConfig({
@@ -266,18 +229,10 @@ test('rule 2 (finding A8): an allow_read_paths entry outside the workspace is re
   rmSync(root, { recursive: true, force: true });
 });
 
-// ---------------------------------------------------------------------------------------------
-// Rule 3 — one refusal
-// ---------------------------------------------------------------------------------------------
-
 test('rule 3: gateway.host must be loopback', () => {
   const config = baseConfig({ gateway: { host: '0.0.0.0', port: 18790 } });
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(3));
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 4 — two refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 4: PICOCLAW_GATEWAY_HOST set to a non-loopback value is refused', () => {
   const config = baseConfig();
@@ -294,10 +249,6 @@ test("rule 4: -public on PicoClaw's own argv is refused", () => {
     refusal(4, /-public/)
   );
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 5 — thirteen refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 5: an http server with no url is refused', () => {
   const config = baseConfig({
@@ -339,12 +290,7 @@ test('rule 5: a stdio command that is not an absolute path is refused', () => {
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(5, /not an absolute path/));
 });
 
-// --- HOLE A, the shape that passed before 2026-09-05 -------------------------------------------
 test('rule 5 (hole A, CTO §2.7a): an interpreter command is refused even when it is pinned and its hash matches', () => {
-  // The exact shape the stage 2-3 spec §5 ships and that v1 accepted the moment `node` was
-  // allow-listed: the hash proves the node binary, and /tmp/x.js — the thing that actually runs —
-  // is pinned by nothing. Both halves of the hole are asserted here: the interpreter IS in the
-  // allow-list and its hash IS correct, and it is refused anyway.
   const dir = mkdtempSync(path.join(os.tmpdir(), 'agent-runtime-stdio-'));
   const nodeLike = shippedExecutable(dir, 'node');
   const config = withStdioServer({ type: 'stdio', command: nodeLike.path, args: ['/tmp/x.js', '--mode', 'stdio'] });
@@ -391,7 +337,6 @@ test('rule 5 (hole A): a non-empty env on a correctly pinned stdio server is ref
   );
   rmSync(dir, { recursive: true, force: true });
 });
-// --- end hole A --------------------------------------------------------------------------------
 
 test('rule 5: a stdio MCP server not on the shipped allow-list is refused', () => {
   const config = withStdioServer({ type: 'stdio', command: '/usr/local/bin/some-tool' });
@@ -423,10 +368,6 @@ test('rule 5 (finding B4): a bash -c MCP server with no recognised type is refus
   const config = withStdioServer({ enabled: true, command: 'bash', args: ['-c', 'echo hi'] });
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(5, /which is not "http", "sse" or/));
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 6 — five refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 6 (finding B6): tools.install_skill.enabled true is refused', () => {
   const config = baseConfig({ tools: baseTools({ install_skill: { enabled: true } }) });
@@ -462,18 +403,10 @@ test('rule 6: an unshipped skill directory in the workspace is refused', () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-// ---------------------------------------------------------------------------------------------
-// Rule 7 — one refusal
-// ---------------------------------------------------------------------------------------------
-
 test('rule 7: a non-empty channel_list is refused', () => {
   const config = baseConfig({ channel_list: { telegram: { enabled: false, type: 'telegram' } } });
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(7));
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 8 — four refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 8: hooks.enabled true is refused', () => {
   const config = baseConfig({ hooks: { enabled: true } });
@@ -496,10 +429,6 @@ test('rule 8: a job file in the workspace cron store is refused', () => {
   assert.throws(() => checkRules(config, { env: {}, argv: [], packageRoot: root }), refusal(8, /cron store/));
   rmSync(root, { recursive: true, force: true });
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 9 — six refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 9 (finding B5): a model_list that is not an array is refused rather than skipped', () => {
   const config = baseConfig({ model_list: { 'route-normal': { api_base: 'https://evil.example/v1' } } });
@@ -538,10 +467,6 @@ test('rule 9 (finding B5): a model api_base host not on the allow-list is refuse
   });
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(9, /on neither the allow-list/));
 });
-
-// ---------------------------------------------------------------------------------------------
-// Rule 10 — two refusals
-// ---------------------------------------------------------------------------------------------
 
 test('rule 10 (finding A4): a .security.yml key path off the shipped allow-list is refused', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'agent-runtime-test-'));
@@ -591,10 +516,6 @@ test('rule 10: the .security.yml reader names the leaf key paths a file sets', (
   assert.deepEqual([...paths], ['model_list.route-normal.api_keys']);
 });
 
-// ---------------------------------------------------------------------------------------------
-// The loader — three refusals that are not rule violations
-// ---------------------------------------------------------------------------------------------
-
 test('loader: a missing config file is refused', () => {
   assert.throws(
     () => loadConfig(path.join(os.tmpdir(), 'agent-runtime-no-such-config.json')),
@@ -618,15 +539,6 @@ test('loader: a config that is valid JSON but not an object is refused', () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-// ---------------------------------------------------------------------------------------------
-// The count in the README, asserted against the checker's own source
-//
-// "A record that is not asserted rots" — the CTO on the README's stale run record (§1, defect 8c).
-// The same applies to the count of refusals: it is read out of bin/check-rules.ts here and
-// compared with what the README's rule list claims, so neither can move without the other.
-// ---------------------------------------------------------------------------------------------
-
-/** How many times each rule number appears as a refusal in the checker's source. */
 function refusalsPerRuleFromSource(): Map<number, number> {
   const source = readFileSync(path.join(import.meta.dirname, '..', 'bin', 'check-rules.ts'), 'utf8');
   const counts = new Map<number, number>();
@@ -637,7 +549,6 @@ function refusalsPerRuleFromSource(): Map<number, number> {
   return counts;
 }
 
-/** What the README's "What it refuses" list claims for each rule. */
 function refusalsPerRuleFromReadme(): Map<number, number> {
   const readme = readFileSync(path.join(import.meta.dirname, '..', 'README.md'), 'utf8');
   const start = readme.indexOf('## What it refuses');
@@ -681,10 +592,6 @@ test('every rule number that appears in the checker also appears in the README l
     assert.ok(readme.has(rule), `rule ${rule} has refusals in the checker but no line in the README`);
   }
 });
-
-// ---------------------------------------------------------------------------------------------
-// The shipped template itself
-// ---------------------------------------------------------------------------------------------
 
 test('the shipped config template passes every rule against the shipped workspace', () => {
   const packageRoot = path.resolve(import.meta.dirname, '..');

@@ -1,10 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * Phase two's argument parsing and the profile it publishes under, as a module with no side
- * effects: `bin/beat-phase2.ts` runs at import (it is the process), so anything a test needs to
- * call lives here instead. The defaults are Heron's, unchanged; a second citizen names hers by
- * flag (`--agent wren --profile-file /srv/wren/profile.json`).
- */
 
 import { allow, refuse, type Outcome } from './outcome.js';
 
@@ -15,12 +9,9 @@ export interface BeatArgs {
   readonly chain: string;
   readonly beatId: string;
   readonly dryRun: boolean;
-  /** Both or neither: with them a publish plan runs; without them it is refused locally. */
   readonly apiOrigin: string | null;
   readonly address: string | null;
-  /** The agent's name: the log prefix and the User-Agent. `heron` when not given. */
   readonly agent: string;
-  /** A JSON file `{ "name", "bio" }` phase two publishes under; Heron's literal when not given. */
   readonly profileFile: string | null;
 }
 
@@ -28,12 +19,10 @@ const FLAGS = ['--runs', '--state', '--socket', '--chain', '--beat-id', '--api-o
 const OPTIONAL = new Set<string>(['--api-origin', '--address', '--agent', '--profile-file']);
 export const DEFAULT_AGENT = 'heron';
 const AGENT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
-/** Heron's, unchanged: the profile the first citizen has always published under. */
 export const DEFAULT_PROFILE = {
   name: 'Heron',
   bio: 'A Northlatch Labs agent. It reads the network, writes what it sees, and prices its own writing; every signature it produces is bounded by a policy under a human operator.',
 } as const;
-/** The profile route's own limits (packages/web), pinned by test in publish.test.ts. */
 const PROFILE_NAME_MAX = 60;
 const PROFILE_BIO_MAX = 280;
 
@@ -42,7 +31,6 @@ export interface Profile {
   readonly bio: string;
 }
 
-/** Read and validate a profile file. A refusal names the field; it never echoes the file. */
 export function parseProfile(text: string): Outcome<Profile> {
   let value: unknown;
   try {
@@ -116,4 +104,3 @@ export function parseBeatArgs(argv: readonly string[]): Outcome<BeatArgs> {
     profileFile,
   });
 }
-

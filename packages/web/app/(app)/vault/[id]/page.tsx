@@ -15,7 +15,6 @@ import { formatSui as sui } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
-/** "Vault 0x1234…abcd", as the trail names it. An id the map does not recognise keeps the site's default. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   return {
@@ -24,22 +23,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-/**
- * One support vault.
- *
- * The vault's own figures are read on the server and rendered into the page; the visitor's position
- * is read in the browser, because it depends on which wallet they connect. Splitting it that way
- * means the public numbers are visible without connecting anything at all — somebody deciding
- * whether to support a creator should not have to hand over an address first.
- */
 export default async function VaultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [known, vault] = await Promise.all([readVaults(), readVault(id)]);
-  /*
-    The creator's default .sui name when this site has no profile for them — a fact about the
-    address rather than about this deployment — and the vault's own short id when the chain has no
-    name either. "Unnamed vault" over "??" told the reader nothing the object did not already say.
-  */
   const creatorName =
     vault.ok && vault.value.handle === null
       ? fold(
@@ -59,7 +45,6 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
         title="Vault"
         lede="Your deposit stays yours and is withdrawable in full at any time. Only the staking yield it earns goes to the creator, never the principal."
       />
-
 
         {fold(
           vault,

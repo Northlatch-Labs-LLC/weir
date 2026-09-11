@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Discovery, against a fake event log.
- *
- * The cases that matter are about the ceiling. A truncated list reported as complete means the
- * daemon silently stops harvesting the newest vaults — the ones most likely to need it — and
- * nothing anywhere goes red.
- */
 
 import { describe, expect, it } from 'vitest';
 import { discoverVaults } from '../src/adapters/discovery.js';
@@ -25,7 +18,6 @@ function event(n: number) {
   };
 }
 
-/** A fake client serving `pages` pages of events, counting how many were actually requested. */
 function fakeClient(pages: Array<{ events: unknown[]; hasNextPage: boolean; endCursor?: string | null }>) {
   let calls = 0;
   const client = {
@@ -69,8 +61,6 @@ describe('discoverVaults', () => {
   });
 
   it('stops at the ceiling and flags the result as partial', async () => {
-    // The bound that stops a 99,616-call walk. Flagged, because "that is all of them" and
-    // "that is all I had budget for" imply opposite next actions.
     const pages = Array.from({ length: 10 }, (_, i) => ({
       events: [event(i)],
       hasNextPage: true,
@@ -88,8 +78,6 @@ describe('discoverVaults', () => {
   });
 
   it('does not loop forever when the node claims more pages but gives no cursor', async () => {
-    // A node that says hasNextPage without an endCursor would otherwise re-request page one for
-    // ever. Reported as partial rather than spun on.
     const client = fakeClient([{ events: [event(1)], hasNextPage: true, endCursor: null }]);
     const reading = await discoverVaults(client, PKG, 20);
 
@@ -100,8 +88,6 @@ describe('discoverVaults', () => {
   });
 
   it('fails on a malformed event rather than skipping it', async () => {
-    // Skipping would silently drop a vault from the harvest set. A vault nobody harvests earns
-    // nothing, which looks exactly like a vault with no deposits.
     const client = fakeClient([
       { events: [event(1), { json: { vault: '0xabc' }, transactionDigest: 'd' }], hasNextPage: false },
     ]);
@@ -121,7 +107,6 @@ describe('discoverVaults', () => {
   });
 
   it('returns an empty list, not a failure, when no vault has ever been opened', async () => {
-    // "We looked and there are none" is a real answer and must not read as a fault.
     const client = fakeClient([{ events: [], hasNextPage: false }]);
     const reading = await discoverVaults(client, PKG, 20);
 

@@ -1,27 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The manifest is the root of trust, and this file is what makes that sentence checkable.
- *
- * # Why this is separate from `test/agent-manifest.test.ts`
- *
- * That file asserts the document's CONTENT — that every published statement is the one the verifier
- * builds, that every endpoint's `proof` matches its route, that no credential leaks. It is about
- * whether the claims are true.
- *
- * This file is about whether the claims are *ours*. A perfectly true manifest that an intermediary
- * rewrote in flight is the more dangerous document of the two, because everything in it still looks
- * right. So what is asserted here is the machinery a stranger uses to tell one from the other: that
- * the signature covers the exact bytes served, that a single edited character breaks it, that the
- * digest is a digest of the response and not of something adjacent to it, and that an unsigned
- * deployment says so rather than sending a signature nobody can trust.
- *
- * # The key here is generated, and never read from anywhere
- *
- * `Ed25519Keypair.generate()` per run. Nothing in this file may reach a real operator key: a test
- * that could load one is a test that puts one in a CI log the first time an assertion prints the
- * object it was given.
- */
 
 import { createHash, createPublicKey, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -52,7 +30,6 @@ import {
   type PackageLineage,
 } from '../lib/agent-manifest';
 
-/** Synthetic ids of the right shape, belonging to nothing. Same discipline as the sibling suite. */
 const CONFIG: ProjectXSocialConfig = {
   network: 'mainnet',
   grpcUrl: 'https://fullnode.example.invalid:443',
@@ -98,32 +75,16 @@ function inputs(overrides: Partial<ManifestInputs> = {}): ManifestInputs {
     seal: ok(SEAL),
     coinTypes: [`0x${'a7'.repeat(32)}::usdc::USDC`],
     platform: ok(PLATFORM),
-    /*
-      A closed door with a date, because that is the state this deployment is actually in and a
-      test that fed the open default would never render the half of the block a reader depends on.
-      Overridden where a case needs the other branch.
-    */
     door: { peopleGated: true, peopleOnboardFrom: { atMs: 1_796_083_200_000, label: 'people onboard from' } },
     ...overrides,
   };
 }
 
-/** A throwaway operator key, and the environment a deployment holding it would have. */
 function operatorKey(): { keypair: Ed25519Keypair; env: Record<string, string | undefined> } {
   const keypair = Ed25519Keypair.generate();
   return { keypair, env: { [AGENT_MANIFEST_KEY_ENV]: keypair.getSecretKey() } };
 }
 
-/**
- * The published public key, turned into something a verifier can use — from the manifest's own
- * base64 and nothing else.
- *
- * Deliberately built from the STRING the document publishes rather than from the keypair object,
- * because that is all a stranger has. `302a300506032b6570032100` is the fixed SPKI header for an
- * Ed25519 public key of exactly 32 bytes: SEQUENCE, AlgorithmIdentifier 1.3.101.112, BIT STRING.
- * A test that verified with the keypair in hand would prove we can check our own signature and
- * nothing about whether anybody else can.
- */
 function publishedKey(base64: string): KeyObject {
   return createPublicKey({
     key: Buffer.concat([
@@ -135,10 +96,6 @@ function publishedKey(base64: string): KeyObject {
   });
 }
 
-/* ------------------------------------------------------------------------------------------------
-   The signing key itself.
-   ------------------------------------------------------------------------------------------------ */
-
 describe('the operator key', () => {
   it('publishes an address a verifier can derive from the public key it publishes beside it', () => {
     const { keypair, env } = operatorKey();
@@ -146,8 +103,6 @@ describe('the operator key', () => {
     expect(signer.ok).toBe(true);
     if (!signer.ok) return;
 
-    // The cross-check the manifest tells an agent to perform, performed. If these two could
-    // disagree, publishing both would be publishing one fact twice and calling it corroboration.
     expect(signer.value.identity.address).toBe(keypair.toSuiAddress());
     expect(signer.value.identity.publicKey).toBe(
       Buffer.from(keypair.getPublicKey().toRawBytes()).toString('base64'),
@@ -164,11 +119,6 @@ describe('the operator key', () => {
   });
 
   it('never echoes the key material in the failure it reports', () => {
-    /*
-      This detail string is serialised into the response body. A loader that quoted the value it
-      could not parse would publish a malformed private key to every reader of the manifest — and a
-      malformed Sui key is usually a correct one with a typo.
-    */
     const secret = 'suiprivkey1qqqqqqqqqqqqqqqqqqqqqqqqqqnotarealkeyatallxxxxx';
     const signer = loadManifestSigner({ [AGENT_MANIFEST_KEY_ENV]: secret });
     expect(signer.ok).toBe(false);
@@ -178,10 +128,6 @@ describe('the operator key', () => {
     expect(JSON.stringify(signer.failure)).not.toContain('suiprivkey');
   });
 });
-
-/* ------------------------------------------------------------------------------------------------
-   The signature over the served bytes.
-   ------------------------------------------------------------------------------------------------ */
 
 describe('the detached signature', () => {
   it('verifies against the published public key, over exactly the bytes served', async () => {
@@ -194,8 +140,6 @@ describe('the detached signature', () => {
     expect(served.jws).not.toBeNull();
     if (served.jws === null) return;
 
-    // Re-attaching the payload is the whole verification procedure the manifest documents. If this
-    // does not work here it does not work for anybody.
     const [header, signature] = served.jws.split('..');
     const payload = Buffer.from(served.body, 'utf8').toString('base64url');
     const verified = await compactVerify(
@@ -203,7 +147,6 @@ describe('the detached signature', () => {
       publishedKey(manifest.integrity.signer?.publicKey ?? ''),
       { algorithms: ['EdDSA'] },
     );
-    // And the key the document published is the key that signed it.
     expect(manifest.integrity.signer?.address).toBe(keypair.toSuiAddress());
     expect(new TextDecoder().decode(verified.payload)).toBe(served.body);
   });
@@ -218,8 +161,6 @@ describe('the detached signature', () => {
     const segments = served.jws.split('.');
     expect(segments).toHaveLength(3);
     expect(segments[1]).toBe('');
-    // A header that carried the body would double every response for no gain and create a second
-    // copy that can disagree with the first.
     expect(served.jws.length).toBeLessThan(served.body.length);
   });
 
@@ -230,11 +171,6 @@ describe('the detached signature', () => {
     const served = await signManifest(manifestFrom(inputs()), signer);
     if (served.jws === null) throw new Error('expected a signature');
 
-    /*
-      The attack this exists to stop, at its smallest: an intermediary changes one id and leaves
-      everything else alone. The document still parses, still looks right, and points every agent
-      that trusts it at somebody else's package.
-    */
     const tampered = served.body.replace(CONFIG.latestPackageId, `0x${'99'.repeat(32)}`);
     expect(tampered).not.toBe(served.body);
 
@@ -262,8 +198,6 @@ describe('the detached signature', () => {
 
     expect(decoded['alg']).toBe('EdDSA');
     expect(decoded['kid']).toBe(signer.value.identity.address);
-    // Both are inside the signature. An old document replayed at an agent carries an old `iat` and
-    // an old `ver`, and neither can be edited forward without breaking the signature over them.
     expect(decoded['ver']).toBe(AGENT_MANIFEST_REVISION);
     expect(decoded['iat']).toBe(Math.floor(manifest.observedAtMs / 1000));
   });
@@ -274,15 +208,9 @@ describe('the detached signature', () => {
       fail('unconfigured', 'agent manifest signing key', 'not set'),
     );
     expect(served.jws).toBeNull();
-    // The digest is still there. It cannot prove who wrote the document, and it still catches a
-    // response mangled in transit, which is the cheaper of the two failures and the commoner one.
     expect(served.contentDigest).toMatch(/^sha-256=:[A-Za-z0-9+/=]+:$/);
   });
 });
-
-/* ------------------------------------------------------------------------------------------------
-   The digest and the tag.
-   ------------------------------------------------------------------------------------------------ */
 
 describe('the digest and the tag', () => {
   it('digests the bytes that are served, not the object they came from', async () => {
@@ -292,13 +220,10 @@ describe('the digest and the tag', () => {
 
     const expected = createHash('sha256').update(Buffer.from(served.body, 'utf8')).digest();
     expect(served.contentDigest).toBe(`sha-256=:${expected.toString('base64')}:`);
-    // Strong and quoted, per RFC 9110. A weak tag would say two different documents were
-    // interchangeable, which for a signed document is exactly the claim that must not be made.
     expect(served.etag).toBe(`"${expected.toString('hex')}"`);
   });
 
   it('is the digest of a body that JSON.parse round-trips to the manifest', async () => {
-    // The property that makes "sign what you serve" safe: nobody has to re-serialise to read it.
     const served = await signManifest(
       manifestFrom(inputs()),
       fail('unconfigured', 'agent manifest signing key', 'not set'),
@@ -306,10 +231,6 @@ describe('the digest and the tag', () => {
     expect(JSON.parse(served.body)).toEqual(JSON.parse(JSON.stringify(served.manifest)));
   });
 });
-
-/* ------------------------------------------------------------------------------------------------
-   The integrity block inside the document.
-   ------------------------------------------------------------------------------------------------ */
 
 describe('the integrity block', () => {
   it('has the wire shape a consumer pins', () => {
@@ -331,11 +252,6 @@ describe('the integrity block', () => {
   });
 
   it('names the headers the route actually sets', () => {
-    /*
-      A document that tells an agent to read `x-weir-signature` while the route sets
-      `x-weir-manifest-jws` is a document that makes every verifier conclude we do not sign at all.
-      Read from the route source rather than from a second copy of the string.
-    */
     const manifest = manifestFrom(inputs());
     const source = readFileSync(
       new URL('../app/.well-known/weir-agent.json/route.ts', import.meta.url),
@@ -349,7 +265,6 @@ describe('the integrity block', () => {
     });
     expect(source).toContain('MANIFEST_HEADERS.jws');
     expect(source).toContain('MANIFEST_HEADERS.digest');
-    // Without this the browser-based agent receives every integrity header and can read none.
     expect(source).toContain('access-control-expose-headers');
   });
 
@@ -357,8 +272,6 @@ describe('the integrity block', () => {
     const manifest = manifestFrom(inputs());
     expect(manifest.integrity.dnsAnchor).toBe(AGENT_MANIFEST_DNS_ANCHOR);
     expect(manifest.integrity.dnsAnchorNote).toContain(AGENT_MANIFEST_DNS_ANCHOR);
-    // The point of the anchor is that it is not us. A document that told an agent to check a
-    // signature and nothing else would have told it to trust the document about the document.
     expect(manifest.integrity.dnsAnchorNote).toContain('out of band');
   });
 
@@ -371,8 +284,6 @@ describe('the integrity block', () => {
   });
 
   it('distinguishes a check that was not attempted from one that failed', () => {
-    // The `Reading` discipline, applied to the document's own metadata: absent is not zero, and it
-    // is not an error either. A consumer deciding whether to trust us needs to know which.
     expect(manifestFrom(inputs()).integrity.packageLineageUnavailable).toBe(
       'this build did not attempt the on-chain package cross-check',
     );
@@ -382,10 +293,6 @@ describe('the integrity block', () => {
     ).toBe('deadline exceeded');
   });
 });
-
-/* ------------------------------------------------------------------------------------------------
-   The package cross-check.
-   ------------------------------------------------------------------------------------------------ */
 
 describe('the package lineage cross-check', () => {
   const lineage = (originalId: string): PackageLineage => ({ originalId, version: '2' });
@@ -400,12 +307,6 @@ describe('the package lineage cross-check', () => {
   });
 
   it('says so plainly when the two package ids are not one package', () => {
-    /*
-      The configuration mistake this catches costs nothing at the door and everything afterwards:
-      every `moveCall` resolves against the latest, every type filter silently matches nothing
-      against the wrong original, and the Seal namespace is derived from a package the approvals are
-      never called against — which reaches a paying reader as "you cannot open what you bought".
-    */
     const manifest = manifestFrom(
       inputs({ packageLineage: ok(lineage(`0x${'11'.repeat(32)}`)) }),
     );
@@ -414,8 +315,6 @@ describe('the package lineage cross-check', () => {
   });
 
   it('does not report a mismatch for two spellings of the same id', () => {
-    // A node may strip leading zeros where an environment variable padded them. Comparing strings
-    // would raise the loudest alarm in this document for a formatting difference.
     const padded = `0x${'0'.repeat(62)}a1`;
     const stripped = '0xa1';
     const manifest = manifestFrom({
@@ -426,11 +325,6 @@ describe('the package lineage cross-check', () => {
   });
 
   it('reads original_id and the version over gRPC, and reports a node fault as a failure', async () => {
-    /*
-      The transport is asserted rather than the network. What matters is that this calls
-      `MovePackageService.GetPackage` — there is no JSON-RPC path in this repository and a reader of
-      this test should be able to see that the gRPC one is the one being used.
-    */
     const client = {
       movePackageService: {
         getPackage: (input: { packageId?: string }) => {
@@ -461,10 +355,6 @@ describe('the package lineage cross-check', () => {
   });
 });
 
-/* ------------------------------------------------------------------------------------------------
-   The key server committee.
-   ------------------------------------------------------------------------------------------------ */
-
 describe('the key server committee', () => {
   it('is resolved against the chain rather than echoed back from configuration', async () => {
     const client = {
@@ -487,11 +377,6 @@ describe('the key server committee', () => {
   });
 
   it('reports a retired committee member as absent, which is the state that strands agents', async () => {
-    /*
-      The failure the pinned list was worried about, made visible. A member removed on chain used to
-      be echoed out of an environment variable forever; an agent would encrypt to a threshold it can
-      no longer meet and nobody would learn until a reader could not open what they had paid for.
-    */
     const client = { getObject: () => Promise.resolve({ object: null }) };
     const [state] = await resolveKeyServers(client as never, SEAL.keyServers);
     expect(state?.onChain).toBe('absent');
@@ -505,8 +390,6 @@ describe('the key server committee', () => {
     const broken = { getObject: () => Promise.reject(new Error('connection refused')) };
 
     expect((await resolveKeyServers(missing as never, SEAL.keyServers))[0]?.onChain).toBe('absent');
-    // An outage is not evidence the committee changed. Folding the two together would either
-    // panic an operator over a blip or hide a real removal behind one.
     expect((await resolveKeyServers(broken as never, SEAL.keyServers))[0]?.onChain).toBe(
       'unreadable',
     );
@@ -546,12 +429,6 @@ describe('the key server committee', () => {
   });
 
   it('still never publishes the committee credential, now that a second block describes it', () => {
-    /*
-      The sibling suite asserts this for the configured list. `committee` is a SECOND rendering of
-      the same servers, built in a different function, and a credential that leaked through it would
-      leak just as completely — so the guard is repeated against the shape that did not exist when
-      the original guard was written.
-    */
     const states = serialised(
       manifestFrom(
         inputs({
@@ -574,7 +451,6 @@ describe('the key server committee', () => {
   });
 });
 
-/** Serialise, so a search covers every nested string rather than the keys of the top level. */
 function serialised(value: unknown): string {
   return JSON.stringify(value);
 }

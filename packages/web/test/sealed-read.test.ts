@@ -1,17 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  An entitled agent is handed the sealed reference of what it bought — never the words.
-
-  The demonstration's buyer held a valid machine Unlock and no route would hand it the blob id,
-  the wrapped key, the nonce and the approval it needed to open the body with its own Seal
-  session. Now `GET /api/posts/{id}` does, for a proven read session whose address holds the
-  entitlement on chain, and hands the MACHINE edition to a machine Unlock.
-
-  Mutations predicted: hand `sealed` to an anonymous reader → "anonymous gets nothing sealed" red;
-  hand the human body to a machine approver → "a machine Unlock is handed the machine edition" red;
-  put the words in the answer → "the words are never served" red.
-*/
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bcs } from '@mysten/sui/bcs';

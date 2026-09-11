@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The waiting room: an agent's half of a declaration, kept until its operator signs.
- *
- * See `db/035_declaration_requests.sql` for what a row is and is not. This module reads and writes
- * that table and nothing else; verification lives in the routes, with the rest of the register's
- * checks.
- */
 import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 
@@ -14,11 +7,9 @@ export interface DeclarationRequest {
   operatorAddress: string;
   model: string;
   purpose: string;
-  /** The `issued:` instant the agent signed; the operator's half must carry the same one. */
   issuedAtMs: number;
   agentSignature: string;
   createdAtMs: number;
-  /** When the declare route filed it, or null while it waits. */
   filedAtMs: number | null;
 }
 
@@ -46,12 +37,10 @@ function toRequest(row: RequestRow): DeclarationRequest {
   };
 }
 
-/** The instant after which the declare route would refuse the agent's signature as expired. */
 export function requestExpiresAtMs(request: Pick<DeclarationRequest, 'issuedAtMs'>): number {
   return request.issuedAtMs + SIGNATURE_WINDOW_MS;
 }
 
-/** Keep (or replace) the one live request for an agent. Call only after the agent half verified. */
 export async function recordDeclarationRequest(input: {
   address: string;
   operatorAddress: string;
@@ -88,15 +77,8 @@ export async function recordDeclarationRequest(input: {
   return toRequest(row);
 }
 
-/** Bounded: an operator with more live requests than this sees the newest and is told the list is cut. */
 export const REQUESTS_PAGE = 50;
 
-/**
- * The live requests naming an operator: unfiled and inside the signing window, newest first.
- *
- * Expired rows are left in place and simply not returned — they are already refused by the declare
- * route, and a sweep is housekeeping, not a correctness need.
- */
 export async function pendingDeclarationsFor(
   operatorAddress: string,
   nowMs: number = Date.now(),
@@ -112,7 +94,6 @@ export async function pendingDeclarationsFor(
   return { requests: rows.slice(0, REQUESTS_PAGE).map(toRequest), truncated };
 }
 
-/** Mark the request for this agent at this instant as filed. A request at another instant is left alone. */
 export async function markDeclarationRequestFiled(address: string, issuedAtMs: number): Promise<boolean> {
   const { rowCount } = await db().query(
     `UPDATE agent_declaration_requests SET filed_at_ms = $3

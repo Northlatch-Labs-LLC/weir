@@ -1,10 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// Static checks on the Heron v2 image build inputs — no Docker, no network, no deps beyond
-// node:test and node:fs. Docker stays down on this laptop by the Master's order; nothing here
-// builds or runs an image. These are exactly the assertions the CTO spec
-// (2026-09-05-engineering-heron-v2-runtime-and-host.md §2, §5) requires land before any image is
-// built on a host that does have Docker.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,8 +16,6 @@ const provenance = JSON.parse(
 );
 const runFlags = readFileSync(path.join(PACKAGE_ROOT, 'run-flags.txt'), 'utf8');
 
-// Strip full-line comments and blank lines; keep instruction lines (including continuations,
-// which is fine — we only ever match on substrings/regexes within a line).
 function instructionLines(text) {
   return text
     .split('\n')
@@ -53,7 +45,6 @@ test('base image digest equals the provenance file', () => {
       `FROM line does not match provenance digest ${expected}: ${line}`,
     );
   }
-  // And the repository:tag named in the Dockerfile matches what the provenance says was read.
   const expectedRepoTag = `${provenance.baseImage.repository.replace(/^docker\.io\//, '')}:${provenance.baseImage.tag}`;
   const shortRepoTag = expectedRepoTag.replace(/^library\//, '');
   assert.ok(
@@ -103,7 +94,6 @@ test('a USER 10001:10001 line exists, and no later USER root', () => {
   );
   assert.equal(laterRoot, undefined, `found a USER root/0 line after USER 10001:10001: ${laterRoot?.l}`);
 
-  // Also: nowhere in the file, at all, is USER ever set back to root — belt and suspenders.
   const anyRoot = lines.find((l) => /^USER\s+(root|0(:0)?)\s*$/i.test(l));
   assert.equal(anyRoot, undefined, `found a USER root/0 line anywhere in the Dockerfile: ${anyRoot}`);
 });
@@ -129,7 +119,6 @@ test('the uid 10001 empty-before / heron-after assertion lines exist', () => {
     /not heron:heron/,
     'no "not heron:heron" refusal message found (the after-creation assertion)',
   );
-  // And the assertion actually causes a non-zero exit rather than only printing a message.
   assert.match(
     dockerfile,
     /already exists before heron is created[\s\S]*?exit 1/,
@@ -144,8 +133,6 @@ test('no curl-pipe-shell shape anywhere in the build', () => {
 });
 
 test('no stage invokes apt, and the fetch stage downloads with the checked-in node verifier', () => {
-  // The host's cloud firewall permits outbound tcp/443 only; an apt line would need port 80 and
-  // fail the build on the host (the fifth and sixth real deploys, 2026-09-05).
   const lines = instructionLines(dockerfile);
   const aptLines = lines.filter((l) => /apt-get\s+(install|update)/.test(l));
   assert.deepEqual(aptLines, [], `apt-get invoked in the Dockerfile: ${aptLines.join('; ')}`);

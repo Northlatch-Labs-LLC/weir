@@ -6,12 +6,6 @@ import { findAccount, prepareDeposit, type CheckoutQuote } from '@/lib/checkout'
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Build and simulate. Returns a quote the user can be shown, or a failure they can act on.
- *
- * Never signs and never submits. The client cannot obtain signable bytes without a simulation
- * having passed, because this is the only route that produces them.
- */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
@@ -31,7 +25,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: account.failure.detail, kind: account.failure.kind }, { status: 503 });
   }
   if (account.value === null) {
-    // A real answer, not a fault: this address has no account yet.
     return NextResponse.json({ needsAccount: true }, { status: 200 });
   }
 
@@ -42,8 +35,6 @@ export async function POST(request: Request) {
     amountMist: body.amountMist,
   });
 
-  // Both branches return the same widened response type; `fold` requires both to be written,
-  // which is the point — there is no path where a failure falls through as an empty quote.
   return fold<CheckoutQuote, NextResponse>(
     quote,
     (value) => NextResponse.json({ quote: value }),

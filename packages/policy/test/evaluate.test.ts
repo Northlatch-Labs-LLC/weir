@@ -1,8 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Behaviour the mutation test cannot reach: window arithmetic, cumulative spend, canonical
- * hashing input, and the shape of a decision.
- */
 
 import { describe, expect, it } from 'vitest';
 import { canonicalPolicyJson, evaluate, type PolicyDoc } from '../src/index.js';
@@ -23,8 +19,6 @@ const DAY = 86_400_000;
 
 describe('the rolling window', () => {
   it('counts a spend at the exact start of the window', () => {
-    // Inclusive at both ends on purpose. Excluding the boundary opens a one-millisecond hole that
-    // a loop can be timed against.
     const decision = evaluate(BASELINE, POLICY, {
       nowMs: NOW,
       spend: [{ coinType: SUI_TYPE, amountOut: '9000000', atMs: NOW - DAY }],
@@ -46,9 +40,7 @@ describe('the rolling window', () => {
       amountOut: '100000',
       atMs: NOW - i * 1000,
     }));
-    // 90 × 100_000 = 9_000_000, plus this transaction's 1_088_000 = 10_088_000 > 10_000_000.
     expect(evaluate(BASELINE, POLICY, { nowMs: NOW, spend }).allow).toBe(false);
-    // One fewer and it fits.
     expect(evaluate(BASELINE, POLICY, { nowMs: NOW, spend: spend.slice(1) })).toEqual({
       allow: true,
     });
@@ -96,7 +88,6 @@ describe('outflow accounting', () => {
       POLICY,
       LEDGER,
     );
-    // 11_000_000 in one transaction, over the 10_000_000 ceiling. Neither change alone is.
     expect(decision.allow).toBe(false);
   });
 
@@ -153,12 +144,6 @@ describe('canonicalPolicyJson', () => {
   });
 
   it('hashes a document that never bounded objects differently from one that bounds none', () => {
-    // `allowedObjects` is the one key a previously-valid policy file can genuinely lack, so
-    // `canonicalPolicyJson` encodes an absent one as `null` rather than throwing or defaulting.
-    // Those two documents describe different authority — one permits no object, the other never
-    // considered the question and could pay any vault on the platform — so they must not share a
-    // hash, or an audit entry from before this rule existed would be indistinguishable from one
-    // written under it.
     const legacy = { ...POLICY } as Record<string, unknown>;
     delete legacy['allowedObjects'];
 
@@ -171,9 +156,6 @@ describe('canonicalPolicyJson', () => {
   });
 
   it('hashes a document with no approval bar differently from one that configures none', () => {
-    // Same distinction as `allowedObjects`, for the same reason: an author who considered the
-    // question and set no bar, and an author who wrote the document before bars existed, are
-    // different policies in the record even though the same transactions are permitted under both.
     const bare = canonicalPolicyJson(POLICY);
     const none = canonicalPolicyJson({ ...POLICY, approvalThresholds: [] });
 
@@ -195,13 +177,6 @@ describe('canonicalPolicyJson', () => {
   });
 });
 
-/**
- * The operator's bar.
- *
- * The baseline spends 1_088_000 of SUI inside a 10_000_000 ceiling. Everything below moves the bar
- * and the approvals around that one fixed figure, so every assertion is about the gate and not
- * about the transaction.
- */
 describe('the approval threshold', () => {
   const BAR_500K: PolicyDoc = {
     ...POLICY,
@@ -236,8 +211,6 @@ describe('the approval threshold', () => {
     expect(barred.ruleId).toBe('approval-threshold');
     expect(barred.approvalRequired).toBe(true);
 
-    // A ceiling breach is not an approvable refusal: no approval exists that would lift it, and a
-    // surface that offered the operator a button there would be offering one that cannot work.
     const overCeiling = evaluate(BASELINE, POLICY, {
       nowMs: NOW,
       spend: [{ coinType: SUI_TYPE, amountOut: '9000000', atMs: NOW - 1000 }],
@@ -258,16 +231,10 @@ describe('the approval threshold', () => {
   });
 
   it('counts prior spend against the approval, so an approval is not a per-transaction coupon', () => {
-    // 600_000 already out, 1_088_000 now: a total of 1_688_000. An approval for 1_000_000 covered
-    // this transaction in isolation and does not cover the window, which is the whole point — a
-    // coupon-shaped approval is defeated by the same loop a per-transaction ceiling is.
     const window = {
       nowMs: NOW,
       spend: [{ coinType: SUI_TYPE, amountOut: '600000', atMs: NOW - 1000 }],
     };
-    // 1_200_000 is chosen to sit BETWEEN this transaction's 1_088_000 and the window's 1_688_000.
-    // An approval judged against the transaction alone would cover it; one judged against the
-    // window does not. A figure below both would be refused either way and would prove nothing.
     const short = evaluate(BASELINE, BAR_500K, {
       ...window,
       approvals: [{ coinType: SUI_TYPE, maxAmount: '1200000', expiresAtMs: NOW + 1 }],
@@ -284,10 +251,6 @@ describe('the approval threshold', () => {
   });
 
   it('crosses the bar on the window total, not on this transaction alone', () => {
-    // A bar of 2_000_000 that this transaction's 1_088_000 does not reach, and prior spend of
-    // 1_500_000 in the same window that takes the total to 2_588_000. A bar compared against the
-    // transaction alone is a per-transaction bar, and a loop of small spends walks under it all
-    // day — the same defeat the ceilings in this package are shaped to refuse.
     const cumulative: PolicyDoc = {
       ...POLICY,
       approvalThresholds: [{ coinType: '0x2::sui::SUI', maxWithoutApproval: '2000000' }],
@@ -300,8 +263,6 @@ describe('the approval threshold', () => {
     if (decision.allow) throw new Error('unreachable');
     expect(decision.ruleId).toBe('approval-threshold');
 
-    // The same transaction with nothing prior is unattended, so the bar is doing arithmetic and
-    // not simply refusing everything.
     expect(evaluate(BASELINE, cumulative, LEDGER)).toEqual({ allow: true });
   });
 
@@ -331,8 +292,6 @@ describe('the approval threshold', () => {
   });
 
   it('matches a short-spelled coin type in the bar against the padded one the node reports', () => {
-    // `0x2::sui::SUI` in the policy, `0x000…002::sui::SUI` in the simulation. Unnormalised, the
-    // bar would never fire and the operator would never be asked about anything.
     const padded: PolicyDoc = {
       ...POLICY,
       approvalThresholds: [{ coinType: SUI_TYPE, maxWithoutApproval: '500000' }],
@@ -349,7 +308,6 @@ describe('the approval threshold', () => {
     expect(decision.allow).toBe(false);
     if (decision.allow) throw new Error('unreachable');
     expect(decision.ruleId).toBe('approval-threshold');
-    // Both numbers in the sentence, so the author can see the two they wrote.
     expect(decision.reason).toContain('10000000');
   });
 
@@ -365,8 +323,6 @@ describe('the approval threshold', () => {
   });
 
   it('refuses a bar that BigInt would read as zero', () => {
-    // `BigInt('')` is `0n`. A bar that silently became zero asks the operator about every
-    // transaction, which is a gate switched off by whoever gets tired of it first.
     const malformed: PolicyDoc = {
       ...POLICY,
       approvalThresholds: [{ coinType: '0x2::sui::SUI', maxWithoutApproval: '' }],
@@ -398,9 +354,6 @@ describe('the approval threshold', () => {
 
 describe('a policy document written before allowedObjects existed', () => {
   it('is read as permitting no object, so it refuses rather than throwing', () => {
-    // A policy arrives as JSON from disk, where TypeScript is not present — the same reason
-    // `policy-version` is enforced by a rule. Silence about which vault may be paid is not
-    // permission, and a crash here would be a refusal nobody could read.
     const legacy = { ...POLICY } as Record<string, unknown>;
     delete legacy['allowedObjects'];
 
@@ -425,8 +378,6 @@ describe('a policy document written before allowedObjects existed', () => {
 
 describe('object-input evidence', () => {
   it('refuses when the field is absent, which is not the same as an empty list', () => {
-    // The opposite reading from the policy side, and deliberately so: an absent POLICY field is
-    // the empty permission, an absent EVIDENCE field is nobody having looked.
     const blind = { ...BASELINE } as Record<string, unknown>;
     delete blind['objectInputs'];
 
@@ -470,8 +421,6 @@ describe('object-input evidence', () => {
   });
 
   it('matches a short-spelled allow-list entry against the padded id the node reports', () => {
-    // `0x6` in the policy, `0x000…006` from the simulator. If both sides were not normalised the
-    // Clock would be refused on every call, and the policy file would look as if it listed it.
     const decision = evaluate(
       {
         ...BASELINE,

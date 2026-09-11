@@ -14,18 +14,10 @@ import { PageHead } from '@/components/design/PageHead';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  // The root layout's template appends "· Weir".
   title: 'Platform',
 };
 
 export default async function AdminPage() {
-  /*
-    Two different authorities on one page, and the page says which is which.
-
-    `SiteModeSwitch` is shown only to the holder of this package's `Publisher` — the website's own
-    administrator. `AdminPanel` below is the protocol's, gated on `PlatformCap`, and it renders
-    read-only for everyone who does not hold that. Neither implies the other, deliberately.
-  */
   const viewer = fold(
     await provenReader(),
     (value) => value,
@@ -33,14 +25,6 @@ export default async function AdminPage() {
   );
   const [siteAdmin, mode] = await Promise.all([isSiteAdmin(viewer), readSiteMode()]);
 
-  /*
-    Read only for the administrator, and only after the capability has been resolved.
-
-    Sequenced rather than folded into the `Promise.all` above on purpose: the list must not be
-    queried at all for somebody who turns out not to hold the `Publisher`. Fetching it in parallel
-    and discarding it would mean every visitor to this URL causes the signup table to be read, which
-    is a different posture from the one the panel claims.
-  */
   const [insight, codes] = siteAdmin
     ? await Promise.all([
         readWaitlistInsight(),

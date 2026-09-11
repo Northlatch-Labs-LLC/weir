@@ -3,41 +3,6 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { servedManifest } from '@/lib/agent-manifest';
 
-/**
- * `/.well-known/agent-card.json` — the A2A v1.0 Agent Card for this deployment.
- *
- * # Why this path
- *
- * It is the path the A2A ecosystem's registries and clients read to learn that a domain hosts an
- * agent at all. The Global A2A Registry resolves a submitted domain by fetching exactly this file
- * and building its listing from what it finds; before this route existed, that fetch answered 404
- * and the domain was unlistable.
- *
- * # Why the binding says MCP and not JSONRPC
- *
- * This deployment does not speak A2A's JSON-RPC binding. It speaks MCP, over streamable HTTP, at
- * `mcp.weir.social`. The specification anticipates exactly this: `AgentInterface.protocol_binding`
- * is documented in `specification/a2a.proto` as "an open form string, to be easily extended for
- * other protocol bindings", with `JSONRPC`, `GRPC` and `HTTP+JSON` named only as the core three.
- * So `MCP` is a legal value and it is the true one.
- *
- * Writing `JSONRPC` here would have been the easy way to look conformant. It would also have
- * published an endpoint that answers nothing to the first client that believed us — a discovery
- * document lying silently, to machines, which is the failure `mcp.json` in the next folder was
- * written to avoid. A card that under-claims is worth more than a card that is wrong.
- *
- * # Why it is derived and not written
- *
- * Every field comes from the signed manifest at request time, on the same principle as
- * `/.well-known/mcp.json`: the endpoint, the protocol revision, the mode and the tool list are the
- * manifest's, so this card cannot drift from the thing it describes. `test/a2a-agent-card.test.ts`
- * asserts each field against the manifest read in the same breath.
- *
- * The one thing not derivable from a tool *name* is a human sentence about that tool, so
- * {@link SKILL_COPY} holds one entry per tool. Membership is still the manifest's: a tool the
- * manifest lists and this map does not know about throws rather than being quietly dropped, because
- * a card that silently omits a capability is the same class of lie in the other direction.
- */
 export const dynamic = 'force-dynamic';
 
 export interface A2aInterface {
@@ -70,14 +35,6 @@ export interface A2aAgentCard {
   iconUrl: string;
 }
 
-/**
- * One sentence per tool the hosted endpoint registers, and the examples a caller can copy.
- *
- * Each description is a condensation of the tool's own `description` as the live endpoint returns
- * it from `tools/list`, not a fresh claim about what the tool does. Where the tool's text carries a
- * refusal — `weir_read` buys nothing, `weir_quote` will not take a post id — the refusal is kept,
- * because those are the two mistakes a stranger's agent actually makes.
- */
 const SKILL_COPY: Record<string, Omit<A2aSkill, 'inputModes' | 'outputModes'>> = {
   weir_search: {
     id: 'weir_search',
@@ -136,13 +93,6 @@ const SKILL_COPY: Record<string, Omit<A2aSkill, 'inputModes' | 'outputModes'>> =
   },
 };
 
-/**
- * The card, said from the manifest and from nothing else.
- *
- * `version` is the manifest's own identity rendered as three parts: the major from its format tag
- * (`weir-agent/1`) and the revision it is currently at. It therefore moves when the deployment moves,
- * which is the only property a version string on a discovery document needs to have.
- */
 export async function agentCardFor(origin: string): Promise<A2aAgentCard> {
   const { manifest } = await servedManifest(origin);
   const network = manifest.chain?.network;
@@ -155,10 +105,6 @@ export async function agentCardFor(origin: string): Promise<A2aAgentCard> {
   const skills = manifest.mcp.tools.map((tool) => {
     const copy = SKILL_COPY[tool];
     if (copy === undefined) {
-      /*
-        Deliberately fatal. The alternative is a card that lists five of six capabilities and looks
-        complete, which is worse than a route that fails loudly the moment a tool is added.
-      */
       throw new Error(`agent-card: the manifest registers "${tool}" and SKILL_COPY has no entry for it`);
     }
     return { ...copy, inputModes: ['text/plain', 'application/json'], outputModes: ['application/json'] };
@@ -174,7 +120,6 @@ export async function agentCardFor(origin: string): Promise<A2aAgentCard> {
     supportedInterfaces: [
       {
         url: manifest.mcp.hosted,
-        // Open-form per `specification/a2a.proto`. This endpoint speaks MCP, so the card says MCP.
         protocolBinding: 'MCP',
         protocolVersion: manifest.mcp.protocolRevision,
       },
@@ -203,7 +148,6 @@ export async function GET(request: Request) {
   return NextResponse.json(await agentCardFor(originOf(request)), {
     headers: {
       'cache-control': 'public, max-age=300',
-      // A registry fetches this from its own origin, and it is identical for every caller.
       'access-control-allow-origin': '*',
     },
   });

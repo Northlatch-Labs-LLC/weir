@@ -1,29 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The read-only construction path: an agent with no key, and nothing on it that needs one.
- *
- * # The defect
- *
- * `packages/mcp/src/transport.ts` `openWeir` passes `keypair: null` under `--http`, by design: a
- * hosted server holds no key. `createAgent` required one and read `key.address` at construction,
- * so the keyless deployment died with `TypeError: Cannot read properties of null (reading
- * 'address')` — reproduced at `src/index.ts:384` before this suite was written — before it could
- * serve a single read.
- *
- * # What is asserted, and how it would go red
- *
- * The surface is asserted by `Object.keys`, not by calling each spending method and expecting a
- * refusal. The MCP's `capabilitiesOf` registers a tool for every member that is a function, so a
- * spending method that was present-and-throwing would be registered as a tool that always fails.
- * Presence is the defect; only an assertion on presence catches it.
- *
- * The read methods run against a fake gRPC client built here. The vault bytes are encoded with the
- * same BCS layout `packages/sdk/src/creator.ts` decodes with, restated field for field; if that
- * layout moves, `decodeCreatorVault` misreads these bytes and the owner and price assertions below
- * fail. That is the pin.
- *
- * Nothing here touches a network.
- */
 
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -52,12 +27,6 @@ const FULL_ENV = {
   PROJECTX_SOCIAL_AGENT_BASE_URL: 'https://weir.social/',
 };
 
-/**
- * Every member of `Agent` that is not on `ReadOnlyAgent`.
- *
- * Asserted in BOTH directions below — absent on the keyless agent, present on the keyed one — so
- * a renamed spending method cannot leave this list checking for a name nothing has.
- */
 const NEEDS_A_KEY = [
   'address',
   'sign',
@@ -71,22 +40,12 @@ const NEEDS_A_KEY = [
   'balance',
 ] as const;
 
-/** The read set, in full. A new member here is a decision, not a drift. */
 const READ_SET = [
   'agents',
   'authorship',
   'balanceOf',
   'client',
   'commentAuthorship',
-  /*
-    One address's register entry, added 2026-09-05. Keyless like the rest of this set: asking whether
-    an address is declared needs no key, and the callers that need the answer most — a control
-    deciding whether to write — must be able to ask it before they hold anything.
-
-    It is deliberately NOT `agents`, which cannot answer the question: that endpoint selects
-    `WHERE revoked_at_ms IS NULL` and caps its page at 500, so it can neither report a withdrawal nor
-    be relied on to contain a live agent. See `Declaration` in src/index.ts.
-  */
   'declaration',
   'feed',
   'manifest',
@@ -95,8 +54,6 @@ const READ_SET = [
   'seal',
   'seeking',
 ] as const;
-
-// === A vault and a price, as bytes ===
 
 const OWNER = `0x${'a'.repeat(64)}`;
 const VAULT = `0x${'b'.repeat(64)}`;
@@ -111,7 +68,6 @@ const TierBcs = bcs.struct('Tier', {
   active: bcs.bool(),
 });
 
-/** `packages/sdk/src/creator.ts` `CreatorVaultBcs`, restated. See the header for why that is safe. */
 const CreatorVaultBcs = bcs.struct('CreatorVault', {
   id: bcs.Address,
   version: bcs.u64(),
@@ -171,7 +127,6 @@ interface Seen {
   balances: Array<{ owner: string; coinType: string }>;
 }
 
-/** A node holding one vault and one priced key, recording what it was asked. */
 function fakeClient(options: { accepting: boolean; balance: string }): { client: SuiGrpcClient; seen: Seen } {
   const seen: Seen = { objects: [], balances: [] };
   const objects = new Map<string, Uint8Array>([
@@ -206,8 +161,6 @@ function readOnly(client?: SuiGrpcClient): ReadOnlyAgent {
   return made.value;
 }
 
-// === (c) The failure that shipped cannot recur ===
-
 describe('constructing without a key', () => {
   it("does not throw — the failure was `reading 'address'` on a null keypair", () => {
     expect(() => createAgent({ keypair: null, config: FULL_ENV })).not.toThrow();
@@ -218,8 +171,6 @@ describe('constructing without a key', () => {
   });
 
   it('refuses an undefined keypair with a Reading, never a throw', () => {
-    // Not expressible through the types; a JavaScript caller reaches it in one keystroke, and it
-    // is the same `key.address` line by another spelling.
     const made = createAgent({ keypair: undefined, config: FULL_ENV } as never);
     expect(made.ok).toBe(false);
     if (!made.ok) {
@@ -237,8 +188,6 @@ describe('constructing without a key', () => {
     expect(made.ok && made.value.manifest.baseUrl).toBe('https://staging.weir.social');
   });
 });
-
-// === (a) The surface, by presence ===
 
 describe('the read-only surface', () => {
   const agent = readOnly();
@@ -261,7 +210,6 @@ describe('the read-only surface', () => {
     for (const name of NEEDS_A_KEY) {
       expect(name in made.value, `${name} is missing from the keyed agent`).toBe(true);
     }
-    // And the keyed agent carries the read set too: one builder, two surfaces.
     for (const name of READ_SET) {
       expect(name in made.value, `${name} is missing from the keyed agent`).toBe(true);
     }
@@ -278,8 +226,6 @@ describe('the read-only surface', () => {
   });
 });
 
-// === (b) Each read method, against the fake node ===
-
 describe('quote() without a key', () => {
   it('prices a content key from the vault and the price entry', async () => {
     const { client, seen } = fakeClient({ accepting: true, balance: '0' });
@@ -291,7 +237,6 @@ describe('quote() without a key', () => {
       expect(quote.value.accepting).toBe(true);
       expect(quote.value.coinType).toBe(MAINNET_RECORD.usdcType);
     }
-    // The vault, then the derived price entry. Two reads, both of the chain, none of any HTTP API.
     expect(seen.objects).toEqual([VAULT, PRICE_FIELD_ID]);
   });
 
@@ -306,11 +251,6 @@ describe('quote() without a key', () => {
   });
 
   it('skips only the refusal that is about the payer: a keyed OWNER is refused, a keyless reader is not', async () => {
-    /*
-      The one documented difference between the two surfaces. `readPayableVault` refuses a payer
-      who owns the vault (ESelfPayment, code 13). A read-only agent has no address, so the check
-      has no subject; the keyed agent whose address IS the owner still gets the refusal.
-    */
     const { client } = fakeClient({ accepting: true, balance: '0' });
     const ownerKey = generateAgentKey();
     const keyed = createAgent({
@@ -363,7 +303,6 @@ describe('balanceOf() without a key', () => {
   });
 });
 
-/** A node whose one vault is owned by `owner` — for the self-payment half of the quote test. */
 function fakeClientOwnedBy(owner: string): SuiGrpcClient {
   const bytes = CreatorVaultBcs.serialize({
     id: VAULT,

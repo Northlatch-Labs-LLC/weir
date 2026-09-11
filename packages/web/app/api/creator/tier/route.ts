@@ -6,7 +6,6 @@ import { prepareAddTier, type CheckoutQuote } from '@/lib/checkout';
 
 export const dynamic = 'force-dynamic';
 
-/** Build and simulate adding a subscription tier. */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;

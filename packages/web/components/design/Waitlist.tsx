@@ -1,13 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The **`gated` notice** — "the app itself is still behind the door… I have a code" — renders only
- * while `site_mode.waitlist_mode` is set, and the button does what it says: it opens a field that
- * redeems an access code minted at `/admin`, and a good code sets the pass `proxy.ts` honours.
- * See `lib/access-codes.ts`.
- */
-
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { Fragment } from 'react';
 import { Icon } from '@/components/design/icons';
@@ -19,11 +12,6 @@ import {
   type WaitlistRole,
 } from '@/lib/waitlist';
 import { useHandleAvailability } from '@/components/design/use-handle-availability';
-/*
-  The bounds come from the SDK, never from literals here. `packages/sdk/src/accounts.ts` mirrors
-  `account.move` and a drift test asserts the two agree, so a bound that moves in the contract moves
-  in this sentence. A number typed into this file would not.
-*/
 import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import { Countdown, absoluteDate } from '@/components/design/Countdown';
 import { ExploreFunnel, type FunnelSides } from '@/components/design/ExploreFunnel';
@@ -40,10 +28,6 @@ const ROLES: readonly { value: WaitlistRole; label: string; icon: string }[] = [
   { value: 'both', label: 'Both', icon: 'layers' },
 ];
 
-/**
- * What being early actually gets somebody.
- */
-/** What joining gets you. The first item depends on whether the door is open today. */
 function perksFor(gated: boolean) {
   return [
     gated
@@ -63,29 +47,10 @@ export function DesignWaitlist({
   funnel = null,
 }: {
   signedIn?: boolean;
-  /**
-   * The two-sided funnel — creators and declared agents — read on the server. `null` renders no
-   * funnel at all, which is what a test or a caller without the data gets; a failed read is not
-   * `null`, it is a side that says it failed.
-   */
   funnel?: FunnelSides | null;
   myHandle?: string | null;
-  /**
-   * How many addresses are on the list, counted on the server for this request.
-   *
-   * `null` means the count could not be taken — an unconfigured deployment, or a database that did
-   * not answer — and renders as no counter at all rather than as zero. Zero is a real answer that a
-   * genuinely empty list should be able to give, so the two cannot share a representation.
-   */
   total?: number | null;
-  /**
-   * Typed as the pair rather than as two optional fields, so "a date with no label" cannot be
-   * expressed here any more than it can in the schema. See `components/design/Countdown.tsx`.
-   */
   launchTarget?: { atMs: number; label: string } | null;
-  /**
-   * The site is closed and this page is where everybody lands.
-   */
   gated?: boolean;
 } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,14 +64,7 @@ export function DesignWaitlist({
   const [outcome, setOutcome] = useState<WaitlistOutcome | null>(null);
   const trapId = useId();
 
-  /*
-    The code out of the link they followed, if they followed one.
-  */
   const [ref, setRef] = useState('');
-  /*
-    Where the gate sent them from, so a redeemed code returns them there. A local path only —
-    `proxy.ts` already refuses to write anything else into `?from=`, and this refuses it again.
-  */
   const [from, setFrom] = useState('/');
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
@@ -116,7 +74,6 @@ export function DesignWaitlist({
     if (back !== null && back.startsWith('/') && !back.startsWith('//')) setFrom(back);
   }, []);
 
-  /* "I have a code": the field, the attempt, and the server's own reason when it refuses. */
   const [showCode, setShowCode] = useState(false);
   const [accessCode, setAccessCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
@@ -137,7 +94,6 @@ export function DesignWaitlist({
         setCodeError(body.error ?? `the code was refused (${response.status})`);
         return;
       }
-      // The pass is a cookie the server just set; a full navigation is what makes the gate read it.
       window.location.href = from;
     } catch (cause) {
       setCodeError(cause instanceof Error ? cause.message : String(cause));
@@ -163,25 +119,8 @@ export function DesignWaitlist({
 
   const shapeProblem = handleShapeProblem(handle);
 
-  /*
-    Capitals, reported rather than absorbed.
-
-    `account.move` rejects any byte outside `[a-z0-9_]`, and the SDK spells out the reason it does
-    not fold instead: "a registry that lower-cases what you typed hands you a different handle from
-    the one you asked for and reports success." The availability check lower-cases before it looks,
-    so "Alice" is read as "alice" and comes back available — a green note for a handle the contract
-    would refuse as typed. Saying so here is the only warning the person gets.
-  */
   const hasUppercase = /[A-Z]/.test(handle.trim().replace(/^@/, ''));
 
-  /*
-    `malformed` had no branch, and that was the whole defect.
-
-    The chain below ended in a bare `Optional.` in dim grey, so a handle the registry had just
-    called invalid produced the same note as an empty field: the person was told nothing, and
-    submitted. It is reachable even when `handleShapeProblem` is satisfied, because the registry is
-    the authority and this client is not. Anything that slips through locally lands here.
-  */
   const wlHandleNote =
     handle.trim() === ''
       ? 'Optional. We will note it. It is yours once you mint it on chain.'
@@ -219,11 +158,6 @@ export function DesignWaitlist({
     border: role === option.value ? CREST : LINE,
   }));
 
-  /*
-    The result panel. Every branch of `WaitlistOutcome` gets its own title, body and accent, which is
-    the whole point of the type: a form that shows one cheerful message whatever happened is lying
-    four different ways. A failure never renders in crest.
-  */
   const result = ((): null | { icon: string; title: string; body: string; detail: string; accent: string } => {
     if (outcome === null) return null;
     if (outcome.ok) {
@@ -245,14 +179,6 @@ export function DesignWaitlist({
     }
   })();
 
-  /*
-    Where they stand, and the link they can share.
-
-    Only ever present on a success, because it is only ever sent with one. The link is built from
-    `window.location.origin` so it is correct on any deployment without a configured base URL — and
-    it is built in render rather than an effect only because it is read at click time, never painted
-    before hydration.
-  */
   const standing = outcome !== null && outcome.ok ? (outcome.standing ?? null) : null;
   const refLink =
     standing === null
@@ -504,7 +430,6 @@ export function DesignWaitlist({
                     </div>
                   )}
 
-            
                 </div>
               </section>
 

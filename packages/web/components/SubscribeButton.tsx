@@ -1,24 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Join a creator's membership.
- *
- * # This is the platform's core action and it had no button
- *
- * `prepareSubscribe` and `/api/checkout/subscribe` were written, tested and complete. Nothing in
- * the interface called either of them. A creator page displayed the price, the fee split and how
- * many subscriptions had sold, and offered no way to buy one — the same shape as a recovery screen
- * that existed for weeks with no route to it.
- *
- * # Refusals are named before a transaction is built
- *
- * Four of them are knowable from a read: no account, paying your own vault, not holding enough of
- * the coin, and an inactive tier. The route returns those as `blocked` rather than letting a
- * simulation fail, because an abort code is a poor way to learn you needed an account — and each
- * one needs a different action from the person reading it.
- */
-
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -39,7 +21,6 @@ interface Quote {
   platformReceives: string;
 }
 
-/** Smallest units to a decimal string, by string surgery. No float touches a price. */
 function amount(raw: string, decimals: number): string {
   const value = BigInt(raw);
   const scale = 10n ** BigInt(decimals);
@@ -57,7 +38,6 @@ export function SubscribeButton({
   vaultId: string;
   coinType: string;
   tierIndex: number;
-  /** From the coin's own metadata. Never assumed — a wrong scale misprices by orders of magnitude. */
   decimals: number;
   symbol: string;
 }) {
@@ -104,7 +84,6 @@ export function SubscribeButton({
       const response = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       });
       const body = (await response.json()) as { digest?: string; error?: string };
@@ -142,10 +121,6 @@ export function SubscribeButton({
   }
 
   if (blocked !== null) {
-    /*
-      Each refusal gets its own sentence and its own next step. "Cannot subscribe" would be true for
-      all four and useful for none of them.
-    */
     return (
       <div className="note warn" style={{ marginTop: 'var(--space-12)' }}>
         <span className="lbl">Not subscribed</span>

@@ -1,8 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * The brake sweep: bytes built without a key, read back and checked before a key touches them,
- * signed by the brake alone into an envelope the multisig public key accepts.
- */
 
 import { describe, expect, it } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -160,7 +156,6 @@ describe('the envelope', () => {
       publicKeys: doc.members.map((m) => ({ publicKey: publicKeyFromSuiBytes(m.publicKey), weight: m.weight })),
     });
     expect(await multisig.verifyTransaction(built.value, signed.value)).toBe(true);
-    // The hot key alone can no longer be the one that signed it.
     expect(await hot.getPublicKey().verifyTransaction(built.value, signed.value).catch(() => false)).toBe(false);
   });
 

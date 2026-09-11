@@ -1,24 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The approval transaction must be *buildable*, and for four months it was not.
- *
- * `entitlementRef` declared `mutable: false` on an `Unlock` and a `Subscription`. Both are OWNED
- * objects — soulbound to their holder — and `mutable` is a shared-object property, so
- * `@mysten/sui` refused every approval before it reached a key server:
- *
- *     Input at index 1 did not match unresolved object.
- *     {"objectId":"0x405bbf4a…","mutable":false} is not compatible with
- *     {"objectId":"0x405bbf4a…","version":"967953191","digest":"DsvANPHS…"}
- *
- * Measured against the real mainnet `Unlock` above on `@mysten/sui` 2.27.1. After removing the key
- * the same call builds a 347-byte transaction. The offending clause reads `original.mutable != null`
- * — it is the PRESENCE of the key that fails, so `mutable: true` is not a fix and neither is any
- * value. This test therefore asserts the key is ABSENT rather than asserting what it holds.
- *
- * It is a unit test on purpose. The failure is structural and needs no network, and a chain test
- * would make a regression invisible whenever the fullnode was unreachable — which is exactly the
- * condition under which nobody investigates.
- */
 import { describe, expect, it } from 'vitest';
 import { Transaction } from '@mysten/sui/transactions';
 import { simulate } from '../src/client.js';
@@ -38,7 +18,6 @@ const VAULT = '0xa1f80da9efffa73a2617163f5f35249130972e4f6e0bfd2bf7396c584423fd6
 const UNLOCK = '0x405bbf4ac0334bf325aa53992356be4e1fb138c99cc0580bb0e819a50f5af4e5';
 const SUBSCRIPTION = '0x5524552c2c39000000000000000000000000000000000000000000000000ffff';
 
-/** Every `UnresolvedObject` input the transaction carries. */
 function unresolvedInputs(tx: { getData(): { inputs: readonly unknown[] } }) {
   return tx
     .getData()
@@ -71,7 +50,6 @@ describe('an entitlement is named as an owned object', () => {
       coinType: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
     });
     const refs = unresolvedInputs(tx);
-    // Two unresolved objects since v5: the vault (shared) and the subscription (owned).
     expect(refs).toHaveLength(2);
     expect(refs[1]).not.toHaveProperty('mutable');
     expect(refs[0]).not.toHaveProperty('mutable');
@@ -87,26 +65,6 @@ describe('an entitlement is named as an owned object', () => {
 });
 
 describe('simulate() reads the envelope the node actually sends', () => {
-  /*
-    Three defects were found in this one function in a single evening, all of the same species:
-    reading a shape nobody measured.
-
-      1. status read at `transaction.effects.status` — the JSON-RPC path. Over gRPC it is
-         `Transaction.status`, so EVERY simulation reported `wouldSucceed: false` for a
-         transaction that would have succeeded. The daemon hit this in production; the shared
-         package shipped it for another day.
-      2. `shape.Transaction?.status` guards an undefined PROPERTY, not a null SUBJECT. A node
-         answering `null` threw into the catch and came back `transport` — "retry me" for a
-         condition that repeats for ever.
-      3. a FAILED simulation is not under `Transaction` at all. `@mysten/sui` 2.27.1
-         `src/grpc/core.ts:1597` returns `FailedTransaction` on failure, so a genuine abort was
-         answered with "client/server shape mismatch, not a rejected transaction" — backwards, and
-         the decoded abort was unreachable.
-
-    Each failed CLOSED, which is why none of them moved money. Each was wrong about WHY, which is
-    what sends an operator to the wrong place at the wrong hour. These fixtures are the measured
-    shapes, so a fourth reading of this envelope has to argue with a test rather than with prose.
-  */
   const simulateWith = async (response: unknown) => {
     const client = {
       simulateTransaction: async () => response,
@@ -116,11 +74,6 @@ describe('simulate() reads the envelope the node actually sends', () => {
     tx.setSender(SENDER);
     tx.setGasBudget(1_000_000n);
     tx.setGasPrice(1000n);
-    /*
-      A gas PAYMENT as well as a budget. Without it `build()` performs server-side gas selection,
-      which is a chain interaction — the build would fail on the stub before `simulate()` was ever
-      called, and the test would be measuring the stub rather than the envelope reader.
-    */
     tx.setGasPayment([{ objectId: `0x${'11'.repeat(32)}`, version: '1', digest: '11111111111111111111111111111111' }]);
     return simulate(client, tx, SENDER);
   };

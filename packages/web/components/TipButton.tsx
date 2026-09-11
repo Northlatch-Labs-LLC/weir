@@ -1,28 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Send a creator a one-off amount.
- *
- * # The route existed and nothing called it
- *
- * `prepareTip` and `/api/checkout/tip` were written, tested and complete, and no control anywhere
- * sent one — while the creator setup told creators "tips and one-off unlocks already work". The
- * reachability test named this route and `checkout/unlock` on the day it was written.
- *
- * # Why a tip is not a tiny subscription
- *
- * It buys nothing and confers nothing. There is no entitlement, no object to keep, no expiry —
- * which is exactly why it can be offered to a creator with no tiers at all, and why it renders
- * whether or not this creator sells anything.
- *
- * # The amount is the reader's, the scale is the coin's
- *
- * Parsed by string surgery against the coin's own decimals, never `parseFloat`. A tip typed as
- * `1.5` against a six-decimal coin is 1,500,000 units; the same string read as a float and
- * multiplied is off by one unit often enough to matter, and it is somebody's money.
- */
-
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -40,12 +18,6 @@ interface Quote {
   platformReceives: string;
 }
 
-/**
- * A typed decimal to smallest units. `null` for anything that is not a clean amount.
- *
- * Rejects rather than rounds. Accepting more decimal places than the coin has would silently
- * truncate somebody's intent, and the difference belongs to them.
- */
 function toMinor(input: string, decimals: number): bigint | null {
   const trimmed = input.trim();
   if (!new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`).test(trimmed)) return null;
@@ -60,7 +32,6 @@ export function TipButton({
   symbol,
 }: {
   vaultId: string;
-  /** From the coin's own metadata. Never assumed — a wrong scale misprices by orders of magnitude. */
   decimals: number;
   symbol: string;
 }) {
@@ -84,7 +55,6 @@ export function TipButton({
       const response = await fetch('/api/checkout/tip', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // No coin type — the route reads the vault's own denomination.
         body: JSON.stringify({ sender: signer.address, vaultId, amount: minor.toString() }),
       });
       const body = (await response.json()) as { quote?: Quote; blocked?: Blocker; error?: string };
@@ -107,7 +77,6 @@ export function TipButton({
       const response = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       });
       const body = (await response.json()) as { digest?: string; error?: string };
@@ -161,7 +130,6 @@ export function TipButton({
           value={amount}
           onChange={(event) => {
             setAmount(event.target.value);
-            // A quote belongs to the amount it was made for.
             setQuote(null);
             setBlocked(null);
           }}
@@ -216,8 +184,6 @@ export function TipButton({
           <button
             className="btn"
             type="button"
-            // Withheld rather than allowed-and-refused: an amount the coin cannot express is not a
-            // payment worth simulating.
             disabled={busy || minor === null}
             onClick={() => void simulate()}
           >

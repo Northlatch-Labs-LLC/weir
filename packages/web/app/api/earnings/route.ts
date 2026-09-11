@@ -8,17 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
-/**
- * What this address has earned and can withdraw.
- *
- * Read from the vault objects on chain, never totalled from the content store. A failure is
- * reported as a failure: a creator shown a zero balance because a node was unreachable would
- * reasonably conclude nobody had paid them.
- *
- * `bigint` values leave as strings. `JSON.stringify` throws on a bigint, and `Number()` above 2^53
- * loses precision silently — for large balances only, which is the worst possible schedule for a
- * rounding error in somebody's earnings.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -41,9 +30,6 @@ export async function GET(request: Request) {
           platformFees: v.platformFees.toString(),
           subscriptionsSold: v.subscriptionsSold.toString(),
           feeBpsSnapshot: v.feeBpsSnapshot.toString(),
-          // Sent so the client formats with the coin's own scale rather than assuming one. Not a
-          // string: it is a small integer, not an amount, and amounts are the things that must
-          // never become numbers.
           decimals: v.decimals,
           capId: v.capId,
         })),

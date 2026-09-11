@@ -3,14 +3,6 @@
 
 import { useEffect, useRef, type RefObject } from 'react';
 
-/**
- * `--crest-rgb` and `--line-rgb` are read from computed style rather than hardcoded, so the line
- * takes its colour from whichever theme is active.
- *
- * Under `prefers-reduced-motion` it draws exactly one frame at `t = 0` and never schedules another.
- * The line stays on screen; only the movement goes. Somebody who asked for less motion asked for
- * less motion, not for a missing element.
- */
 export function useWeirLine(canvasRef: RefObject<HTMLCanvasElement | null>) {
   const gen = useRef(0);
   const raf = useRef(0);
@@ -48,7 +40,6 @@ export function useWeirLine(canvasRef: RefObject<HTMLCanvasElement | null>) {
         return;
       }
 
-      // Capped at 2: beyond that the extra pixels cost more than they show on a line this thin.
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -61,7 +52,6 @@ export function useWeirLine(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
       const t = reduced ? 0 : now / 1000;
       const base = h * 0.62;
-      // Three sines at unrelated periods: one is a wave, three never visibly repeat.
       const yAt = (x: number) =>
         base +
         Math.sin(x / 190 + t * 0.55) * 7 +
@@ -108,7 +98,6 @@ export function useWeirLine(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
     raf.current = requestAnimationFrame(frame);
     return () => {
-      // Invalidate first, then cancel — a frame already queued checks the generation and returns.
       gen.current++;
       cancelAnimationFrame(raf.current);
     };

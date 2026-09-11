@@ -1,30 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Nothing ships that nothing can reach.
- *
- * # The defect class this exists for
- *
- * Every failure below was found by running the product, never by reading it or by the test suite,
- * and each one was fully typed, commented and green:
- *
- *   - `/api/studio/upload` had no caller, and stored bytes to a serverless disk that evaporates.
- *   - `/api/checkout/unlock` had no caller, so a locked post showed a price and no way to pay it.
- *   - `/api/checkout/tip` had no caller, while a comment in the creator setup told creators
- *     "tips and one-off unlocks already work".
- *   - `profiles.stake_vault_id` was read in three places and written by none, which switched off
- *     the "free support" badge for everybody.
- *
- * The shape is always the same: code that is correct in isolation and connected to nothing. A type
- * checker cannot see it, because every individual piece type-checks. A unit test cannot see it,
- * because the piece under test is fine. Only the absence of a caller gives it away.
- *
- * # How this stays honest
- *
- * The allowlist is exact, not a floor. An entry that becomes reachable fails the test just as
- * loudly as a new unreachable route does — otherwise the list grows quietly and the guard becomes
- * a record of things nobody intends to fix. Every entry states why it is there and what would
- * remove it.
- */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,15 +15,6 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/**
- * Every source file that could plausibly call something. Tests are deliberately excluded.
- *
- * **Comments are stripped before anything is matched.** They were not, and the omission was found
- * the honest way: a new module's docstring mentioned `/api/studio/upload` while explaining what
- * gates it, and this suite promptly reported the route as wired up. Nothing called it. A prose
- * mention is not a caller, and a guard that cannot tell the difference can be silenced by writing
- * about the dead code instead of deleting it.
- */
 const sources = ['app', 'components', 'lib']
   .flatMap((d) => walk(d))
   .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'))
@@ -60,13 +25,6 @@ const sources = ['app', 'components', 'lib']
       .replace(/^\s*\/\/.*$/gm, ''),
   }));
 
-/**
- * Routes with no caller anywhere in the application.
- *
- * Each one is a live gap, not a style problem: an endpoint the product cannot reach is either a
- * feature that was never wired up or one that was wired up and then orphaned. Removing an entry
- * from this list means building the client that calls it.
- */
 const UNREACHABLE_ROUTES: string[] = [
   /*
     Empty, and that is the point of the exactness check below rather than a claim anybody made.
@@ -92,11 +50,6 @@ describe('every API route has a caller', () => {
   });
 
   const unreachable = routes.filter((route) => {
-    /*
-      Dynamic segments are matched on the static prefix. A caller writes
-      `/api/media/${postId}/${assetId}`, which shares no literal with `media/[postId]/[assetId]`
-      beyond `api/media/` — matching the whole path would report every dynamic route as dead.
-    */
     const stem = route.split('/[')[0] ?? route;
     const needle = `api/${stem}`;
     return !sources.some(
@@ -110,19 +63,11 @@ describe('every API route has a caller', () => {
   });
 
   it('has no known-unreachable route that has since been wired up', () => {
-    // Exact, not a floor. A list that only ever grows stops being a guard and becomes a graveyard.
     const fixed = UNREACHABLE_ROUTES.filter((r) => !unreachable.includes(r));
     expect(fixed).toEqual([]);
   });
 });
 
-/**
- * Columns the application declares and never writes.
- *
- * `profiles.stake_vault_id` was exactly this: declared, read in three places, written by nothing,
- * and populated for zero rows in production while a feature quietly depended on it. A column that
- * is never written is either a missing write or a column that should not exist.
- */
 describe('every database column is written by something', () => {
   const schema = readdirSync(join(web, 'db'))
     .filter((f) => f.endsWith('.sql'))
@@ -134,7 +79,6 @@ describe('every database column is written by something', () => {
     .map(({ text }) => text)
     .join('\n');
 
-  /** Columns declared across every `CREATE TABLE`, minus ones dropped by a later migration. */
   const declared = new Set<string>();
   for (const block of schema.matchAll(/CREATE TABLE IF NOT EXISTS \w+ \(([\s\S]*?)\n\);/g)) {
     for (const line of (block[1] ?? '').split('\n')) {
@@ -146,11 +90,6 @@ describe('every database column is written by something', () => {
     declared.delete(dropped[1] ?? '');
   }
 
-  /*
-    Columns written only by SQL inside the application, never by a name in TypeScript. `id` and the
-    timestamps are set by literals in statements rather than carried as fields, so requiring them to
-    appear as identifiers would flag every table.
-  */
   const WRITTEN_BY_SQL_ONLY = ['id', 'created_at_ms', 'registered_at_ms'];
 
   it('finds the schema at all', () => {

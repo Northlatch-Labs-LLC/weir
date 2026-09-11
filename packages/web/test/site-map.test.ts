@@ -20,19 +20,11 @@ import {
   titleFor,
 } from '../lib/site-map';
 
-/**
- * Every page route in `app/` must have a place on the map.
- *
- * This is the guard that would have caught `/creators`: a finished page, reachable from no header,
- * rail or footer, found only by somebody who already knew the URL. The walk is of the filesystem,
- * so a page added later is checked without anybody remembering to list it here.
- */
 function pageRoutes(dir: string, prefix = ''): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      // Route groups — `(app)` — change no URL.
       const segment = entry.startsWith('(') ? '' : `/${entry}`;
       out.push(...pageRoutes(full, `${prefix}${segment}`));
     } else if (entry === 'page.tsx') {
@@ -42,20 +34,12 @@ function pageRoutes(dir: string, prefix = ''): string[] {
   return out;
 }
 
-/**
- * Routes whose only job is to send somebody somewhere else.
- *
- * They are pages on disk, so the walk finds them, and they are deliberately absent from the map: a
- * breadcrumb naming a page the reader is never on, and a menu entry pointing at a redirect, are both
- * worse than nothing.
- */
 const REDIRECTS = ['/verified'];
 
 describe('the site map knows every page', () => {
   const routes = pageRoutes(resolve(process.cwd(), 'app'));
 
   it('found the pages at all', () => {
-    // Guards the guard: an empty walk would pass every assertion below for nothing.
     expect(routes.length).toBeGreaterThanOrEqual(20);
     expect(routes).toContain('/explore');
     expect(routes).toContain('/c/[handle]');
@@ -63,7 +47,6 @@ describe('the site map knows every page', () => {
 
   for (const route of routes) {
     it(`${route} has a breadcrumb trail`, () => {
-      // Dynamic segments are exercised with a value of the shape the route accepts.
       const concrete = route
         .replace('[handle]', 'someone')
         .replace('[id]', '0x1234567890abcdef');
@@ -71,10 +54,8 @@ describe('the site map knows every page', () => {
       if (route === '/') {
         expect(trail).toEqual([{ label: 'Home', href: null }]);
       } else if (REDIRECTS.includes(route)) {
-        // A redirect renders nothing and is never the page somebody is on, so it needs no trail.
         expect(trail).toEqual([{ label: 'Home', href: '/' }]);
       } else {
-        // Home, then at least the page itself. A route the map does not know yields Home alone.
         expect(trail.length, `${route} is not on the map`).toBeGreaterThanOrEqual(2);
         expect(trail[0]).toEqual({ label: 'Home', href: '/' });
         expect(trail[trail.length - 1]?.href).toBeNull();
@@ -82,11 +63,6 @@ describe('the site map knows every page', () => {
     });
   }
 
-  /*
-   * Being on the map is not being reachable. `/creators` had a trail's worth of metadata and sat
-   * in no menu; this is the assertion that would have caught it. A route may opt out only by
-   * being listed here with its reason.
-   */
   const NOT_IN_A_MENU: Record<string, string> = {
     '/': 'the logo',
     '/verified': 'redirects to /names; kept because links to it exist',
@@ -100,14 +76,6 @@ describe('the site map knows every page', () => {
     '/agents/build': 'what running an agent means, reached from the header and the front page',
     '/agents/reference': 'the technical guide, reached from /agents/build; a person does not navigate to it',
   };
-  /*
-    The header's grouped menus count as menus.
-
-    The bar carries three destinations and everything else sits behind `Money`, `You` and `Know` —
-    or, for somebody with no account, behind `Read` and `How it works`. Leaving those out of this
-    set made the test claim that `/names` and `/account/recovery` were unreachable while they were
-    two clicks from every page.
-  */
   const inAMenu = new Set(
     [
       ...PRIMARY,
@@ -167,7 +135,6 @@ describe('the trail', () => {
   });
 
   it('follows a parent chain and tolerates a trailing slash', () => {
-    // Two links deep: reference sits under "Run an agent", which sits under the agent pages.
     expect(crumbsFor('/agents/reference/').map((c) => c.label)).toEqual([
       'Home',
       'The agents',
@@ -177,12 +144,10 @@ describe('the trail', () => {
   });
 
   it('hangs the registration page off Home', () => {
-    // Not off Earn. Most people who make an account never open a vault.
     expect(crumbsFor('/join').map((c) => c.label)).toEqual(['Home', 'Create your account']);
   });
 
   it('puts a name under the account, not under Creators', () => {
-    // A .sui name is a thing this address owns, like a purchase — not a step in registering.
     expect(crumbsFor('/names')).toEqual([
       { label: 'Home', href: '/' },
       { label: 'Your account', href: null },
@@ -205,7 +170,6 @@ describe('which header section is lit', () => {
     expect(primaryFor('/vault/0xabc')).toBe('/treasury');
   });
   it('lights nothing on the registration path', () => {
-    // `/join` is not under Earn, so no header section is its ancestor.
     expect(primaryFor('/join')).toBe(null);
   });
   it('is nothing on the home page and on account pages', () => {
@@ -239,50 +203,20 @@ describe('the lists agree with each other', () => {
     expect(ACCOUNT_TABS.map((d) => d.label)).toContain('My vault');
   });
   it('builds the footer by address, and these are the addresses', () => {
-    // Exact, so an insertion elsewhere in the map cannot silently re-point a footer link.
-    /*
-      Three, not nine.
-
-      This column was `[...PRIMARY, …four more]`, and the footer around it held twenty-seven links
-      across six columns — a sitemap, which nobody reads. Everything dropped from here is still
-      reachable: `/creators`, `/treasury` and `/chests` are in the header's own menus, `/security`
-      and `/disclosure` are in the legal column below, and `/explore/agents` is one click from
-      `/agents`. Nothing lost a home; the footer stopped being the home of last resort.
-    */
     expect(FOOTER.product.map((d) => d.href)).toEqual(['/feed', '/explore', '/agents']);
-    // `/names` and `/account/recovery` moved to the header's "You" menu, which is where somebody
-    // with an account looks for their own things.
     expect(FOOTER.account.map((d) => d.href)).toEqual(['/signin', '/join', '/vault']);
-    /*
-      The gated footer gained /agents deliberately. While the door is shut the only readers are a
-      waiting-list signup and an operator evaluating whether to point a program at us — and the
-      manifest, which is open to machines, names this page as its human-readable companion. Opening
-      one and hiding the other publishes a document whose own reference cannot be followed.
-    */
     expect(FOOTER.gated.map((d) => d.href)).toEqual([
       '/waitlist',
       '/signin',
       '/explore',
       '/explore/agents',
       '/agents',
-      /*
-        And /disclosure, for the strongest version of that same argument. Its reader is a regulator
-        or a journalist who will never join a waiting list, the path is in ALWAYS_OPEN so the door
-        does not stop them, and a compliance page nothing links to while the door is shut is
-        discoverable only by somebody who already knows it is there.
-      */
       '/disclosure',
     ]);
-    /*
-      The legal column is the one a provider is obliged to display. Pinned exactly, and asserted
-      against the gated footer too — a closed door does not excuse the obligation.
-    */
     expect(FOOTER.legal.map((d) => d.href)).toEqual([
       '/legal/terms',
       '/legal/privacy',
       '/legal/creator-terms',
-      // The disclosure register joined this group deliberately: it is a document whose only job is
-      // to be findable, and it sat at a 404 while the compliance posture cited it.
       '/disclosure',
       '/legal/terms#7-content-moderation-reports-and-takedowns',
     ]);

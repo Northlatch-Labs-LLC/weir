@@ -1,38 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * The brake sweep: move SUI out of Heron's address with the brake key alone, the hot key absent.
- *
- * # What this is for
- *
- * Heron's address is a 1-of-2 multisig of the hot key (on the host, behind the purse) and the
- * brake (the operator's, never on the host, never on this laptop's disk). The whole point of the
- * second member is this file: when the hot key is lost, leaked or simply stopped, the operator
- * signs one transfer as Heron's address and the coins leave. `multisig.ts` in the signer package
- * says what that does and does not buy; this file is the tool that does it, and the drill that
- * proves it works before it is needed.
- *
- * # Two halves, so the key is never where the network is
- *
- * `buildSweep` needs no key: it makes the transaction bytes, the caller simulates them, writes
- * them to a file and stops. `inspectSweep` reads bytes back and refuses anything that is not one
- * transfer of the named amount from Heron's address to the named recipient, so a file altered
- * between the two halves is caught before a key touches it. `brakeKeypairFrom` turns the brake's
- * secret, read at a hidden prompt and nowhere else, into a keypair and checks it IS the brake
- * member of the document; `signAsMultisig` produces the multisig envelope and verifies it against
- * the multisig public key before it is returned. No function here prints, logs or returns a
- * secret, and every refusal is a value that names the rule.
- *
- * # Gas from the address balance, and the coin from a withdrawal
- *
- * Heron holds a balance and no coin object, so the gas payment is empty and the transaction
- * carries a `ValidDuring` expiration, the shape @mysten/sui's executor uses for that mode and the
- * shape `birth-vault.ts` proved on mainnet (2026-09-05). In that mode the gas coin is NOT the
- * whole balance: the node funds it with the gas budget alone, so `SplitCoins(GasCoin, amount)`
- * fails at execution with `InsufficientCoinBalance` while the simulation lets it pass. The first
- * drill (2026-09-05, digest 6pAFozwF…) failed exactly there. The coin therefore comes from a
- * `FundsWithdrawal` input against the sender's balance, redeemed by `0x2::coin::redeem_funds`,
- * and that coin is what is transferred.
- */
 
 import { bcs } from '@mysten/sui/bcs';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
@@ -44,7 +10,6 @@ import { fromBase64 } from '@mysten/sui/utils';
 import { allow, refuse, type Outcome } from './outcome.js';
 import type { MultisigDoc } from './multisig-file.js';
 
-/** The member label the document gives the operator's key. Fixed: the drill is about this member. */
 export const BRAKE_MEMBER = 'brake';
 
 export interface ValidDuring {
@@ -74,7 +39,6 @@ const ADDRESS = /^0x[0-9a-f]{64}$/;
 const SUI_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
 const SUI_PACKAGE = '0x0000000000000000000000000000000000000000000000000000000000000002';
 
-/** Heron's multisig public key from the document. Pure; throws only on a document `loadMultisigDoc` would have refused. */
 export function multisigPublicKeyOf(doc: MultisigDoc): MultiSigPublicKey {
   return MultiSigPublicKey.fromPublicKeys({
     threshold: doc.threshold,
@@ -82,7 +46,6 @@ export function multisigPublicKeyOf(doc: MultisigDoc): MultiSigPublicKey {
   });
 }
 
-/** Build the sweep bytes. No key, no network: everything the chain must supply is in `build`. */
 export async function buildSweep(build: SweepBuild): Promise<Outcome<Uint8Array>> {
   if (!ADDRESS.test(build.sender)) return refuse('request-malformed', `the sender ${build.sender} is not a lower-case full Sui address.`);
   if (!ADDRESS.test(build.recipient)) return refuse('request-malformed', `the recipient ${build.recipient} is not a lower-case full Sui address.`);
@@ -113,12 +76,6 @@ export async function buildSweep(build: SweepBuild): Promise<Outcome<Uint8Array>
   }
 }
 
-/**
- * Read bytes back and refuse anything that is not exactly the sweep the caller expects: one
- * withdrawal of `amountMist` SUI from the sender's balance redeemed as a coin, one
- * TransferObjects of that coin to `recipient`, sent by `sender`, with an empty gas payment. The bytes file sits between the two halves of the
- * drill; this is the check that it still says what `prepare` wrote.
- */
 export function inspectSweep(bytes: Uint8Array, expected: SweepShape): Outcome<{ readonly expiration: ValidDuring; readonly gasBudget: bigint }> {
   let data: ReturnType<Transaction['getData']>;
   try {
@@ -191,12 +148,6 @@ export function inspectSweep(bytes: Uint8Array, expected: SweepShape): Outcome<{
   return allow({ expiration: data.expiration as ValidDuring, gasBudget: BigInt(data.gasData.budget ?? '0') });
 }
 
-/**
- * The brake's keypair from its secret, checked against the document.
- *
- * The secret arrives from a hidden prompt and nothing else. No refusal here repeats any part of
- * it, and the one thing said about a wrong key is which member it is not.
- */
 export function brakeKeypairFrom(secret: string, doc: MultisigDoc): Outcome<Ed25519Keypair> {
   const trimmed = secret.trim();
   if (trimmed === '') return refuse('request-malformed', 'no key was entered.');
@@ -220,11 +171,6 @@ export function brakeKeypairFrom(secret: string, doc: MultisigDoc): Outcome<Ed25
   return allow(keypair);
 }
 
-/**
- * Sign the bytes with one member and wrap the partial signature in the multisig envelope.
- * Verified against the multisig public key before it is returned: a combination below the
- * threshold is refused here with a sentence, not by a node.
- */
 export async function signAsMultisig(bytes: Uint8Array, member: Ed25519Keypair, doc: MultisigDoc): Promise<Outcome<string>> {
   const multisig = multisigPublicKeyOf(doc);
   const { signature } = await member.signTransaction(bytes);

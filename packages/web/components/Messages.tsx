@@ -1,29 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Direct messages, end-to-end encrypted where both parties have a key.
- *
- * Reading is signed, not just sending. Everywhere else naming an address grants nothing because
- * entitlement lives on chain; a DM has no such backstop, so proof is required to read.
- *
- * A signature is requested per action rather than held. There is no session and nothing cached —
- * which means a wallet prompt each time, and that is the honest trade for having nothing to steal.
- *
- * # The encryption key lives in this component's memory and nowhere else
- *
- * It is derived from a signature, held in React state, and gone when the tab closes. Nothing is
- * written to `localStorage`: a key at rest in the browser is a key any script on the origin can
- * read, and the derivation is cheap enough to repeat.
- *
- * # Encryption is never silently on or silently off
- *
- * Every message is labelled with what it actually is, and the composer says which of the two it is
- * about to send *before* it is sent. A recipient who has never registered a key cannot receive an
- * encrypted message — nobody can force them to — so those messages go in plaintext, and the
- * composer says so rather than downgrading quietly.
- */
-
 import { useMemo, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -39,15 +16,9 @@ import {
   type EncryptedPayload,
 } from '@/lib/e2e';
 
-/**
- * What a locked message costs, and what that number means.
- */
 interface Price {
-  /** Smallest units, as a decimal string. Never a number: these exceed 2^53. */
   minor: string;
-  /** From the vault coin's own `CoinMetadata`, via the read route. `null` when it could not be read. */
   decimals: number | null;
-  /** Display only, from the coin type's last segment. */
   symbol: string;
 }
 
@@ -71,17 +42,9 @@ interface Thread {
   lastAtMs: number;
   lastPreview: string;
   lastEncrypted: boolean;
-  /**
-   * What this person has tipped you, in the smallest unit of your vault's coin.
-   *
-   * Present only when you own a creator vault and the chain showed a tip. Absent means "no mark to
-   * show" — a guest, no vault, a read that failed, or a tally the bounded walk did not reach — and
-   * never "this person has given you nothing", which is a different claim the route cannot make.
-   */
   supporterUnits?: string;
 }
 
-/** Must match `statementFor` in lib/identity.ts exactly. */
 function stmt(action: string, address: string, ts: number): string {
   return `Weir\naddress: ${address}\nissued: ${ts}\norigin: ${window.location.origin}\n${action}`;
 }
@@ -90,41 +53,19 @@ function short(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-/**
- * A price, at the scale its own coin declares.
- *
- * An unread scale prints as an admission rather than a figure. There is no fallback to six: a coin
- * whose metadata could not be read is not a six-decimal coin, and guessing is how the original bug
- * stayed invisible.
- */
 function money(price: Price): string {
   if (price.decimals === null) return 'scale unknown';
   const amount = formatUnits(BigInt(price.minor), price.decimals);
   return price.symbol === '' ? amount : `${amount} ${price.symbol}`;
 }
 
-/**
- * The result of looking up a recipient's published key.
- *
- * `none` and `failed` are deliberately separate. "This person has not set up encryption" is a fact
- * about them and a reason to send in plaintext; "we could not find out" is a fact about us and a
- * reason to send nothing at all.
- */
 type KeyLookup = { state: 'unchecked' } | { state: 'checking' } | KeyResolution;
 
-/**
- * The subset a completed lookup can be in.
- *
- * Split out so `fetchKey` cannot be typed as possibly returning `unchecked` — the callers narrow
- * on `found` versus `none`, and a wider return type forces a defensive branch for a state that
- * never occurs, which is the kind of branch that later gets filled in with a guess.
- */
 type KeyResolution =
   | { state: 'found'; key: string }
   | { state: 'none' }
   | { state: 'failed'; detail: string };
 
-/** What the reader sees for one message, after decryption has been attempted. */
 type Rendered =
   | { state: 'plain'; text: string }
   | { state: 'decrypted'; text: string }
@@ -162,21 +103,11 @@ export function Messages() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /** The X25519 secret, in memory only. `null` means encryption is not enabled on this device. */
   const [secret, setSecret] = useState<Uint8Array | null>(null);
-  /**
-   * The recipient's published key.
-   *
-   * Four states, not two, because the differences decide what pressing Send does. Collapsing
-   * "we could not look" into "there is none" is how a lookup outage turns into a plaintext message
-   * the sender believed was encrypted — a silent downgrade, and the worst failure this component
-   * can have. So a failed look refuses to send rather than choosing for them.
-   */
   const [theirKey, setTheirKey] = useState<KeyLookup>({ state: 'unchecked' });
 
   const recipient = open ?? to.trim();
   const willEncrypt = secret !== null && theirKey.state === 'found';
-  /** Pressing Send must never be ambiguous about which of the two it is doing. */
   const canSend =
     recipient !== '' &&
     text.trim() !== '' &&
@@ -203,26 +134,6 @@ export function Messages() {
     return signature === null ? null : { signature, timestampMs };
   }
 
-
-  /**
-   * Derive this address's encryption key and, if the chain does not already hold it, publish it.
-   *
-   * # Deriving and publishing are separate, and only the first always happens
-   *
-   * The derivation is a personal-message signature and costs nothing. Publishing writes to the
-   * shared `KeyRegistry` on Sui and costs gas — so it is only proposed when the chain actually
-   * disagrees with the key just derived, and it is quoted before it is signed like every other
-   * transaction here.
-   *
-   * A user who has already published can therefore read their messages on a new device for free.
-   * Only a first publication or a genuine rotation costs anything.
-   *
-   * # Why the read comes first and is allowed to stop this
-   *
-   * A failed registry read does not fall through to "publish anyway". Republishing a key that is
-   * already there wastes gas; publishing over a *different* one is a rotation that makes the
-   * user's own history unreadable. Neither is a thing to do on a guess.
-   */
   async function enableEncryption() {
     if (signer === null) return;
     setBusy(true);
@@ -245,7 +156,6 @@ export function Messages() {
       }
 
       setSecret(derived);
-      // Anything already on screen was rendered without a key. Re-render it with one.
       if (open !== null) await lookupKey(open);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -254,17 +164,6 @@ export function Messages() {
     }
   }
 
-  /**
-   * Build, simulate, quote, sign and submit a key publication.
-   *
-   * The same shape as every payment in this application: the confirming step does not exist until
-   * a simulation has passed. The cost here is only gas, but a transaction that aborts still costs
-   * it — and this contract does abort, on a key of the wrong length or an all-zero one.
-   *
-   * A rotation is confirmed separately and in words, because it is the one action in this
-   * component that destroys something: every message wrapped to the old key stops opening, and
-   * nothing anywhere can re-wrap them.
-   */
   async function publishKey(
     sender: string,
     x25519Public: string,
@@ -286,7 +185,6 @@ export function Messages() {
       return false;
     }
 
-    // Not `Number(mist) / 1e9`: this is a figure somebody is about to agree to pay.
     const gas = formatSui(body.quote.gasMist);
     const confirmed = window.confirm(
       rotating
@@ -301,8 +199,6 @@ export function Messages() {
 
     const signature = await signer.signTransaction(body.quote.bytes);
 
-    // Submitted through the shared endpoint, which takes the bytes back unchanged — so what
-    // executes is byte-identical to what was simulated and to what the wallet displayed.
     const submitted = await fetch('/api/checkout/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -316,15 +212,6 @@ export function Messages() {
     return true;
   }
 
-  /**
-   * One address's published key, from the chain-backed route.
-   *
-   * The route reports three outcomes and this keeps them three. Folding an error into "no key" is
-   * exactly the downgrade the on-chain registry was built to remove, and a client that flattened
-   * the response would reintroduce it on its own. That includes a response that is not JSON at
-   * all: a 500 used to reject inside `r.json()` and leave the state stuck on "checking", which
-   * read as harmless while Send fell through to plaintext.
-   */
   async function fetchKey(address: string): Promise<KeyResolution> {
     try {
       const r = await fetch(`/api/keys?addresses=${encodeURIComponent(address)}`);
@@ -352,13 +239,6 @@ export function Messages() {
     }
   }
 
-  /**
-   * Fetch the recipient's published key. What is fetched here is what a send will use.
-   *
-   * Thin, because the enable flow needs the same three outcomes. Two copies of that logic would
-   * eventually disagree about which one means "send plaintext", and only one of the two answers
-   * is safe.
-   */
   async function lookupKey(other: string) {
     setTheirKey({ state: 'checking' });
     setTheirKey(await fetchKey(other));
@@ -419,18 +299,10 @@ export function Messages() {
     setBusy(true);
     setError(null);
     try {
-      /*
-        Two paths, chosen by `willEncrypt`, which is the same value the composer has been showing.
-        The decision is not recomputed here against a freshly fetched key: a send must do what the
-        label said it would, and a key that changed between reading the label and pressing the
-        button should force another look, not silently alter what happens.
-      */
       let payload: Record<string, unknown>;
       if (willEncrypt && secret !== null && theirKey.state === 'found') {
         const encryption = encrypt(trimmed, [
           { address: recipient, x25519Public: theirKey.key },
-          // The sender's own envelope. Without it the thread is unreadable to the person who wrote
-          // half of it — see the note in lib/e2e.ts.
           { address: signer.address, x25519Public: toB64(publicFromSecret(secret)) },
         ]);
         const signed = await sign(
@@ -441,18 +313,7 @@ export function Messages() {
         if (signed === null) return;
         payload = { from: signer.address, to: recipient, encryption, ...signed };
       } else {
-        /*
-          Signed and sent are the same value, so it is computed once.
-
-          `preview` is what a recipient sees before deciding to pay, and it was not covered by the
-          signature — so a captured send could be replayed with a different one. `paid` is empty
-          here because this composer never charges; the field is still signed, so "free" is
-          something the sender stated rather than something the request omitted.
-        */
         const previewText = trimmed.slice(0, 80);
-        // A value, not an empty literal. The server interpolates here, and the drift test compares
-        // the two as skeletons — a hard-coded blank is a different shape from a slot that happens
-        // to be empty, and it would pass locally while failing the guard that exists to catch this.
         const paidStatement = '';
         const signed = await sign(
           `action: send\nto: ${recipient}\ntext: ${trimmed}\npreview: ${previewText}\npaid: ${paidStatement}`,
@@ -621,9 +482,7 @@ export function Messages() {
                     {r.price === null
                       ? 'Locked.'
                       : r.price.decimals === null
-                        ? // Named, not hidden and not guessed. The price exists; what it means does
-                          // not, and a figure printed anyway would be indistinguishable from a real
-                          // one.
+                        ?
                           "Locked. The price could not be shown: this coin's scale was not read."
                         : `Locked. ${money(r.price)} to open.`}
                   </div>
@@ -636,8 +495,6 @@ export function Messages() {
         {recipient !== '' && (
           <p className="enc-status" style={{ marginBottom: 8 }}>
             {theirKey.state === 'failed' ? (
-              // Not a badge. Neither "encrypted" nor "not encrypted" is known to be true here, and
-              // showing either would be a claim this component cannot make.
               <span className="unmeasured">
                 Not measured: {short(recipient)}&rsquo;s key could not be read ({theirKey.detail}).
                 Nothing is sent until it can be.

@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  `read` — an agent opens what it bought through its own Seal session.
-
-  Mutations predicted: treat a null `sealed` as an empty body → "no entitlement is not-found" red;
-  skip the decryptor → "a sealed post is opened by the bound decryptor" red; return the words
-  without the hash check → the decryptor's own test covers it (SealHashMismatchError).
-*/
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
 import { createAgent, generateAgentKey, MAINNET_RECORD, type SealDecryptor } from '../src/index.js';

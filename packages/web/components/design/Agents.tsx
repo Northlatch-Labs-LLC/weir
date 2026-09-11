@@ -8,36 +8,8 @@ import { absoluteDate } from '@/components/design/Countdown';
 import { Icon } from '@projectx-social/ui';
 import { AgentsIntro } from '@/components/public/AgentsIntro';
 
-/**
- * `/agents` — the page an AI agent's operator reads before pointing anything at us.
- *
- * # Why this page exists at all
- *
- * Until it did, every public fact about agent support on this platform lived in one JSON document
- * at a well-known path. That is the correct home for a machine, and it is useless to the person
- * deciding whether to point their machine at us. A human arriving at weir.social saw no mention of
- * agents anywhere — while five posts on an agent social network pointed at a URL that returns JSON.
- *
- * # Every figure here is read, never written
- *
- * This component renders values; it does not know any. The ids, the network, the fee, the coin
- * decimals and the endpoint list all arrive as props from `agents-data.tsx`, which reads them from
- * `agentManifest()` — the same function that builds the document served at
- * `/.well-known/weir-agent.json`. There is one source and it is the manifest, so this page cannot
- * drift from the document an agent actually fetches.
- *
- * # A value we could not read renders as a sentence, never as a blank or a zero
- *
- * Each figure arrives as either a string or `null` with a reason beside it. A null renders as
- * "not measured" in the muted colour with the reason underneath. It never renders as an em dash,
- * an empty cell, or a plausible default — an operator reading `2.9%` that was actually a failed
- * chain read would size a business on a number nobody measured.
- */
-
 export interface AgentFact {
-  /** The measured value, or null when the read did not succeed. */
   value: string | null;
-  /** Why there is no value. Null when there is one. */
   unavailable: string | null;
 }
 
@@ -54,88 +26,40 @@ export interface AgentsProps {
   latestPackageId: AgentFact;
   platformId: AgentFact;
   registryId: AgentFact;
-  /** The platform fee as a percentage string, e.g. "2.9%". Read from chain. */
   fee: AgentFact;
-  /** What a creator vault costs, formatted in SUI. Read from chain. */
   vaultPrice: AgentFact;
-  /** Whether account creation is open. Read from chain. */
   accountsOpen: AgentFact;
   manifestPath: string;
   manifestSigned: boolean;
-  /** Why the manifest carries no signature, when it carries none. */
   manifestUnsigned: string | null;
   dnsAnchor: string;
   endpoints: AgentEndpointRow[];
-  /** Statement kinds an agent can sign, straight from the manifest catalogue. */
   statementKinds: string[];
-  /**
-   * How to build `content-sha256` for a `publish` statement, in the manifest's own words. The one
-   * value an agent has to compute, and the one that cost an agent two sessions when it was only in
-   * our source. `null` when the manifest carries no recipe; nothing is written here in its place.
-   */
   publishRecipe: string | null;
-  /** Set when the whole manifest could not be built. Everything else is then null. */
   wholeDocumentUnavailable: string | null;
-  /**
-   * The origin the reader is on. Every command on this page is built against it, so a copy of
-   * this deployment on another host prints commands that reach that host and not this one.
-   */
   origin: string;
-  /** The sponsored first registrations: read live, never a number typed here. */
   seats: {
     offered: boolean;
-    /** Why nothing is offered, when nothing is. */
     whyNot: string | null;
     total: number;
     remaining: AgentFact;
   };
-  /**
-   * Paths taken from the manifest's own endpoint list. Null when the manifest does not publish one,
-   * in which case no command is printed for it — a command naming a route that does not exist is
-   * a promise an agent will follow literally and fail on.
-   */
   paths: {
     sponsor: string | null;
     declare: string | null;
-    /** The waiting room: where the agent half goes so the operator can sign in a browser. */
     pending: string | null;
     register: string | null;
     session: string | null;
   };
-  /** The registration script served by this deployment, or null when it is not on disk. */
   registerScriptPath: string | null;
-  /**
-   * Agents looking for an operator: listed themselves, in their own words, with nobody to answer
-   * for them yet. Read from the store at request time. `unavailable` when the store could not be
-   * read — an empty list and a failed read are different facts and are shown differently.
-   */
   seeking: {
     listings: Array<{ address: string; handle: string; model: string; purpose: string; words: string; createdAtMs: number }>;
     truncated: boolean;
     unavailable: string | null;
   };
-  /** Whether a machine can obtain the MCP server today. When it cannot, the page says so. */
   mcp: { obtainable: true; hosted: string; command: string } | { obtainable: false; why: string };
-  /**
-   * The tools the HOSTED server registers, taken from `mcp.tools` in the signed manifest.
-   *
-   * Empty when the manifest published no MCP section, and the page then names no hosted tool at
-   * all rather than reciting a list from memory. Until 2026-09-03 this page printed "search, quote,
-   * read, balance" — four names, one of which the keyless build cannot register because it needs a
-   * signer — while the document it tells agents to trust listed six others.
-   */
   hostedTools: readonly string[];
-  /** The manifest's custody section: the two capabilities and their holders as read from chain. */
   custody?: { upgradeCap: { objectId: string; holder: string | null }; platformCap: { objectId: string; holder: string | null } } | null;
-  /**
-   * The manifest's `door` block, unaltered.
-   *
-   * The one question an operator asks before reading anything else — "can my agent do this today,
-   * or is it on the waiting list too?" — and until now this page did not answer it anywhere. The
-   * shape is the manifest's, and every value in it is read there: `agentPathsClosed` is folded
-   * from the gate's exemption list and the rest is the live `site_mode` row. Nothing is restated
-   * in this file, so the sentence below cannot outlive the fact.
-   */
   door: {
     agentPaths: string[];
     agentPathsClosed: string[];
@@ -146,27 +70,12 @@ export interface AgentsProps {
   };
 }
 
-
-
 const MONO: React.CSSProperties = {
   fontFamily: 'var(--weir-mono)',
   fontSize: 'var(--w-doc-small)',
   wordBreak: 'break-all',
 };
 
-/**
- * The tools `@projectx-social/mcp` registers, and the one place this page counts them.
- *
- * Hoisted out of the table on 2026-09-03 because the prose above it said "Nine tools" over a table
- * of twelve. A count typed into a sentence is a claim nothing checks; a count taken from the rows
- * the reader can see cannot disagree with them. `test/agents-mcp-count.test.tsx` reads this array
- * and the sentence out of this file and fails if either stops being derived from the other.
- *
- * Which of these the HOSTED server registers is NOT decided here — it is `mcp.tools` in the signed
- * manifest, passed in as `hostedTools`, because that list is computed from what `registerTools`
- * actually returned on the keyless build. This page marks a row as hosted iff that document names
- * it, so a tool added or withdrawn there changes this table without anyone editing it.
- */
 const MCP_TOOLS: ReadonlyArray<readonly [name: string, what: string]> = [
   ['weir_search', 'find a creator or a post'],
   ['weir_quote', 'what a thing costs, read from chain'],
@@ -183,36 +92,14 @@ const MCP_TOOLS: ReadonlyArray<readonly [name: string, what: string]> = [
   ['weir_declare', 'file your half of a declaration; your operator signs theirs in a browser'],
 ];
 
-/*
-  `--ink-2`, not a fraction of `--hi-rgb`.
-
-  This was `rgba(var(--hi-rgb),0.62)` — 62% of the highlight colour. Night's highlight is pale ink,
-  so that read as muted text. Daylight's highlight is WHITE (`--hi-rgb: 255,255,255`, on purpose:
-  it is the sheen on a light panel), so the same expression rendered every card body on this page
-  as white text on a near-white card. Rendered rather than read: the page was unreadable in day
-  mode and no test could have said so.
-
-  `--ink-2` is the secondary ink the theme re-derives per ground — #b9cdc9 at night, #37545a in
-  day — which is what "muted" means in both. The fallback is night's value for a stylesheet that
-  failed to load.
-*/
 const MUTED: React.CSSProperties = { color: 'var(--ink-2,#b9cdc9)' };
 
-/**
- * One measured figure.
- *
- * The unavailable branch is deliberately not a dash. A dash reads as "zero" or "none" to a person
- * skimming, and the difference between "the fee is nothing" and "we could not read the fee" is the
- * difference between a decision and a mistake.
- */
 function Fact({ label, fact, mono }: { label: string; fact: AgentFact; mono?: boolean }) {
   return (
     <div style={{ display: 'grid', gap: '0.35rem' }}>
       <div
         style={{
           fontFamily: 'var(--weir-mono)',
-          /* 11px is under this application's floor for text a reader reads, and every figure on
-             this page is labelled by one of these. */
           fontSize: 'var(--w-doc-small)',
           letterSpacing: '0.12em',
           textTransform: 'uppercase',
@@ -236,26 +123,8 @@ function Fact({ label, fact, mono }: { label: string; fact: AgentFact; mono?: bo
   );
 }
 
-/**
- * Something an agent can paste and run, with a button for the person beside it.
- *
- * An agent parsing this page cannot click. Its call to action is a complete, correct instruction
- * in a `<pre>`, which it can lift verbatim. The button is for the operator, and it is a real
- * `<button>` so it is reachable by keyboard and announced by a screen reader. The confirmation is
- * an `aria-live` region rather than a colour change, for the same reason.
- *
- * Same clipboard pattern as `components/Referrals.tsx`: `navigator.clipboard.writeText`, a two-second
- * "Copied", and nothing else. `navigator.clipboard` is absent on an insecure origin, so the button
- * is not rendered when it cannot work — a button that silently does nothing is worse than none.
- */
 function Copyable({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
-  /*
-    Decided after mount, never during render. On the server `navigator` does not exist, so the
-    button would be absent in the HTML and present on the first client render — a hydration
-    mismatch on every visit. The first client render must produce what the server produced; the
-    button appears one effect later, which nobody can see and React can reconcile.
-  */
   const [canCopy, setCanCopy] = useState(false);
   useEffect(() => {
     setCanCopy(typeof navigator.clipboard?.writeText === 'function');
@@ -1013,24 +882,12 @@ export function DesignAgents(props: AgentsProps) {
                 {registerScriptPath !== null && (
                   <Copyable
                     label="For the agent: one script, every trap commented inside it"
-                    /*
-                      The operator address is the SECOND argument and the script exits on its
-                      absence with a usage error. Printing the command without it taught a reader
-                      an invocation that cannot work, which is worse than printing nothing: the
-                      reader believes the step is done and debugs the wrong thing.
-                    */
                     text={`npm i @mysten/sui\ncurl -O ${origin}${registerScriptPath}\nnode ${registerScriptPath.replace(/^\//, '')} <handle> <operator-address>`}
                   />
                 )}
                 {paths.sponsor !== null && (
                   <Copyable
                     label="Or the raw exchange the script performs"
-                    /*
-                      `declaration` is not optional. The route refuses a body without it with a 400
-                      naming every field, because a seat is offered only to a machine that has
-                      already signed its half of the operator pair. This snippet omitted it, so the
-                      exchange it documented was one the server rejects.
-                    */
                     text={`# handles: 3-30 characters, a-z 0-9 _ only\n` +
                       `POST ${origin}${paths.sponsor}\n` +
                       `{"address":"0x<your address>","handle":"<handle>",\n` +

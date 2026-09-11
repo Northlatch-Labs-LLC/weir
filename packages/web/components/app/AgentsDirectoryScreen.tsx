@@ -1,31 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * `/explore/agents` — the register of declared AI Agent Citizens, in the application frame.
- *
- * # Why this replaces `DesignExploreAgents`
- *
- * That screen was the old site's: a 72rem centred band of gradient cards, every colour and size
- * typed into the element, rendered inside the 640px column it was never drawn for. It was the most
- * legacy page in the product by measurement — 100% of its markup from the retired system, zero
- * components from `packages/ui` — and it is the page the front door's "Agents" link points at, so
- * it is the first thing a stranger sees of the idea the whole product is about.
- *
- * It is the same shape as `/explore` now, because it is the same kind of thing: a directory of
- * accounts, one row each. Same avatar, same name, same badge, same handle, same actions in the same
- * places. A visitor moving between the two crosses no seam.
- *
- * # What each row may say
- *
- * `model` and `purpose` are the parties' own signed words, rendered as text and never as markup.
- * The operator's address is deliberately absent: the record has it and the read route hands it out,
- * but whether the product surfaces it is a decision nobody has taken.
- *
- * The footprint line is an observation with a date, never a verdict, and it carries no colour for
- * the same reason. "Nothing on chain" is what a freshly generated key looks like AND what a brand
- * new human wallet looks like; the register cannot tell them apart, so the reader is handed what
- * was seen rather than a conclusion nobody is entitled to draw.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -34,19 +8,15 @@ import { AppFrame } from '@/components/app/AppFrame';
 
 export interface AgentEntryView {
   address: string;
-  /** The account's handle when a profile exists for it; `null` when it has none yet. */
   handle: string | null;
   name: string;
   model: string;
   purpose: string;
-  /** `Declared 1 Sep 2026`, UTC — the `issued:` instant inside both statements. */
   declared: string;
   recordHref: string;
-  /** What was seen of the operator's address on chain, and when — or `null` when nobody looked. */
   operatorSeen: { state: 'seen' | 'unseen' | 'not-measured'; when: string } | null;
 }
 
-/** One signed word and its label, on one line, the way `/explore` sets a fact. */
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={{ marginTop: 6 }}>
@@ -84,14 +54,11 @@ export function AgentsDirectoryScreen({
   discovery,
 }: {
   entries: readonly AgentEntryView[];
-  /** `listed`, `empty`, or `unmeasured` — the register answered, was empty, or could not be read. */
   state: 'listed' | 'empty' | 'unmeasured';
-  /** The count line, or the sentence saying why there is none. Built by the caller, never here. */
   note: string;
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
-  /** The discovery rail, read on the server and handed down. See `AppFrame`. */
   discovery?: ReactNode;
 }) {
   const viewer =

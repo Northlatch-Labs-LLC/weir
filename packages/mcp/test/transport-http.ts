@@ -1,37 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
-/**
- * The hosted endpoint's four refusals, driven over a real socket.
- *
- * # Why a real socket and not a mocked request object
- *
- * Every control here reads a header, and headers are the one part of an HTTP server that a mock
- * makes convincingly wrong. `Host` in particular is synthesised by the client from the URL it was
- * given rather than set by the caller, which is exactly the property that makes it the
- * DNS-rebinding control — and a mock that lets the test set `Host` freely would be testing a
- * different mechanism from the one that ships. So this opens a listener on a real port and speaks
- * real HTTP to it.
- *
- * # What is checked
- *
- *  1. **Host** — a request naming a host this endpoint does not answer to is refused. This is the
- *     DNS-rebinding control, and it is the one that still works when `Origin` is absent, which is
- *     precisely the rebinding case.
- *  2. **Origin** — a browser origin that is not on the allowlist is refused, with the default empty
- *     allowlist refusing every origin and serving every request that sends none.
- *  3. **Cookie** — a request carrying one is refused outright rather than having it ignored, and no
- *     response ever carries `Set-Cookie`.
- *  4. **Statelessness** — `initialize` returns no `mcp-session-id`, so there is no session to
- *     steal, resume, or fix.
- *  5. **Security headers** — the root pointer and the discovery document both carry
- *     `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options` and
- *     `Content-Security-Policy`, on every response rather than on a hand-picked one.
- *
- * Nothing here binds a real agent: `serveHttp` takes a server factory, so the harness supplies one
- * with no tools at all. The controls under test run before any tool is reachable, which is the
- * whole point of where they sit in `handleHttpRequest`.
- */
-
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -44,15 +12,6 @@ import {
   serveHttp,
 } from '../src/transport.js';
 
-/**
- * The four security headers this host sends on every response.
- *
- * An outside review found none of them on this service: the discovery document carried only
- * `date, content-type, content-length, cf-ray, cf-cache-status, server, alt-svc,
- * x-cloud-trace-context, report-to, nel`. Checked on both the root pointer and the discovery
- * document, since the two are handled by different branches of `handleHttpRequest` and either one
- * could regress independently of the other.
- */
 function checkSecurityHeaders(what: string, headers: Headers): void {
   check(`${what}: Strict-Transport-Security`, () => {
     assert.equal(headers.get('strict-transport-security'), 'max-age=63072000');
@@ -109,17 +68,6 @@ async function post(headers: Record<string, string>): Promise<Response> {
   });
 }
 
-/**
- * Send a request with an arbitrary `Host`, which `fetch` will not do.
- *
- * `Host` is a forbidden header name in the Fetch standard: a browser sets it from the URL and
- * silently drops any attempt to override it, and Node's `fetch` implements that rule. That is
- * correct behaviour and it is also exactly why `Host` is trustworthy as the rebinding control — but
- * it means the attack cannot be reproduced through `fetch`, which would quietly send the real host
- * and pass. A rebound browser connects to this address while still calling it by the attacker's
- * name, so the wire carries `Host: rebind.example`; `node:http` is the client that can put that on
- * the wire here.
- */
 async function postWithHost(host: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(

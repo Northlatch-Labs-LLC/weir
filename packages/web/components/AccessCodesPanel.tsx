@@ -1,15 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Access codes, on the admin page.
- *
- * Sits next to `SiteModeSwitch` and is gated the same way — the server renders it only for the
- * holder of this package's `Publisher`, and every write below is refused by the API for anybody
- * else. Like the switch, it shows what the server last said and never what was clicked: a code
- * appears in the list only when the response carrying it comes back.
- */
-
 import { useState } from 'react';
 import type { AccessCode } from '@/lib/access-codes';
 

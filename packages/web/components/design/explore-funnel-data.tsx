@@ -1,35 +1,13 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The funnel's data: who the creators are, and who the declared agents are.
- *
- * # The rule that matters
- *
- * An account is on the agents side **only if the declaration register lists it live**. The items
- * are built from register rows and from nothing else; a profile is consulted only to give a listed
- * row a name. There is no path from "looks like a bot", a handle, a bio or a posting pattern to
- * this list, and `agentsSide` is a pure function so a test can hand it one declared account and one
- * undeclared account and watch the second never appear.
- *
- * The same source feeds the `Agent` pill on every post (`lib/agents.ts` `declaredAgents`), so the
- * funnel and the feed cannot disagree about who is a machine.
- *
- * # Three states, two of which look alike from a distance
- *
- * A register with no rows and a register that could not be read both produce an empty list. They
- * are said as two different sentences, in two different voices, because a reader who is told
- * "there are no agents" when the truth is "we could not look" has been told something false.
- */
 
 import type { AgentAccount } from '@/lib/agents';
 import type { Profile } from '@/lib/content';
 import type { FunnelItem, FunnelSide, FunnelSides } from '@/components/design/ExploreFunnel';
 
-/** How many accounts a side shows before pointing at the full directory. */
 export const FUNNEL_ITEMS = 4;
 
 export type StoreReading<T> = { ok: true; value: T } | { ok: false; why: string };
 
-/** `0x1234…abcd` — for an account that has no handle to be called by. */
 export function shortAddress(address: string): string {
   return address.length <= 12 ? address : `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -57,8 +35,6 @@ function plural(n: number, word: string): string {
 }
 
 export function creatorsSide(reading: StoreReading<readonly Profile[]>): FunnelSide {
-  // One stamp for whichever branch below returns: an attempt has a time even when it finds
-  // nothing, or finds nothing because it failed.
   const readAtMs = Date.now();
   if (!reading.ok) {
     return { ...CREATORS, items: [], state: 'unmeasured', readAtMs, note: `The creator store could not be read; attempted. ${reading.why}` };
@@ -76,17 +52,9 @@ export function creatorsSide(reading: StoreReading<readonly Profile[]>): FunnelS
   return { ...CREATORS, items, state: 'listed', readAtMs, note: `${plural(profiles.length, 'creator')}, read from the store` };
 }
 
-/**
- * The register, and the profiles that give its rows names.
- *
- * `profiles` may hold accounts that are NOT in the register — the caller passes whatever it has,
- * and this function is where the undeclared ones are refused a place. Only `agents` decides
- * membership.
- */
 export function agentsSide(
   reading: StoreReading<{ agents: readonly AgentAccount[]; profiles: readonly Profile[] }>,
 ): FunnelSide {
-  // One stamp for whichever branch below returns — see `creatorsSide`.
   const readAtMs = Date.now();
   if (!reading.ok) {
     return {
@@ -123,20 +91,13 @@ export function agentsSide(
   return { ...AGENTS, items, state: 'listed', readAtMs, note: `${plural(live.length, 'declared agent')}, read from the register` };
 }
 
-/**
- * Both sides, read on this request. Never throws: each side reports its own failure in its own
- * words, and a page carrying the funnel renders whatever else it has.
- */
 export async function funnelSides(): Promise<FunnelSides> {
-  // Imported here rather than at the top so the pure functions above can be tested — and rendered
-  // in a client component's test — without a database in the process.
   const [{ listProfiles }, { listDeclaredAgents }, { opaqueDetail }] = await Promise.all([
     import('@/lib/content'),
     import('@/lib/agents'),
     import('@/lib/opaque'),
   ]);
 
-  // A `pg` message names tables and hosts. The visitor gets the sentence; the log gets the message.
   const why = (source: string, error: unknown): string => opaqueDetail(source, error);
 
   const creators = await listProfiles()

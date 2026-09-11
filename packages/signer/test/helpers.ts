@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Test-only fixtures. Nothing here reads the operator's real keystore or touches the network.
- *
- * A test that loaded `~/.sui/sui_config/sui.keystore` would be a test that only passes on one
- * machine and, worse, one that pulls real private keys into a process whose output is captured.
- * Every key below is generated in-process and discarded.
- */
 
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,7 +8,6 @@ import { ok } from '@projectx-social/sdk';
 import type { PolicyDoc, SimulatedEffects } from '@projectx-social/policy';
 import type { SerializedSignature, Signer } from '../src/index.js';
 
-/** Wrap a raw Sui keypair as one of our `Signer`s, without going through a secret string. */
 export function signerFor(keypair: Keypair): Signer {
   return {
     address: keypair.toSuiAddress(),
@@ -27,19 +19,12 @@ export function signerFor(keypair: Keypair): Signer {
   };
 }
 
-/**
- * Write a throwaway Sui CLI keystore holding the given keys.
- *
- * The entry format is base64 of `flag || 32 bytes`, which is what the real CLI writes — verified
- * against the shape of a real keystore's entries (33 bytes decoded, leading `0x00` for Ed25519)
- * without reading any key material out of it.
- */
 export async function writeKeystore(secrets: readonly Uint8Array[]): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'weir-keystore-'));
   const path = join(dir, 'sui.keystore');
   const entries = secrets.map((secret) => {
     const withFlag = new Uint8Array(33);
-    withFlag[0] = 0x00; // Ed25519
+    withFlag[0] = 0x00;
     withFlag.set(secret, 1);
     return Buffer.from(withFlag).toString('base64');
   });
@@ -81,15 +66,6 @@ export function effectsFor(agentAddress: string): SimulatedEffects {
   };
 }
 
-/**
- * A simulation response in the exact shape `@mysten/sui` 2.27.1's gRPC transport produced on
- * mainnet on 2026-08-31.
- *
- * Reproduced field for field from a live run, including the padded coin type, the signed decimal
- * amount string, the base64 `Pure.bytes` for the transfer recipient, and the digest living on
- * `effects` rather than on the transaction. Changing any of these to a shape that "looks right"
- * would make the translation tests assert against a fiction.
- */
 export function mainnetSuccessResponse(agentAddress: string) {
   const addressBytes = Buffer.from(agentAddress.slice(2), 'hex');
   return {

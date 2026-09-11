@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The mind, end to end against a fake deployment and a fake registry.
-
-  Mutations predicted: derive from the address instead of the signature → "two keys derive two
-  minds" red; add a second envelope in sealMind → "one envelope, the agent's own" red; skip the
-  registry read in remember → "an unpublished key is refused before anything is encrypted" red;
-  drop the hash check in openMind → "bytes that are not the bytes are refused" red; sign the
-  statement over the plaintext hash → the verify in "remember posts a signed remember statement" red.
-*/
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -30,10 +21,6 @@ const ENV = {
   PROJECTX_SOCIAL_KEY_REGISTRY_ID: REGISTRY,
 };
 
-/*
-  The registry as gRPC serves it: raw BCS. The layouts mirror `key_registry.move`; the SDK's own
-  `keyregistry-layout` test pins them against the Move source, so a drift fails there, not here.
-*/
 const KeyRegistryBcs = bcs.struct('KeyRegistry', { id: bcs.Address, keys: bcs.struct('Table', { id: bcs.Address, size: bcs.u64() }) });
 const FieldBcs = bcs.struct('Field', {
   id: bcs.Address,
@@ -41,7 +28,6 @@ const FieldBcs = bcs.struct('Field', {
   value: bcs.struct('PublishedKey', { x25519Public: bcs.vector(bcs.u8()), version: bcs.u64(), updatedAtMs: bcs.u64() }),
 });
 
-/** A chain that holds one registry entry (or none) and refuses to execute anything. */
 function fakeChain(entry: { address: string; x25519Public: string; version?: number } | null) {
   const calls: string[] = [];
   const client = {
@@ -73,7 +59,6 @@ function fakeChain(entry: { address: string; x25519Public: string; version?: num
   return { client: client as unknown as SuiGrpcClient, calls };
 }
 
-/** A weir deployment: one record store and one aggregator. */
 function fakeWeir() {
   const records = new Map<string, Record<string, unknown>>();
   const blobs = new Map<string, Uint8Array>();
@@ -204,11 +189,9 @@ describe('Agent.remember and Agent.recall', () => {
     const payload = body['payload'] as { ciphertext: string; envelopes: unknown[] };
     expect(payload.envelopes).toHaveLength(1);
     const ciphertext = fromB64(payload.ciphertext);
-    // The signature is over exactly the statement the server rebuilds from the bytes it received.
     const text = statementFor({ kind: 'remember', label: 'desk', sha256: sha256Hex(ciphertext), bytes: String(ciphertext.length) }, key.address, Number(body['timestampMs']), 'https://weir.social');
     const pk = await verifyPersonalMessageSignature(new TextEncoder().encode(text), String(body['signature']), { address: key.address });
     expect(pk.toSuiAddress()).toBe(key.address);
-    // The plaintext never left the agent.
     expect(JSON.stringify(body)).not.toContain(toB64(plaintext));
 
     const back = await agent.recall({ label: 'desk' });

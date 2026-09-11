@@ -1,31 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Commission the platform has earned, and the transactions that would collect it.
- *
- * # Why this panel exists at all
- *
- * Nothing in this application had ever called `claim_platform_fees`. The commission was being
- * charged correctly and accruing correctly, inside each vault, where no screen showed it — so the
- * platform's own revenue was invisible to the platform. It stayed invisible because the amounts
- * were small, and the amounts were small because volume was small. The first time that stops being
- * true is the first time it is expensive to have not noticed.
- *
- * # Why it renders without a wallet
- *
- * Every figure here is public: vault objects are shared, `platform_fees` is a readable field, and
- * `VaultOpened` is an event. Gating the display behind sign-in would imply a secret and would not
- * create one. The capability governs *collecting*, and that is enforced by the chain.
- *
- * # Why each row is its own transaction
- *
- * Commission is never pooled — the contract keeps it in the vault that charged it so a creator's
- * earnings and the platform's cut can never be paid out of the same balance. Collection is
- * therefore one transaction per vault, and this panel shows that honestly rather than offering a
- * "collect all" button that would silently be N signatures at a multisig.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { MultisigSubmit } from '@/components/MultisigSubmit';
 
@@ -61,16 +36,8 @@ type Load =
   | { name: 'read'; revenue: Revenue }
   | { name: 'unmeasured'; detail: string };
 
-/** The struct name, which is the symbol by convention. Display only. */
 const symbolOf = (coinType: string): string => coinType.split('::').pop() ?? coinType;
 
-/**
- * A smallest-unit amount at the coin's own scale, without floating point.
- *
- * String arithmetic on purpose. `Number` loses precision above 2^53 and these are balances; a
- * revenue figure that is subtly wrong is worse than one that is missing, because nothing about it
- * looks wrong.
- */
 function amount(raw: string, decimals: number | null): string {
   if (decimals === null) return `${raw} (unknown scale)`;
   const value = BigInt(raw);
@@ -129,8 +96,6 @@ export function PlatformRevenue({ address }: { address: string | null }) {
               kind: 'claim-platform-fees',
               vaultId: row.vaultId,
               coinType: row.coinType,
-              // The whole balance. A partial claim is possible on chain and there is no reason to
-              // offer it here: leaving commission behind only means signing for it again later.
               amount: row.uncollected,
             },
           }),

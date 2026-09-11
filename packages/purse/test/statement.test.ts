@@ -1,8 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * The statement intent: the purse signs one of two texts the SDK builds, under the bounds
- * statement.ts names, and refuses everything else as a value.
- */
 
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
@@ -159,7 +155,6 @@ describe('the bounds', () => {
     expect(other.ok).toBe(false);
     if (other.ok) throw new Error('unreachable');
     expect(other.refused.ruleId).toBe('statement-object');
-    // The cap is an allowed object and is not the vault the purse was started with.
     const cap = await h.purse.handle({ intent: nameVault({ vaultId: CAP_ID }) });
     expect(cap.ok).toBe(false);
     if (cap.ok) throw new Error('unreachable');
@@ -274,7 +269,6 @@ describe('the count survives a restart and refuses a broken chain', () => {
     const h = await harness({ statements: { perDay: 2 } });
     expect((await h.purse.handle({ intent: publish({ title: 'one' }) })).ok).toBe(true);
     await h.close();
-    // A new purse over the same audit path: seeded from the chain, one already signed.
     const dir = dirname(h.auditPath);
     const opened = await AuditFile.open(h.auditPath);
     if (!opened.ok) throw new Error(opened.reason);
@@ -298,4 +292,3 @@ describe('the count survives a restart and refuses a broken chain', () => {
     await ledger.ledger.close();
   });
 });
-

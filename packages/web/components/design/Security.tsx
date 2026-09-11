@@ -1,7 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-
 import { PageHead } from '@/components/design/PageHead';
 import { Fragment, type ReactNode } from 'react';
 import { useReveals } from '@/components/design/use-weir-line';
@@ -46,7 +45,6 @@ export interface DesignContract {
   tagBorder: string;
   icon: ReactNode;
   rail: string;
-  /** Null when this deployment has not been given one. The buttons then say so and do nothing. */
   id: string | null;
   idColor: string;
   idStyle: string;
@@ -77,7 +75,6 @@ export function DesignSecurity({
   cmpSources: readonly string[];
   contracts: readonly DesignContract[];
 }) {
-  /* The design marks sections `data-reveal`; without an observer they stay at opacity 0. */
   useReveals();
 
   return (

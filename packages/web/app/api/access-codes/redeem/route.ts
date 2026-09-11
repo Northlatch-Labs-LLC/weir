@@ -3,17 +3,6 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { accessPassCookie, redeemAccessCode } from '@/lib/access-codes';
 
-/**
- * Redeem an access code. Public, because the person redeeming it is by definition not signed in.
- *
- * Rate-limited as a write: forty attempts a minute per client against a 60-bit code is not a
- * search, and the limit is there so a scripted guess spends its budget on 429s rather than on
- * this server's database.
- *
- * The reason a code is refused is stated. A code is handed over by a person; "that did not work"
- * sends the recipient back to them with nothing to act on, whereas "that code has been used up"
- * is something they can fix.
- */
 export const dynamic = 'force-dynamic';
 
 const WHY: Record<Exclude<Awaited<ReturnType<typeof redeemAccessCode>>, { ok: true }>['reason'], string> = {

@@ -1,5 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/** Changing the policy is a redeploy, not a reload — and the pin is what makes that true. */
 
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -43,7 +42,6 @@ describe('the pin', () => {
   });
 
   it('refuses to start when the document was widened after the pin was taken', async () => {
-    // The case the pin exists for: somebody edits the allow-list in place.
     const written = await writePolicy(policyFor(AGENT));
     await writeFile(
       written.path,
@@ -77,13 +75,6 @@ describe('the document', () => {
   });
 
   it('loads a document that sets an approval bar, and one written before bars existed', async () => {
-    /*
-      The schema is a `strictObject`, so a key it does not name is a refusal to start. That is the
-      right default and it is also why this test exists: without `approvalThresholds` in the
-      schema, an operator who wrote a bar would be told at start that their document has an
-      unknown field, and the deployed purse could never run the gate at all. Both documents must
-      load — the one with a bar, and every document deployed before there were bars.
-    */
     const withBar = await writePolicy({
       ...policyFor(AGENT),
       approvalThresholds: [{ coinType: `0x${'0'.repeat(63)}2::sui::SUI`, maxWithoutApproval: '500000' }],
@@ -103,7 +94,6 @@ describe('the document', () => {
     expect(legacy.ok).toBe(true);
     if (!legacy.ok) throw new Error(legacy.refused.reason);
     expect(legacy.value.doc.approvalThresholds).toBeUndefined();
-    // Different documents, so different policy hashes in the audit chain.
     expect(loaded.value.policyHash).not.toBe(legacy.value.policyHash);
   });
 

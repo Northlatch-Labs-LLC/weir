@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Money parsing and formatting.
- *
- * The cases that matter are the ones a float implementation gets wrong. `parseFloat('0.1') * 1e9`
- * is `100000000.00000001`, and `Number(9007199254740993n)` is `9007199254740992`. Both are pinned
- * below so a future "simplification" to `Number` fails loudly rather than at scale.
- */
 
 import { describe, expect, it } from 'vitest';
 import { formatAmount, parseAmount, parseSui } from '../src/money.js';
@@ -20,21 +13,16 @@ describe('parseAmount', () => {
   });
 
   it('parses 0.1 exactly', () => {
-    // The canonical float failure. parseFloat('0.1') * 1e9 === 100000000.00000001
     expect(parseSui('0.1').units).toBe(100_000_000n);
     expect(parseSui('0.3').units).toBe(300_000_000n);
-    // 0.1 + 0.2 !== 0.3 in binary float; exact here.
     expect(parseSui('0.1').units + parseSui('0.2').units).toBe(parseSui('0.3').units);
   });
 
   it('keeps precision far above 2^53', () => {
-    // Number would round this to ...992.
     expect(parseAmount('9007199254.740993', 6).units).toBe(9_007_199_254_740_993n);
   });
 
   it('refuses excess precision rather than rounding it away', () => {
-    // A user who typed a seventh digit meant it. Silently discarding it is how an amount stops
-    // matching an exact-price check on chain.
     expect(() => parseAmount('0.1234567', 6)).toThrow(/decimal places/);
   });
 

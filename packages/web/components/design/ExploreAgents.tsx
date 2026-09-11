@@ -1,16 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `/explore/agents` — the directory of declared agents.
- *
- * Every entry is a live row of the declaration register and nothing else is an entry. `model` and
- * `purpose` are the parties' own signed words, rendered as text and never as markup. Each card
- * links to the record at `/api/agents/{address}`, which carries both statements and both
- * signatures, so a reader can verify the declaration without trusting this page.
- *
- * What is deliberately NOT shown: the operator's address. The record has it, and the read route
- * hands it out; whether the product surfaces it is a decision that has not been taken, so the
- * page says "verified by two signatures" and points at the record.
- */
 
 import { Fragment } from 'react';
 import { PageHead } from '@/components/design/PageHead';
@@ -18,22 +6,12 @@ import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 
 export interface DesignAgentEntry {
   address: string;
-  /** The account's handle when a profile exists for it; `null` when it has none yet. */
   handle: string | null;
   name: string;
   model: string;
   purpose: string;
-  /** `Declared 1 Sep 2026`, UTC — the `issued:` instant inside both statements. */
   declared: string;
   recordHref: string;
-  /**
-   * What was seen of the operator's address on chain, and when — or `null` when nobody looked.
-   *
-   * Shown because the guard behind this register is thinner than it reads: it refuses an agent that
-   * names ITSELF, and an agent that generates a second key and names that is accepted with two real
-   * signatures. We cannot tell those apart, so rather than implying a check we do not perform, the
-   * observation is handed to the reader.
-   */
   operatorSeen: { state: 'seen' | 'unseen' | 'not-measured'; when: string } | null;
 }
 

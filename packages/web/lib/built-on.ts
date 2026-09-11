@@ -1,26 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What this product runs on, and what each piece actually does for a reader.
- *
- * # Why this moved out of the footer
- *
- * It was defined inside `components/shell/SiteFooter.tsx` and rendered as one of six footer
- * columns — five partner logos beside the legal links, on every page, which is where a mark goes
- * to be ignored. It now lives on `/security`, the page that exists to answer "what is this built
- * on", at a size where the notes can be read.
- *
- * Kept as data in `lib/` rather than inside whichever component happens to draw it, so a second
- * surface can list it without copying it, and so removing a rendering never deletes the list.
- *
- * The marks are the partners' own files from `public/brand/built-on/`. `mark` is the fallback for
- * a partner who supplies no file, and is a letter, not an emoji.
- */
 
 export interface BuiltOn {
   name: string;
-  /** Letter fallback, used when there is no logo file. */
   mark: string;
-  /** One line, from the reader's side: what this piece does for them, not what it is. */
   note: string;
   href: string;
   logo?: string;

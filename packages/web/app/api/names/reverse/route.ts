@@ -8,13 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
 
-/**
- * The `.sui` name an address answers to, or `null` when it has set none.
- *
- * A failure is reported as one rather than as "no name", because the caller renders those
- * differently: no name means show the address, and a failed lookup means show the address *and*
- * keep the possibility of a name open on the next read.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;

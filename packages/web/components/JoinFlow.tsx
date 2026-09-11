@@ -1,40 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Registration: claim a handle and open a `SocialAccount`.
- *
- * # This is the front door, and it did not exist
- *
- * # What the user is told before they sign
- *
- * Three things, in this order, because each can stop the transaction:
- *
- *   1. Is the handle shaped legally? Checked locally, from rules mirrored from the contract.
- *   2. Is it free? Checked against the same table the contract checks.
- *   3. Does this address already have an account? One per address, enforced on chain.
- *
- * Then the transaction is built and simulated, and only then is there a button that signs. The
- * ordering matters more here than anywhere else in the product: this is the first thing a person
- * ever signs, and an abort code is a poor introduction.
- *
- * # The referrer is read once and never guessed
- *
- * `?ref=0x…` is captured verbatim and shown before signing. It is fixed at creation and there is no
- * setter in the protocol — so an inferred or defaulted referrer would permanently attribute
- * somebody's referral revenue to a stranger.
- *
- * # Registration says nothing about `.sui`, and that is the point
- *
- * A `.sui` name is a product this platform sells. It is not an identity system, and for a while
- * this screen treated it as one: it read a verification endpoint, showed a badge mid-signup, and
- * there was a second registration path where buying a name created the account.
- *
- * That coupling made a simple thing confusing, and it was wrong on its own terms — somebody can own
- * a name bought straight from SuiNS, which is a real name and no signal about this platform at all.
- * Signing up is a wallet or a Google account. What you own is a separate question, asked elsewhere.
- */
-
 import { useEffect, useState } from 'react';
 import { Avatar } from '@projectx-social/ui';
 import { useSigner } from '@/components/SignerProvider';
@@ -65,37 +31,15 @@ const sui = formatSui;
 export function JoinFlow({ referrer }: { referrer: string | null }) {
   const { signer } = useSigner();
   const [handle, setHandle] = useState('');
-  /*
-    What their page will call them.
-
-    This was hardcoded to `''` and the profile row therefore fell back to the handle for every
-    account ever created here — so nobody who signed up had a name, and every page in the product
-    was headed by a lowercase handle. It is asked for once, here, because this is the only moment
-    somebody is already filling in a form about themselves.
-
-    Optional on purpose: it is not worth blocking a registration on, and `/api/account/profile`
-    already falls back to the handle when it is blank.
-  */
   const [displayName, setDisplayName] = useState('');
   const [handleState, setHandleState] = useState<HandleState>({ state: 'idle' });
   const [accountState, setAccountState] = useState<AccountState>({ state: 'unknown' });
   const [quote, setQuote] = useState<{ bytes: string; gasMist: string } | null>(null);
   const [digest, setDigest] = useState<string | null>(null);
-  /**
-   * The account landed but its page did not.
-   *
-   * Kept apart from `error`, which means the registration itself failed. Conflating them would tell
-   * somebody who has just paid gas that nothing happened, when in fact they own the handle.
-   */
   const [pageWarning, setPageWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /*
-    Debounced, because this runs a chain read per keystroke otherwise. 400ms is long enough that a
-    person typing a handle produces one lookup rather than eight, and short enough that the answer
-    arrives before they reach for the button.
-  */
   useEffect(() => {
     const typed = handle.trim();
     if (typed === '') {
@@ -151,7 +95,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     return () => clearTimeout(timer);
   }, [handle]);
 
-
   async function simulate() {
     if (signer === null) return;
     setBusy(true);
@@ -176,17 +119,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     }
   }
 
-  /*
-    The third thing that can stop this transaction, and the one that was never asked.
-
-    One account per address is enforced on chain. Without this read a registered address is offered
-    the whole form, types a fresh handle, and gets an `EAlreadyRegistered` abort — as the first
-    thing that person ever signed. `/api/account?address=` has answered this since it was written
-    and nothing called it.
-
-    Keyed on the address rather than the signer object: a wallet that moves account changes who is
-    registering, and the previous address's answer is not an answer about this one.
-  */
   useEffect(() => {
     const address = signer?.address;
     if (address === undefined) return;
@@ -209,8 +141,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           setAccountState({ state: 'unmeasured', detail: result.error });
           return;
         }
-        // `null` is a measured absence — this address holds no account — and is the only reading
-        // that opens the form. Anything else, including a failure, keeps it shut.
         setAccountState(
           result.handle === null ? { state: 'none' } : { state: 'registered', handle: result.handle },
         );
@@ -229,17 +159,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     };
   }, [signer?.address]);
 
-  /*
-    A quote belongs to the address it was simulated for.
-
-    The wallet can switch account while this page is open — following `standard:events` is what
-    makes that happen — and the bytes were built with the previous address as sender and simulated
-    against that address's gas coins. Left on screen they would be signed by an account that is not
-    their sender, which the node refuses after the reader has read and approved a gas quote.
-
-    Discarded rather than re-simulated silently: the next quote is somebody else's transaction and
-    they should see it priced before they approve it.
-  */
   useEffect(() => {
     setQuote(null);
   }, [signer?.address]);
@@ -254,7 +173,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
       const r = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged. Nothing is rebuilt here.
         body: JSON.stringify({ bytes: quote.bytes, signature }),
       });
       const body = (await r.json()) as { digest?: string; error?: string };
@@ -263,34 +181,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
         setDigest(body.digest);
         setAccountState({ state: 'registered', handle: handle.trim() });
 
-        /*
-          Give the account a page.
-
-          The handle now exists on chain, and until this call nothing wrote a `profiles` row — so
-          `/c/<handle>` resolved to nothing, and there was nowhere to send anybody after they had
-          paid gas to register.
-
-          Deliberately after the digest is set. The registration has landed on chain and that is the
-          fact that matters; if this write fails the account still exists and is still theirs. So a
-          failure here is reported as what it is — the page not being ready — rather than as the
-          registration having failed, which would be a lie about money that was spent.
-
-          The route re-checks ownership against the chain rather than believing these arguments.
-        */
-        /*
-          Signed, with no gas. The route reads the registry to check this address holds this handle,
-          which is a real question — but it cannot answer "is the caller this address", so without a
-          signature anybody could read a handle's owner and rewrite that person's page. The
-          statement must match `statementFor('set-profile')` exactly, and `name` is empty here
-          because this call sends no display name; the server verifies over the same empty string.
-        */
         const profileTimestampMs = Date.now();
-        /*
-          Registration collects no display name, so this is empty — but it is still a value the
-          statement interpolates rather than a blank baked into the text. Hardcoding the empty
-          string made the client's statement a different shape from the server's, which binds a
-          name; they agreed only by the accident of the name always being empty here.
-        */
         const profileName = displayName.trim();
         const profileStatement =
           `Weir\naddress: ${signer.address}\nissued: ${profileTimestampMs}\norigin: ${window.location.origin}` +
@@ -331,14 +222,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   }
 
   if (signer === null) {
-    /*
-      The two ways in, first.
-
-      This opened with a paragraph — no password to forget, no email to confirm, nothing that can
-      lock you out — and put the buttons under it. Three reassurances above the only two controls on
-      a page whose entire job is to get somebody through them, on the screen where they have already
-      decided to sign up. What they need first is the button.
-    */
     return (
       <div className="panel">
         <SignIn />
@@ -406,18 +289,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     );
   }
 
-  /*
-    Not asked yet.
-
-    This branch did not exist, so `unknown` — the state this starts in, before the registry read
-    returns — fell through to the registration form. Somebody who already held a handle was told to
-    claim one, and a moment later told they already had one. Same address, two answers, decided by
-    whether a network round trip had finished.
-
-    That is the same `undefined` versus `null` distinction the rail and the account menu make: "we
-    have not looked" is not "you have nothing", and only one of them should produce a form asking
-    for something you already own.
-  */
   if (accountState.state === 'unknown') {
     return (
       <div className="panel" role="status">

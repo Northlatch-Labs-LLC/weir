@@ -1,20 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * A retry must not publish twice — proven on the REAL route, not on the ledger alone.
- *
- * `test/idempotency-namespace.test.ts` proves `lib/idempotency.ts`; until B3 no route called it.
- * This file drives `POST /api/posts` through `lib/idempotent-route.ts` against the test database:
- * the same signed request with the same `Idempotency-Key` twice creates ONE post and replays the
- * first answer; a different body under the same key is refused; no header means the old behaviour.
- *
- * Mutations, predicted before the first run:
- *   M1 `idempotently` runs `run()` without claiming → "one post" goes red (two rows).
- *   M2 the wrapper completes on every status, not only 2xx → "a refused request frees its key"
- *      goes red (the retry after a refusal is answered with the refusal, forever).
- *   M3 the posts route exports `publishOnce` directly → "no header" still passes, everything
- *      with a header goes red on the replay header.
- */
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -124,7 +109,6 @@ describe('POST /api/posts under an Idempotency-Key', () => {
   it('without the header, two identical requests are two posts — the old behaviour, unchanged', async () => {
     const body = await signedPublic('twice on purpose', Date.now());
     expect((await post(body)).status).toBe(200);
-    // A second signature is needed: the first was spent. Re-sign the same words a millisecond later.
     const again = await signedPublic('twice on purpose', Date.now() + 1);
     expect((await post(again)).status).toBe(200);
     expect(await rows()).toBe(2);

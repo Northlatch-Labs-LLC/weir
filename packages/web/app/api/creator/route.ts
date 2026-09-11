@@ -9,12 +9,6 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
-/**
- * Where this address is in setting itself up as a creator.
- *
- * Four states, kept apart because each needs a different action: no account, no vault, a vault with
- * no tier, and ready. Collapsing any two sends half the people reading it to the wrong place.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;

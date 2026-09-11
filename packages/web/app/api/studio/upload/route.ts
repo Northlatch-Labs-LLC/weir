@@ -11,48 +11,12 @@ import { tooLarge } from '@/lib/body-limit';
 import { siteConfig } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
-/**
- * Slack allowed above {@link MAX_BYTES} for the multipart envelope.
- *
- * A multipart body carries field names, boundaries and per-part headers around the file, so a
- * request containing a file exactly at the limit is legitimately larger than the limit. Refusing on
- * the declared length without this would reject the largest file the route is documented to accept.
- * Sixty-four kilobytes is far more than the envelope needs and far less than a body worth buffering.
- */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
-
-/**
- * Attach an image to a post.
- *
- * Authorship is read from chain, exactly as publishing is — the vault's owner is the only address
- * allowed to add media to that creator's post. The uploader's claim about who they are buys
- * nothing, and neither does their claim about what the file is: the type is sniffed from the bytes
- * in `storeAsset`, and anything that is not a real image is refused.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  /*
-    A body that is not multipart makes `formData()` throw, and an uncaught throw here is a 500 —
-    which says "this server is broken" about a request that was simply malformed. Found by probing
-    the deployed route with an empty POST.
-
-    The composer always sends multipart, so nothing legitimate reaches this branch; it exists so
-    that anything else gets an answer that is true.
-  */
-  /*
-    Refused before the body is read, not after.
-
-    The check below on `file.size` is correct and ran one line after `request.formData()` had
-    already buffered the whole thing into memory — so an oversized body was refused having already
-    been received. `Content-Length` is a claim rather than a fact, so this stops the honest mistake
-    and the lazy attack; the parsed-size check stays exactly where it is for a body that lies.
-
-    The allowance is generous on purpose: multipart carries field names, boundaries and headers
-    around the file, so a request at the byte limit is legitimately larger than the file in it.
-  */
   const oversized = tooLarge(request, MAX_BYTES + MULTIPART_OVERHEAD_BYTES);
   if (oversized !== null) return oversized;
 
@@ -77,29 +41,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `file exceeds ${MAX_BYTES} bytes` }, { status: 413 });
   }
 
-  /*
-    The bytes, read ONCE.
-
-    They were read twice: `arrayBuffer()` for the hash and again for `storeAsset`, so an
-    eight-megabyte upload occupied sixteen megabytes of an instance that has a few. One read, held,
-    and handed to both.
-  */
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  /*
-    Prove the caller BEFORE spending anything of ours.
-
-    This route used to do a post lookup, a profile lookup and a FULLNODE READ before it checked the
-    signature, so an anonymous caller could make this deployment talk to the chain by posting a file
-    and a made-up address. Hashing has to come first — the statement binds the hash, so the server
-    cannot rebuild it without one — but nothing else does.
-
-    A signature proves control of `author` and nothing about authorship of the post; the vault check
-    below is what decides that, and it now runs for a caller who has already proved an address.
-
-    One consequence, and it is an improvement: an unauthenticated caller naming a post that does not
-    exist now gets 401 rather than 404, so this route stops answering whether a post id is real.
-  */
   const signature = form.get('signature');
   const timestampMs = Number(form.get('timestampMs'));
   const fileSha256 = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
@@ -124,8 +67,6 @@ export async function POST(request: Request) {
   const config = siteConfig();
   if (!config.ok) return NextResponse.json({ error: config.failure.detail }, { status: 503 });
 
-  // Authorship is checked against the vault, so a profile without one has nothing to attribute an
-  // upload to. Refused rather than read against a null object id.
   if (profile.vaultId === null) {
     return NextResponse.json(
       { error: 'this profile has no vault yet, so uploads cannot be attributed' },
@@ -135,8 +76,6 @@ export async function POST(request: Request) {
 
   const vault = await readCreatorVault(createClient(config.value), profile.vaultId);
   if (!vault.ok) {
-    // Cannot verify authorship, so nothing is stored. Writing bytes we could not attribute is how
-    // one creator's media ends up on another's post.
     return NextResponse.json(
       { error: `could not read the vault: ${vault.failure.detail}` },
       { status: 503 },
@@ -146,40 +85,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'only the vault owner may attach media' }, { status: 403 });
   }
 
-  /*
-    Prove the caller controls `author`.
-
-    The check above reads the vault's owner from chain and compares it to a form field, which
-    authorises nothing on its own: the owner is public, so anybody could send it and attach bytes
-    to somebody else's post. The signature binds the post and a hash of the file, so it cannot be
-    reused to attach a different file to the same post.
-
-    Nothing in the interface calls this route today. That makes it surface with no purpose, and a
-    closed door is the right state for it until something needs to open it.
-  */
-  /*
-    Storage terms follow the post's own access, and are decided here rather than accepted from the
-    request. A body that could name its own tier could ask for two years of storage on a free post,
-    and the bill would be ours.
-
-    Gating and duration are read from the same fact but passed separately, because they answer
-    different questions: `gated` decides whether the bytes are encrypted before they leave, `tier`
-    decides how long the lease runs. Changing the free tier's duration must not quietly change
-    whether free content is encrypted.
-  */
-  /*
-    Every gated post's media is sealed. Only an open post's bytes go up in the clear.
-
-    This line used to read `post.access.kind === 'paid'`, and it was older than this storage layer.
-    It was written when media lived on `/app/media`, a private volume served by a route that checked
-    entitlement, where "not encrypted" honestly meant "only our server can read it". Storage then
-    moved to Walrus — **a Walrus blob is public** — and the line did not change, so subscriber media
-    went from a private file to a public one with no edit to mark the moment.
-
-    A paid post seals to `unlock_identity(vault, content_key)`; a subscriber post has no content key
-    and seals to `period_identity(vault, tier, period)` instead, which is what its words already
-    use, so one `Subscription` opens the picture and the sentence under it.
-  */
   const gated: AssetGate | null =
     post.access.kind === 'paid'
       ? { kind: 'unlock', vaultId: post.vaultId, contentKey: post.access.contentKey }
@@ -187,18 +92,6 @@ export async function POST(request: Request) {
         ? {
             kind: 'period',
             vaultId: post.vaultId,
-            /*
-              Tier 0, and the period the POST was published in — never `periodOf(now)`.
-
-              Media is uploaded after its post exists, sometimes much later, and a key sealed to the
-              month of the upload would be unopenable by exactly the subscribers the post was
-              written for. `createdAtMs` is the same instant the body was sealed against, so the
-              picture and the words land on one identity.
-
-              Tier 0 because `seal_approve_subscription` compares `subscription.tier >= tier`, so
-              tier 0 is readable by every subscriber at any tier — which is what "subscribers only"
-              means in the product today.
-            */
             tier: 0n,
             period: periodOf(BigInt(post.createdAtMs)),
           }
@@ -207,27 +100,12 @@ export async function POST(request: Request) {
     postId,
     label: file.name,
     bytes,
-    // Not the form's `author` field: this is the address the vault reports as owner, already
-    // checked above. It decides who ends up owning the `Blob` object we are about to pay for.
     owner: vault.value.owner,
-    /*
-      The mapping lives in `tierForAccess`, not here.
-
-      This was `gated !== null ? 'durable' : 'ephemeral'` — a storage lease decided by asking
-      whether the asset is encrypted. Those two facts agree today by coincidence rather than by
-      construction, and deriving one from the other is how this route and `tierForAccess` came to
-      disagree about subscribers while both looked correct.
-    */
     tier: tierForAccess(post.access.kind),
     gated,
   });
 
   if (!stored.ok) {
-    /*
-      Separated by kind, because these need different responses. An unconfigured or refused
-      publisher is ours to fix and the creator can do nothing about it — 503, and it must not read
-      as "your file was wrong". A malformed upload is theirs — 400.
-    */
     const status =
       stored.failure.kind === 'malformed' ? 400 : stored.failure.kind === 'unconfigured' ? 503 : 502;
     return NextResponse.json({ error: stored.failure.detail }, { status });
@@ -235,19 +113,15 @@ export async function POST(request: Request) {
 
   const attached = await attachAsset(stored.value);
   if (!attached) {
-    // The blob is stored and paid for but belongs to no post. Reported rather than swallowed: the
-    // WAL is spent either way, and a silent success here would leave an orphan nobody can find.
     return NextResponse.json(
       { error: 'no such post — the blob was stored but could not be attached' },
       { status: 404 },
     );
   }
 
-  // The id, not a URL. There is no URL that reaches this without the entitlement gate.
   return NextResponse.json({
     assetId: stored.value.id,
     contentType: stored.value.contentType,
-    // Storage is a lease. A caller that cannot see when it ends cannot warn anybody it is ending.
     blobId: stored.value.blobId,
     endEpoch: stored.value.endEpoch,
   });

@@ -5,13 +5,6 @@ import NextLink from 'next/link';
 import { ColumnHeader } from '@projectx-social/ui';
 import { AccountTabs } from '@/components/shell/AccountTabs';
 
-/**
- * `/add-funds` — no card path exists here.
- *
- * The route stays reachable so an old link does not 404; the page it once served (a card-funded
- * on-ramp) is removed. Weir is crypto only: SUI and USDC settle from the visitor's own wallet, and
- * no provider has been accepted to sell either for a card or a bank transfer. See UPDATE.md.
- */
 export const metadata: Metadata = { title: titleFor('/add-funds') };
 
 export const dynamic = 'force-dynamic';

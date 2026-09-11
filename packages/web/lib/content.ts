@@ -1,36 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import 'server-only';
 
-/**
- * The content store: profiles, posts, media metadata, comments, follows and messages.
- *
- * # What lives here and what lives on chain
- *
- * So a row here records *that* something is locked and what it costs. There is no column for who
- * may read it, and adding one would create a second source of truth for a question the chain
- * already answers.
- *
- * # Postgres, and why nothing else changed
- *
- * This was a JSON file. Every exported signature survived the move, so no route, page or
- * entitlement check was touched. That was only possible because access control never lived in the
- * storage layer — had `canRead` consulted the store, this migration would have reached into every
- * gate in the system.
- *
- * Every query is parameterised. There is no string interpolation of values into SQL in this file.
- */
-
 import type { Pool } from 'pg';
 import { db, normaliseAddress } from './db';
 
-/** Anything that can run a query: the pool, or a client inside an open transaction. */
 export type QueryRunner = { query: Pool['query'] };
-/*
-  Type-only, and circular on purpose: `entitlement.ts` imports `Post` from here to write `canRead`.
-  A value import either way round would be a real cycle; a type import is erased entirely by the
-  compiler, and the alternative — restating the approver's shape here — is a second definition of
-  one contract that would drift the first time an argument was added to a `seal_approve_*` call.
-*/
 import type { SealApprover } from './entitlement';
 import type { AssetEncryption } from './media';
 
@@ -39,13 +13,6 @@ export interface Post {
   vaultId: string;
   authorHandle: string;
   createdAtMs: number;
-  /**
-   * What lets somebody who is not us check who wrote this — see `db/038_authorship_proof.sql`.
-   *
-   * Absent on every post published before 2026-09-02, and that absence is the honest answer rather
-   * than a gap to be filled in: those posts were signed, verified, and the proof was discarded.
-   * Never default it. "We did not keep it" and "this was not signed" must stay distinguishable.
-   */
   authorship?: {
     address: string;
     issuedAtMs: number;
@@ -55,54 +22,17 @@ export interface Post {
   };
   title: string;
   preview: string;
-  /**
-   * How many comments this post has, counted by the query that loaded the post.
-   *
-   * Here so a card can print the number without asking a server for it. A card that fetches its
-   * own count turns one page into one request per post — see the note on the query above.
-   */
   commentCount: number;
-  /**
-   * Withheld until the reader holds an entitlement — see `visiblePost`.
-   *
-   * Empty for a gated post published after bodies became sealed: there is no plaintext to
-   * withhold, because the words live on Walrus as ciphertext and `sealedBody` names them.
-   */
   body: string;
-  /**
-   * A gated body's ciphertext, when there is one.
-   *
-   * Present only for paid posts sealed at publish. Every field is public — a Walrus blob id, a
-   * GCM nonce and a Seal-wrapped key open nothing without a threshold of key servers first
-   * executing `entitlement::seal_approve_unlock` for a reader who holds the `Unlock`.
-   */
   sealedBody?: {
     blobId: string;
     endEpoch: number;
     nonce: string;
     sealWrappedKey: string;
     sha256: string;
-    /**
-     * The tier and period this body was sealed to, for a subscriber post.
-     *
-     * Absent on a paid post, whose identity is built from the content key it already carries.
-     * Present on a subscriber post because `seal_approve_subscription` takes both as arguments and
-     * neither can be recovered from anything else here — the period is the one the post was
-     * published in, not the one the reader is in now.
-     */
     tier?: string;
     period?: string;
   };
-  /**
-   * The machine edition: the same words, sealed a second time to
-   * `unlock_identity(vault, contentKey)` where `contentKey` is `<key>#machine`.
-   *
-   * Present only on a paid post published after machine editions were sealed at publish
-   * (migration 034). Its absence on an older paid post is permanent — the platform holds no
-   * plaintext to seal — and `machineBodyState` reports exactly that so nobody prices what cannot
-   * be delivered. `contentKey` is stored rather than re-derived: the reader names it to the key
-   * server, and the rule that derives it must not be able to drift under a row already written.
-   */
   machineBody?: {
     blobId: string;
     endEpoch: number;
@@ -112,7 +42,6 @@ export interface Post {
     contentKey: string;
   };
   access: PostAccess;
-  /** Attached media, by asset id. Ids only — never paths and never URLs. */
   assetIds?: string[];
 }
 
@@ -124,12 +53,10 @@ export type PostAccess =
 
 export interface Profile {
   handle: string;
-  /** Null until this account opens a vault — registering is not becoming a creator. */
   vaultId: string | null;
   owner: string;
   displayName: string;
   bio: string;
-  /** Null until a vault exists; a vault's coin is chosen when the vault is opened. */
   coinType: string | null;
 }
 
@@ -140,32 +67,17 @@ export interface AssetRecord {
   bytes: number;
   label: string;
   sha256: string;
-  /** The Walrus blob holding the bytes. */
   blobId: string;
-  /** The epoch after which Walrus deletes the blob unless the lease is extended. */
   endEpoch: number;
-  /**
-   * How the bytes are locked, or null for a public blob stored as plaintext.
-   *
-   * The scheme is read from the row, never inferred from which columns happen to be populated. See
-   * `AssetEncryption` in `lib/media.ts` and the `assets_encryption_scheme` constraint in
-   * `db/019_seal_key_custody.sql`, which makes every other combination unrepresentable.
-   */
   encryption: AssetEncryption | null;
 }
 
 export interface Comment {
   id: string;
   postId: string;
-  /** The address that signed. Already the proved signer, unlike a post's handle. */
   author: string;
   text: string;
   createdAtMs: number;
-  /**
-   * What lets somebody who is not us check who wrote this — see `db/040_comment_authorship.sql`.
-   * Absent on comments written before the proof was kept. Never defaulted: those were signed, and
-   * "we did not keep it" must stay distinguishable from "this was not signed".
-   */
   authorship?: { issuedAtMs: number; origin: string; signature: string };
 }
 
@@ -181,24 +93,12 @@ export interface Message {
   from: string;
   to: string;
   createdAtMs: number;
-  /**
-   * Empty when {@link encryption} is present, and the database enforces that rather than trusting
-   * a caller — see the `encrypted_rows_are_complete` constraint. A preview is a plaintext excerpt,
-   * so an encrypted message cannot have one and still be encrypted.
-   */
   preview: string;
   body: string;
   access: MessageAccess;
-  /**
-   * Ciphertext and the per-participant key envelopes, when the sender encrypted this message.
-   *
-   * The server stores it and can do nothing else with it. There is no key here, and no code path
-   * that reads {@link body} for such a row because the row's `body` is the empty string.
-   */
   encryption: MessageEncryption | null;
 }
 
-/** The stored form of `EncryptedPayload` from `lib/e2e.ts`. Shape asserted by a test. */
 export interface MessageEncryption {
   ciphertext: string;
   nonce: string;
@@ -217,23 +117,9 @@ export type MessageAccess =
 export const MAX_COMMENT_LENGTH = 1000;
 export const MAX_MESSAGE_LENGTH = 4000;
 
-/*
-  Posts were the one write with no ceiling at all.
-
-  Comments bound at 1000, messages at 4000, and a profile's name and bio are sliced to 60 and 280 —
-  posts bounded nothing, so a signed vault owner could write a row of any size. Signature-gated, so
-  this is a real creator overreaching rather than an outside attack, which is why the limits are
-  generous rather than tight: a long-form post is the product working.
-*/
 export const MAX_POST_TITLE_LENGTH = 200;
 export const MAX_POST_PREVIEW_LENGTH = 1000;
 export const MAX_POST_BODY_LENGTH = 100_000;
-
-/*
-  `bigint` columns arrive from `pg` as strings, deliberately — the driver will not silently narrow
-  a value that does not fit a JS number. Timestamps are widened back because they are safely within
-  range; amounts stay strings the whole way to the wire.
-*/
 
 export interface PostRow {
   id: string;
@@ -268,20 +154,6 @@ export interface PostRow {
   comment_count: number;
 }
 
-/**
- * A paid row that cannot say what it costs is refused, not defaulted.
- *
- * `price: row.price ?? '0'` read a paid post with a NULL price as one costing NOTHING, and
- * `contentKey: row.content_key ?? ''` gave it an empty key to unlock against. Both are defaults for
- * a state the database already forbids — `posts` carries
- * `CHECK (access_kind <> 'paid' OR (price IS NOT NULL AND content_key IS NOT NULL))` — so neither
- * could ever be the right answer, and the value they produced was worse than no answer at all: a
- * gated post rendering as free, on the money path, with nothing anywhere reporting it.
- *
- * A default is only safe when the thing it stands in for is merely absent. Here it stands in for
- * something impossible, and it made the impossible look ordinary. Reaching this throw means the
- * constraint is gone or the row was written around it, and both are worth stopping for.
- */
 export function paidAccess(row: PostRow): PostAccess {
   if (row.price === null || row.content_key === null) {
     throw new Error(
@@ -302,11 +174,6 @@ function toPost(row: PostRow): Post {
 
   const assetIds = row.asset_ids ?? [];
   const commentCount = row.comment_count ?? 0;
-  /*
-    All five or none. A partial row cannot be verified and must not be presented as if it could:
-    the route that serves this says "no proof was kept" for a post without it, and that sentence
-    has to be true of every post it is said about.
-  */
   const authorship =
     row.author_address !== null &&
     row.issued_at_ms !== null &&
@@ -331,12 +198,6 @@ function toPost(row: PostRow): Post {
     title: row.title,
     preview: row.preview,
     body: row.body,
-    /*
-      Carried back only when every part is present. The database constraint already refuses a
-      half-written sealed body, so this is belt and braces — but a partial record here would
-      become a reader staring at a spinner over a blob that can never open, and the honest
-      response to that is to behave as though there is no sealed body at all.
-    */
     ...(row.body_blob_id !== null && row.body_nonce !== null
         && row.body_seal_wrapped_key !== null && row.body_sha256 !== null
       ? {
@@ -346,23 +207,12 @@ function toPost(row: PostRow): Post {
             nonce: row.body_nonce,
             sealWrappedKey: row.body_seal_wrapped_key,
             sha256: row.body_sha256,
-            /*
-              Strings, all the way to the browser.
-
-              These are `u64` in Move and `bigint` in Postgres. Round-tripping them through a
-              JavaScript `number` is lossless for every value anyone will ever see and lossy
-              eventually, and the failure is silent: an identity built from a rounded period is the
-              right length and the wrong bytes, and the key server refuses it in a way that reads
-              exactly like having no subscription.
-            */
             ...(row.body_tier !== null && row.body_period !== null
               ? { tier: String(row.body_tier), period: String(row.body_period) }
               : {}),
           },
         }
       : {}),
-    // The same rule as the human edition: all of it or none of it. `posts_machine_body_complete`
-    // already refuses a partial row; this is the read side of the same promise.
     ...(row.machine_blob_id !== null && row.machine_nonce !== null
         && row.machine_seal_wrapped_key !== null && row.machine_sha256 !== null
         && row.machine_content_key !== null
@@ -383,24 +233,6 @@ function toPost(row: PostRow): Post {
   };
 }
 
-/**
- * Posts with their asset ids, in one query.
- *
- * A left join with aggregation rather than a query per post. The N+1 shape is invisible with six
- * posts and is what makes a feed unusable at six hundred.
- */
-/*
- * The asset ids come from a correlated subquery rather than a `LEFT JOIN … GROUP BY`.
- *
- * The join form aggregated before it limited. Postgres has no transform that streams
- * `posts_created_idx` in order and stops after N groups, because the group key (`p.id`) is not the
- * sort key (`created_at_ms`) — so a `LIMIT` bounded the rows RETURNED while the whole
- * `posts ⋈ assets` product was still read and sorted first. A limit that does not reduce the work
- * is not a limit.
- *
- * As a scalar subquery there is no aggregation barrier: the planner walks the index in order, stops
- * at N, and runs the subquery for those N rows only. `assets_post_idx` serves it.
- */
 const POST_SELECT = `
   SELECT p.id, p.vault_id, p.author_handle, p.created_at_ms, p.title, p.preview, p.body,
          p.access_kind, p.price, p.content_key,
@@ -432,14 +264,6 @@ const POST_SELECT = `
 
 interface ProfileRow {
   handle: string;
-  /*
-    Null until the account opens a vault.
-
-    Registering and becoming a creator are separate acts — see `db/006_accounts_without_vaults.sql`.
-    Typed as nullable rather than defaulted to '' so that every place assuming a vault exists is
-    named by the compiler, instead of receiving a string that looks like an object id and resolves
-    to nothing.
-  */
   vault_id: string | null;
   owner: string;
   display_name: string;
@@ -458,43 +282,6 @@ function toProfile(row: ProfileRow): Profile {
   };
 }
 
-/**
- * Creator profiles, alphabetically.
- *
- * # Narrowing, because most callers wanted a few
- *
- * This took no arguments and returned the whole table. Three callers then threw most of it away in
- * JavaScript: the entity markers kept the handles on the current page, the earnings page kept the
- * rows belonging to one address, and the sidebar kept the first few. Each read every creator on the
- * platform to use a handful, on every render, and `RightRail` sits in the shell — so that was every
- * page on the site.
- *
- * The options narrow in SQL instead. `handles` and `owner` are served by the primary key and
- * `profiles_owner_idx`; `limit` bounds the rest.
- *
- * # Why there is no DEFAULT limit, unlike `listPosts`
- *
- * Posts grow without bound and a feed is a window onto them, so a default page is right there. The
- * remaining callers here build a lookup map over every creator — a handle-to-vault index, a
- * coin-type index — and a silently truncated map is not a smaller answer, it is a wrong one: a
- * creator missing from it renders as though they do not exist. So an unnarrowed call still returns
- * everything, deliberately, and the callers that want a subset now say so.
- *
- * That remains a whole-table read for those callers. It is bounded by the number of creators rather
- * than by anything this function does, and turning those maps into targeted lookups is a different
- * change to a different set of call sites.
- */
-/**
- * How many creator profiles exist.
- *
- * Separate from {@link listProfiles} so a caller showing a subset can say what it is a subset OF
- * without fetching the rest. The sidebar's "Showing 6 of 12" is the honest version of showing six —
- * its own comment says showing the first six as though they were all of them is how a reader
- * concludes the platform has six creators — and keeping that sentence true was the only reason that
- * component read every row.
- *
- * One aggregate instead of every column of every row.
- */
 export async function countProfiles(): Promise<number> {
   const { rows } = await db().query<{ n: string }>('SELECT count(*)::text AS n FROM profiles');
   return Number(rows[0]?.n ?? '0');
@@ -505,11 +292,6 @@ export async function listProfiles(options?: {
   owners?: readonly string[];
   owner?: string;
   limit?: number;
-  /**
-   * Continue strictly after this handle. Keyset over the primary key, for the same reason
-   * `listPosts` seeks by value rather than OFFSET: a deep page costs the same as the first, and a
-   * handle inserted between two requests is neither dropped nor repeated.
-   */
   afterHandle?: string;
 }): Promise<Profile[]> {
   const conditions: string[] = [];
@@ -520,14 +302,10 @@ export async function listProfiles(options?: {
   }
 
   if (options?.handles !== undefined) {
-    // An empty array matches nothing, which is the wanted behaviour: "these creators" with an empty
-    // list is an empty answer, not everybody.
     params.push([...options.handles]);
     conditions.push(`handle = ANY($${params.length}::text[])`);
   }
   if (options?.owners !== undefined) {
-    // The same shape as `handles`, for the callers that start from an address — the agent register
-    // keys on owners, and a profile is how an owner gets a name.
     const owners: string[] = [];
     for (const owner of options.owners) {
       try {
@@ -544,8 +322,6 @@ export async function listProfiles(options?: {
     try {
       owner = normaliseAddress(options.owner);
     } catch {
-      // Not an address, so nobody owns anything under it. Returning nothing beats throwing on a
-      // page that is only trying to list what somebody has.
       return [];
     }
     params.push(owner);
@@ -566,34 +342,6 @@ export async function listProfiles(options?: {
   return rows.map(toProfile);
 }
 
-/**
- * The row that already names this vault, whatever handle it is filed under.
- *
- * A vault is named by exactly one row — `007_one_profile_per_vault` enforces it — but that row is
- * keyed by handle, and a handle can differ from the one the chain now reports. Looking a vault up
- * by the *expected* handle therefore misses the row that is actually answering for it, and writes a
- * second one: the save succeeds, and every page keeps reading the first. This is the lookup that
- * asks the question the caller means.
- */
-/**
- * The profile that owns a vault.
- *
- * # Why this compares the bare column
- *
- * It asked `WHERE lower(vault_id) = lower($1)`. `profiles_vault_id_key` is a plain unique index on
- * the bare column, so a function applied to that column made the predicate non-sargable and the
- * index unusable — every call sequentially scanned `profiles`, on the paths that take money:
- * `checkout/tip`, `checkout/unlock`, `creator/profile` and `messages/read`.
- *
- * The `lower()` could not simply be dropped. It looked redundant because addresses are normalised
- * on write, and `vault_id` was the one that was not: `upsertProfile` normalised `owner` and passed
- * `vaultId` through raw. So both sides are normalised now — the writer, a CHECK in `db/031`, and
- * the argument here — and only then is comparing the bare column correct rather than merely faster.
- *
- * A caller that hands over something unparseable gets `null` rather than an exception. This is a
- * lookup; "no profile owns that" is the honest answer to a vault id that cannot exist, and throwing
- * would turn a bad query parameter into a 500 on a money path.
- */
 export async function findProfileByVault(vaultId: string): Promise<Profile | null> {
   let key: string;
   try {
@@ -606,13 +354,6 @@ export async function findProfileByVault(vaultId: string): Promise<Profile | nul
   return rows[0] === undefined ? null : toProfile(rows[0]);
 }
 
-/**
- * The profile an address owns, if any.
- *
- * `profiles_owner_idx` serves this. Addresses are stored normalised, so the parameter is too —
- * comparing a raw address against a normalised column is how a lookup returns nothing for somebody
- * who is plainly there.
- */
 export async function findProfileByOwner(owner: string): Promise<Profile | null> {
   const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles WHERE owner = $1', [
     normaliseAddress(owner),
@@ -625,22 +366,6 @@ export async function findProfile(handle: string): Promise<Profile | null> {
   return rows[0] === undefined ? null : toProfile(rows[0]);
 }
 
-/**
- * Write a profile, without destroying the links this caller does not carry.
- *
- * # The defect this fixes, exactly
- *
- * `COALESCE(EXCLUDED.x, profiles.x)` on the three nullable links makes an omitted field mean "leave
- * it alone" rather than "clear it". `display_name` and `bio` are exempt deliberately: they are not
- * nullable, an empty bio is a value somebody chose, and treating `''` as absent would make a bio
- * impossible to delete.
- *
- * # What this deliberately cannot do
- *
- * Unlink a vault. Nothing in the product offers that today, and a helper that can silently sever a
- * creator from a vault holding deposits is the more dangerous of the two shapes. When unlinking is
- * a real action it gets its own function that says so in its name.
- */
 export async function upsertProfile(profile: Profile): Promise<void> {
   await db().query(
     `INSERT INTO profiles (handle, vault_id, owner, display_name, bio, coin_type)
@@ -652,9 +377,6 @@ export async function upsertProfile(profile: Profile): Promise<void> {
        coin_type = COALESCE(EXCLUDED.coin_type, profiles.coin_type)`,
     [
       profile.handle,
-      // Normalised like `owner` below, which it was not: this column is compared against a
-      // normalised argument and constrained to that shape by `db/031`, so a raw value here would
-      // be a row its own lookup cannot find.
       profile.vaultId === null ? null : normaliseAddress(profile.vaultId),
       normaliseAddress(profile.owner),
       profile.displayName,
@@ -664,56 +386,15 @@ export async function upsertProfile(profile: Profile): Promise<void> {
   );
 }
 
-/**
- * Newest first.
- *
- * `handles` narrows the feed to a set of creators. An **empty array means an empty feed**, not an
- * unfiltered one — treating "follows nobody" as "show everything" is how a following feed silently
- * stops filtering while still looking full. `= ANY($n)` over an empty array matches nothing, which
- * is exactly the wanted behaviour and is why it is written this way rather than as a dynamic
- * `IN (...)` that would have to special-case empty.
- */
-/**
- * How many posts a caller gets when it does not say.
- *
- * There is a default rather than "all" because the previous behaviour WAS all: no `LIMIT` existed,
- * so every logged-out visitor to the home feed selected every post in the table — bodies included,
- * plus every asset row — so that the component could keep ten. At a few hundred posts that is
- * invisible; at a few thousand it is tens of megabytes crossing the pooler, per visitor, holding one
- * of a handful of pooled connections while it does.
- *
- * The number is a page, not a policy: callers that want fewer pass fewer, and callers that want
- * more page with {@link listPosts}'s cursor rather than by asking for an unbounded read.
- */
 export const POSTS_PAGE = 50;
 
-/** The hard stop. A caller asking for more than this gets this — an unbounded read has no caller. */
 const POSTS_MAX = 200;
 
-/** Where a page ended, so the next one can begin exactly after it. */
 export interface PostCursor {
   createdAtMs: number;
   id: string;
 }
 
-/**
- * Newest first, bounded.
- *
- * `handles` narrows the feed to a set of creators. An **empty array means an empty feed**, not an
- * unfiltered one — treating "follows nobody" as "show everything" is how a following feed silently
- * stops filtering while still looking full. `= ANY($n)` over an empty array matches nothing, which
- * is exactly the wanted behaviour and is why it is written this way rather than as a dynamic
- * `IN (...)` that would have to special-case empty.
- *
- * # Keyset, not OFFSET
- *
- * `after` continues from the last row of the previous page by value, so the database seeks to that
- * point in the index instead of counting past it. `OFFSET` reads and discards everything before the
- * page, which makes deep pages progressively more expensive for no reason, and it drops or repeats
- * rows when something is inserted between two requests. The tiebreak on `id` is what makes the
- * cursor total: two posts written in the same millisecond would otherwise have no defined order,
- * and a page boundary landing between them would lose one.
- */
 export async function listPosts(options?: {
   handle?: string;
   handles?: readonly string[];
@@ -732,7 +413,6 @@ export async function listPosts(options?: {
     conditions.push(`p.author_handle = ANY($${params.length}::text[])`);
   }
   if (options?.after !== undefined) {
-    // Row-value comparison, so the tiebreak is part of the seek rather than a filter applied after.
     params.push(String(options.after.createdAtMs), options.after.id);
     conditions.push(`(p.created_at_ms, p.id) < ($${params.length - 1}::bigint, $${params.length})`);
   }
@@ -749,25 +429,9 @@ export async function listPosts(options?: {
   return rows.map(toPost);
 }
 
-/**
- * Titles for named content keys, and nothing else.
- *
- * The caller here holds a handful of unlocks and wants each one named. It used to get there by
- * reading every post in the table — bodies, asset ids and all — and keeping the two columns it
- * needed. This asks for those two columns, for those keys.
- *
- * A key with no row is simply absent from the map: an unlock for content this deployment does not
- * store keeps its raw key rather than borrowing somebody else's title.
- */
 export async function titlesForContentKeys(
   wanted: readonly { vaultId: string; contentKey: string }[],
 ): Promise<Map<string, string>> {
-  /*
-    Keyed by the PAIR. A content key is a creator-chosen string and `/api/posts` does not uniquify
-    it across vaults, so two creators can both price `intro`; matched on the key alone, a buyer of
-    A's `intro` was titled with B's. `unlockKey` in entitlement.ts is `${vault}:${key}` for the same
-    reason — the pair is the identity — and this map is keyed the same way.
-  */
   const seen = new Set<string>();
   const pairs = wanted
     .filter((w) => w.contentKey !== '' && w.vaultId !== '')
@@ -791,28 +455,10 @@ export async function titlesForContentKeys(
   return new Map(rows.map((row) => [titleKey(row.vault_id, row.content_key), row.title]));
 }
 
-/** The lookup key {@link titlesForContentKeys} answers under. */
 export function titleKey(vaultId: string, contentKey: string): string {
   return `${normaliseAddress(vaultId)}:${contentKey}`;
 }
 
-/**
- * Whether the machine edition of a content key can be delivered on this vault.
- *
- * Asked before a machine edition is priced — by `studio/price`, by the composer and by `weir_price`
- * — because pricing is a promise the seal has to keep. An `Unlock` stamps a KEY, not a post, so a
- * creator who reuses one key across a season sells every post under it with one purchase; the
- * answer is therefore about every paid post under the key, and one post that cannot deliver makes
- * the whole key `absent`.
- *
- *  - `no-post`: nothing is published under this key yet. Pricing is allowed — the composer prices
- *    before it publishes, and publish seals both editions.
- *  - `sealed`: every paid post under the key that has a sealed body has a machine body too.
- *  - `absent`: at least one paid post under the key was sealed for humans and never for machines —
- *    published before migration 034. Its plaintext is gone, so this is permanent until the creator
- *    republishes. A paid post whose words are still in the `body` column (published before 020)
- *    is not counted: a machine buyer's `Unlock` reads that column through `canRead` like any other.
- */
 export async function machineBodyState(
   vaultId: string,
   humanKey: string,
@@ -827,7 +473,6 @@ export async function machineBodyState(
   return rows.some((row) => row.sealed_without_machine) ? 'absent' : 'sealed';
 }
 
-/** The cursor that continues after `posts`, or `null` when there is nothing more to ask for. */
 export function cursorAfter(posts: readonly Post[]): PostCursor | null {
   const last = posts.at(-1);
   return last === undefined ? null : { createdAtMs: last.createdAtMs, id: last.id };
@@ -838,14 +483,6 @@ export async function findPost(postId: string): Promise<Post | null> {
   return rows[0] === undefined ? null : toPost(rows[0]);
 }
 
-/**
- * Store the post.
- *
- * `runner` defaults to the pool and exists so a caller can hand in a client and have this row
- * written inside a transaction it already opened — `POST /api/posts` claims the author's
- * single-use signature in that same transaction, so a publish that fails leaves the signature
- * unspent rather than making them sign a second time.
- */
 export async function addPost(post: Post, runner: QueryRunner = db()): Promise<void> {
   const paid = post.access.kind === 'paid' ? post.access : null;
   await runner.query(
@@ -860,13 +497,6 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
              $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
     [
       post.id, post.vaultId, post.authorHandle, post.createdAtMs, post.title, post.preview,
-      /*
-        The plaintext column is written EMPTY for a sealed body, not left to carry the words.
-
-        Storing both would defeat the whole exercise: the claim is that the platform cannot read a
-        gated body, and a copy in Postgres is precisely the thing that claim denies. The ciphertext
-        on Walrus is the only copy.
-      */
       post.sealedBody === undefined ? post.body : '',
       post.access.kind, paid?.price ?? null, paid?.contentKey ?? null,
       post.sealedBody?.blobId ?? null, post.sealedBody?.endEpoch ?? null,
@@ -876,10 +506,6 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
       post.machineBody?.blobId ?? null, post.machineBody?.endEpoch ?? null,
       post.machineBody?.nonce ?? null, post.machineBody?.sealWrappedKey ?? null,
       post.machineBody?.sha256 ?? null, post.machineBody?.contentKey ?? null,
-      /*
-        Null together or not at all. A row with an address and no signature would read as a proof
-        and verify as nothing, which is worse than the honest absence these columns are for.
-      */
       post.authorship?.address ?? null, post.authorship?.issuedAtMs ?? null,
       post.authorship?.origin ?? null, post.authorship?.contentSha256 ?? null,
       post.authorship?.signature ?? null,
@@ -887,17 +513,8 @@ export async function addPost(post: Post, runner: QueryRunner = db()): Promise<v
   );
 }
 
-/** Attach a stored asset. The `EXISTS` guard makes a missing post a refusal, not an orphan. */
 export async function attachAsset(record: AssetRecord): Promise<boolean> {
   const encryption = record.encryption;
-  /*
-    Written from the tagged union rather than from a bag of optional fields.
-
-    `enc_key` is populated only in the `platform` branch, and there is no expression anywhere in
-    this statement that could put a key on a sealed row — the union has no `key` to read. The
-    database enforces the same rule independently in `assets_encryption_scheme`, so a future edit
-    that reintroduced one would be refused at write time rather than quietly stored.
-  */
   const { rowCount } = await db().query(
     `INSERT INTO assets (id, post_id, content_type, bytes, label, sha256,
                          blob_id, end_epoch, enc_key, enc_nonce, enc_scheme, seal_wrapped_key,
@@ -930,12 +547,6 @@ export async function findAsset(assetId: string): Promise<AssetRecord | null> {
 
   const row = rows[0];
   if (row === undefined) return null;
-  /*
-    A row without a blob predates the move to Walrus. Its bytes lived on a per-instance disk that
-    has long since been discarded, so there is nothing to serve — reported as absent rather than
-    returned as a record whose `blobId` is an empty string, which would reach the aggregator as a
-    malformed request and come back as a confusing transport error.
-  */
   if (row.blob_id === null || row.end_epoch === null) return null;
 
   return {
@@ -946,22 +557,6 @@ export async function findAsset(assetId: string): Promise<AssetRecord | null> {
   };
 }
 
-/**
- * Turn the four encryption columns into the one value that says how to open the asset.
- *
- * # Why an unrecognised scheme is `null` and not a guess
- *
- * Returning `null` means "treat these bytes as plaintext", which for an encrypted blob produces a
- * broken image — visibly, immediately, for that one asset. Every alternative is worse. Guessing
- * `platform` from the presence of `enc_key` would, on the day a third scheme exists, hand a reader
- * the wrong key and a corrupt decrypt; guessing `seal` would ask a key server for a key nobody
- * issued. A row this function cannot read is a row this deployment does not understand, and the
- * safe response to that is to serve nothing usable rather than something plausible.
- *
- * In practice it is unreachable: `assets_encryption_scheme` permits exactly the three shapes below.
- * It exists because the database is older than any one deployment of this code, and a rolled-back
- * release must not decrypt with a scheme it has never heard of.
- */
 function readEncryption(row: {
   enc_key: string | null;
   enc_nonce: string | null;
@@ -978,21 +573,12 @@ function readEncryption(row: {
       scheme: 'seal',
       wrappedKey: row.seal_wrapped_key,
       nonce: row.enc_nonce,
-      // Strings, because they are `u64` and a `number` would round one silently into an identity
-      // that is the right length and the wrong bytes.
       ...(row.seal_tier !== null && row.seal_tier !== undefined
         && row.seal_period !== null && row.seal_period !== undefined
         ? { tier: String(row.seal_tier), period: String(row.seal_period) }
         : {}),
     };
   }
-  /*
-    A row written before 019 and not yet backfilled: a key and a nonce, but no scheme.
-
-    The migration sets `enc_scheme` for every such row, so this is reachable only if the code is
-    deployed ahead of the migration. It reads as platform custody because that is what those rows
-    factually are — and a paying reader must not be locked out by a deployment ordering.
-  */
   if (row.enc_scheme === null && row.enc_key !== null && row.enc_nonce !== null) {
     return { scheme: 'platform', key: row.enc_key, nonce: row.enc_nonce };
   }
@@ -1005,10 +591,6 @@ export async function addComment(comment: Comment): Promise<void> {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       comment.id, comment.postId, normaliseAddress(comment.author), comment.text, comment.createdAtMs,
-      /*
-        All three or none. A row with an instant and no signature would read as a proof and verify
-        as nothing, which is worse than the honest absence these columns exist for.
-      */
       comment.authorship?.issuedAtMs ?? null,
       comment.authorship?.origin ?? null,
       comment.authorship?.signature ?? null,
@@ -1028,11 +610,6 @@ interface CommentRow {
 }
 
 function toComment(r: CommentRow): Comment {
-  /*
-    All three or none. A partial row cannot be verified and must not be handed on as though it
-    could: the route that serves this says "no proof was kept", and that sentence has to be true of
-    every comment it is said about.
-  */
   const authorship =
     r.issued_at_ms !== null && r.origin !== null && r.signature !== null
       ? { issuedAtMs: Number(r.issued_at_ms), origin: r.origin, signature: r.signature }
@@ -1044,13 +621,11 @@ function toComment(r: CommentRow): Comment {
   };
 }
 
-/** One comment, by id. Added for the authorship route: the list is by post, not by comment. */
 export async function findComment(id: string): Promise<Comment | null> {
   const { rows } = await db().query<CommentRow>('SELECT * FROM comments WHERE id = $1', [id]);
   return rows[0] === undefined ? null : toComment(rows[0]);
 }
 
-/** Oldest first — a conversation reads forwards. */
 export async function listComments(postId: string): Promise<Comment[]> {
   const { rows } = await db().query<CommentRow>(
     'SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at_ms ASC',
@@ -1059,12 +634,6 @@ export async function listComments(postId: string): Promise<Comment[]> {
   return rows.map(toComment);
 }
 
-/**
- * Follow or unfollow. Idempotent in both directions.
- *
- * `ON CONFLICT DO NOTHING` against the composite key deduplicates in the database rather than in a
- * read-then-write, which two concurrent requests can interleave.
- */
 export async function setFollow(
   follower: string,
   handle: string,
@@ -1100,13 +669,6 @@ export async function isFollowing(follower: string | null, handle: string): Prom
   return rows.length > 0;
 }
 
-/**
- * The handles this address follows.
- *
- * Not signed, deliberately. A following list is public on every social network and the follower
- * counts already disclose it. Contrast messaging, where the store is the only authority and reading
- * therefore has to be proved.
- */
 export async function listFollowing(address: string): Promise<string[]> {
   const { rows } = await db().query<{ handle: string }>(
     'SELECT handle FROM follows WHERE follower = $1 ORDER BY handle',
@@ -1115,12 +677,6 @@ export async function listFollowing(address: string): Promise<string[]> {
   return rows.map((r) => r.handle);
 }
 
-/**
- * The thread two addresses share.
- *
- * Derived by sorting, so both participants compute the same id and neither owns it. A stored
- * relationship would need creating, and then two people could disagree about whether it exists.
- */
 export function threadIdFor(a: string, b: string): string {
   const [first, second] = [normaliseAddress(a), normaliseAddress(b)].sort();
   return `${first}:${second}`;
@@ -1162,22 +718,6 @@ export interface MessageRow {
   envelopes: MessageEncryption['envelopes'] | null;
 }
 
-/**
- * A paid message that cannot say what it costs is refused, not defaulted.
- *
- * The same defect as {@link paidAccess}, in the same file, seven hundred lines away — and it
- * survived that fix because the fix was applied where the finding pointed rather than everywhere
- * the shape occurred.
- *
- * `price ?? '0'` read a paid message with a NULL price as one costing NOTHING; `content_key ?? ''`
- * gave it an empty key to unlock against; `vault_id ?? ''` gave it no vault to pay into. All three
- * stand in for a state the database forbids — `001_init.sql` carries
- * `paid_messages_need_pricing CHECK (access_kind <> 'paid' OR (price IS NOT NULL AND content_key IS
- * NOT NULL AND vault_id IS NOT NULL))`.
- *
- * A direct message somebody paid to send, rendering as free, is the worse half of the pair: a post
- * is public and its price is visible elsewhere on the page, and a message is not.
- */
 export function paidMessageAccess(row: MessageRow): MessageAccess {
   const missing =
     row.price === null
@@ -1204,12 +744,6 @@ export function paidMessageAccess(row: MessageRow): MessageAccess {
 function toMessage(row: MessageRow): Message {
   const access: MessageAccess = row.access_kind === 'paid' ? paidMessageAccess(row) : { kind: 'open' };
 
-  /*
-    `encrypted` alone does not make the payload usable, so all three parts are required before this
-    is reported as encrypted. The database constraint already guarantees it; this agrees with the
-    constraint rather than trusting it, because the alternative failure is a row that claims to be
-    encrypted and decodes to nothing.
-  */
   const encryption: MessageEncryption | null =
     row.encrypted && row.ciphertext !== null && row.nonce !== null && row.envelopes !== null
       ? { ciphertext: row.ciphertext, nonce: row.nonce, envelopes: row.envelopes }
@@ -1222,12 +756,6 @@ function toMessage(row: MessageRow): Message {
   };
 }
 
-/**
- * Every message in a thread, oldest first.
- *
- * Takes the two participants rather than a thread id, so a caller cannot ask for a thread it is not
- * part of by passing an id it guessed. The id is derived here from addresses already proved.
- */
 export async function listThread(a: string, b: string): Promise<Message[]> {
   const { rows } = await db().query<MessageRow>(
     'SELECT * FROM messages WHERE thread_id = $1 ORDER BY created_at_ms ASC',
@@ -1236,13 +764,6 @@ export async function listThread(a: string, b: string): Promise<Message[]> {
   return rows.map(toMessage);
 }
 
-/**
- * Threads this address participates in, most recent first.
- *
- * `lastEncrypted` rather than a preview string for encrypted threads: the server has no preview to
- * give, and substituting one — even "(encrypted)" — would put server-authored text where the
- * sender's words are expected. The flag lets the client say so in its own voice.
- */
 export async function listThreads(
   address: string,
 ): Promise<
@@ -1278,13 +799,6 @@ export async function listThreads(
     }))
     .sort((x, y) => y.lastAtMs - x.lastAtMs);
 }
-
-/*
-  Narrow reads for the notification inbox.
-
-  The JSON store had no choice but to load everything and filter in memory. These do the filtering
-  in the database and cap the result, so an inbox does not get slower as the platform grows.
-*/
 
 export async function commentsOnPostsBy(
   handles: readonly string[],
@@ -1323,72 +837,25 @@ export async function messagesTo(address: string): Promise<Message[]> {
 export interface VisiblePost extends Omit<Post, 'body' | 'assetIds' | 'sealedBody' | 'machineBody'> {
   body?: string;
   assetIds?: string[];
-  /**
-   * Present only for an entitled reader of a post whose body was sealed at publish.
-   *
-   * THE EDITION THIS READER CAN OPEN, not always the human one: a reader whose `Unlock` carries
-   * `<key>#machine` is handed the machine body here, under the same field, so the card has one
-   * thing to open. `edition` says which.
-   */
   sealedBody?: Post['sealedBody'];
-  /**
-   * Which body `sealedBody` is, or why there is none to hand over.
-   *
-   * `machine-absent` is the one state that is a defect and not a choice: the reader holds a machine
-   * `Unlock` for a post published before machine editions were sealed (migration 034). Its words
-   * were never sealed to that key and cannot be now — the platform kept no plaintext — so the card
-   * says so rather than spinning over a blob that will never open.
-   */
   edition?: 'human' | 'machine' | 'machine-absent';
-  /**
-   * The entitlement object the browser names to the key server, with its arguments.
-   *
-   * Built by `sealApprover`, never here: which object opens a post is the same question `canRead`
-   * answers yes-or-no, and there is one implementation of it.
-   */
   approver?: SealApprover;
   locked: boolean;
   unlockWith: 'subscribe' | 'purchase' | null;
 }
 
-/**
- * Strip the body from a post the reader cannot see.
- *
- * **The only place a body is released.** It takes the entitlement decision as an argument rather
- * than computing it, so there is exactly one predicate in the system and this cannot drift from it.
- * `body` is omitted rather than blanked: a client that receives no field cannot render one by
- * mistake, where an empty string can be rendered as an empty post.
- */
 export function visiblePost(
   post: Post,
   entitled: boolean,
-  /**
-   * The entitlement object this reader would present for this post, from `sealApprover`.
-   *
-   * The key server needs it named — `seal_approve_unlock` takes `&Unlock` and
-   * `seal_approve_subscription` takes `&Subscription` — and finding which of a reader's objects
-   * matches means decoding every one they own, which `readEntitlements` has already done to answer
-   * `entitled`. Naming it grants nothing: the key server re-executes the policy with the reader as
-   * sender, so an object they do not own aborts.
-   */
   approver?: SealApprover,
 ): VisiblePost {
   const base = {
     id: post.id, vaultId: post.vaultId, authorHandle: post.authorHandle,
     createdAtMs: post.createdAtMs, title: post.title, preview: post.preview, access: post.access,
-    // Public: how many comments a post has is not withheld from a reader who cannot open it.
     commentCount: post.commentCount,
   };
 
   if (post.access.kind === 'public' || entitled) {
-    /*
-      Which sealed body this reader gets.
-
-      The approver names the key the reader's `Unlock` carries. When that is the machine key, the
-      machine body is the one their object can open — `seal_approve_unlock` asserts the identity
-      matches the `Unlock`'s own key — so it travels under `sealedBody` and the human one stays
-      behind. A machine `Unlock` on a post with no machine body is reported, not papered over.
-    */
     const machineApprover =
       approver?.kind === 'unlock'
       && post.access.kind === 'paid'
@@ -1414,15 +881,6 @@ export function visiblePost(
     return {
       ...base,
       body: post.body,
-      /*
-        The sealed body travels with the visible post, and only to an entitled reader.
-
-        Every field in it is public — a Walrus blob id, a nonce and a wrapped key open nothing on
-        their own. It is withheld from a locked post anyway, for the same reason the media route
-        withholds ciphertext: releasing blob ids and wrapped keys to anyone who asks puts a
-        creator's catalogue on the open internet in an enumerable form, and defence in depth costs
-        nothing here.
-      */
       ...handed,
       ...(approver === undefined ? {} : { approver }),
       ...(post.assetIds === undefined ? {} : { assetIds: post.assetIds }),
@@ -1442,20 +900,6 @@ export interface VisibleMessage extends Omit<Message, 'body'> {
   locked: boolean;
 }
 
-/**
- * Strip a paid message's body when the recipient has not bought it.
- *
- * The **sender always sees their own message** — they wrote it, and hiding it from them would be
- * absurd. Only the recipient's view is gated.
- *
- * # Encrypted messages are released unconditionally, and that is not a hole
- *
- * There is nothing to withhold: `body` is empty and the ciphertext is useless without a key this
- * server does not have. The gate above is a server-side gate, and a server-side gate over a
- * payload the server cannot read is theatre. So encryption and payment are mutually exclusive —
- * enforced at the point of sending, in `app/api/messages/route.ts`, and asserted here by the
- * `access.kind === 'open'` branch being the only one an encrypted message can take.
- */
 export function visibleMessage(
   message: Message,
   viewer: string,

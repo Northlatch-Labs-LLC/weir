@@ -1,25 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The two-sided funnel: **Explore creators** and **Explore AI agents**.
- *
- * # One component, two instances
- *
- * Both sides are the same `Side` with different data. That is the design constraint, not a
- * convenience: neither side is a footnote to the other, and the only way to keep that true as the
- * page is edited is for there to be one piece of code that draws a side. A visual difference
- * between them would have to be written deliberately, into data.
- *
- * # What a side says about how it was arrived at
- *
- * `state` follows the vocabulary the rest of these pages use for a figure: `listed` is a read that
- * found rows; `empty` is a read that found none, which is a real answer and is said in the quiet
- * voice; `unmeasured` is a read that failed, said in the alert voice and never shaped like a
- * result. The agents side in particular must be able to say "the register is empty" and "the
- * register could not be read" as two different sentences, because they are two different facts.
- *
- * No server imports. This renders inside client components (the waiting list is one), so every
- * fact it shows arrives as a prop from the data module.
- */
 
 import { Fragment } from 'react';
 import { Freshness } from '@/components/design/Freshness';
@@ -27,13 +6,8 @@ import { Freshness } from '@/components/design/Freshness';
 export interface FunnelItem {
   href: string;
   name: string;
-  /** The line under the name: `@handle`, or a shortened address when the account has no handle. */
   handle: string;
   meta: string;
-  /**
-   * `true` only for an account the declaration register lists live. Renders the same `Agent` pill
-   * `PostCard` draws. Absent renders nothing — there is no opposite pill.
-   */
   agent?: true;
 }
 
@@ -46,11 +20,7 @@ export interface FunnelSide {
   cta: string;
   items: readonly FunnelItem[];
   state: 'listed' | 'empty' | 'unmeasured';
-  /** The count line, the empty-state reason, or the failure — whichever `state` says it is. */
   note: string;
-  /** When this side's own read happened, server-side. Set on every branch, including a failed
-   *  read: an attempt still has a time, even when it found nothing. Grows a live `<Freshness>`
-   *  next to `note`, so a tab held open for an hour keeps telling the truth. */
   readAtMs: number;
 }
 
@@ -106,10 +76,6 @@ function Side({ side }: { side: FunnelSide }) {
   );
 }
 
-/**
- * Both sides, side by side, equal width; stacked on a narrow screen. The heading is for assistive
- * technology — the two section titles are the visible ones.
- */
 export function ExploreFunnel({ sides }: { sides: FunnelSides }) {
   return (
     <section aria-labelledby="funnel-title" style={{ maxWidth: '72rem', marginInline: 'auto' }}>

@@ -1,15 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The two rules in the component layer that have already cost this product something, held down
- * by tests rather than by memory.
- *
- *   1. A post's access marker states the POST's terms, never the reader's relationship to them.
- *      A buyer once saw the word "Free" on a post they had just paid for, because a badge read
- *      `locked ? price : 'Free'` — the reader's entitlement standing in for the post's price.
- *   2. A price that could not be read is never rendered as free and never as a number.
- *
- * Both are assertions about what a reader sees, not about markup, so they survive a redesign.
- */
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
@@ -64,7 +53,6 @@ describe('a post states its own terms', () => {
     render(<PostCard post={post({ access: { kind: 'paid', price: null } })} Link={Link} />);
     expect(screen.getByText('Locked')).toBeTruthy();
     expect(screen.queryByText('FREE')).toBeNull();
-    // The control cannot be pressed towards a price nobody could read.
     expect(screen.getByRole('button', { name: /not priced yet/i }).hasAttribute('disabled')).toBe(true);
   });
 
@@ -77,11 +65,6 @@ describe('a post states its own terms', () => {
       />,
     );
     expect(screen.getByText('the free lede only')).toBeTruthy();
-    /*
-      The count of what is behind the gate is stated. It reads inside a sentence now — "Bought once,
-      kept for good. 3 images inside." — rather than as its own centred line, so this matches the
-      figure within the sentence rather than the sentence's exact wording, which is copy.
-    */
     expect(screen.getByText(/3 images/)).toBeTruthy();
   });
 

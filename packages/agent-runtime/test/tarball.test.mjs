@@ -1,18 +1,3 @@
-// Proves scripts/make-source-tarball.sh actually fixes Heron v1 cause #2: the tarball was built
-// from the working tree with macOS `tar`, so `.DS_Store`, `.git/` internals and AppleDouble `._*`
-// files (which macOS `bsdtar` folds onto their parent as an extended attribute — invisible to a
-// listing grep) rode along, and the rule checker's refusal was the only thing that caught it.
-//
-// The real test is SET EQUALITY against `git ls-tree -r --name-only HEAD -- packages/agent-runtime`,
-// not a denylist grep for `._` or `.DS_Store` — a denylist only catches the names you thought to
-// list; a real `.git/` entry or a differently-named stray file would still pass one. The weak
-// denylist form is kept too, underneath, because it is what a listing-grep reviewer would have
-// run, and the point of §1 in the spec is that it reports clean while metadata still rides along
-// (a claim only checked here for the case that is actually possible: a `.git/`-prefixed name in
-// the listing — macOS's xattr-folding behaviour is the tar tool's, not this script's, since
-// `git archive` never touches the filesystem at all).
-//
-// Run: node --test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -74,10 +59,6 @@ test('the tarball entry set equals git ls-tree, exactly (set equality, not a den
   const entries = tarLongListing(OUT_TGZ);
   const names = tarEntries(OUT_TGZ);
 
-  // Directory entries (trailing '/') are git's own tree structure re-materialized by
-  // `git archive`, not tracked blobs — git ls-tree -r never lists them. SOURCE_COMMIT is this
-  // script's own, intentional, documented addition (see scripts/make-source-tarball.sh) and is
-  // asserted separately below, by name and content, rather than folded into the equality check.
   const fileNames = names.filter((n) => !n.endsWith('/') && n !== 'SOURCE_COMMIT');
   const tracked = gitTrackedFiles();
 
@@ -88,18 +69,12 @@ test('the tarball entry set equals git ls-tree, exactly (set equality, not a den
   );
   assert.equal(fileNames.length, tracked.length, 'no duplicate or collapsed entries');
 
-  // The weak assertion (kept underneath the real one, per the spec): none of v1's actual leaks
-  // appear in the listing at all.
   for (const name of names) {
     assert.doesNotMatch(name, /(^|\/)\._[^/]*$/, `AppleDouble file leaked into the archive: ${name}`);
     assert.doesNotMatch(name, /(^|\/)\.DS_Store$/, `.DS_Store leaked into the archive: ${name}`);
     assert.doesNotMatch(name, /(^|\/)\.git\//, `.git/ internals leaked into the archive: ${name}`);
   }
 
-  // Extended-attribute/AppleDouble metadata rides along in a tar built by macOS bsdtar as a
-  // synthetic "PaxHeaders" entry immediately before the file it decorates — that is the concrete,
-  // checkable signal (a raw permission string like "-rwxr-xr-x" is not: it always contains an
-  // 'x' for the executable bit, which is not evidence of anything).
   assert.doesNotMatch(entries, /PaxHeader/, 'no synthesized extended-attribute entries expected');
 });
 

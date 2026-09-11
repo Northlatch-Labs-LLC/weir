@@ -11,13 +11,6 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-/**
- * `/agents/declare` — the operator's side of a declaration.
- *
- * The register needs two signatures over one instant (db/023). The agent's is easy: a program
- * signs when it likes. The operator's was not, because a wallet signs a message only when a page
- * asks it to, and no page asked. This one does. Everything else about the register is unchanged.
- */
 export default function OperatorDeclarePage() {
   return (
     <div className="weir-page">

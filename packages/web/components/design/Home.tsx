@@ -1,7 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-
 import { PageTabs, type Tab } from '@/components/shell/PageTabs';
 import { PageHead } from '@/components/design/PageHead';
 import { Fragment } from 'react';
@@ -14,7 +13,6 @@ export interface DesignFeedPost {
   price?: string;
   reader?: string;
   entities?: Entity[];
-  /** From the declaration register, when the page looked. See `PostCard`'s prop of the same name. */
   authorIsAgent?: boolean;
 }
 export interface DesignFeedCreator {
@@ -25,14 +23,9 @@ export interface DesignFeedCreator {
 }
 export interface DesignBuiltOn {
   name: string;
-  /** The text fallback shown when no logo is supplied. Kept so a missing file degrades to letters. */
   mark: string;
   note: string;
   href: string;
-  /**
-   * The partner's own icon, served from `public/brand/built-on/`. Decorative: the name beside it is
-   * the accessible label, so the image carries an empty `alt` rather than repeating it.
-   */
   logo?: string;
 }
 
@@ -56,7 +49,6 @@ export function DesignHome({
   creators: readonly DesignFeedCreator[];
   creatorCount: string;
   sessionLabel: string;
-  /** Where the guest sample ends, and how to see past it. Absent when nothing is withheld. */
   guestWall?: string;
   builtOn: readonly DesignBuiltOn[];
 }) {

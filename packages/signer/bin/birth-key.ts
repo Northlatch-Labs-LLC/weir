@@ -1,51 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `birth-key` — the one audited generator that makes a machine key for this estate.
- *
- * # Why this file exists at all
- *
- * `sui client new-address` writes `~/.sui/sui_config/sui.keystore`. That file was overwritten
- * twice on this laptop on 2026-09-02 by processes that had no business near it, and a key born
- * into it is a key whose survival depends on nothing else ever doing that again. So no key of
- * this build is made at a prompt, by hand, or by the Sui CLI. It is made here, once, under a
- * umask this tool sets and then reads back, into a folder this tool has checked, and the only
- * things that reach a terminal are an address and three paths.
- *
- * # What it never does
- *
- * It never prints a secret except in `--decrypt-to-stdout`, whose entire purpose is to feed one
- * over a pipe and which refuses to run when stdout is a terminal. It never places a secret in an
- * argv (world-readable through `ps`) or in an environment variable: every child process is
- * spawned through `run()`, which scrubs the environment down to three variables and refuses to
- * launch at all if the bech32 secret prefix appears anywhere in the argv or the env it was
- * handed. It never overwrites a file. It never reads, writes, creates or repairs anything under
- * the Sui home; it hashes one file there through `shasum` so the bytes never enter this
- * program's heap, and it compares that hash before and after itself.
- *
- * # Why it imports nothing from this workspace
- *
- * The only imports are `@mysten/sui` and node builtins. `@projectx-social/sdk` is consumed as
- * compiled JavaScript from a gitignored `dist`, so importing it here would mean an unbuilt or
- * stale sibling package could stop a key birth halfway, or complete one and fail to report it.
- * The tool that makes keys gets the shortest dependency chain in the repository. The refusal type
- * below is the house `Reading` shape rewritten in nine lines for that reason, not by accident.
- *
- * # Refusals are values
- *
- * Every failure path returns a `Refusal` carrying the rule it broke. `main` prints it to stderr
- * and exits non-zero. Nothing throws except a programming fault, because an operator reading a
- * stack trace at two in the morning cannot tell a refused precondition from a crash mid-write.
- *
- * ## Usage
- *
- * ```
- * pnpm exec tsx packages/signer/bin/birth-key.ts <name> --pile <dir>
- * pnpm exec tsx packages/signer/bin/birth-key.ts <name> --pile <dir> --encrypt --keychain-item <item>
- * pnpm exec tsx packages/signer/bin/birth-key.ts <name> --pile <dir> --decrypt-to-stdout --keychain-item <item>
- * pnpm exec tsx packages/signer/bin/birth-key.ts derive-multisig --threshold 1 --pub <b64> --pub <b64>
- * pnpm exec tsx packages/signer/bin/birth-key.ts keystore-guard
- * ```
- */
 
 import { chmod, open, readdir, readFile, realpath, stat, unlink } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
@@ -58,9 +11,6 @@ import { MultiSigPublicKey } from '@mysten/sui/multisig';
 import { publicKeyFromSuiBytes } from '@mysten/sui/verify';
 import type { PublicKey } from '@mysten/sui/cryptography';
 
-/* ------------------------------------------------------------------ results */
-
-/** A refused precondition, named by the rule it broke. Never carries key material. */
 export interface Refusal {
   readonly refused: true;
   readonly rule: string;
@@ -77,33 +27,14 @@ export function allow<T>(value: T): Result<T> {
   return { refused: false, value };
 }
 
-/* ------------------------------------------------------------------ constants */
-
-/**
- * The prefix of a bech32 Sui secret. Used only to detect one where it must not be — in an argv,
- * in an environment, on a line about to be printed. It is a public constant of the encoding, not
- * a secret. Assembled from two halves so that a grep of this repository's *test output* for the
- * literal cannot match this source line either.
- */
 export const BECH32_SECRET_PREFIX = 'suipriv' + 'key1';
 
-/** The pile file modes, fixed here so a caller cannot ask for a friendlier one. */
 const MODE_SECRET = 0o600;
 const MODE_PUBLIC = 0o644;
 const MODE_PILE = 0o700;
 
-/** A key name is a filename component and is checked as one. No dots, so no `.key` collisions. */
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
-/* ------------------------------------------------------------------ umask */
-
-/**
- * Set the process umask to 077 and read it back.
- *
- * `process.umask(mask)` returns the *previous* mask, so it is called twice: the first call sets
- * it, the second returns what the first left in place. Reading it back rather than assuming the
- * set took is the difference between a tool that enforces a umask and a tool that mentions one.
- */
 export function enforceUmask(): Result<number> {
   process.umask(0o077);
   const readBack = process.umask(0o077);
@@ -117,52 +48,12 @@ export function enforceUmask(): Result<number> {
   return allow(readBack);
 }
 
-/* ------------------------------------------------------------------ child processes */
-
-/**
- * The two programs this tool spawns by absolute path, and the iteration count it pins.
- *
- * # A pinned program is never a name
- *
- * `openssl` and `security` used to be spawned by bare name off the inherited `PATH`, while the
- * hasher below already pinned `/usr/bin/shasum` first. That was a real gap and not a theoretical
- * one: on the desk's own laptop `which -a openssl` reports `/usr/local/bin/openssl` ahead of
- * `/usr/bin/openssl`, so the tool was already not running the program its comments described — and
- * the program it did run was handed the passphrase on fd 3 and the plaintext key's path. The bound
- * was "already running as `admin`", which is a real bound and is still not a reason to let `PATH`
- * choose. Security's A4, 2026-09-05; `test/birth-key.test.ts` puts a recording shim first on `PATH`
- * and asserts it is never called.
- *
- * `/usr/bin/openssl` on macOS is LibreSSL (3.3.6 on this laptop), which supports `-pbkdf2 -iter`;
- * verified by a round trip before this pin was made. If it is ever absent the tool refuses rather
- * than falling back to a name, because a fallback is the hole this closes.
- *
- * # The KDF iteration count, and the deviation it records
- *
- * The CISO's rows 1, 3, 4 and 7 say "gpg-symmetric" and this tool uses
- * `openssl enc -aes-256-cbc -pbkdf2`, which is not AEAD. The deviation is deliberate and is written
- * down here and in `README.md` rather than left as a difference nobody recorded (Security's N1).
- * What it costs and what it does not: the passphrase is 32 random bytes read from the macOS
- * keychain, so iterations are not a practical bound on anybody, and a tampered ciphertext fails to
- * open rather than yielding a chosen key — CBC with a wrong key produces garbage, and the round
- * trip in {@link encryptInPlace} compares the plaintext byte for byte before the shred. What is
- * genuinely lost against gpg is an authentication tag, so a tampered file is detected by the
- * comparison at decrypt time and not by the cipher.
- *
- * `-iter` is stated rather than left at openssl's default (10,000), which is low for a
- * password-derived key and, worse, is a *default* — it moves with the openssl version, and a blob
- * encrypted under one and decrypted under another would silently fail to open. 600,000 is OWASP's
- * current PBKDF2-HMAC-SHA256 figure. Both the encrypt and the decrypt pass the same value; they
- * must, and a mismatch is a ciphertext nobody can open.
- */
 const OPENSSL = '/usr/bin/openssl';
 const SECURITY = '/usr/bin/security';
 const PBKDF2_ITERATIONS = '600000';
 
-/** `enc`'s KDF arguments, written once so the encrypt and the decrypt cannot drift apart. */
 const KDF_ARGS = ['-pbkdf2', '-iter', PBKDF2_ITERATIONS] as const;
 
-/** Refuse rather than fall back to a name when a pinned program is not on this machine. */
 async function pinned(program: string): Promise<Result<string>> {
   if (await exists(program)) return allow(program);
   return refuse(
@@ -173,19 +64,6 @@ async function pinned(program: string): Promise<Result<string>> {
   );
 }
 
-/**
- * The one place a child process is created.
- *
- * The environment is rebuilt from three variables rather than inherited: an inherited environment
- * is an unbounded set of strings this tool did not write, handed to a program that is about to be
- * given a passphrase on a file descriptor. `PATH` is kept because the hasher's fallbacks are
- * located through it; `HOME` because `security` needs the login keychain; `LANG=C` so parsed output
- * does not change with a locale. `openssl` and `security` are **not** located through it — see
- * {@link OPENSSL} above.
- *
- * `fd3` is written to the child's file descriptor 3 and is how a passphrase travels. It is never
- * an argument and never an environment variable, which is the whole reason this helper exists.
- */
 async function run(
   program: string,
   args: readonly string[],
@@ -199,7 +77,6 @@ async function run(
 
   const dirty = assertNoSecretInSpawn([program, ...args], env);
   if (dirty !== null) {
-    // A programming fault, not an operator error: the code tried to hand a secret to `ps`.
     throw new Error(`birth-key refused to spawn a child: ${dirty.detail}`);
   }
 
@@ -220,8 +97,6 @@ async function run(
       child.kill();
       throw new Error('birth-key could not open file descriptor 3 on the child.');
     }
-    // A trailing newline: `-pass fd:N` reads one line. Both the encrypt and the decrypt call
-    // write the passphrase the same way, and the round trip in `encryptInPlace` proves it.
     passFd.end(Buffer.concat([options.fd3, Buffer.from('\n')]));
   }
 
@@ -244,14 +119,6 @@ async function run(
   });
 }
 
-/**
- * Refuse a spawn whose argv or environment contains a bech32 secret.
- *
- * This is a control, not a test hook. `ps` shows every argument of every process on the machine
- * to every user, and crash reporters capture environments. A secret in either is a leak that no
- * later shredding undoes, so the check runs on every spawn this tool makes rather than being
- * asserted once in a test and trusted forever.
- */
 export function assertNoSecretInSpawn(
   args: readonly string[],
   env: Readonly<Record<string, string | undefined>>,
@@ -277,14 +144,7 @@ export function assertNoSecretInSpawn(
   return null;
 }
 
-/* ------------------------------------------------------------------ the pile */
-
 export interface PileOptions {
-  /**
-   * The Sui home this run must not touch and must not write into. Defaults to `~/.sui`. It is a
-   * flag (`--keystore-root`) so that this check and the keystore guard can be exercised against a
-   * throwaway directory in a test, and so a machine with a relocated Sui home is still protected.
-   */
   readonly suiRoot?: string;
 }
 
@@ -302,23 +162,6 @@ async function exists(target: string): Promise<boolean> {
   }
 }
 
-/**
- * Check the directory a key is about to be born into.
- *
- * Four rules, cheapest failure first: it must exist and be a directory; it must be mode 0700; no
- * segment of its resolved path may be `.sui` and it may not sit at or under the Sui home; and it
- * may not sit inside a git working tree.
- *
- * The last rule is not in the CISO's table and is here because that table's standing rule "no key
- * in a commit" has no other enforcement anywhere. A pile inside a checkout is one `git add -A`
- * from being committed, and this tool is the only moment at which that is cheap to prevent.
- *
- * The containment test compares the pile's resolved path against the Sui home both as written and
- * as resolved, because on macOS the two differ constantly (`/var` is a symlink to `/private/var`)
- * and a test that compared only one of them would pass while protecting nothing. Resolving the
- * Sui home is a path resolution and opens no file inside it. If the Sui home does not exist,
- * there is nothing to resolve and the written form is used alone.
- */
 export async function checkPile(
   pile: string,
   options: PileOptions = {},
@@ -389,18 +232,13 @@ export async function checkPile(
   return allow({ path: real, mode });
 }
 
-/* ------------------------------------------------------------------ the keystore guard */
-
 export interface KeystoreFingerprint {
   readonly root: string;
-  /** Whether the Sui home exists at all. When it does not, the guard says so and continues. */
   readonly rootPresent: boolean;
-  /** File *names* in `<root>/sui_config`, sorted. Names only; nothing is opened. */
   readonly configEntries: readonly string[];
   readonly keystorePresent: boolean;
   readonly keystoreSize: number | null;
   readonly keystoreMode: string | null;
-  /** sha256 of the keystore, computed by `shasum` in a child process. */
   readonly keystoreSha256: string | null;
 }
 
@@ -421,16 +259,6 @@ async function hasher(): Promise<Result<{ program: string; args: readonly string
   );
 }
 
-/**
- * Fingerprint the Sui keystore without reading it.
- *
- * The bytes never enter this process: `shasum` opens the file and this tool parses 64 hex
- * characters out of its stdout. The number of *keys* inside the file is deliberately not
- * computed — that would mean parsing a JSON array of private keys into this heap — and it is not
- * needed, because the sha256 changes on any addition, removal or reordering, which is strictly
- * more than a count would catch. What is counted is the number of files in `sui_config`, from a
- * directory listing that opens nothing.
- */
 export async function fingerprintKeystore(root?: string): Promise<Result<KeystoreFingerprint>> {
   const suiRoot = root ?? join(homedir(), '.sui');
 
@@ -492,7 +320,6 @@ export async function fingerprintKeystore(root?: string): Promise<Result<Keystor
   });
 }
 
-/** The fields that differ between two fingerprints. Empty means the keystore was not touched. */
 export function keystoreDrift(
   before: KeystoreFingerprint,
   after: KeystoreFingerprint,
@@ -528,8 +355,6 @@ function describeFingerprint(f: KeystoreFingerprint): string {
   );
 }
 
-/* ------------------------------------------------------------------ birth */
-
 export interface BirthOptions {
   readonly name: string;
   readonly pile: string;
@@ -543,7 +368,6 @@ export interface BirthResult {
   readonly addressPath: string;
 }
 
-/** Read a passphrase from the macOS keychain. Captured as bytes, never printed, never stored. */
 export function keychainPassphrase(item: string): () => Promise<Result<Buffer>> {
   return async () => {
     const program = await pinned(SECURITY);
@@ -565,20 +389,6 @@ export function keychainPassphrase(item: string): () => Promise<Result<Buffer>> 
   };
 }
 
-/**
- * Generate one Ed25519 key into the pile.
- *
- * Three files, opened `wx` so the kernel refuses an existing name rather than this tool checking
- * and then racing itself. The secret is written at 0600 explicitly: the umask above would already
- * produce 0600, and the explicit `chmod` is there so the mode is a property of this code rather
- * than of the ambient environment.
- *
- * The `.pub` file holds `toSuiPublicKey()` — the flag-prefixed base64 form — and not
- * `toBase64()`. This is not cosmetic: `publicKeyFromSuiBytes`, which is what `src/multisig.ts`
- * calls on every member, *rejects* the raw 32-byte base64 with "Unsupported signature scheme
- * undefined". A pile written in the other form would derive no multisig address at all, and the
- * operator would discover that at the moment of deriving Heron's address.
- */
 export async function birthKey(options: BirthOptions): Promise<Result<BirthResult>> {
   if (!NAME.test(options.name)) {
     return refuse(
@@ -632,22 +442,6 @@ async function writeExclusive(target: string, contents: string, mode: number): P
   await chmod(target, mode);
 }
 
-/* ------------------------------------------------------------------ encryption */
-
-/**
- * Encrypt `<name>.key` to `<name>.key.enc` and shred the plaintext.
- *
- * The order is the point. The ciphertext is written, then **decrypted back and compared to the
- * plaintext still on disk**, and only a byte-for-byte match permits the shred. Shredding first
- * and trusting the encryption is how a pile ends up holding one unopenable file where a key used
- * to be.
- *
- * The shred overwrites the file with random bytes, then zeroes, syncing each pass, then unlinks.
- * The honest bound, said plainly: on APFS this does not guarantee the original blocks are
- * unrecoverable — the filesystem is copy-on-write and the SSD remaps underneath it. What it does
- * guarantee is that the plaintext is not sitting in the pile under a name, which is the failure
- * this estate actually had.
- */
 export async function encryptInPlace(args: {
   readonly keyPath: string;
   readonly passphrase: Buffer;
@@ -684,7 +478,6 @@ export async function encryptInPlace(args: {
   }
   await chmod(encPath, MODE_SECRET);
 
-  // Prove the ciphertext opens before destroying the only thing that could rewrite it.
   const roundTrip = await run(
     openssl.value,
     ['enc', '-d', '-aes-256-cbc', ...KDF_ARGS, '-in', encPath, '-pass', 'fd:3'],
@@ -726,14 +519,6 @@ async function shredFile(target: string): Promise<void> {
   await unlink(target);
 }
 
-/**
- * Emit the decrypted secret on stdout and nowhere else.
- *
- * The child's stdout is *inherited*, so the plaintext travels from `openssl` to this process's
- * stdout without ever entering this program's heap. Refused when stdout is a terminal: the only
- * caller is the deploy step piping into a sealing command over an SSH session, and a secret on a
- * terminal is a secret in a scrollback buffer, a screenshot and a shell history.
- */
 export async function decryptToStdout(args: {
   readonly encPath: string;
   readonly passphrase: Buffer;
@@ -763,19 +548,6 @@ export async function decryptToStdout(args: {
   return allow(null);
 }
 
-/* ------------------------------------------------------------------ multisig */
-
-/**
- * Derive a multisig address from public keys at equal weight 1.
- *
- * Built with the same `publicKeyFromSuiBytes` + `MultiSigPublicKey.fromPublicKeys` pair that
- * `src/multisig.ts` uses, so the address this prints and the address that package signs for are
- * the same value by construction rather than by coincidence — and `test/birth-key.test.ts`
- * asserts it against `multiSigSigner()` rather than trusting that sentence.
- *
- * Duplicate members are refused. Two copies of one public key at threshold 2 looks like a 2-of-2
- * and is a 1-of-1, and a Sui multisig address cannot be changed after birth.
- */
 export function deriveMultisigAddress(threshold: number, pubs: readonly string[]): Result<string> {
   if (!Number.isInteger(threshold) || threshold <= 0) {
     return refuse('threshold', `${String(threshold)} is not a positive integer threshold.`);
@@ -790,7 +562,6 @@ export function deriveMultisigAddress(threshold: number, pubs: readonly string[]
       publicKeys.push({ publicKey: publicKeyFromSuiBytes(pub.trim()), weight: 1 });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      // A public key is not secret, so the offending value may be named.
       return refuse(
         'member-key',
         `${JSON.stringify(pub.trim())} is not a Sui public key: ${detail}`,
@@ -821,8 +592,6 @@ export function deriveMultisigAddress(threshold: number, pubs: readonly string[]
     return refuse('multisig', `the multisig public key could not be built: ${detail}`);
   }
 }
-
-/* ------------------------------------------------------------------ the command line */
 
 export interface Parsed {
   readonly mode: 'birth' | 'decrypt' | 'derive-multisig' | 'keystore-guard';
@@ -967,7 +736,6 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   note(describeFingerprint(before.value));
 
-  /** Re-fingerprint the Sui keystore and refuse to finish if anything about it moved. */
   const finish = async (code: number): Promise<number> => {
     const after = await fingerprintKeystore(args.suiRoot ?? undefined);
     if (after.refused) {
@@ -1058,7 +826,6 @@ export async function main(argv: readonly string[]): Promise<number> {
   return await finish(0);
 }
 
-/* Run only when executed, so the test can import every function above. */
 const invoked =
   process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invoked) {
@@ -1067,7 +834,6 @@ if (invoked) {
       process.exitCode = code;
     })
     .catch((error: unknown) => {
-      // Never wrap: a thrown value from a key path can quote key material.
       void error;
       note('birth-key failed with an unexpected fault. Nothing about it is quoted by design.');
       process.exitCode = 1;

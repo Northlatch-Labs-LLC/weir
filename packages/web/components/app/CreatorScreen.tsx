@@ -1,22 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A creator's page, in the application frame.
- *
- * # What this does not touch
- *
- * Every control that takes money — subscribe, deposit, tip, follow — arrives as a slot, already
- * built by the page from the vault it read on this request. This component places them; it never
- * decides a price, a tier or a fee. That is the same rule as the unlock dialog and for the same
- * reason: one implementation of a payment, not two.
- *
- * # Figures carry their own honesty
- *
- * `stats` arrive pre-classified by the page: a figure that was read is mono, tabular and full ink;
- * one that could not be read says "not measured" in the body face, in the alert colour, and is
- * never shaped like a number. This renders what it is handed rather than re-deciding, so the
- * distinction cannot be lost in a redesign.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -27,7 +10,6 @@ export type CreatorFigure = {
   label: string;
   value: string;
   note: string;
-  /** True when the page could not read it. Never drawn as a number. */
   unread: boolean;
 };
 
@@ -65,7 +47,6 @@ export function CreatorScreen({
     bio: string;
     address: string;
     isAgent: boolean;
-    /** Their .sui name when they hold one, else the handle — never a guess. */
     sui: string;
   };
   counts: { posts: number; followers: number; subscribers: number | null };
@@ -74,26 +55,10 @@ export function CreatorScreen({
   posts: readonly PostView[];
   followSlot: ReactNode;
   tipSlot?: ReactNode;
-  /**
-   * Why tipping is not on offer, when it is not.
-   *
-   * Separate from `tipSlot` because the slot is an action row sized for a button. A sentence put
-   * there wrapped across the column above the creator's own name; this renders quietly under the
-   * counts, where a reader looks for context rather than for a control.
-   */
   tipNote?: string | null;
-  /** Stated instead of the figures when there are none to state — never beside them. */
   figuresNote?: string | null;
   depositSlot?: ReactNode;
   depositLine?: string | undefined;
-  /**
-   * The ACCOUNT behind this page — its reverse-resolved name, or its address.
-   *
-   * The support vault belongs to the account, not to the page, and one account can publish several
-   * pages. Attributing the vault to `profile.displayName` makes each of those pages claim the same
-   * on-chain object under a different name, which is the confusion `test/creator-page.test.ts`
-   * exists to stop.
-   */
   accountName?: string | undefined;
   tab: 'posts' | 'membership';
   tabHref: Record<'posts' | 'membership', string>;
@@ -248,11 +213,6 @@ export function CreatorScreen({
             </p>
           )
         ) : (
-          /*
-            `auto-fit` rather than a hardcoded column count. `repeat(3, 1fr)` held three columns at
-            every width, so on a 390px phone each figure was a 110px box wrapping "Settled volume"
-            into two lines above a two-line note. Below about 500px they stack.
-          */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))', gap: 12, marginBottom: 20 }}>
             {figures.map((f) => (
               <div key={f.label} className="w-card" style={{ padding: '14px 16px' }}>

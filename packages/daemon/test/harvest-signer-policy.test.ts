@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The harvest key signs only through the policy, and every decision lands in one chain.
-
-  Mutations predicted: drop `allowedObjects` from harvestPolicy → "a harvest of the named vault is
-  signed" red (the vault input is refused); widen `allowedTargets` → "a transaction to another
-  function is refused" red; give each call its own AuditLog → "one chain across vaults" red;
-  execute before the gate → "nothing is executed when the gate refuses" red.
-*/
 import { describe, expect, it } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -34,7 +26,6 @@ function signerFor(keypair: Ed25519Keypair): Signer {
   };
 }
 
-/** A mainnet-shaped successful simulation of `harvest(vault, system)` with gas as the only outflow. */
 function harvestResponse(input: { vault: string; fn?: string; gasMist?: string }) {
   const gas = input.gasMist ?? '1088000';
   return {
@@ -70,12 +61,6 @@ function harvestResponse(input: { vault: string; fn?: string; gasMist?: string }
   };
 }
 
-/**
- * The harvest transaction with every reference already resolved, so `build` touches no network:
- * shared-object references with their initial versions, the gas price and the gas payment. The
- * real adapter leaves these to be resolved against the chain; the policy judges the same bytes
- * either way.
- */
 function resolvedHarvest(vaultId: string): Transaction {
   const tx = new Transaction();
   tx.setGasPrice(1000n);
@@ -147,7 +132,6 @@ describe('the harvest signer behind the policy', () => {
   });
 
   it('a harvest whose simulation touches a vault other than the one asked for is refused', async () => {
-    // The policy is built for VAULT; the chain answered with OTHER_VAULT as the object input.
     const { client, simulation, executed } = world(harvestResponse({ vault: OTHER_VAULT }));
     const signer = harvestSignerOver(signerFor(KEY), client, BUDGET, PACKAGE, { simulation, transaction: resolvedHarvest });
     const r = await signer.simulateAndHarvest(VAULT);
@@ -168,7 +152,7 @@ describe('the harvest signer behind the policy', () => {
     const { client, simulation } = world(harvestResponse({ vault: VAULT }));
     const signer = harvestSignerOver(signerFor(KEY), client, BUDGET, PACKAGE, { simulation, transaction: resolvedHarvest });
     await signer.simulateAndHarvest(VAULT);
-    await signer.simulateAndHarvest(OTHER_VAULT); // refused: the simulation names VAULT, the policy names OTHER_VAULT
+    await signer.simulateAndHarvest(OTHER_VAULT);
     await signer.simulateAndHarvest(VAULT);
     const head = signer.auditHead();
     expect(head.entries).toBe(3);

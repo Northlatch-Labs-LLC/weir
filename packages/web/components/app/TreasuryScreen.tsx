@@ -1,34 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * `/treasury` — where pooled SUI goes, in the application frame.
- *
- * # What this replaces
- *
- * `DesignTreasuries`: a 72rem centred band drawn in the retired teal system, rendered inside the
- * 640px column it was never laid out for. It carried 47 font sizes and six colours typed into the
- * elements, a five-column table that could only be reached by sideways scrolling, and initials in a
- * circle where the rest of the product draws an address-derived avatar. It was the most legacy page
- * left in the product by measurement, and it is the page a stranger reads to decide whether to put
- * money behind somebody.
- *
- * # Three states, kept as three
- *
- * A figure is measured, genuinely none, or unread, exactly as `/explore` keeps them — and the states
- * arrive from the server as states rather than as colours, so this file cannot lose the distinction
- * by picking a shade. "No pool open" is a fact about a creator. "Could not be read" is a fact about
- * us. They are never the same sentence and never the same typography.
- *
- * The ladder has the same rule one level down. A rung is open, maturing, or unplaced — unplaced
- * meaning the epoch could not be read — and an unplaced rung is never drawn as open. Telling
- * somebody a rung is liquid when it is not costs them a withdrawal they were counting on.
- *
- * # The simulator quotes no yield
- *
- * Deliberately. Staking returns vary by validator and by epoch and are not ours to promise. What the
- * contract does fix exactly is what comes back — all of the principal, on demand — so that is what
- * it states.
- */
 
 import { useState, type ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -36,29 +7,22 @@ import { Avatar, ColumnHeader, EmptyState } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
 import type { FigureState } from '@/components/app/ExploreScreen';
 
-/** One creator's pool, already reduced to what can be shown. Nothing is computed here. */
 export interface TreasuryPoolRow {
   handle: string;
-  /** The on-chain address. What the avatar is derived from — never the handle. */
   address: string;
   displayName: string;
   pooled: string;
   pooledState: FigureState;
   yieldShare: string;
   yieldState: FigureState;
-  /** Shortened, or the word for having none. Never an address this file trimmed. */
   validator: string;
-  /** One entry per rung: true where this vault has actually funded that rung. */
   funded: readonly boolean[];
 }
 
-/** A rung of the withdrawal ladder. `unplaced` is the epoch unread, never a rung assumed shut. */
 export interface LadderRungView {
   name: string;
-  /** How far along the cycle this rung sits, as a CSS width. Derived from the contract's `RUNGS`. */
   pct: string;
   state: 'open' | 'maturing' | 'unplaced';
-  /** `unlocked`, `maturing`, or the empty string when the position is unknown. */
   label: string;
 }
 
@@ -100,13 +64,10 @@ export function TreasuryScreen({
   viewerHandle: string | null;
   reader?: string | undefined;
   pools: readonly TreasuryPoolRow[];
-  /** Why the figures are dashes, when they are. Said once for the whole list, never per cell. */
   poolNote: string;
   ladder: readonly LadderRungView[];
   epochLabel: string;
-  /** True when the epoch itself could not be read, so no rung has a known position. */
   epochUnread: boolean;
-  /** `LADDER_DEPTH / RUNGS` as a percentage. Read from the contract's constants, never typed. */
   capturePct: string;
   rungCount: number;
 }) {
@@ -127,7 +88,6 @@ export function TreasuryScreen({
   const valid = Number.isFinite(typed) && typed >= 0 && amount.trim() !== '';
   const sui = valid ? `${typed.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI` : '';
 
-  /* The remainder the ladder gives up. Derived, so the two figures can never disagree. */
   const givenUpPct = `${(100 - Number(capturePct.replace('%', ''))).toFixed(1)}%`;
 
   const aside: ReactNode = (

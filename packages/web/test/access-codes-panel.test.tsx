@@ -4,9 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AccessCodesPanel } from '../components/AccessCodesPanel';
 
-/**
- * The panel's three opening states are three different facts, and each is said in words.
- */
 describe('AccessCodesPanel', () => {
   it('says "not measured" when the list could not be read, rather than showing an empty list', () => {
     render(<AccessCodesPanel initial={null} />);

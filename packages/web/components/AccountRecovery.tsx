@@ -1,34 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The escape hatch, made reachable.
- *
- * # Why this screen has to exist
- *
- * This platform's claim is that identity and payments are on-chain objects, not database rows. A
- * Google sign-in quietly puts an asterisk on that: the salt behind the address is derived from a
- * seed this deployment holds, so an account created that way is reachable only for as long as this
- * deployment keeps that seed. If it disappeared, so would every zkLogin address it issued.
- *
- * That dependency cannot be argued away, only *ended*. Salt plus a Google sign-in plus any zkLogin
- * proving service reconstructs the address and signs from it with nothing from us. A route that
- * does this existed before this component did — and an escape hatch nobody can reach is not an
- * escape hatch, it is a paragraph in a source file.
- *
- * # Nothing is revealed until it is asked for
- *
- * The salt is not fetched on mount and not shown beside the address. Reading it spends a fresh,
- * nonce-bound, Google-signed token, and the act of asking should be as deliberate as the value
- * deserves. A page that displayed it automatically would put it in every screenshot and every
- * screen-share of somebody showing a colleague their profile.
- *
- * # Wallet users see none of this, and that is correct
- *
- * A wallet session has no salt and never depended on us for anything. Showing an empty recovery
- * panel to those users would imply a risk they do not carry.
- */
-
 import { useState } from 'react';
 import { useSigner, type RecoveryDetails } from '@/components/SignerProvider';
 
@@ -43,7 +15,6 @@ export function AccountRecovery() {
   const [state, setState] = useState<State>({ phase: 'hidden' });
   const [copied, setCopied] = useState(false);
 
-  // Nothing to recover, and nothing that ever depended on this platform.
   if (signer === null || signer.kind !== 'zklogin') return null;
 
   async function reveal() {
@@ -60,13 +31,6 @@ export function AccountRecovery() {
     }
   }
 
-  /**
-   * All five values as one block.
-   *
-   * Deliberately not five separate copy buttons: a salt on its own recovers nothing, and somebody
-   * who copied only the interesting-looking number would discover that with no working deployment
-   * left to ask. One button, one artefact, everything needed.
-   */
   function recoveryText(details: RecoveryDetails): string {
     return [
       'Weir · zkLogin recovery details',

@@ -1,13 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The operator's one button: it signs the operator statement over the agent's instant with the
-  connected wallet and posts both halves. Nothing is typed, nothing is pasted.
-
-  Mutations predicted: sign with Date.now() instead of the request's instant → "the operator half
-  repeats the agent's instant" red; send the agent half from state the server did not give → the
-  body assertion red; offer the button on an expired request → "an expired request has no button" red.
-*/
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { statementFor } from '@projectx-social/sdk';
@@ -91,7 +83,6 @@ describe('OperatorDeclare', () => {
       operatorSignature: 'OPERATOR-SIG',
     });
     await waitFor(() => expect(container.querySelector('[data-filed="true"]')).not.toBeNull());
-    // A success page, not a JSON link: it names the agent and leads to its record by handle.
     expect(container.querySelector('[data-filed="true"]')?.textContent).toContain('This is your agent');
     expect(container.querySelector('[data-record-link="true"]')?.getAttribute('href')).toBe('/agents/demo_agent');
   });
@@ -143,7 +134,6 @@ describe('the other list: agents looking for an operator', () => {
     expect(body.operatorAddress).toBe(OPERATOR);
     expect(body.agentAddress).toBe(AGENT);
     expect(body.timestampMs).toBeGreaterThanOrEqual(before);
-    // What the wallet was asked to sign is the declare-operator statement over THAT instant.
     const signedText = new TextDecoder().decode(signed[signed.length - 1]!);
     expect(signedText).toBe(statementFor({ kind: 'declare-operator', agent: AGENT, model: 'claude', purpose: 'proves the list' }, OPERATOR, body.timestampMs, window.location.origin));
     await waitFor(() => expect(view.container.querySelector('[data-offered="true"]')).not.toBeNull());

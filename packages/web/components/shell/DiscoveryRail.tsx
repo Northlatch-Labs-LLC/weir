@@ -1,12 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The discovery column's markup.
- *
- * Split from `Discovery` because that one reads the store and this one needs `next/link` and the
- * client boundary — the same split `FeedView` and `FeedApp` make, and for the same reason: nothing
- * that renders is allowed to read, so a card cannot invent a figure the page did not measure.
- */
 
 import NextLink from 'next/link';
 import type { ReactNode } from 'react';
@@ -39,7 +32,6 @@ export function DiscoveryRail({
   people,
   seeking,
 }: {
-  /** `null` when the store could not be read. The card is then absent rather than empty. */
   people: readonly DiscoveryPerson[] | null;
   seeking: readonly DiscoverySeeking[] | null;
 }) {

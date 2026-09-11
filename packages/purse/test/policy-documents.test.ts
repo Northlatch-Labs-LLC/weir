@@ -1,28 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The two shipped policy documents, read from `policy/` and evaluated.
- *
- * A3 from Security's review of 2026-09-05: "`settle_epoch` is separated by a policy document that
- * does not exist". The binary that holds the hot key can build a `LedgerCap` call — `intent.ts`
- * carries the kind on purpose, because the settlement signer is this same program with a different
- * key — and the only thing that stops it is the deployed document's `allowedTargets`. Until this
- * file existed, no document was on the branch and no test asserted the separation, so decision 6's
- * "one signer per money path" was a sentence in a comment.
- *
- * Three properties are asserted here, each against the real loader and the real evaluator:
- *
- *  1. The content document refuses a **well-formed** `settle_epoch`, by target.
- *  2. The ledger document refuses `post` and `price`, by target.
- *  3. A document naming both arms stops the purse at start, before a key is held open.
- *
- * # Why the documents are loaded and rendered rather than written inline
- *
- * A fixture that restated the document would pass while the shipped file said something else. The
- * files in `policy/` are read here byte for byte; the only thing this file changes is the four
- * addresses and the soul package id, which are `<ANGLE_BRACKET>` substitutions because **no Heron
- * key exists yet** and **the soul package is unpublished** — the same convention, and the same
- * reason, as `<POLICY_SHA256>` in `systemd/heron-purse.service`.
- */
 
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -70,7 +46,6 @@ const GAS = fixedGas({
   payment: [{ objectId: GAS_COIN_ID, version: '1', digest: '11111111111111111111111111111111' }],
 });
 
-/** The substitutions `digitalocean/deploy.sh` fills. Fixture values stand in for them here. */
 function rendered(text: string, agentAddress: string): string {
   return text
     .replaceAll('<HERON_ADDRESS>', agentAddress)
@@ -86,7 +61,6 @@ function rendered(text: string, agentAddress: string): string {
     .replaceAll('<CLOCK_ID>', CLOCK_ID);
 }
 
-/** Load one of the shipped documents through the real loader, rendered for a throwaway address. */
 async function shipped(name: string, agentAddress: string): Promise<PolicyDoc> {
   const raw = await readFile(join(POLICY_DIR, name), 'utf8');
   const dir = await temporaryDirectory('heron-policy-');
@@ -222,15 +196,6 @@ describe('policy/heron-ledger.json — the LedgerCap service', () => {
 });
 
 describe('one signer per money path', () => {
-  /*
-    Decision 6 keeps the caps on separate keys and separate services. Two documents that each keep
-    to one arm are only half of that: the half that fails is an operator pasting both target sets
-    into one file to "simplify the deploy", at which point one key signs both money paths and a
-    settlement can consume the content ceiling.
-
-    The purse refuses to start on such a document. At start, not per transaction: a purse that
-    caught it per transaction would already be holding the key.
-  */
   async function startWith(
     targets: readonly string[],
   ): Promise<Awaited<ReturnType<typeof startPurse>> & { socketPath: string }> {
@@ -294,11 +259,6 @@ describe('one signer per money path', () => {
 });
 
 describe('policy/heron-multisig.json, the committed members document', () => {
-  /*
-    Heron's real members: the hot key born 2026-09-05 and the brake key read from the chain. The
-    address is what the SDK derives from them, computed here rather than restated, and compared to
-    the one written in the estate's records so the document and the records cannot drift apart.
-  */
   const HERON_ADDRESS = '0xe8345fea67b57baf5461446852c4badeb8936e2af7cc390fc5c16be0337ddd70';
   const HOT_ADDRESS = '0x51704a474f342e9f50a408f8be090b05ae73b17b98a0f8f7597abb62ec4310b0';
   const BRAKE_ADDRESS = '0x4668e5bf1dfd48129d6037d027c344577163f9685389be1f43a8a8e9ce726c9a';
@@ -350,11 +310,8 @@ describe('policy/heron-content-pre-soul.json, the document the purse runs under 
     if (!audit.ok) throw new Error(audit.reason);
     const ledger = await SpendLedger.open({ path: join(dir, 'spend.jsonl'), policy: loaded.value.doc });
     if (!ledger.ok) throw new Error(ledger.reason);
-    // The signer stands in for the multisig; only the address matters to the policy.
     const signer = { ...signerFor(throwawayKeypair()), address: HERON_ADDRESS };
     const response = setPriceResponse(HERON_ADDRESS);
-    // The real v5 package, so the built target matches the document's and the refusal is the
-    // objects rule's, not the target rule's.
     const V5 = '0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5';
     const purse: Purse = createPurse({
       signer,
@@ -372,9 +329,6 @@ describe('policy/heron-content-pre-soul.json, the document the purse runs under 
     const answered = await purse.handle({ intent: priceIntentFor() });
     expect(answered.ok).toBe(false);
     if (answered.ok) throw new Error('unreachable');
-    // The recorded simulation calls the fixture package, so under the document as committed the
-    // target rule speaks first. The claim under test is the EMPTY object list: with the fixture's
-    // target admitted and nothing else changed, the refusal is the objects rule's.
     expect(answered.refused.ruleId).toBe('move-call-target');
     const targetAdmitted: Purse = createPurse({
       signer,
@@ -409,8 +363,6 @@ describe('policy/heron-chain.mainnet.json, the chain document the purse reads on
     const originalId = /original-id = "(0x[0-9a-f]+)"/.exec(published)?.[1];
     expect(loaded.value.latestPackageId).toBe(publishedAt);
     expect(loaded.value.packageId).toBe(originalId);
-    // The platform and registry are the shared objects the original package's publish transaction
-    // created (DbB4fSp7GV9C2UTRWe2T7f8G7ddT8fo4QjnnBtLddpct, read from mainnet 2026-09-05).
     expect(loaded.value.platformId).toBe('0x3f695b2c32714e2359c4bb9515598d8dd765b216148c5b8fa818073d52b50f36');
     expect(loaded.value.registryId).toBe('0x1a3fb4ac25458d7524be064a2b7e1586ccd9ed09c0d5b351621e3b101e1203a0');
   });
@@ -439,18 +391,10 @@ describe('policy/heron-content.mainnet.json, the rendered content policy the pur
   });
 });
 
-/*
-  The settlement set is enumerated by capability in policy-file.ts, and the note there argues that
-  such a list is safe precisely because its staleness REFUSES rather than admits. That argument is
-  only worth the words if it is a test, so here it is: a soul call this file has never heard of,
-  and the one soul call that belongs to the other arm, are both refused beside settle_epoch.
-*/
 describe('the settlement set is by capability, and its staleness fails closed', () => {
   const SOUL = '0x000000000000000000000000000000000000000000000000000000000000005e::soul';
 
   it('refuses record_spend beside settle_epoch, though both are in the soul module', () => {
-    // record_spend takes no capability: the contract asserts ctx.sender() == soul.agent, so it is
-    // signed by the hot key that publishes. Grouping by module would have merged the two paths.
     const refusal = refuseMixedMoneyPaths([`${SOUL}::settle_epoch`, `${SOUL}::record_spend`]);
     expect(refusal).not.toBeNull();
     expect(refusal).toContain('record_spend');

@@ -1,22 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * A machine buyer is entitled by the machine key, and is handed the machine body.
- *
- * # The defect this pins
- *
- * A paid post is sold under two keys on one vault — the creator's, and `<key>#machine` for machine
- * buyers. Both mint a real `Unlock` through the same `creator::unlock`. `canRead` compared the
- * reader's unlocks against the human key only, so a machine buyer holding a valid `Unlock` was
- * refused as a stranger; and even where it was not, `sealApprover` named no key, so the card asked
- * the key server for the HUMAN identity against a machine `Unlock` — a `MoveAbort` that reads as
- * "you do not have access" on a post that was paid for.
- *
- * # Mutations these must catch (predicted before the run)
- *
- *   - `canRead` paid branch reverted to the human key only → "is entitled by the machine key" red.
- *   - `sealApprover` returns the human key for a machine `Unlock` → "names the machine key" red.
- *   - `visiblePost` hands the human body to a machine approver → "hands the machine body" red.
- */
 import { describe, expect, it } from 'vitest';
 import { machineContentKey } from '../lib/machine-pricing';
 import { NO_ENTITLEMENTS, canRead, sealApprover, unlockKey, type Entitlements } from '../lib/entitlement';
@@ -52,7 +34,6 @@ function paidPost(withMachineBody: boolean): Post {
   };
 }
 
-/** A reader holding exactly these unlocks, with the object id behind each. */
 function holding(...keys: Array<[contentKey: string, objectId: string]>): Entitlements {
   const unlocked = new Set<string>();
   const unlockIds = new Map<string, string>();
@@ -115,7 +96,6 @@ describe('visiblePost hands over the edition the approver can open', () => {
     const visible = visiblePost(post, true, approver);
     expect(visible.edition).toBe('machine');
     expect(visible.sealedBody?.blobId).toBe('machine-blob');
-    // The human body stays behind: one field, one thing to open.
     expect(JSON.stringify(visible)).not.toContain('human-blob');
     expect(visible.approver).toEqual(approver);
   });
@@ -129,8 +109,6 @@ describe('visiblePost hands over the edition the approver can open', () => {
   });
 
   it('reports a machine Unlock on a post that has no machine body, rather than handing the wrong one', () => {
-    // A paid post sealed before machine editions were (pre-034). Its plaintext is gone; the machine
-    // buyer's object can open nothing, and the human blob would abort on the key server.
     const post = paidPost(false);
     const visible = visiblePost(post, true, sealApprover(post, holding([MACHINE, '0xm'])));
     expect(visible.edition).toBe('machine-absent');

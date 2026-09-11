@@ -1,24 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Your referral link, who used it, and what it has paid you.
- *
- * # The share comes out of the platform's cut, never the creator's
- *
- * That is the sentence this page exists to make true rather than merely claim. On a 10 USDC
- * subscription at 290 bps with a 5% referral share, ProjectX takes 0.29 and hands 0.0145 of it to
- * the referrer — the creator receives exactly what they would have received anyway. A referral
- * scheme funded out of the creator's earnings would be a pay cut with a friendly name.
- *
- * # Both figures come from chain events
- *
- * Counting referrals in a database written at signup undercounts: the account opens on chain, the
- * row fails to write, and somebody is never credited for a person they brought. `AccountOpened`
- * carries the referrer and `PaymentSettled` carries the cut actually paid, so if the signup
- * happened the referral exists — they are the same fact.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -26,14 +8,6 @@ import { formatUnits } from '@/lib/units';
 
 interface Referred { handle: string; owner: string; createdAtMs: number }
 
-/**
- * A referrer's cut, grouped by the vault's own coin.
- *
- * Not one number: a referrer can be credited from vaults denominated in different coins, and a
- * raw-unit sum across coins is not a figure anything can be scaled by. `decimals` and `symbol` are
- * `null` when the vault behind this cut has no named profile yet — the amount is real but cannot
- * be shown at its right scale, so it is reported rather than guessed at USDC's.
- */
 interface CoinEarning { coinType: string | null; symbol: string | null; decimals: number | null; amount: string }
 
 type Load =
@@ -41,7 +15,6 @@ type Load =
   | { state: 'ready'; referred: Referred[]; earned: CoinEarning[]; payments: number; truncated: boolean }
   | { state: 'unmeasured'; detail: string };
 
-/** One coin's cut, formatted at its own decimals — or flagged unmeasured when they could not be read. */
 function formatEarning(e: CoinEarning): string {
   if (e.decimals === null) return 'not measured';
   const amount = formatUnits(BigInt(e.amount), e.decimals);
@@ -81,7 +54,6 @@ export function Referrals() {
     if (signer !== null) void refresh(signer.address);
   }, [signer, refresh]);
 
-
   if (signer === null) {
     return (
       <div className="panel">
@@ -95,8 +67,6 @@ export function Referrals() {
     );
   }
 
-  // Built from the page's own origin, so it is right in development, in a container and in
-  // production without a configured base URL that would be wrong in two of the three.
   const link =
     typeof window === 'undefined' ? '' : `${window.location.origin}/join?ref=${signer.address}`;
 

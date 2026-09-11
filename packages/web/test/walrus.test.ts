@@ -1,18 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The Walrus client.
- *
- * # What is worth pinning
- *
- * Not "it calls fetch". The things that would hurt are: a blob id taken from the store and dropped
- * into a URL unchecked; a store that reports success without naming what it stored; treating a
- * re-upload of identical content as a failure when it is deduplication working; and losing the
- * expiry, which is the difference between "this is stored" and "this is stored until epoch N".
- *
- * The absent-publisher case is asserted deliberately. Walrus has no public unauthenticated
- * publisher on mainnet and never will, so "cannot write yet" is the ordinary state of a deployment
- * that has not funded one — it has to fail clearly rather than look like a network fault.
- */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_EPOCHS, isBlobId, readBlob, storeBlob, walrusConfig } from '../lib/walrus';
@@ -29,7 +15,6 @@ function env(over: Record<string, string> = {}): Record<string, string | undefin
 
 describe('configuration', () => {
   it('refuses to invent an aggregator', () => {
-    // A default would route this deployment's reads through somebody else's infrastructure.
     const r = walrusConfig({});
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.failure.kind).toBe('unconfigured');
@@ -57,14 +42,12 @@ describe('blob ids', () => {
   });
 
   it('rejects anything that could escape a URL path', () => {
-    // The reason this function exists: an id round-tripped through the store is still untrusted.
     expect(isBlobId('../../etc/passwd')).toBe(false);
     expect(isBlobId(`${ID}/..`)).toBe(false);
     expect(isBlobId('')).toBe(false);
   });
 });
 
-/** Synthetic. The publisher is stubbed in these tests, so neither value is ever verified. */
 const TOKEN = 'stub.jwt.token';
 const OWNER = `0x${'a1'.repeat(32)}`;
 
@@ -98,14 +81,12 @@ describe('storing', () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.blobId).toBe(ID);
-      // The lease, not a promise of permanence.
       expect(r.value.endEpoch).toBe(40);
       expect(r.value.alreadyExisted).toBe(false);
     }
   });
 
   it('treats an already-certified blob as a success', async () => {
-    // Identical content yields the same id, so re-publishing unchanged text takes this branch.
     vi.stubGlobal('process', { ...process, env: env() });
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
@@ -126,8 +107,6 @@ describe('storing', () => {
   });
 
   it('buys permanent storage unless told otherwise', async () => {
-    // Walrus defaults to deletable. Content somebody paid to read must not be removable by the
-    // person who uploaded it.
     vi.stubGlobal('process', { ...process, env: env() });
     const seen: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
@@ -148,7 +127,6 @@ describe('reading', () => {
 
     const r = await readBlob(ID);
     expect(r.ok).toBe(false);
-    // `not-found` and `transport` need different responses from a caller.
     if (!r.ok) expect(r.failure.kind).toBe('not-found');
   });
 

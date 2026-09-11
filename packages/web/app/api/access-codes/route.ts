@@ -6,14 +6,6 @@ import { provenReaderFor } from '@/lib/read-session';
 import { isSiteAdmin } from '@/lib/site-admin';
 import { listAccessCodes, mintAccessCode, revokeAccessCode } from '@/lib/access-codes';
 
-/**
- * Access codes, for the site administrator.
- *
- * Every method proves the same two things `POST /api/site-mode` proves — a *proved* session, and
- * that its address holds this package's `Publisher`, read from chain — and refuses with one body
- * for both failures, for the reason given there. GET is not public: a list of live codes is a list
- * of ways in.
- */
 export const dynamic = 'force-dynamic';
 
 async function administrator(request: Request): Promise<string | null> {

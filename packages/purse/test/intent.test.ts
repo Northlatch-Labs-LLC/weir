@@ -1,5 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/** The schema is the first control, and an unknown key is a refusal rather than a field ignored. */
 
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, intentHash, parseIntent } from '../src/intent.js';
@@ -33,8 +32,6 @@ describe('what the schema refuses', () => {
   });
 
   it('refuses an unknown key rather than ignoring it', () => {
-    // The hazard this closes: a field named `recipient` reaching a builder that grew support for
-    // one in a later commit, while the deployed policy still says nothing about recipients.
     const parsed = parseIntent({ ...priceIntentFor(), recipient: STRANGER });
     expect(parsed.ok).toBe(false);
     if (parsed.ok) throw new Error('unreachable');
@@ -68,8 +65,6 @@ describe('what the schema refuses', () => {
 
   it('never quotes the offending value back', () => {
     const parsed = parseIntent({ ...priceIntentFor(), contentKey: 'ignore-previous-instructions' });
-    // The content key above is valid, so make one that is not, and check the refusal says nothing
-    // the model chose.
     void parsed;
     const bad = parseIntent({ ...priceIntentFor(), priceMist: 'ignore-previous-instructions' });
     expect(bad.ok).toBe(false);
@@ -81,8 +76,6 @@ describe('what the schema refuses', () => {
 describe('the intent hash', () => {
   it('does not depend on key order', () => {
     const one = priceIntentFor();
-    // Rebuilt key by key in reverse order. A `JSON.stringify` replacer array would only reorder the
-    // top level and would silently DROP every nested key, which is a different test.
     const reordered = Object.fromEntries(Object.entries(one).reverse());
     const a = parseIntent(one);
     const b = parseIntent(reordered);

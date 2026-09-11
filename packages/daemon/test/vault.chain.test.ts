@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The decoder and the decision, against the real vault on Sui mainnet.
- *
- * Everything else in this package is proven against synthetic buffers. That proves the offsets are
- * self-consistent; it does not prove they match what a Sui fullnode actually serialises. This does.
- *
- * Run with `pnpm test:chain`. Kept out of the unit suite so a network outage cannot turn the
- * ordinary suite red — a suite that fails for unrelated reasons is a suite people stop reading.
- */
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -45,8 +36,6 @@ describe('the decoder reads the real vault', () => {
   });
 
   it('recovers the fields the offsets depend on', async () => {
-    // These are the fields a synthetic buffer cannot validate: if the layout disagreed with what
-    // the node serialises, they would come back as some other field's value.
     const reading = await readStakeVault(client, VAULT);
     if (!reading.ok) throw new Error(reading.failure.detail);
     const v = reading.value;
@@ -55,16 +44,12 @@ describe('the decoder reads the real vault', () => {
     expect(v.validator).toBe(OKX_EARN);
     expect(v.accepting).toBe(true);
 
-    // 2 SUI deposited; 1 staked by the first harvest, 1 left liquid.
     expect(v.totalPrincipalMist).toBe(2n * MIN_STAKE_MIST);
     expect(v.liquidMist).toBe(MIN_STAKE_MIST);
     expect(v.harvests).toBeGreaterThanOrEqual(1n);
   });
 
   it('recovers exactly one tranche of one SUI', async () => {
-    // The rung is capped at MIN_STAKE_MIST for a vault this small: rung_size(2 SUI) is
-    // 2e9/7 = 285,714,285, below Sui's minimum stake, so the ladder degrades to one larger rung
-    // rather than to no ladder at all.
     const reading = await readStakeVault(client, VAULT);
     if (!reading.ok) throw new Error(reading.failure.detail);
 
@@ -86,8 +71,6 @@ describe('the decoder reads the real vault', () => {
 
 describe('the decision against real state', () => {
   it('declines to harvest again this epoch', async () => {
-    // The money-saving case, on real data. A rung was staked this epoch, so another harvest would
-    // SUCCEED, change nothing, and cost gas. Nothing would go red.
     const vault = await readStakeVault(client, VAULT);
     const epoch = await readCurrentEpoch(client);
     if (!vault.ok) throw new Error(vault.failure.detail);
@@ -95,7 +78,6 @@ describe('the decision against real state', () => {
 
     const decision = decideHarvest(vault.value, epoch.value);
 
-    // The tranche activates next epoch and nothing has matured, so there is nothing to do.
     expect(decision.act).toBe(false);
     if (!decision.act) {
       expect(['already-staked-this-epoch', 'nothing-to-stake']).toContain(decision.reason);
@@ -114,7 +96,6 @@ describe('the decision against real state', () => {
     expect(isMatured(tranche, maturesAt - 1n)).toBe(false);
     expect(isMatured(tranche, maturesAt)).toBe(true);
 
-    // Not yet — the vault was funded in the current epoch.
     expect(isMatured(tranche, epoch.value)).toBe(false);
   });
 });
@@ -136,8 +117,6 @@ describe('the epoch reader', () => {
 
 describe('a vault id that is not a vault', () => {
   it('fails rather than returning a plausible empty vault', async () => {
-    // Pointed at the Platform, which exists and is ours but is a different struct. Decoding it as
-    // a StakeVault must fail — a zeroed "empty vault" would read as "nothing to harvest" for ever.
     const reading = await readStakeVault(
       client,
       '0x3f695b2c32714e2359c4bb9515598d8dd765b216148c5b8fa818073d52b50f36',

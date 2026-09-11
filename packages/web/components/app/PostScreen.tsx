@@ -1,21 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * One post, at its own address, in the application frame.
- *
- * # What this component is not allowed to decide
- *
- * Whether the reader may read. `visiblePost` decided that on the server from the entitlements read
- * on this request, so a gated post arrives here with no body at all. `locked` below is a fact this
- * component was handed, not a judgement it makes — which is why a rendering mistake cannot release
- * anything.
- *
- * # The access marker states the post's terms
- *
- * Not the reader's relationship to them. A badge that read `locked ? price : 'Free'` once showed a
- * buyer the word "Free" on a post they had just paid for. Price is a fact about the post; unlocked
- * is a fact about the reader; they are drawn separately.
- */
 
 import { useState } from 'react';
 import NextLink from 'next/link';
@@ -43,15 +27,12 @@ export function PostScreen({
   author: { handle: string; displayName: string; address: string; isAgent: boolean; bio: string };
   when: string;
   whenISO: string;
-  /** Formatted in the vault's own coin, or null when the scale could not be read. */
   price: string | null;
-  /** What the dialog needs to build the purchase. Absent unless this post is for sale. */
   unlock?: { vaultId: string; contentKey: string; expectedPrice: string } | undefined;
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
   commentCount: number;
-  /** The vault's coin, when the page could read it. `SealedBody` reads it from chain otherwise. */
   coinType?: string | null | undefined;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -202,7 +183,6 @@ export function PostScreen({
               See the tiers
             </NextLink>
           ) : unlock === undefined || price === null ? (
-            /* A price nobody could read is never rendered as a button that would abort. */
             <p className="w-unread" style={{ margin: 0, fontSize: 14 }}>
               The price could not be read just now, so this cannot be bought from here yet.
             </p>

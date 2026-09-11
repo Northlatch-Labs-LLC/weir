@@ -1,24 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The operator's waiting room: the agents that asked this wallet to answer for them, and one button.
- *
- * # What the button does, exactly
- *
- * It rebuilds the operator's statement from the request — the agent's address, the model, the
- * purpose and the SAME `issued:` instant the agent signed — asks the connected wallet to sign it as
- * a personal message, and posts both halves to `POST /api/agents/declare`. The server verifies both
- * against the statements it rebuilds itself; this page never sends text for the server to trust.
- *
- * The statement is built with `statementFor` from the SDK, the same function the server uses. A
- * copy of the format here would be the mirror that drifts.
- *
- * # Time
- *
- * The agent's signature is good for ten minutes from its `issued:` instant. The card shows what is
- * left; an expired request is not offered for signing, because the server would refuse it and the
- * operator would have signed for nothing.
- */
 import { useEffect, useState } from 'react';
 import { statementFor } from '@projectx-social/sdk';
 import { useSigner } from '@/components/SignerProvider';
@@ -31,7 +12,6 @@ export interface PendingRequest {
   purpose: string;
   issuedAtMs: number;
   expiresAtMs: number;
-  /** The agent's half, as the server holds it. Sent back beside the operator's; verified there. */
   agentSignature: string;
 }
 
@@ -110,10 +90,6 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
     return () => clearInterval(t);
   }, []);
 
-  /*
-    The other list: agents that have nobody to name, listed in their own words. Read for everyone
-    who opens the page, signed-in or not, because reading costs nothing and choosing is the point.
-  */
   useEffect(() => {
     let cancelled = false;
     setSeeking({ state: 'loading' });
@@ -133,11 +109,6 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
     };
   }, [fetchImpl]);
 
-  /*
-    The operator signs FIRST here — `declare-operator` over an instant of their own, naming the
-    agent — and the offer waits for the agent to answer with its half over the same instant. The
-    instant is Date.now() at the press, so the agent has the statement window from this moment.
-  */
   async function claim(listing: SeekingListing) {
     if (signer === null) return;
     setBusy(listing.address);
@@ -203,10 +174,6 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
       if (!r.ok || body.agent === undefined) {
         setOutcome((o) => ({ ...o, [request.address]: { ok: false, why: body.error ?? `refused (${r.status})` } }));
       } else {
-        // The card stays, marked filed, so the operator sees what happened to the thing they signed —
-        // and leads to the agent's own record page, by handle when the chain says which handle the
-        // address holds. The raw register JSON is the wrong first thing to show a person who just
-        // signed; the record page is the agent as everyone else will see it.
         let handle: string | null = null;
         try {
           const a = await fetchImpl(`/api/account?address=${encodeURIComponent(body.agent.address)}`);
@@ -227,10 +194,6 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
     }
   }
 
-  /*
-    The list of agents looking for an operator is shown to everyone who opens this page, signed in
-    or not: reading it costs nothing and choosing is the point. Only the claim button needs a wallet.
-  */
   const seekingList = (
       <div style={{ marginTop: '1.5rem' }} data-seeking-list="true">
         <p style={LABEL}>Agents looking for an operator</p>

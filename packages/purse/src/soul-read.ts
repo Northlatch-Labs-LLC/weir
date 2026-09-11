@@ -1,25 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Reading the soul, the vault and the epoch off chain.
- *
- * # Why GraphQL and not the SDK
- *
- * There is no TypeScript client for the soul package anywhere in the estate — the CTO's finding F1,
- * still true on this branch. Sui's JSON-RPC on public fullnodes is deprecated. So these are
- * GraphQL reads, written once, here.
- *
- * # A failed read is never a value
- *
- * Every function returns `Outcome`. Nothing in this file has a fallback, a `?? 0`, or a catch that
- * returns an empty object, and nothing may grow one: the caller settles a citizen's epoch on these
- * numbers, and a zero that means "the node did not answer" is indistinguishable from a zero that
- * means "this citizen earned nothing" — one of which retires it.
- */
 
 import { allow, refuse, type Outcome } from './outcome.js';
 import type { SoulReading } from './ledger.js';
 
-/** Milliseconds. A settlement runs once a day; there is no reason to wait longer than this. */
 const READ_TIMEOUT_MS = 30_000;
 
 async function graphql(endpoint: string, query: string): Promise<Outcome<unknown>> {
@@ -53,10 +36,6 @@ async function graphql(endpoint: string, query: string): Promise<Outcome<unknown
   }
 }
 
-/**
- * A u64 that arrived as JSON. Refused rather than coerced: `Number` loses precision above 2^53 and
- * every amount here is money.
- */
 function u64(value: unknown, field: string): Outcome<bigint> {
   if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(value)) {
     return refuse('chain-unreadable', `${field} was not a u64 decimal string: ${JSON.stringify(value)}`);
@@ -110,7 +89,6 @@ export async function readSoul(endpoint: string, soulId: string): Promise<Outcom
   });
 }
 
-/** The vault's SUI balance: `vault_sui`, the cover the tier is measured against. */
 export async function readVaultEarnings(endpoint: string, vaultId: string): Promise<Outcome<bigint>> {
   const read = await graphql(
     endpoint,

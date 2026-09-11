@@ -1,16 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  One decoder for every object read.
-
-  The package carried three decoders: client/creator/stakevault accepted a Uint8Array, a byte
-  array or an array-like object but NOT a base64 string; accounts/keyregistry accepted a Uint8Array
-  or base64 but NOT an array. `objectbytes.ts` accepts all five and was used by none of them. A
-  transport that answered the platform as base64 made `readPlatform` say "no decodable content"
-  and every page fold it to "not measured" — a value the node had sent.
-
-  Mutations predicted: put the array-only reader back in client.ts → "a base64 platform is read"
-  red and the source pin red; drop the base64 branch from objectbytes → both readers red.
-*/
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,7 +18,6 @@ const config = {
   registryId: hex('3'),
 };
 
-/** A Platform, byte for byte as the chain lays it out (the field list is the SDK's own). */
 function platformBytes(): Uint8Array {
   const Platform = bcs.struct('Platform', {
     id: bcs.Address,

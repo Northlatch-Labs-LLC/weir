@@ -1,17 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The TypeScript split, asserted against the same cases the Move suite asserts.
- *
- * These are deliberately the *same numbers* as `sui-contracts/tests/split_tests.move`, not
- * independently invented ones. Two implementations tested against two different sets of cases can
- * both pass while disagreeing; testing both against one set is what makes this a mirror check
- * rather than two separate opinions.
- */
 
 import { describe, expect, it } from 'vitest';
 import { computeSplit, computeYieldSplit } from '../src/split.js';
 
-/** The property. Asserted for both referrer states everywhere, exactly as the Move helper does. */
 function expectConserves(gross: bigint, feeBps: bigint, referralShareBps: bigint): void {
   const withRef = computeSplit(gross, feeBps, referralShareBps, true);
   expect(withRef.creator + withRef.platform + withRef.referrer).toBe(gross);
@@ -19,7 +10,6 @@ function expectConserves(gross: bigint, feeBps: bigint, referralShareBps: bigint
   const without = computeSplit(gross, feeBps, referralShareBps, false);
   expect(without.creator + without.platform + without.referrer).toBe(gross);
 
-  // The creator is indifferent to referral — the half that conservation alone cannot catch.
   expect(withRef.creator).toBe(without.creator);
   expect(without.referrer).toBe(0n);
 }
@@ -47,7 +37,6 @@ describe('computeSplit', () => {
   });
 
   it('leaves an absent referrer’s share with the platform', () => {
-    // The regression that mattered: paying it to the creator conserves value and is still wrong.
     const s = computeSplit(1_000_000n, 1_000n, 5_000n, false);
     expect(s).toEqual({ creator: 900_000n, platform: 100_000n, referrer: 0n });
 
@@ -95,8 +84,6 @@ describe('computeSplit', () => {
   });
 
   it('does not overflow at large amounts', () => {
-    // bigint has no ceiling, but this is the case a Number-based implementation gets wrong, so it
-    // is pinned here as the regression that would catch a well-meaning "simplification".
     const big = 1_000_000_000_000_000_000n;
     expectConserves(big, 3_000n, 5_000n);
     expect(computeSplit(big, 3_000n, 5_000n, true)).toEqual({
@@ -119,7 +106,6 @@ describe('computeSplit', () => {
 });
 
 describe('computeYieldSplit', () => {
-  // 290 bps is the rate configured on mainnet.
   const FEE = 290n;
 
   it('gives the creator everything after the platform cut when there is no rebate', () => {
@@ -132,13 +118,13 @@ describe('computeYieldSplit', () => {
 
   it('takes the rebate from the creator, never the platform', () => {
     const half = computeYieldSplit(1_000_000n, FEE, 5_000n);
-    expect(half.platform).toBe(29_000n); // unchanged
+    expect(half.platform).toBe(29_000n);
     expect(half.rebate).toBe(485_500n);
     expect(half.creator).toBe(485_500n);
 
     const full = computeYieldSplit(1_000_000n, FEE, 10_000n);
     expect(full.creator).toBe(0n);
-    expect(full.platform).toBe(29_000n); // still untouched at a 100% rebate
+    expect(full.platform).toBe(29_000n);
     expect(full.rebate).toBe(971_000n);
   });
 

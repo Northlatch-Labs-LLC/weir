@@ -1,16 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The `StakeVault` BCS layout, asserted against the Move source and against a synthetic buffer.
- *
- * This moved here with the decoder. It is the highest-consequence mirror in the codebase — the
- * daemon spends gas on what it says, and the web application shows a depositor their principal
- * from it. BCS is positional and carries no field names,
- * so inserting one field in the Move struct would leave the decoder happily returning
- * `rebate_bps` as the validator address — with nothing failing anywhere.
- *
- * Two checks, because either alone is insufficient. The source check catches a reordered struct;
- * the round-trip catches an offset that is wrong in both places at once.
- */
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -44,10 +32,6 @@ function constantOf(source: string, name: string): bigint {
 describe('the daemon mirrors the ladder constants', () => {
   const ladder = moveSource('stake_ladder');
 
-
-
-
-
   it('the one-rung-per-epoch rule still reads `> current_epoch`', () => {
     expect(ladder).toContain('stake_activation_epoch() > current_epoch');
   });
@@ -65,7 +49,6 @@ describe('the StakeVault BCS layout matches the Move struct', () => {
 });
 
 describe('the decoder reads a synthetic vault correctly', () => {
-  /** Build a buffer exactly as the chain would serialise it, then read it back. */
   function encode(options: {
     id: string;
     tranches: Array<{ epoch: bigint; principal: bigint }>;
@@ -131,19 +114,9 @@ describe('the decoder reads a synthetic vault correctly', () => {
 
   const VAULT = `0x${'a'.repeat(64)}`;
 
-  /*
-    Sui's minimum stake, inlined rather than imported.
-
-    The daemon owns this constant because it is a *decision* input — whether a rung is worth
-    staking. This file tests a *decoder*, and importing a domain constant from another package to
-    build a fixture would couple the two for nothing. The value only has to be a plausible MIST
-    amount; the assertions are about byte offsets.
-  */
   const MIN_STAKE_MIST = 1_000_000_000n;
 
   it('recovers tranche activation epochs and principal', () => {
-    // The fields the harvest decision actually rests on. If the offsets were wrong, these would
-    // come back as some other field's value — plausible numbers, entirely meaningless.
     const bytes = encode({
       id: VAULT,
       tranches: [
@@ -177,7 +150,6 @@ describe('the decoder reads a synthetic vault correctly', () => {
   });
 
   it('one StakedSui serialises to 80 bytes', () => {
-    // Pinned because the tranche vector's stride is what every offset after it depends on.
     const one = encode({
       id: VAULT,
       tranches: [{ epoch: 1n, principal: 1n }],
@@ -189,8 +161,6 @@ describe('the decoder reads a synthetic vault correctly', () => {
   });
 
   it('refuses a buffer whose id is not the vault we asked for', () => {
-    // Guards against decoding some other object that happened to parse. Without this the daemon
-    // would act on another vault's state and report it under this vault's id.
     const bytes = encode({ id: `0x${'b'.repeat(64)}`, tranches: [], liquid: 0n, totalPrincipal: 0n });
     const reading = decodeStakeVault(bytes, VAULT);
     expect(reading.ok).toBe(false);
@@ -205,11 +175,6 @@ describe('the decoder reads a synthetic vault correctly', () => {
 });
 
 describe('Position', () => {
-  /*
-    Added when the web application began reading a depositor's stake. `principal` is the no-loss
-    guarantee expressed as a number, and it is the first field — so a struct that gained anything
-    before it would show somebody a `rebate_debt` where their money should be.
-  */
   it('declares the same fields in the same order', () => {
     const body = /public struct Position has store \{([\s\S]*?)\n\}/.exec(
       readFileSync(resolve(SOURCES, 'stake_vault.move'), 'utf8'),
@@ -220,8 +185,6 @@ describe('Position', () => {
   });
 
   it('keeps principal redeemable one for one', () => {
-    // The sentence the whole product rests on. If this comment leaves the contract, the claim
-    // "your deposit is always withdrawable in full" needs re-checking before it is made again.
     expect(readFileSync(resolve(SOURCES, 'stake_vault.move'), 'utf8')).toContain(
       'Always redeemable one-for-one',
     );
@@ -230,16 +193,10 @@ describe('Position', () => {
 
 describe('the rebate accumulator mirrors the contract', () => {
   it('ACC_SCALE is the Move constant, not a remembered one', () => {
-    // A mirrored scale that drifts is wrong by its own ratio on every claimable figure, silently.
     expect(constantOf(moveSource('stake_vault'), 'ACC_SCALE')).toBe(ACC_SCALE);
   });
 
   it('claimableRebateMist follows claimable_rebate step for step', () => {
-    /*
-      Same multiply, same integer divide, same subtraction, in the same order. Quoted from the
-      source rather than trusted, because a reordering here would disagree with the contract at
-      the last unit and every exact claim would abort.
-    */
     const source = moveSource('stake_vault');
     expect(source).toMatch(
       /let debt = position\.rebate_debt \+ carried;\s*let entitled = \(\(eligible as u128\) \* vault\.acc_rebate_per_unit\) \/ ACC_SCALE;\s*if \(entitled <= debt\) position\.pending else position\.pending \+ \(\(entitled - debt\) as u64\)/,
@@ -248,8 +205,6 @@ describe('the rebate accumulator mirrors the contract', () => {
     const acc = 123_456_789n;
     const entitled = (position.principalMist * acc) / ACC_SCALE;
     expect(claimableRebateMist(position, acc)).toBe(position.pendingRebateMist + (entitled - position.rebateDebt));
-    // The clamp the contract applies when entitlement has not yet caught up to the debt: pending
-    // comes back untouched rather than reduced by a negative difference.
     expect(
       claimableRebateMist({ principalMist: 0n, pendingRebateMist: 3n, rebateDebt: 5n }, acc),
     ).toBe(3n);

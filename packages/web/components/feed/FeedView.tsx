@@ -1,14 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The feed.
- *
- * Posts come from the content store; whether their bodies are released comes from chain objects
- * the reader holds. Those two never mix — see `lib/entitlement.ts`.
- *
- * The reader is identified by a `?reader=0x…` query parameter. That is deliberately not a login:
- * nothing is granted by claiming an address, because entitlement is decided by objects that
- * address owns, which cannot be forged by naming it. A wrong address simply sees less.
- */
 
 import { fold, readDecimals } from '@projectx-social/sdk';
 import { formatUnits } from '@/lib/units';
@@ -34,12 +24,6 @@ import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 import { filterByRegister } from '@/lib/feed-filter';
 import { listSeeking } from '@/lib/agent-seeking';
 
-
-/**
- * `people` hides declared agents and counts them on the tab; `agents` shows only declared agents.
- * Default stays `all` with the mark — the register proves a declaration was made, never that one
- * was not, so hiding is a reader's choice and never the default (spec D-3, the desk's reading).
- */
 type View = 'following' | 'all' | 'people' | 'agents';
 
 function withParams(reader: string | undefined, view: View): string {
@@ -49,21 +33,11 @@ function withParams(reader: string | undefined, view: View): string {
   return `/feed?${params.toString()}`;
 }
 
-/*
-  A post's price, against the scale of the coin its creator's vault actually holds.
-
-  This divided by 1e6 for every post regardless of denomination and appended "USDC" to all of them,
-  so a post priced in a nine-decimal coin advertised a thousand times its real cost under the wrong
-  name. An unread scale shows nothing rather than a confident wrong figure.
-*/
 function priceOf(minor: string, decimals: number | null, symbol: string): string | undefined {
   if (decimals === null) return undefined;
   return `${formatUnits(BigInt(minor), decimals)}${symbol === '' ? '' : ` ${symbol}`}`;
 }
 
-/**
- * The feed, as a component.
- */
 export async function FeedView({
   reader,
   requested,
@@ -71,22 +45,6 @@ export async function FeedView({
   reader: string | undefined;
   requested: string | undefined;
 }) {
-
-  /*
-    Which of the two things this route is.
-
-    `/` is the front door and the feed, and until now it was only the feed: a visitor who had never
-    heard of Weir got a list of posts inside an application shell, with the argument for the product
-    reduced to a paragraph above it. That is a page for somebody who already stayed.
-
-    The test is deliberately generous in the *guest* direction. `viewer` is a proved session;
-    `reader` is the address the frame threads through links, which is set the moment a wallet
-    connects. Either one means "this person is here to use the product", so the feed wins. Only
-    somebody with neither sees the landing.
-
-    It therefore also fails in the safe direction: if the session read fails, `viewer` is null, and a
-    visitor with no `?reader=` gets marketing rather than a feed. Marketing leaks nothing.
-  */
   const viewerReading = await provenReader();
   const viewer = fold(
     viewerReading,
@@ -94,28 +52,8 @@ export async function FeedView({
     () => null,
   );
 
-
-  /*
-    Whose follows these are, and why it is not `reader`.
-
-    `reader` is a query parameter. Anyone can type one, and links carry it — so reading the follow
-    list from it meant a copied URL showed the person who opened it the *sender's* following feed.
-    Nothing paid leaked, because entitlement has always required proof; but who somebody follows is
-    theirs, and it was being handed out on a claim.
-
-    `viewer` is the proved session. An unproved reader gets discovery, which is what a stranger
-    should see anyway.
-  */
   const following = viewer === null ? [] : await listFollowing(viewer);
 
-  /*
-    Which feed to show when nothing was asked for.
-
-    A reader who follows nobody gets discovery, because a following feed with no follows is an
-    empty page that reads as broken. Once they follow someone, following is the default — and an
-    empty following feed after that is a real state, not a reason to widen the filter. Silently
-    falling back to everything is how a following feed stops filtering and nobody notices.
-  */
   const view: View =
     requested === 'all' || requested === 'following' || requested === 'people' || requested === 'agents'
       ? requested
@@ -123,23 +61,9 @@ export async function FeedView({
         ? 'following'
         : 'all';
 
-  /*
-    Bounded at the database, not in JavaScript.
-
-    A guest is shown ten posts. This used to fetch EVERY post in the table — every body, every asset
-    row — and slice ten off the front, so the cost of showing a stranger ten posts grew with the
-    whole archive. One extra row is asked for beyond what will be shown, which is all that is needed
-    to say truthfully whether there is more without counting what there is.
-  */
   const isGuest = reader === undefined;
   const GUEST_POSTS = 10;
   const wanted = isGuest ? GUEST_POSTS : POSTS_PAGE;
-  /*
-    A filtered view reads a bounded multiple of the page rather than the whole table: the register
-    is consulted after the read, so rows that will be hidden cannot be excluded in SQL without
-    joining the register into every feed query. Four pages is the ceiling; a view that would need
-    more says "more" rather than reading on.
-  */
   const filtered = view === 'people' || view === 'agents';
   const fetchLimit = filtered ? wanted * 4 : wanted;
 
@@ -148,34 +72,9 @@ export async function FeedView({
       ? await listPosts({ handles: following, limit: fetchLimit + 1 })
       : await listPosts({ limit: fetchLimit + 1 });
 
-  /*
-    What a visitor sees before signing in.
-
-    The feed was public and unlimited, so there was no reason to ever sign in and no way to show
-    somebody the product without an account. A guest now gets a real sample — actual posts, not a
-    blurred mock — and is told plainly where the wall is and why.
-
-    `reader` is the whole test. It is not authentication and does not pretend to be: entitlement is
-    decided by objects an address owns, so a guest is simply somebody who has not said who they are.
-    Locked bodies stay locked either way. This caps how much of the *public* feed is shown, nothing
-    more.
-  */
   const loaded = all.slice(0, fetchLimit);
-  /*
-    Whether more exists, not how much. The extra row asked for above answers that exactly; an exact
-    total would need a second query counting rows nobody is going to read, which is the cost this
-    change exists to remove.
-  */
   let hasMore = all.length > loaded.length;
 
-
-  /*
-   * Entity markers for the authors on this page.
-   *
-   * `tiersOf` returns `null` when the vault could not be read, which entitiesOf treats as "no
-   * tiers" rather than as a membership — a marker inviting a reader to buy from a vault nobody
-   * could read is worse than no marker.
-   */
   const authors = [...new Set(loaded.map((p) => p.authorHandle))];
   const config = siteConfig();
   const client = config.ok ? createClient(config.value) : null;
@@ -189,37 +88,22 @@ export async function FeedView({
   });
   const profiles = await listProfiles();
 
-  /*
-    Who on this page is a declared agent — one register query for every author, keyed by the owner
-    each handle's profile names. A handle with no profile row is not looked up and gets no marker;
-    a register that could not be read marks nobody and says so in the log, because "we could not
-    look" must never render as "not an agent".
-  */
   const ownerOf = new Map(profiles.map((p) => [p.handle, p.owner]));
   const agents = await declaredAgentsOrUnread(
     authors.map((h) => ownerOf.get(h)).filter((o): o is string => o !== undefined),
     'feed',
   );
 
-  /*
-    The filter, applied only once the register has answered. When it could not be read, nothing is
-    hidden and the tab says so: "we could not look" must never render as "there are no agents".
-  */
   const filteredView = filterByRegister(loaded, view, (p) => agentFlag(agents, ownerOf.get(p.authorHandle)));
   const { kept, hidden: hiddenCount, registerUnread } = filteredView;
   const posts = kept.slice(0, wanted);
   hasMore = hasMore || kept.length > posts.length;
 
-  /*
-    Decimals once per distinct coin, not once per post. Creators on a deployment usually share a
-    denomination, so this is normally a single metadata read for the whole feed.
-  */
   const decimalsByCoin = new Map<string, number | null>();
   for (const coinType of new Set(profiles.map((p) => p.coinType).filter((c): c is string => c != null && c !== ''))) {
     const read = client === null ? null : await readDecimals(client, coinType);
     decimalsByCoin.set(coinType, read !== null && read.ok ? read.value : null);
   }
-  /** Handle to the scale and symbol its prices should be shown in. */
   const coinOf = new Map(
     profiles.map((p) => [
       p.handle,
@@ -230,21 +114,8 @@ export async function FeedView({
     ]),
   );
   const followerCounts = await Promise.all(profiles.map((p) => countFollowers(p.handle)));
-  /*
-    Whose entitlements to read — proved, not named.
-
-    `reader` is a query parameter. It still decides what the frame *shows* (which links carry the
-    account onward, whose name is in "Viewing as"), and it no longer decides what anybody may
-    *read*: this resolved entitlements for whatever address the URL contained, so naming a buyer —
-    trivially enumerable from public chain events — returned their paid bodies and their asset ids.
-
-    `viewer` is the address that proved control of itself, and it is the only thing entitlement is
-    resolved for. The two are usually the same person; when they differ, the page locks.
-  */
   const entitlementReading = await readEntitlements(viewer);
 
-
-  // A failed read locks everything. Never fail open — a node timeout must not release paid content.
   const entitlements = fold(
     entitlementReading,
     (value) => value,
@@ -301,10 +172,6 @@ export async function FeedView({
     href: withParams(reader, tab.view),
     current: view === tab.view,
   }));
-  /*
-    Why the feed is empty, said exactly. "You follow nobody" and "the people you follow have not
-    posted" are different facts, and only one of them is fixed by following somebody.
-  */
   const feedEmptyMessage =
     view === 'following' && following.length === 0
       ? 'You follow nobody yet. Browse everything and follow someone.'
@@ -323,8 +190,6 @@ export async function FeedView({
     href: `/c/${profile.handle}${reader === undefined ? '' : `?reader=${reader}`}`,
   }));
 
-  // The icons are the partners' own marks, supplied by the owner and served from public/brand.
-  // `test/built-on-logos.test.ts` asserts every path here is a file on disk.
   const BUILT_ON = [
     { name: 'Sui', mark: 'S', note: 'Settlement layer', href: 'https://sui.io', logo: '/brand/built-on/sui-icon.png' },
     { name: 'Walrus', mark: 'W', note: 'Where post bodies and media live', href: 'https://www.walrus.xyz', logo: '/brand/built-on/walrus-icon.png' },
@@ -332,11 +197,6 @@ export async function FeedView({
     { name: 'zkLogin', mark: 'zk', note: 'Sign in with Google', href: 'https://docs.sui.io/concepts/cryptography/zklogin', logo: '/brand/built-on/zklogin-icon.png' },
   ];
 
-  /*
-    What the frame says about who is reading. `viewer` is proved; `reader` is only claimed, so when
-    they disagree the label says the session is unconfirmed rather than naming an address we have not
-    verified.
-  */
   const sessionLabel =
     viewer !== null
       ? `Signed in${handleOfViewer === null ? '' : ` as @${handleOfViewer}`}`
@@ -344,18 +204,6 @@ export async function FeedView({
         ? 'Viewing as a guest'
         : 'Connected, not yet confirmed. What you have paid for stays locked until this browser proves the account is yours.';
 
-  /*
-    The feed, as the application draws it.
-
-    `visiblePost` has already decided what each post may contain, so nothing here can release a
-    body: a gated post arrives with no `body` field at all and this maps its `preview`, which is
-    the free lede every reader is meant to see.
-
-    Two figures the design shows are deliberately absent rather than invented. There is no
-    supporter count in the store, so the control carries no number; and a locked post's asset ids
-    are withheld from an unentitled reader by design, so the lock panel does not claim a count it
-    was not given.
-  */
   const nameOf = new Map(profiles.map((p) => [p.handle, p.displayName]));
   const now = Date.now();
   const appPosts: PostView[] = posts.map((post) => {
@@ -374,8 +222,6 @@ export async function FeedView({
         address: ownerOf.get(post.authorHandle) ?? '',
         handle: post.authorHandle,
         displayName: nameOf.get(post.authorHandle) ?? post.authorHandle,
-        // `agentFlag` answers undefined when the register could not be read. Unknown is not
-        // "human": nobody is marked, and nobody is asserted to be a person either.
         isAgent: agentFlag(agents, ownerOf.get(post.authorHandle)) === true,
       },
       when: posted(now, post.createdAtMs),
@@ -388,14 +234,6 @@ export async function FeedView({
     };
   });
 
-  /*
-    AI Agent Citizens looking for a human to operate them.
-
-    Read here rather than in the frame because the frame reads nothing: it is handed what a page
-    measured. A failed read is an EMPTY rail card and never a fabricated one — `listSeeking` throws
-    on a store it cannot reach, and the catch below distinguishes "nobody is looking" from "we could
-    not look" by leaving the card out entirely rather than drawing it with no rows.
-  */
   const seeking = await listSeeking()
     .then((r) => r.listings.slice(0, 2))
     .catch(() => null);

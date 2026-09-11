@@ -1,19 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Tests for `bin/birth-key.ts`, the company's key-birth tool.
- *
- * # Two rules this file keeps, and why
- *
- * **Nothing here goes near the real Sui home.** Every command-line invocation is made through
- * `cli()`, which appends `--keystore-root` pointing at a path inside this run's temp directory
- * that does not exist. The tool therefore fingerprints that, reports "does not exist; continuing",
- * and `~/.sui` is neither read, stat'd nor written by anything in this file.
- *
- * **The literal bech32 secret prefix never appears in a test *name* or in this file's path.** The
- * gate for this work greps the whole test output for it, and vitest prints test names. The
- * constant is imported from the tool, where it is assembled from two halves for the same reason.
- * A failing assertion could still print a value, which is exactly when someone should be looking.
- */
 
 import { spawn } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
@@ -44,11 +29,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const TOOL = resolve(HERE, '..', 'bin', 'birth-key.ts');
 const TSX = resolve(HERE, '..', '..', '..', 'node_modules', '.bin', 'tsx');
 
-/** A throwaway passphrase for the encryption tests. It protects nothing that outlives this run. */
 const TEST_PASSPHRASE = 'a-throwaway-passphrase-for-this-test-run-only';
 
 let root: string;
-/** A Sui home that does not exist, so no invocation in this file can reach the real one. */
 let absentSuiRoot: string;
 
 beforeAll(async () => {
@@ -60,7 +43,6 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-/** Make a pile directory at mode 0700. `mkdir`'s mode is masked by the umask, so chmod after. */
 async function makePile(name: string, mode = 0o700): Promise<string> {
   const path = join(root, name);
   await mkdir(path, { recursive: true });
@@ -74,10 +56,6 @@ interface CliResult {
   readonly stderr: string;
 }
 
-/**
- * Run the tool as a command. `--keystore-root` is appended by this helper and not by the callers,
- * so that no test can forget it and reach the real Sui home.
- */
 async function cli(args: readonly string[]): Promise<CliResult> {
   return await new Promise((settle) => {
     const child = spawn(TSX, [TOOL, ...args, '--keystore-root', absentSuiRoot], {
@@ -182,7 +160,6 @@ describe('preconditions', () => {
       expect(result.refused).toBe(true);
       if (result.refused) expect(result.rule).toBe('name');
     }
-    // Nothing was written: the name check runs before the pile is even opened.
     expect(await readdir(pile)).toEqual([]);
   });
 });
@@ -221,8 +198,6 @@ describe('birth', () => {
   it('writes a public key the rest of this package can actually read', async () => {
     const pub = (await readFile(join(pile, 'heron-hot.pub'), 'utf8')).trim();
     const address = (await readFile(join(pile, 'heron-hot.address'), 'utf8')).trim();
-    // `publicKeyFromSuiBytes` is what src/multisig.ts calls on every member. It rejects the raw
-    // 32-byte base64, so this assertion is what stops the pile being written in the wrong form.
     expect(publicKeyFromSuiBytes(pub).toSuiAddress()).toBe(address);
   });
 
@@ -272,7 +247,6 @@ describe('nothing the tool prints is a secret', () => {
       expect(run.stdout).not.toContain(secret);
       expect(run.stderr).not.toContain(secret);
     }
-    // And it does not print the public key either: the brief says the address and the paths.
     expect(runs[0]?.stdout).not.toContain(pub);
   }, 120_000);
 
@@ -311,7 +285,6 @@ describe('encryption', () => {
     await expect(stat(keyPath)).rejects.toThrow();
     expect(await modeOf(result.value)).toBe('0600');
 
-    // The ciphertext is not the plaintext, and it is not empty.
     const ciphertext = await readFile(result.value);
     expect(ciphertext.length).toBeGreaterThan(16);
     expect(ciphertext.toString('utf8')).not.toContain(BECH32_SECRET_PREFIX);
@@ -337,13 +310,6 @@ describe('encryption', () => {
   });
 
   it('emits exactly the original secret on a piped stdout and writes no file', async () => {
-    /*
-      Run the decrypt in a child so its stdout is a pipe this test owns, rather than vitest's own
-      stdout — which is what the gate greps. This is the deploy step's actual shape: the secret
-      travels openssl -> the child's inherited stdout -> a pipe, never through a heap in between.
-    */
-    // `.mts`, not `.ts`: the temp directory has no package.json, so a `.ts` file there is
-    // compiled as CommonJS and the top-level await below fails to transform.
     const script = join(root, 'emit-decrypt.mts');
     await writeFile(
       script,
@@ -370,7 +336,6 @@ describe('encryption', () => {
 
     expect(emitted.code).toBe(0);
     expect(emitted.stdout).toBe(secret);
-    // Nothing was written back to the pile: the ciphertext is still the only key file there.
     await expect(stat(keyPath)).rejects.toThrow();
   });
 });
@@ -392,12 +357,6 @@ describe('the multisig derivation', () => {
   });
 
   it('derives a different address at threshold 1 and at threshold 2 over the same two keys', () => {
-    /*
-      This is the CISO's "unverified until built" item: that a Sui multisig address commits its
-      threshold and not only its members. If these two were equal, a 1-of-2 and a 2-of-2 over
-      Heron's hot key and the Master's brake key would share an address, and choosing the
-      threshold at birth would be meaningless.
-    */
     const one = deriveMultisigAddress(1, pubs);
     const two = deriveMultisigAddress(2, pubs);
     expect(one.refused).toBe(false);
@@ -459,7 +418,6 @@ describe('the multisig derivation', () => {
 
   it('refuses a member that is not a Sui public key', () => {
     const raw = Ed25519Keypair.generate().getPublicKey().toBase64();
-    // The raw 32-byte form, which is what a naive tool would have written into the pile.
     const result = deriveMultisigAddress(1, [raw, pubs[1] ?? '']);
     expect(result.refused).toBe(true);
     if (result.refused) expect(result.rule).toBe('member-key');
@@ -562,21 +520,6 @@ describe('the command line surface', () => {
 });
 
 describe('the pinned programs', () => {
-  /*
-    A4 from Security's review of 2026-09-05.
-
-    `openssl` and `security` were spawned by bare name off the inherited `PATH`, while the hasher
-    already pinned `/usr/bin/shasum` first. A shadowed `openssl` is handed the passphrase on fd 3
-    and the plaintext key's path; a shadowed `security` is handed the keychain item's name and
-    answers with whatever passphrase it likes. The bound was "already running as `admin`" — which
-    is row 13's stated bound — but step 1's own ruling is that a pinned program is never a name.
-
-    This laptop makes the point concretely: `which -a openssl` reports `/usr/local/bin/openssl`
-    ahead of `/usr/bin/openssl`, so the tool was already not using the program it documented.
-
-    The fixture builds a shim that records having been called, puts it first on `PATH`, and asserts
-    the recording never happens.
-  */
   let shimDir: string;
   let marker: string;
   let originalPath: string | undefined;
@@ -618,8 +561,6 @@ describe('the pinned programs', () => {
     expect(result.refused).toBe(false);
     if (result.refused) return;
 
-    // The shim exits 0 and writes nothing, so a tool that called it would "succeed" with an empty
-    // ciphertext. The real openssl produced one, verified the round trip and shredded the plaintext.
     await expect(stat(marker)).rejects.toThrow();
     await expect(stat(keyPath)).rejects.toThrow();
     const ciphertext = await readFile(result.value);
@@ -631,23 +572,17 @@ describe('the pinned programs', () => {
       passphrase: Buffer.from(TEST_PASSPHRASE, 'utf8'),
       stdoutIsTty: true,
     });
-    // Refused for being a terminal, which is the right refusal; the point is that the plaintext
-    // above is recoverable at all, which the round-trip check inside encryptInPlace already proved.
     expect(back.refused).toBe(true);
     expect(plaintext.startsWith(BECH32_SECRET_PREFIX)).toBe(true);
   });
 
   it('does not call a shadowing security when reading the keychain', async () => {
-    // An item name that does not exist, so the real `security` exits non-zero and nothing is
-    // prompted for. A shim on PATH exits 0 with empty stdout, which would be an "empty item".
     const item = `heron-birth-key-absent-${String(process.pid)}-${String(Date.now())}`;
     const result = await keychainPassphrase(item)();
 
     expect(result.refused).toBe(true);
     if (result.refused) {
       expect(result.rule).toBe('keychain');
-      // "could not be read", not "is empty": the real `security` exited non-zero. The shim exits 0
-      // with empty stdout, which would have produced the "is empty" sentence instead.
       expect(result.detail).toContain('could not be read');
     }
     await expect(stat(marker)).rejects.toThrow();

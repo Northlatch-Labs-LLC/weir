@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The ladder constants the daemon mirrors from the contract.
- *
- * These stayed with the daemon when the BCS decoder moved to the SDK, and the split is the point:
- * the decoder answers "what does the vault say", these answer "when is it worth spending gas".
- * One is a chain shape, the other is a decision, and only the second belongs to this package.
- */
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -45,8 +38,6 @@ describe('the daemon mirrors the ladder constants', () => {
   });
 
   it('the maturity rule still reads `+ LADDER_DEPTH <=`', () => {
-    // The boundary the daemon reimplements. `<` instead of `<=` shifts the whole ladder by an
-    // epoch, and the daemon would sit waiting for a maturity the contract already granted.
     expect(ladder).toContain('tranche.stake_activation_epoch() + LADDER_DEPTH <= current_epoch');
   });
 
@@ -54,4 +45,3 @@ describe('the daemon mirrors the ladder constants', () => {
     expect(ladder).toContain('stake_activation_epoch() > current_epoch');
   });
 });
-

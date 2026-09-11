@@ -1,10 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The key comes from a file, and from nothing else.
- *
- * Every key in this file is generated in this process and written into a directory `mkdtemp` made.
- * Nothing reads `~/.sui`, nothing reads the pile, and no file outside the temp directory is opened.
- */
 
 import { describe, expect, it } from 'vitest';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
@@ -13,7 +7,6 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { CREDENTIAL_NAME, loadHotKey, refuseKeyInProcessSurface } from '../src/key.js';
 import { temporaryDirectory } from './helpers.js';
 
-/** Written rather than pasted, so this file holds no key and matches no grep for the prefix. */
 async function writeThrowawayKey(dir: string, name = 'heron-hot', mode = 0o600): Promise<{ path: string; address: string }> {
   const keypair = Ed25519Keypair.generate();
   const path = join(dir, name);
@@ -66,7 +59,6 @@ describe('the doors that are shut', () => {
     expect(verdict.ok).toBe(false);
     if (verdict.ok) throw new Error('unreachable');
     expect(verdict.refused.reason).toContain('SOMETHING_ELSE');
-    // The value is named as leaked and is not repeated.
     expect(verdict.refused.reason).not.toContain(prefix);
   });
 

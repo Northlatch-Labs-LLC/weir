@@ -1,32 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Signing a governing transaction when the capability is held by a multisig.
- *
- * # Why the ordinary path cannot work here
- *
- * `PlatformCap` is owned by a 2-of-3 multisig address. A browser extension signs with one key and
- * produces one signature; a multisig transaction needs two partial signatures combined into a
- * single multisig signature under scheme flag `0x03`. No wallet in this browser can produce that,
- * and no amount of interface makes it possible — so the panel that offers "sign and submit" is
- * offering something that cannot happen, to the one person who most needs to know it cannot.
- *
- * Confirmed rather than assumed: the holder's only mainnet transaction carries a `0x03` signature
- * whose committee decodes to three ed25519 members of weight 1 each and a threshold of 2.
- *
- * # What this does instead
- *
- * Hands over the exact bytes that were simulated, and takes back the combined signature. The bytes
- * are never rebuilt in between — the transaction that executes is byte-identical to the one the
- * chain already accepted in simulation and to the one each member signed. That equality is the
- * whole safety property of this screen: a rebuilt transaction is a different transaction, and
- * signatures collected for the first do not describe it.
- *
- * The keys are deliberately not on this machine, which is correct and is why the middle step
- * happens somewhere else entirely.
- */
-
 import { useState } from 'react';
 
 export function MultisigSubmit({ bytes, summary }: { bytes: string; summary: string }) {
@@ -43,11 +17,6 @@ export function MultisigSubmit({ bytes, summary }: { bytes: string; summary: str
       const response = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        /*
-          The simulated bytes, unchanged, with a signature produced elsewhere. This endpoint does
-          not care which scheme signed — it executes what it is given — so a combined multisig
-          signature goes through the same path a wallet's does.
-        */
         body: JSON.stringify({ bytes, signature: signature.trim() }),
       });
       const body = (await response.json()) as { digest?: string; error?: string };

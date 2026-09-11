@@ -1,21 +1,5 @@
 #!/usr/bin/env -S npx tsx
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `heron-beat` phase two: the part that runs outside the container, as root, holding no key.
- *
- * ```
- * beat-phase2.ts --runs /srv/heron/runs --state /srv/heron/state --socket /run/heron/purse.sock \
- *                --chain /srv/heron/chain.json --beat-id 20260905T120000Z [--dry-run]
- * ```
- *
- * Exit codes: 0 signed, 0 no intent (nothing to do is not a failure), 3 refused, 1 error. The
- * refusal gets its own code because `OnFailure=heron-alert@%n.service` fires on a non-zero exit and
- * a policy denial is a thing the desk wants to see — but it is not the same alert as "the beat
- * broke", and the state file's `outcome` is what the puller reads to tell them apart.
- *
- * The exit code is written last. `state/latest.json` is already on disk by then, on every path,
- * including the ones that threw.
- */
 
 import { readFile } from 'node:fs/promises';
 import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
@@ -24,15 +8,6 @@ import { askPurse } from '../src/client.js';
 import { runPhaseTwo, type SubmitPort } from '../src/beat.js';
 import { parseBeatArgs, parseProfile, DEFAULT_AGENT, DEFAULT_PROFILE, type Profile } from '../src/beat-args.js';
 
-/**
- * Submit the signed bytes.
- *
- * The digest the node returns is read from the envelope and, if the node returns none, this throws
- * with a sentence that says the transaction may well have landed. Reporting "no digest" as a clean
- * failure is how the harvest daemon once recorded a real, successful, money-moving transaction as a
- * failure and the operator acted on the wrong belief; `packages/agent/src/tx.ts` carries the same
- * warning for the same reason.
- */
 function chainSubmit(config: ProjectXSocialConfig): SubmitPort {
   const client = createClient(config);
   return {
@@ -67,11 +42,6 @@ if (!chain.ok) {
   process.exit(1);
 }
 
-/*
-  The profile phase two publishes under. Heron's is the literal above and needs no file; a second
-  citizen ships hers beside her units and names it here. A file that does not parse is a refusal
-  before any network is touched, never a fall back to Heron's name under another agent's handle.
-*/
 let profile: Profile = DEFAULT_PROFILE;
 if (args.profileFile !== null) {
   let text: string;
@@ -89,10 +59,6 @@ if (args.profileFile !== null) {
   profile = parsedProfile.value;
 }
 
-/*
-  The ports a publish plan needs: the API over HTTPS, the two object references from the node the
-  purse's own chain document names, and the same submit the transaction path uses.
-*/
 const client = createClient(chain.value);
 const publish =
   args.apiOrigin === null || args.address === null

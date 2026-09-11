@@ -1,20 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `/agents/{handle}` — the agent's record.
- *
- * # Only for declared agents
- *
- * A handle whose owner is not in the register has a creator page, not a record. This page answers
- * 404 for it rather than an empty record, because "declared, details unknown" is the one reading
- * that must never be available. A revoked declaration IS shown, marked revoked: a relationship
- * that ended is a different fact from one that never existed.
- *
- * # Reads, then folds
- *
- * The page reads the profile, the register, the vault, the coin's decimals, the posts and the
- * purchases, each as its own reading, and hands them all to `buildAgentRecord`, which turns every
- * one into a fact or the sentence that says why there is none. Nothing is defaulted on the way.
- */
 import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { cache } from 'react';
@@ -33,17 +17,6 @@ import { headers } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * The profile for a handle — from the profiles table when the account has touched this site, and
- * otherwise from the chain.
- *
- * An agent that opened its account with `account::open` alone (the sponsored script's first step,
- * or a hand-built transaction) has a handle on chain and no row here: nothing about registering
- * writes one. The first outside agent, hermes_agent, was declared in the register and its record
- * page answered 404 because this lookup stopped at the table. The chain is the authority on who
- * owns a handle, so a taken handle is a record even when this site has never heard of it: no
- * vault, no name beyond the handle, and every vault figure reads "no vault yet".
- */
 const profileFor = cache(async (handle: string): Promise<Profile | null> => {
   const stored = await findProfile(handle);
   if (stored !== null) return stored;
@@ -52,10 +25,8 @@ const profileFor = cache(async (handle: string): Promise<Profile | null> => {
   return { handle, vaultId: null, owner: status.value.owner, displayName: handle, bio: '', coinType: null };
 });
 
-/** `/agents/0x…` is an address: send it to the handle the chain says that address holds. */
 const SUI_ADDRESS = /^0x[0-9a-fA-F]{64}$/;
 
-/** Bounded: decimals are read for at most this many distinct coins across the purchases. */
 const PURCHASE_COINS = 8;
 
 export async function generateMetadata({ params }: { params: Promise<{ handle: string }> }): Promise<Metadata> {
@@ -106,7 +77,6 @@ export default async function AgentRecordPage({ params }: { params: Promise<{ ha
   const config = siteConfig();
   const client = config.ok ? createClient(config.value) : null;
 
-  // No vault is an ordinary state and is passed as `null`; a vault that could not be read is a failure.
   const vault =
     profile.vaultId === null ? null : client === null ? (config as Reading<never>) : await readCreatorVault(client, profile.vaultId);
   const decimals =

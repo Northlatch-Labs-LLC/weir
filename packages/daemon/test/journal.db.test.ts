@@ -1,16 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The run journal and the single-instance lock, against a real Postgres.
- *
- * Mocking is not an option here. The property that matters — a session advisory lock the *server*
- * releases when the connection drops — is a database behaviour, not application logic. A fake that
- * returned `true` would satisfy every assertion in this file and let two daemons harvest the same
- * vaults, each paying gas, one of them for transactions that change nothing.
- *
- * The constraint tests matter for the same reason: they assert that the schema refuses a harvest
- * that names no transaction. That rule lives in Postgres precisely so a future code path cannot
- * forget it, and a test that only exercised the code path would not notice if it were dropped.
- */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
@@ -82,13 +70,6 @@ afterEach(async () => {
 
 describe('the single-instance lock', () => {
   it('refuses a second daemon while the first holds it', async () => {
-    /*
-      The money test. `harvest` is permissionless, so a second instance is not a correctness
-      problem — the contract refuses a second rung in an epoch. It is a *cost* problem: the loser
-      pays gas for a transaction that changes nothing, every tick, forever. And a supervisor makes
-      this more likely, because restarting something that has not actually died is what supervisors
-      do.
-    */
     await take();
     const second = await openJournal(url);
     expect(second.ok).toBe(false);
@@ -97,13 +78,6 @@ describe('the single-instance lock', () => {
   });
 
   it('leaves no connection behind when it refuses', async () => {
-    /*
-      Found by mutation testing: removing the `pool.end()` on the refusal path passed every other
-      test in this file. It is not cosmetic. An open pool is an open handle, so `--once` would
-      compute exit code 2, reach the end of `main`, and then simply never exit — and a supervisor
-      waiting for the process to finish sees a hang rather than the "I am redundant" signal the
-      exit code was carefully chosen to give it.
-    */
     await take();
 
     const backends = async () =>
@@ -120,7 +94,6 @@ describe('the single-instance lock', () => {
       const refused = await openJournal(url);
       expect(refused.ok).toBe(false);
     }
-    // Postgres closes a backend asynchronously after the client disconnects.
     await new Promise((r) => setTimeout(r, 500));
     expect(await backends()).toBeLessThanOrEqual(before);
   });
@@ -147,11 +120,6 @@ describe('the single-instance lock', () => {
 
 describe('recording a run', () => {
   it('leaves the row running until it finishes', async () => {
-    /*
-      The gap between the two writes is the useful part. A crash, an OOM kill or a power cut leaves
-      a `running` row, and that is the only evidence afterwards that the daemon died mid-tick.
-      Without it, "crashed" and "never started" look identical, and they need different responses.
-    */
     const journal = await take();
     const run = await journal.begin({ mode: 'live', signer: SIGNER });
     expect(run.ok).toBe(true);
@@ -199,8 +167,6 @@ describe('recording a run', () => {
   });
 
   it('keeps skipped and failed apart', async () => {
-    // A vault that could not be read is NOT a vault with nothing to do. Merging them is how a
-    // permanently broken vault hides inside a healthy-looking skip count.
     const journal = await take();
     const run = await journal.begin({ mode: 'live', signer: SIGNER });
     if (!run.ok) return;
@@ -220,8 +186,6 @@ describe('recording a run', () => {
   });
 
   it('records both truncation flags', async () => {
-    // A partial list treated as complete is how the newest vaults stop being harvested with
-    // nothing going red.
     const journal = await take();
     const run = await journal.begin({ mode: 'live', signer: SIGNER });
     if (!run.ok) return;
@@ -252,8 +216,6 @@ describe('recording a run', () => {
 
 describe('the schema refuses states the code must never write', () => {
   it('rejects a harvest that names no transaction', async () => {
-    // "It harvested" with no digest is a claim nobody can check. The rule lives in Postgres so a
-    // future code path cannot forget it.
     await expect(
       pool.query(
         `INSERT INTO daemon_runs (started_at_ms, mode, signer, outcome, ended_at_ms)
@@ -327,8 +289,6 @@ describe('reading the journal', () => {
   });
 
   it('reports a vault that has never harvested as a measured absence', async () => {
-    // `null` inside an ok is a real answer for a new vault — not the same as the query failing,
-    // which lands in the failure branch and must not be rendered as "never harvested".
     const journal = await take();
     const last = await journal.lastHarvestOf(VAULT);
     expect(last.ok).toBe(true);
@@ -356,10 +316,6 @@ describe('reading the journal', () => {
 });
 
 describe('anchoring the audit chain', () => {
-  /*
-    The chain is tamper-evident on its own only against partial edits; this row is the memory
-    outside the process that makes a rewritten chain detectable. See db/002_audit_anchor.sql.
-  */
   const HEAD = 'a'.repeat(64);
   const GENESIS = '0'.repeat(64);
 

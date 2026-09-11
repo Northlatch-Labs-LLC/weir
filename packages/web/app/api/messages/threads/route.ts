@@ -8,7 +8,6 @@ import { verifyAction } from '@/lib/identity';
 
 export const dynamic = 'force-dynamic';
 
-/** The signed-in address's inbox. Signed for the same reason reading a thread is. */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
@@ -26,8 +25,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Scoped to the viewer's own inbox by signing "read thread with: self" — a statement that only
-  // authorises listing, and cannot be replayed as a request to read someone else's conversation.
   const proven = await verifyAction({
     origin: new URL(request.url).origin,
     address: viewer,
@@ -39,17 +36,6 @@ export async function POST(request: Request) {
 
   const threads = await listThreads(viewer);
 
-  /*
-    Which of these people have tipped this viewer.
-
-    Only for a viewer who owns a creator vault — everyone else has no vault for a tip to land in,
-    and asking the chain on their behalf would be a read with no possible answer.
-
-    A failed or partial read leaves the marks off rather than marking nobody as a supporter: an
-    absent mark reads as "not shown", while a wrong one tells a creator this person never gave them
-    anything. The tally is a lower bound in the same direction — it can only ever miss a supporter,
-    never invent one.
-  */
   const mine = await findProfileByOwner(viewer);
   const supporters =
     mine?.vaultId == null

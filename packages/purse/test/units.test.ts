@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The unit files, read back.
- *
- * v1 shipped an SSH hardening file that sorted after cloud-init's and lost every keyword it set,
- * and nobody noticed because nothing read it back. A directive that is only in a file nobody parses
- * is a directive that is only in a comment.
- */
 
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
@@ -19,7 +12,6 @@ async function unit(name: string): Promise<ParsedUnit> {
   return parseUnit(await readFile(join(SYSTEMD, name), 'utf8'));
 }
 
-/** The unit's raw text, comments included — where the uid ruling is written. */
 async function text(name: string): Promise<string> {
   return readFile(join(SYSTEMD, name), 'utf8');
 }
@@ -33,16 +25,6 @@ describe('heron-purse.service', () => {
     );
   });
 
-  /*
-    A5 from Security's review of 2026-09-05: `User=purse` named no uid, and v1's defect 3 was a
-    dynamically allocated uid colliding with a platform account. The ruling the build log records is
-    `heron` 10001 and `purse` 10002, both asserted free before they are created.
-
-    systemd has no directive that carries a uid alongside a user name, so the ruling lives in the
-    unit's header comment — which is precisely the kind of text this test file exists to stop being
-    decorative. The numbers are asserted here and in the README so the deploy has one place to copy
-    from and drift fails a test rather than a droplet.
-  */
   it('runs as purse:purse and names the uid the deploy must create', async () => {
     const purse = await unit('heron-purse.service');
     expect(onlyValue(purse, 'Service', 'User')).toBe('purse');
@@ -78,26 +60,6 @@ describe('heron-purse.service', () => {
   });
 
   it('has MemoryDenyWriteExecute and --jitless present together or absent together', async () => {
-    /*
-      MemoryDenyWriteExecute refuses mappings that are both writable and executable and refuses
-      mprotect adding PROT_EXEC. V8's optimising compiler needs exactly that, so a plain `node` under
-      this directive dies at start. Keeping the directive without the flag means the unit does not
-      run at all; keeping the flag without the directive means the hardening line is decoration.
-      Neither is allowed to happen quietly.
-
-      That rule is a biconditional, and until 2026-09-06 this test asserted only one half of it:
-      `expect(denies).toBe(true)` and `expect(exec).toContain('--jitless')` pinned the flag as
-      REQUIRED. `--jitless` removes WebAssembly from the runtime, node 22's fetch parses HTTP with a
-      WebAssembly build of llhttp, and so every PAID post the purse tried on the droplet died inside
-      the simulation — while this file failed any commit that removed the cause. A test that pins
-      one arrangement of a pair cannot be used to change the pair; what the unit's comment actually
-      states is that the two travel together, so that is what is asserted, and dropping both in one
-      commit is now a passing change rather than a fight with the suite.
-
-      Which of the two arrangements is correct is not a question a unit file can answer, and this
-      test no longer pretends it can. `client-smoke.test.ts` answers it, by starting a real node
-      with whatever flags this ExecStart carries and building the real client in it.
-    */
     const purse = await unit('heron-purse.service');
     const denies = onlyValue(purse, 'Service', 'MemoryDenyWriteExecute') === 'yes';
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
@@ -116,7 +78,6 @@ describe('heron-purse.service', () => {
     expect(exec).toContain('--policy ');
     expect(exec).toContain('--policy-sha256 ');
     expect(exec).toContain('--socket /run/heron/purse.sock');
-    // No --key-file: the key comes from the credential directory, which the unit declares above.
     expect(exec).not.toContain('--key-file');
   });
 
@@ -126,15 +87,9 @@ describe('heron-purse.service', () => {
     expect(pres.some((line) => line.includes('<DIST_SHA256>') && line.includes('/srv/heron/purse/dist/server.js') && line.includes('sha256sum --check'))).toBe(true);
     expect(pres.some((line) => line.includes('<MULTISIG_SHA256>') && line.includes('/srv/heron/policy/heron-multisig.json') && line.includes('sha256sum --check'))).toBe(true);
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
-    /*
-      The interpreter and the script are pinned; what is between them is not. Node's own flags are
-      the pair rule above and the smoke test's business, and spelling `--jitless` into this line was
-      the second place that made removing it fail the suite.
-    */
     expect(exec.startsWith('/opt/node22/bin/node ')).toBe(true);
     expect(exec).toContain(' /srv/heron/purse/dist/server.js ');
     expect(exec.split(' /srv/heron/purse/dist/server.js ')[0]).not.toContain('.js');
-    // systemd expands %-specifiers in Exec lines (%s is the user's shell); a pin line must not use one.
     for (const line of pres) expect(line).not.toMatch(/%[a-zA-Z%]/);
   });
 
@@ -143,7 +98,6 @@ describe('heron-purse.service', () => {
     const exec = directive(purse, 'Service', 'ExecStart').join(' ');
     expect(exec).toContain('--api-origin https://weir.social');
     expect(exec).toMatch(/--statements-per-day [1-9][0-9]{0,3}\b/);
-    // Two statements a beat at most (name once, then publish) at 48 beats a day.
     expect(exec).toContain('--statements-per-day 96');
     expect(exec).toContain('--vault 0x0c3f3a6174293544f3ac61e466d9ebe62edb88cca2f3674cbd9311df8e736b68');
   });

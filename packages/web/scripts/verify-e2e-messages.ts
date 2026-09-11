@@ -1,20 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * End-to-end verification of encrypted direct messages, through the real HTTP routes.
- *
- * The unit tests cover the crypto in isolation. This covers everything the unit tests cannot: that
- * the routes verify the signatures they claim to, that the database stores ciphertext and no
- * plaintext, that the refusals actually refuse, and that a message encrypted by one participant is
- * readable by the other after a full round trip through Postgres.
- *
- * It signs with real Ed25519 keypairs, so the signatures are the same kind a wallet produces. It
- * touches no chain state and spends nothing.
- *
- *   pnpm dev                                       # in another terminal
- *   npx tsx scripts/verify-e2e-messages.ts
- *
- * Exits non-zero on the first failure, with the response that caused it.
- */
 
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
@@ -42,7 +26,6 @@ function check(name: string, condition: boolean, detail?: unknown): void {
   process.exit(1);
 }
 
-/** A participant: a Sui keypair plus the X25519 key derived from its signature. */
 async function participant(seed: number) {
   const keypair = Ed25519Keypair.fromSecretKey(new Uint8Array(32).fill(seed));
   const address = keypair.toSuiAddress();
@@ -50,7 +33,6 @@ async function participant(seed: number) {
   const { signature } = await keypair.signPersonalMessage(new TextEncoder().encode(KEY_STATEMENT));
   const secret = deriveSecret(signature);
 
-  /** Sign a statement exactly as `statementFor` will rebuild it. */
   const sign = async (action: string) => {
     const timestampMs = Date.now();
     const message = `ProjectX Social\naddress: ${address}\nissued: ${timestampMs}\n${action}`;
@@ -112,8 +94,6 @@ async function main() {
       x25519Public: mallory.x25519Public,
       ...(await mallory.sign(`action: register encryption key\nkey: ${mallory.x25519Public}`)),
     });
-    // Mallory signs correctly, but for her own address and her own key, then claims Bob's address.
-    // This is the substitution attack the self-certifying registration exists to stop.
     check('mallory cannot publish a key under bob\'s address', forged.status === 401, forged.json);
   }
 
@@ -171,8 +151,6 @@ async function main() {
   }
 
   {
-    // Mallory asks for her thread with Alice. The route derives the thread id from the two proven
-    // addresses, so there is nothing to ask for.
     const r = await readThread(mallory, alice.address);
     check('mallory sees nothing of alice and bob', (r.json.messages as unknown[]).length === 0);
   }
@@ -205,7 +183,6 @@ async function main() {
   }
 
   {
-    // Only the recipient's envelope. The sender would never be able to read her own message.
     const encryption = encrypt('x', [{ address: bob.address, x25519Public: bob.x25519Public }]);
     const signed = await alice.sign(
       `action: send encrypted\nto: ${bob.address}\nciphertext-sha256: ${ciphertextDigest(encryption.ciphertext)}`,
@@ -228,8 +205,6 @@ async function main() {
   }
 
   {
-    // A signature over one ciphertext, submitted with a different one — the exact replay the
-    // digest binding exists to stop.
     const real = encrypt('the real one', [
       { address: bob.address, x25519Public: bob.x25519Public },
       { address: alice.address, x25519Public: alice.x25519Public },

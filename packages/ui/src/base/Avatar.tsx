@@ -1,33 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Everybody here has a face from the moment their account exists.
- *
- * An account with no uploaded picture does not get initials in a grey circle: it gets a pattern
- * derived from its own address, so the same account is the same picture on every screen, for
- * every reader, forever, with no server round trip and no state. Two letters in a circle is what
- * a directory looks like; this is what a social product looks like before anybody has uploaded
- * anything.
- *
- * # Why not sha256
- *
- * The design calls for a hash of the address. In a browser `crypto.subtle.digest` is async, so a
- * sha256 avatar cannot be painted in the first render — every avatar on the page would arrive one
- * frame late, which is the flash of missing content this codebase refuses elsewhere. So the
- * derivation is a synchronous, deterministic 32-bit mix (xmur3). It is not cryptographic and does
- * not need to be: nothing is protected by it. It needs to be stable and well spread, and it is
- * both — the same address always produces the same picture, on the server and in the browser.
- *
- * # The agent ring
- *
- * A declared agent carries a 2px violet ring. It is never the only marker — `AgentBadge` travels
- * with the name everywhere the avatar appears. And its absence asserts nothing: the register
- * proves that a declaration was made, never that one was not.
- */
 
 const GRID = 5;
 const CELL = 40 / GRID;
 
-/** Deterministic 32-bit mix. Same input, same output, on every runtime. */
 function seed(input: string): () => number {
   let h = 1779033703 ^ input.length;
   for (let i = 0; i < input.length; i += 1) {
@@ -43,10 +18,6 @@ function seed(input: string): () => number {
   };
 }
 
-/**
- * Ground and figure, always drawn from the ramp and the three accents — so a face never
- * introduces a colour the rest of the interface does not already use.
- */
 const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ['#0d1c22', '#5fd6a4'],
   ['#150f26', '#a98bfa'],
@@ -73,15 +44,11 @@ export function Avatar({
   Image,
   className,
 }: {
-  /** The on-chain address. The identity the picture is derived from — never the handle, which can change hands. */
   address: string;
-  /** An uploaded avatar. When absent, the generated one is drawn. */
   src?: string | null | undefined;
   isAgent?: boolean | undefined;
   size?: AvatarSize | undefined;
-  /** Empty string marks it decorative, which it is wherever the name sits beside it. */
   alt?: string | undefined;
-  /** `next/image` where the host has one; a plain `img` otherwise. */
   Image?: React.ComponentType<{ src: string; alt: string; width: number; height: number; style?: React.CSSProperties }>;
   className?: string;
 }) {
@@ -113,21 +80,11 @@ export function Avatar({
     return <img src={src} alt={alt ?? ''} width={size} height={size} style={box} className={className} />;
   }
 
-  // One normalisation, used for both the pattern and the element id: an address that arrives in a
-  // different case is the same account and must produce byte-identical markup, or React will
-  // re-render it on hydration and two components showing the same person will disagree.
   const key = address.toLowerCase();
   const next = seed(key);
   const pair = PAIRS[next() % PAIRS.length] ?? PAIRS[0]!;
   const [ground, figure] = pair;
 
-  /*
-    A symmetric half, mirrored — three columns decided, five drawn.
-
-    A row with all three half-cells on mirrors into a solid bar across the face, and a picture made
-    of bars reads as a flag rather than as a person. When that happens the middle cell is dropped,
-    which keeps the symmetry and the determinism and costs one cell.
-  */
   const on: boolean[][] = [];
   const half = Math.ceil(GRID / 2);
   for (let row = 0; row < GRID; row += 1) {
@@ -156,18 +113,6 @@ export function Avatar({
     }
   }
 
-  /*
-    Clipped in CSS rather than by an SVG `clipPath`.
-
-    The clip was `<clipPath id={`w-av-${address}-${size}`}>`, and an `id` is document-scoped: a page
-    that draws the same account twice at the same size — a feed with two posts by one author, a
-    directory row and the same person in the rail — emitted the same `id` twice. Measured on `/feed`
-    at every width: three duplicated ids per page. The shape never varied by account or by size, so
-    the id was carrying no information and only ever collided.
-
-    `circle(50%)` is the same circle, needs no `id`, and leaves the markup byte-identical on the
-    server and in the browser, which is what the note above about hydration is protecting.
-  */
   return (
     <svg
       width={size}
@@ -187,12 +132,6 @@ export function Avatar({
   );
 }
 
-/**
- * The label that travels with a declared agent's name.
- *
- * It appears everywhere the name appears — feed, profile, message list, market — because a reader
- * deciding whether to pay someone should never have to work out which kind of citizen they are.
- */
 export function AgentBadge({ className }: { className?: string | undefined }) {
   return <span className={className === undefined ? 'w-agent' : `w-agent ${className}`}>AGENT</span>;
 }

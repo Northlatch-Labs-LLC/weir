@@ -1,17 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The mind route, end to end against the disposable database, with Walrus faked at the two calls
-  that spend WAL (`grantUpload`, `storeBlob`).
-
-  Mutations predicted: drop the config gate → "answers 501 with nothing configured" red; compute
-  the statement's sha256 from the request's claim instead of the bytes → "a signature over other
-  bytes is a forgery" red; accept two envelopes → "one envelope, naming the signer" red; skip
-  `quotaLimitConfigured` → "a second remember inside the window is refused" red; spend the
-  signature before the store → "a store failure leaves the signature unspent" red; sweep every
-  bucket → "the sweep leaves the configured bucket alone" red; drop the register gate → "an
-  undeclared address is refused" red.
-*/
 import { createHash } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -94,7 +82,6 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
 const get = (address: string, label: string) => route.GET(new Request(`${ORIGIN}/api/agents/mind?address=${address}&label=${label}`));
 
 const OPERATOR = Ed25519Keypair.generate().toSuiAddress();
-/** The register row a real declaration writes (023); signatures are opaque text to this table. */
 async function declare(address: string, revokedAtMs: number | null = null) {
   await testDb().query(
     `INSERT INTO agent_accounts (address, operator_address, agent_signature, operator_signature, model, purpose, declared_at_ms, revoked_at_ms)
@@ -138,7 +125,6 @@ describe('POST /api/agents/mind', () => {
     expect(Object.keys(mind).sort()).toEqual(['address', 'blobId', 'bytes', 'createdAtMs', 'endEpoch', 'label', 'sha256']);
     expect(walrus.stores).toEqual([{ size: ciphertext.length, owner: AGENT, epochs: 53 }]);
 
-    // The plaintext is nowhere: not in the row, not in the response.
     const rows = await testDb().query<{ envelope: { recipient: string }; nonce: string }>('SELECT envelope, nonce FROM agent_minds WHERE address = $1', [AGENT]);
     expect(rows.rowCount).toBe(1);
     expect(rows.rows[0]!.envelope.recipient).toBe(AGENT);
@@ -151,14 +137,11 @@ describe('POST /api/agents/mind', () => {
     expect(back.mind['nonce']).toBe(body.payload.nonce);
     expect(back.mind['envelope']).toEqual(body.payload.envelopes[0]);
 
-    // Single-use: the same signed body again is a replay.
     const again = await post(body);
     expect(again.status).toBe(401);
   });
 
   it('a signature over other bytes is a forgery: the server hashes what it received', async () => {
-    // Each forgery also CLAIMS the value it signed over, as a top-level field, so a server that
-    // trusted a claim instead of hashing the bytes would accept it. The route must never read them.
     const forged = { ...(await submission(new Uint8Array([9, 9, 9]), { signOver: { sha256: 'a'.repeat(64) } })), sha256: 'a'.repeat(64) };
     expect((await post(forged)).status).toBe(401);
     const wrongLength = { ...(await submission(new Uint8Array([9, 9, 9]), { signOver: { bytes: '1' } })), bytes: '1' };
@@ -184,7 +167,6 @@ describe('POST /api/agents/mind', () => {
     const r = await post(await submission(new Uint8Array(5000)));
     expect(r.status).toBe(413);
     expect(((await r.json()) as { maxBytes: number }).maxBytes).toBe(4096);
-    // And a body that DECLARES more than the ceiling allows is refused unread.
     const declared = await post(await submission(new Uint8Array([1])), { 'content-length': String(10 * 1024 * 1024) });
     expect(declared.status).toBe(413);
     expect(walrus.stores).toEqual([]);
@@ -199,8 +181,6 @@ describe('POST /api/agents/mind', () => {
     expect(refusal.retryAfterSeconds).toBeGreaterThan(21_000);
     expect(walrus.stores).toHaveLength(1);
 
-    // The sweep runs on every constant-bucket spend with a one-hour cutoff. The mind row is older
-    // than that cutoff by the time this runs (aged by hand) and must survive it.
     await testDb().query(`UPDATE agent_quotas SET refilled_at_ms = $1 WHERE bucket = 'mind'`, [Date.now() - 2 * 3_600_000]);
     await rateLimit.spendQuota(AGENT, 'write', { now: Date.now() + 10 * 60_000 });
     const rows = await testDb().query(`SELECT bucket FROM agent_quotas WHERE address = $1 ORDER BY bucket`, [AGENT]);
@@ -213,7 +193,6 @@ describe('POST /api/agents/mind', () => {
     const r = await post(body);
     expect(r.status).toBe(503);
     expect(((await r.json()) as { error: string }).error).toContain('502');
-    // The quota token was spent — WAL was attempted — but the signature was not; the retry succeeds once the quota refills.
     await testDb().query('DELETE FROM agent_quotas');
     expect((await post(body)).status).toBe(201);
   });
@@ -226,7 +205,6 @@ describe('POST /api/agents/mind', () => {
     await declare(AGENT, Date.now());
     expect((await post(await submission(new Uint8Array([1])))).status).toBe(403);
     expect(walrus.stores).toEqual([]);
-    // An unsigned caller is still 401, never 403: the register is not consulted for an anonymous body.
     const unsigned = { ...(await submission(new Uint8Array([1]))), signature: 'AAAA' };
     expect((await post(unsigned)).status).toBe(401);
   });

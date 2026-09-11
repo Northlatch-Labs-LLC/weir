@@ -1,17 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The purchase quota binds at the one step that is a purchase.
-
-  `QUOTAS.purchase` — "the reason this table exists" — had one caller, and it was the card onramp.
-  No checkout route spent a purchase token, so the documented ceiling bounded nothing. This proves
-  `POST /api/checkout/submit` spends `purchase` for a signed creator::unlock/subscribe/tip/renew,
-  `write` for any other signed submission, keyed on the address the SIGNATURE proves, and refuses
-  before any bucket is touched when the signature does not verify.
-
-  Mutations predicted: classify every submission as `write` → "unlock spends purchase" red; skip
-  the local verification → "a forged signature spends nothing" red (a bucket call appears).
-*/
 import { describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
@@ -35,7 +23,6 @@ const PKG = `0x${'e5'.repeat(32)}`;
 const keypair = new Ed25519Keypair();
 const address = keypair.getPublicKey().toSuiAddress();
 
-/** Bytes for one MoveCall, with every gas field pinned so no node is needed to build them. */
 async function signed(target: string, by = keypair): Promise<{ bytes: string; signature: string }> {
   const tx = new Transaction();
   tx.setSender(by.getPublicKey().toSuiAddress());

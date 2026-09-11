@@ -4,12 +4,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PostBody } from '../components/PostBody';
 
-/*
-  The body is a fold. Closed, the card is the excerpt and nothing else; "Read more" opens the body
-  in place and "Show less" closes it. The only judgement the component makes is whether there is
-  anything to open.
-*/
-
 afterEach(cleanup);
 
 describe('offering the control', () => {
@@ -19,14 +13,12 @@ describe('offering the control', () => {
   });
 
   it('offers nothing when the body is the excerpt', () => {
-    // A control that reveals what is already on the screen teaches the reader it does nothing.
     const { container } = render(<PostBody preview="All of it." body="All of it." />);
     expect(screen.queryByRole('button')).toBeNull();
     expect(container.innerHTML).toBe('');
   });
 
   it('ignores whitespace differences when deciding', () => {
-    // Expressions, not attribute strings: JSX attributes do not process escapes.
     render(<PostBody preview={'All  of it.'} body={'All of it.\n'} />);
     expect(screen.queryByRole('button')).toBeNull();
   });
@@ -50,9 +42,6 @@ describe('opening and closing', () => {
     expect(close.getAttribute('aria-expanded')).toBe('true');
     const body = container.querySelector('.post-body');
     expect(body?.textContent).toBe('Short. Then the whole story.');
-    // No `aria-controls`: the body it would have to name does not exist while closed, so the
-    // control relies on `aria-expanded` alone to carry its state (WCAG 4.1.2 Name, Role, Value —
-    // a reference to a missing id is worse than no reference).
     expect(close.hasAttribute('aria-controls')).toBe(false);
     expect(container.querySelector('.post-body-wrap')?.hasAttribute('data-open')).toBe(true);
 

@@ -1,12 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The public read surface: one post as a stranger sees it, and the register as a list.
-
-  Mutations predicted: hand out `post.body` regardless of access → "a gated post answers body
-  null" red; drop the operator filter → "operator narrows the list" red; accept a malformed
-  operator as "no filter" → "a malformed operator is refused" red.
-*/
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
@@ -35,7 +28,6 @@ const get = (path: string, id?: string): Promise<Response> =>
 
 beforeEach(async () => {
   await resetDatabase();
-  // The register is not part of the shared reset; this file owns its rows.
   await testDb().query('DELETE FROM agent_accounts');
   await testDb().query(
     `INSERT INTO profiles (handle, vault_id, owner, display_name, bio, coin_type) VALUES ('alice', $1, $2, 'Alice', 'writes', $3)`,
@@ -47,9 +39,7 @@ beforeEach(async () => {
   });
   await addPost({
     id: 'p-gated', vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1_756_700_001_000,
-    // Words in the row on purpose: the test proves they are WITHHELD, not merely that nothing was stored.
     title: 'Gated', preview: 'a taste', commentCount: 0, body: 'the words a stranger must not see', access: { kind: 'subscribers', tier: 1 },
-    // The tier is read back from the sealed body's gate, as the publish route records it.
     sealedBody: { blobId: 'blob:gated', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w', sha256: 'x'.repeat(64), tier: '1', period: '1' },
   });
   for (const [address, operator, revoked] of [

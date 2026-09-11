@@ -1,14 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The JSON-LD nodes this site emits, checked for the two things that make structured data useful
- * rather than decorative: it has to parse as JSON, and it has to say only what is true.
- *
- * Before this file there was no `ld+json` anywhere on the site (measured 2026-09-06, grepping
- * `app/` and `components/`), so there was nothing for a citation engine's structured-data pass to
- * read — it fell back to guessing from prose. These tests pin what was added and, as much as what
- * was added, what was deliberately left out.
- */
 import { describe, expect, it } from 'vitest';
 import { SOCIAL } from '../lib/social-links';
 import { TITLE, TAGLINE, DESCRIPTION } from '../lib/site-meta';
@@ -24,7 +15,6 @@ describe('Organization', () => {
   });
 
   it('names the operator of record from the Terms and Privacy pages, not a guess', () => {
-    // content/legal/terms.md line 4, content/legal/privacy.md line 4.
     expect(org['name']).toBe('Northlatch Labs LLC');
     expect(org['url']).toBe('https://weir.social');
   });
@@ -38,12 +28,6 @@ describe('Organization', () => {
   });
 
   it('does NOT carry a Wyoming filing ID, because the site does not publish one yet', () => {
-    /*
-      content/legal/terms.md and content/legal/privacy.md both say, in the operator/controller
-      line: "the Filing ID will be published on this page upon approval" — which is a statement
-      that it is not published yet. Structured data must not assert more than the page it sits on
-      shows; asserting a filing ID here would fail that rule even if the number itself is correct.
-    */
     expect(JSON.stringify(org)).not.toMatch(/filing/i);
     expect(JSON.stringify(org)).not.toContain('2026-002064040');
   });
@@ -57,7 +41,6 @@ describe('Organization', () => {
     const { join } = await import('node:path');
     const logo = org['logo'] as string;
     expect(logo).toBe('https://weir.social/icon-512.png');
-    // Confirms the referenced file is real, not just a plausible-looking path.
     expect(() => readFileSync(join(process.cwd(), 'public/icon-512.png'))).not.toThrow();
   });
 });

@@ -1,25 +1,9 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * `lib/scale` — one place that turns a coin type into the scale its amounts are printed at.
- *
- * # Why this is a module rather than four copies
- *
- * It was four copies. `explore`, the creator page, the home page and the notifications feed each
- * grew their own `usdc()` with `1_000_000n` written into it, and every one of them was wrong for
- * any coin that is not six decimals — silently, by a factor of a thousand for a nine-decimal coin,
- * with no error anywhere and a confident-looking number on screen.
- *
- * The rule this pins is not "divide by a million". It is **read the decimals, and if you cannot,
- * say so**. A default is the bug: six is right often enough to look correct in testing and wrong
- * exactly when somebody is paid in something else.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 
-/** Reassigned per test — what `CoinMetadata` reports for each coin type. */
 let metadata: Record<string, number | 'unreadable'> = {};
-/** Every coin type `readDecimals` was actually called with, in order. Duplicates are the defect. */
 let reads: string[] = [];
 
 vi.mock('@/lib/chain', () => ({
@@ -51,7 +35,6 @@ describe('symbolOf', () => {
   });
 
   it('is empty rather than invented when there is no coin', () => {
-    // A vault with no denomination prints an amount with no unit, never a guessed one.
     expect(symbolOf(null)).toBe('');
     expect(symbolOf('')).toBe('');
   });
@@ -78,11 +61,6 @@ describe('readScales', () => {
   });
 
   it('leaves an unreadable coin without a scale instead of defaulting it', async () => {
-    /*
-      The whole point. A coin whose metadata cannot be read must produce "scale unknown" at the
-      surface, not a plausible number — six would render an unreadable nine-decimal coin at a
-      thousand times its value, and nothing on the page would look wrong.
-    */
     metadata = { [USDC]: 'unreadable' };
     reads = [];
 

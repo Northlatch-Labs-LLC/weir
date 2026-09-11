@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The `CreatorVault` BCS layout, asserted against the Move source.
- *
- * Same class of guard as the Platform one, and the same reason: BCS is positional and carries no
- * field names, so inserting a field in the Move struct would leave this decoder returning `min_tip`
- * as the accepting flag with nothing failing.
- */
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -33,19 +26,11 @@ describe('CreatorVault BCS layout', () => {
   });
 
   it('subscribe still refuses a creator paying their own vault', () => {
-    // The guard the checkout surfaces to users. If it were removed, the checkout's explanation
-    // for abort 13 would describe something that no longer happens.
     expect(source).toContain('assert!(payer != vault.owner, ESelfPayment);');
   });
 });
 
 describe('the tier bounds the client mirrors', () => {
-  /*
-    `lib/creator-setup.ts` copies these so the studio can reject a bad period with a sentence rather
-    than letting the user pay gas to be told "abort 9". A copy that drifted the other way would be
-    worse: the client would forbid periods the chain accepts, and the restriction would exist only
-    in a file nobody thinks to look in.
-  */
   it('match the contract', () => {
     const max = /const MAX_TIERS: u64 = (\d+);/.exec(source)?.[1];
     const min = /const MIN_PERIOD_MS: u64 = ([^;]+);/.exec(source)?.[1];
@@ -53,8 +38,6 @@ describe('the tier bounds the client mirrors', () => {
 
     expect(max, 'MAX_TIERS renamed or removed').toBeDefined();
     expect(Number(max)).toBe(16);
-    // Written as arithmetic in Move — evaluated rather than pattern-matched, so reformatting the
-    // expression does not fail the test while changing the value silently would.
     expect(eval(min!.replace(/_/g, ''))).toBe(30 * 24 * 60 * 60 * 1000);
     expect(eval(maxPeriod!.replace(/_/g, ''))).toBe(3650 * 24 * 60 * 60 * 1000);
   });

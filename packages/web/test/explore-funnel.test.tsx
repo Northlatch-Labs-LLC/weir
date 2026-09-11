@@ -1,22 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The two-sided funnel: Explore creators / Explore AI agents.
- *
- * # The one rule
- *
- * An account is on the agents side only if the declaration register lists it live. The fixture
- * below has one declared account, one undeclared account with a perfectly bot-shaped profile, and
- * one withdrawn declaration; exactly the first appears, and the word "Human" appears nowhere,
- * because the register proves a declaration was made and never that one was not.
- *
- * # The other two rules
- *
- * Two sides, one component: the rendered sections have the same shape and the same style string,
- * so neither can quietly become the other's footnote. And three states — listed, empty,
- * unmeasured — are three different sentences: "there are none" and "we could not look" are not
- * allowed to share one.
- */
 
 import { cleanup, render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
@@ -54,7 +37,6 @@ function profile(handle: string, owner: string, displayName = handle): Profile {
 
 const PROFILES: Profile[] = [
   profile('kaela', DECLARED, 'Kaela'),
-  // The bio says bot, the handle says bot, the posting pattern would say bot. Not declared.
   profile('bot_9000', UNDECLARED, 'Bot 9000'),
   profile('former', WITHDRAWN),
 ];
@@ -125,7 +107,6 @@ describe('who is a creator', () => {
 
 describe('what a failed read tells a visitor', () => {
   it('is the opaque sentence, never the driver’s own message', () => {
-    // The pure functions render whatever reason they are handed; this pins what they are handed.
     const RAW = /error instanceof Error \? error\.message : String\(error\)/;
     for (const file of ['components/design/explore-funnel-data.tsx', 'app/explore/agents/page.tsx']) {
       const code = readFileSync(join(process.cwd(), file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -149,8 +130,6 @@ describe('the rendered funnel', () => {
     const [creators, agents] = [...sections] as [HTMLElement, HTMLElement];
     expect(creators.dataset['funnelSide']).toBe('creators');
     expect(agents.dataset['funnelSide']).toBe('agents');
-    // Same component: same child sequence, same style string. A visual difference would have to
-    // be written into data, on purpose.
     const shape = (el: HTMLElement) => [...el.children].map((c) => c.tagName).join(',');
     expect(shape(creators)).toBe(shape(agents));
     expect(creators.getAttribute('style')).toBe(agents.getAttribute('style'));
@@ -164,7 +143,6 @@ describe('the rendered funnel', () => {
     expect(pills.map((p) => p.textContent)).toEqual(['Agent']);
     expect(pills[0]?.getAttribute('title')).toBe(AGENT_PILL_TITLE);
     expect(pills[0]?.closest('section')?.getAttribute('data-funnel-side')).toBe('agents');
-    // The creators side lists the same bot-shaped profile and marks nothing.
     expect(container.querySelector('section[data-funnel-side="creators"] .pill')).toBeNull();
     expect(container.textContent ?? '').not.toMatch(/human/i);
   });
@@ -176,7 +154,6 @@ describe('the rendered funnel', () => {
     expect(links.some((a) => a.getAttribute('tabindex') === '-1')).toBe(false);
     const doors = links.filter((a) => a.textContent?.startsWith('Explore'));
     expect(doors.map((a) => a.getAttribute('href'))).toEqual(['/explore', '/explore/agents']);
-    // Relative paths only: nothing here names an origin.
     expect(links.some((a) => /^https?:/.test(a.getAttribute('href') ?? ''))).toBe(false);
   });
 
@@ -191,9 +168,7 @@ describe('the rendered funnel', () => {
     expect(container.querySelector('ul')).toBeNull();
     expect(agents.textContent).toContain('No declared agents yet.');
     expect(creators.textContent).toContain('could not be read; attempted');
-    // The freshness widget renders live next to every note, including a failed read's.
     expect(creators.textContent).toContain('just now');
-    // Both doors stay open in every state — the directory can say the same thing at length.
     expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/explore', '/explore/agents']);
   });
 });

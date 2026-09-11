@@ -13,13 +13,6 @@ import {
   type DesignOnlyChain,
 } from '@/components/design/Security';
 
-/**
- * Security's data.
- *
- * Most of this page's copy is copied verbatim from the design. Two things are not: the fee, which
- * is read from the Platform object, and the contract ids, which come from configuration.
- */
-
 const CREST = 'var(--crest,#8be3c6)';
 const TEAL = 'var(--teal,#7fd8dd)';
 const SAND = 'var(--sand,#d9c9a3)';
@@ -37,14 +30,6 @@ const GUARANTEES: readonly DesignGuarantee[] = [
   { icon: <Icon name="check" size={18} />, title: 'Verifiable by strangers', body: 'The package digest, the tier object, the vault object and every settlement are public. Read the chain and check every figure on this page against it.', mechanism: 'every figure names its source or says not measured' },
 ];
 
-/*
-  The heading above these says "three things". There were two.
-
-  A count in a heading that disagrees with what is under it is the kind of defect a reader notices
-  before they notice anything the section says. The missing one is settlement, which belongs here
-  rather than in the guarantees above: same-transaction payment is the thing a payout schedule
-  cannot imitate.
-*/
 const ONLY_CHAIN: readonly DesignOnlyChain[] = [
   { figure: '∞', title: 'A paywall that outlives the platform', body: "Your subscriber's access is an object in their wallet. Ours is not the server that grants it, so our uptime, our terms of service and our continued existence are not conditions of your business." },
   { figure: '0d', title: 'Paid in the same transaction', body: 'Money reaches your vault at the instant somebody pays, in the transaction that pays it. There is no payout schedule, no holding period and no minimum balance to reach. Withdrawing is a transaction you sign.' },
@@ -82,13 +67,6 @@ export async function SecurityData({
       : `${(Number(platform.feeBps) / 100).toFixed(2).replace(/\.?0+$/, '')}%`;
   const ceiling = `${Number(MAX_PLATFORM_FEE_BPS) / 100}%`;
 
-  /*
-    The corrected claim.
-
-    "Frozen in the contract" is false — `set-fees` exists and the ceiling is what the contract really
-    guarantees. Saying the true thing is also the stronger thing: a rate anyone can read, bounded by
-    code, beats an unverifiable promise that it will never move.
-  */
   const weirFeeAnswer =
     feePercent === null
       ? `The rate is on chain and could not be read just now. The contract caps it at ${ceiling}.`
@@ -123,41 +101,16 @@ export async function SecurityData({
     { name: 'OnlyFans', figure: '20%', note: "The platform's published rate, before any payout hold. Flat, and the highest of the three.", bg: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.6),rgba(var(--pb,9,32,42),0.8))', border: LINE, shadow: 'inset 0 1px 0 rgba(var(--hi-rgb,220,233,230),0.04)', rule: LINE, nameColor: DIM, figureColor: INK, figureBg: 'none', clip: 'border-box', figureGlow: 'none' },
   ];
 
-  /**
-   * The contract cards, from configuration.
-   */
   const network = config.ok ? config.value.network : null;
   const scan = (id: string) =>
     network === null ? undefined : `https://suiscan.xyz/${network}/object/${id}`;
 
-  /*
-    The key registry, read the way `lib/keys.ts` reads it.
-  */
   const keyRegistry = fold(
     keyRegistryId(),
     (value) => value,
     () => null,
   );
 
-  /*
-    Two package ids, not one, and the running one first.
-
-    This section exists to let a stranger check us, and it listed a single "Weir package" pointing at
-    `packageId` — the *original* publication. `packages/sdk/src/config.ts` states what that is: type
-    identity, and never a call target, because "after an upgrade it names the old code, which does
-    not contain modules added since".
-
-    This deployment has been upgraded. The original holds six modules; the running package holds
-    seven, and the seventh is `key_registry` — the module deciding who can decrypt a paid body.
-    Verified from chain rather than from the deploy record: the live registry's type reads
-    `0xa7fd1540…::key_registry::KeyRegistry`, namespaced to the upgrade, which is only possible if
-    the module was first published there. A sceptic following the one link we gave them landed in a
-    package where the most sensitive code in the product is absent, and nothing said so.
-
-    Both are needed and neither substitutes for the other: the running package is the code that
-    executes when somebody pays, and the original is the address in the type tag of every object this
-    product has ever created.
-  */
   const rows: { key: string; name: string; icon: string; rail: string; id: string | null; what: string }[] = [
     { key: 'package', name: 'Weir package (running)', icon: 'cube', rail: 'linear-gradient(180deg,var(--crest,#8be3c6),var(--teal,#7fd8dd))', id: config.ok ? config.value.latestPackageId : null, what: 'The code that executes: subscriptions, unlocks, tier objects, the settlement that takes the platform fee in the same transaction, and the key registry. This is the package to read.' },
     { key: 'origin', name: 'Original publication', icon: 'layers', rail: 'linear-gradient(180deg,var(--teal,#7fd8dd),var(--sand,#d9c9a3))', id: config.ok ? config.value.packageId : null, what: 'Where these types were first published. Move binds type identity to that address forever, so every object Weir has ever made carries this id in its type tag: it is how you recognise one as ours. It is not the code that runs today.' },

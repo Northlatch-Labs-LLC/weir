@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  `readPreview` — the read the MCP's `weir_read` waited for. Maps `GET /api/posts/{id}` to a
-  `PublicPost`, `null` for a gated post, and a Reading failure for anything else.
-
-  Mutations predicted: return the body for a gated answer → "a gated post is null" red; treat a
-  404 as null → "an unknown post is not-found, not null" red.
-*/
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
 import { createAgent, MAINNET_RECORD } from '../src/index.js';

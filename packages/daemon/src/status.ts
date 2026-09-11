@@ -1,9 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Read-only status. Interrogates the chain and prints what it finds. Signs nothing.
- *
- * `pnpm status` — needs no key, no gas, and no daemon running.
- */
 
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describeFailureKind, fold, retryAdvice } from '@projectx-social/sdk';
@@ -67,10 +62,7 @@ export async function status(env: NodeJS.ProcessEnv): Promise<number> {
   for (const found of discovery.value.vaults) {
     const reading = await readStakeVault(client, found.vaultId);
     if (!reading.ok) {
-      // A vault we could not read is not a vault with nothing in it.
       console.log(`  ${found.vaultId}`);
-      // The kind, its sentence and what to do next — so an operator reading this at 2am is told
-      // whether to wait, retry or stop without opening the SDK.
       console.log(
         `    NOT MEASURED — ${reading.failure.kind} (${describeFailureKind(reading.failure.kind)}; ` +
           `${retryAdvice(reading.failure.kind)}): ${reading.failure.detail}\n`,
@@ -109,14 +101,6 @@ export async function status(env: NodeJS.ProcessEnv): Promise<number> {
     const decision = decideHarvest(v, epoch);
     row('harvest now would', decision.act ? `act — ${decision.reason}` : `skip — ${decision.reason}`);
 
-    /*
-      The one thing a block query cannot tell you on its own.
-
-      Rewards accrue inside the StakedSui object; `lifetime_yield` is only written by the harvest
-      that withdraws it. So a vault whose ladder is working perfectly still reads zero here until
-      something harvests after maturity — indistinguishable, from this number alone, from the
-      defect that produced 22 consecutive zero harvests on the predecessor.
-    */
     if (v.lifetimeYieldMist === 0n) {
       const next = nextActionableEpoch(v);
       if (next !== null && epoch >= next) {

@@ -2,26 +2,6 @@
 import 'server-only';
 import { opaqueDetail } from './opaque';
 
-/**
- * Checkout: build a transaction, simulate it, and only then let it be signed.
- *
- * # The order is the whole design
- *
- * `prepare` builds and simulates. `submit` takes bytes that a wallet has signed and executes them.
- * There is no function here that does both, and `submit` never builds — so a client cannot skip
- * the simulation by calling the second one first. The bytes it submits are the exact bytes that
- * were simulated, because they are handed back to it and returned unchanged.
- *
- * On a chain this ordering is not a nicety. A doomed transaction still costs gas, and a
- * transaction that *succeeds* in a way the user did not expect cannot be undone at all.
- *
- * # Where the abort actually surfaces
- *
- * Not where you would expect. `Transaction.build({ client })` resolves the transaction against the
- * node, and a Move abort throws **there** — before `simulateTransaction` is ever called. So both
- * are wrapped, and the failure path is the same for either.
- */
-
 import { createHash } from 'node:crypto';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64, toBase64 } from '@mysten/sui/utils';
@@ -52,17 +32,6 @@ const {
   openStakeVault, withdrawStake, claimRebate, claimCreatorYield, setRebateBps,
 } = txBuilders;
 
-/**
- * Build, simulate, and quote — the shared tail of every prepare in this file.
- *
- * Extracted after the fifth copy of the same twenty lines. They had NOT drifted — checked, all
- * eleven existing gas computations subtract the storage rebate correctly — so this is a hazard
- * removed before it happened rather than a bug fixed. Worth saying plainly, because "we found a
- * drift" is a more satisfying reason than "there were five copies" and it was not the true one.
- *
- * What made it worth doing anyway: a quote that varies by code path is worse than one that is
- * uniformly wrong, since it looks correct in whichever place you happen to check.
- */
 async function quote(
   source: string,
   tx: Transaction,
@@ -76,7 +45,6 @@ async function quote(
     const client = createClient(config.value);
     tx.setSender(sender);
 
-    // `build` resolves against the node, and a Move abort throws HERE rather than at simulate.
     const bytes = await tx.build({ client });
     const sim = await client.simulateTransaction({
       transaction: bytes,
@@ -110,15 +78,6 @@ async function quote(
   }
 }
 
-// === The stake leg ===
-
-/**
- * Open a support vault.
- *
- * The validator is stamped in and cannot be changed afterwards. Its commission comes off yield
- * before the vault sees it, so this choice sets a permanent floor on what supporters can generate
- * for the creator — which is why the UI asks rather than defaulting.
- */
 export async function prepareOpenStakeVault(input: {
   sender: string;
   accountId: string;
@@ -140,9 +99,6 @@ export async function prepareOpenStakeVault(input: {
   );
 }
 
-/**
- * Withdraw principal.
- */
 export async function prepareWithdrawStake(input: {
   sender: string;
   vaultId: string;
@@ -170,7 +126,6 @@ export async function prepareWithdrawStake(input: {
   );
 }
 
-/** Claim a supporter's accrued share of yield, when the creator has set one. */
 export async function prepareClaimRebate(input: {
   sender: string;
   vaultId: string;
@@ -189,12 +144,6 @@ export async function prepareClaimRebate(input: {
   );
 }
 
-/**
- * Withdraw the creator's realised yield.
- *
- * Yield only. The contract holds it in a separate balance from principal, so there is no amount
- * this call can name that would reach a depositor's money.
- */
 export async function prepareClaimCreatorYield(input: {
   sender: string;
   vaultId: string;
@@ -222,13 +171,6 @@ export async function prepareClaimCreatorYield(input: {
   );
 }
 
-/**
- * Set the supporters' share of yield.
- *
- * Out of the creator's own share, not the platform's. 10000 bps — all of it — is a legitimate
- * choice rather than a mistake to guard against: a creator may run the vault purely as a give-back
- * to their audience.
- */
 export async function prepareSetRebate(input: {
   sender: string;
   vaultId: string;
@@ -251,15 +193,10 @@ export async function prepareSetRebate(input: {
   );
 }
 
-/** What the user is asked to confirm. Every figure comes from the simulation, not from the form. */
 export interface CheckoutQuote {
-  /** Base64 transaction bytes — signed as-is, submitted as-is. */
   bytes: string;
-  /** Net change to the signer's SUI balance, in MIST. Negative means they pay. */
   suiDeltaMist: string;
-  /** Gas the simulation actually charged, in MIST. */
   gasMist: string;
-  /** The deposit itself, separated from gas so the user sees both. */
   amountMist: string;
 }
 
@@ -270,7 +207,6 @@ export interface CheckoutFailure {
 
 const SUI_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
 
-/** Find the caller's `SocialAccount`. Deposits require one; there is no anonymous path. */
 export async function findAccount(owner: string): Promise<Reading<string | null>> {
   const config = siteConfig();
   if (!config.ok) return config;
@@ -285,8 +221,6 @@ export async function findAccount(owner: string): Promise<Reading<string | null>
     });
 
     const first = (response as { objects?: Array<{ objectId?: unknown }> }).objects?.[0];
-    // `null` inside a successful reading means "we looked and there is none" — a real answer,
-    // rendered as a prompt to register. A failed reading means we could not look, which is not.
     return ok(typeof first?.objectId === 'string' ? first.objectId : null);
   } catch (error) {
     const failure = classify(error, source);
@@ -294,12 +228,6 @@ export async function findAccount(owner: string): Promise<Reading<string | null>
   }
 }
 
-/**
- * Build and simulate a stake deposit.
- *
- * `amountMist` is a decimal string of MIST, parsed to `bigint` here. It never becomes a `Number`:
- * above 2^53 that silently loses precision, and it does so only for large amounts.
- */
 export async function prepareDeposit(input: {
   sender: string;
   vaultId: string;
@@ -321,11 +249,8 @@ export async function prepareDeposit(input: {
     const client = createClient(config.value);
     const tx = new Transaction();
 
-    // Split from the gas coin: the deposit is SUI, and the signer's SUI is their gas coin.
     const [coin] = tx.splitCoins(tx.gas, [amount]);
     tx.moveCall({
-      // public fun deposit(platform: &Platform, vault: &mut StakeVault,
-      //                    depositor_account: &SocialAccount, payment: Coin<SUI>, ctx)
       target: `${config.value.latestPackageId}::stake_vault::deposit`,
       arguments: [
         tx.object(config.value.platformId),
@@ -336,7 +261,6 @@ export async function prepareDeposit(input: {
     });
     tx.setSender(input.sender);
 
-    // `build` resolves against the node, and a Move abort throws here rather than at simulate.
     const bytes = await tx.build({ client });
 
     const simulation = await client.simulateTransaction({
@@ -376,56 +300,15 @@ export async function prepareDeposit(input: {
   }
 }
 
-/**
- * Execute bytes a wallet has signed.
- *
- * Takes the bytes back rather than rebuilding, so what is submitted is byte-identical to what was
- * simulated and to what the user's wallet displayed. Rebuilding here would quietly reintroduce the
- * gap this whole module exists to close.
- */
-/** How long a quote stays submittable. Long enough to read a wallet prompt, not long enough to sit. */
 const QUOTE_LIFETIME_MS = 30 * 60 * 1000;
 
-/** The row a set of transaction bytes claims. Keyed on the base64 exactly as handed to the client. */
 function quoteDigest(bytes: string): Buffer {
   return createHash('sha256').update(bytes).digest();
 }
 
-/**
- * Record that this deployment issued these bytes, and hand them back unchanged.
- *
- * Wrapped around every `toBase64(bytes)` that leaves this module, so a new quote-producing function
- * cannot forget: forgetting makes its own quotes unsubmittable, which fails loudly in development
- * rather than silently widening what the relay accepts.
- */
-/**
- * How often one instance will pay for a sweep of expired quotes.
- *
- * Same shape and same number as the sweeps in `lib/rate-limit.ts` and `lib/identity.ts`, because
- * this is the same problem: a table that grows on one path and was reclaimed on another.
- */
 const QUOTE_SWEEP_EVERY_MS = 60_000;
 let quotesSweptAtMs = 0;
 
-/**
- * Delete expired quotes, throttled and bounded.
- *
- * # Why this is called by the WRITER
- *
- * It already existed, and it ran only inside `submitSigned` — on the path that CONSUMES a quote.
- * Every `prepare` route writes one, thirteen of them do so with no session and no signature, and a
- * caller who only ever prepares and never submits therefore inserted rows that nothing reclaimed
- * until some unrelated caller happened to succeed. On a deployment where nobody completes a
- * purchase for an hour, nothing is swept for an hour.
- *
- * Reclaiming on the path that writes is the property: the work is paid for by the traffic that
- * causes it, and a table that only grows cannot outlive the requests filling it.
- *
- * Awaited rather than floated, for the reason `lib/rate-limit.ts` gives: a serverless instance is
- * frozen the moment it returns a response, so a promise left running may never run — and may run
- * against a pool that has been torn down. Throttled to once a minute per instance and bounded to
- * 500 rows, so what is awaited is one small DELETE in every few thousand requests.
- */
 async function sweepQuotes(nowMs: number): Promise<void> {
   if (nowMs - quotesSweptAtMs < QUOTE_SWEEP_EVERY_MS) return;
   quotesSweptAtMs = nowMs;
@@ -444,7 +327,6 @@ async function sweepQuotes(nowMs: number): Promise<void> {
   }
 }
 
-/** Test seam. Nothing in the application calls this. */
 export function resetQuoteSweep(): void {
   quotesSweptAtMs = 0;
 }
@@ -470,20 +352,6 @@ export async function submitSigned(input: {
 
   const source = 'transaction submission';
 
-  /*
-    Only bytes this deployment built.
-
-    Without this the route was an open relay: it executed whatever it was handed, against the
-    configured fullnode, on this platform's RPC quota and IP reputation. Nothing had to be *built*
-    here for that to be abused — sending was enough.
-
-    The claim is consumed as well as checked. A quote is for one submission; leaving the row would
-    let the same signed bytes be replayed at the node until they expired, and while Sui itself
-    rejects a re-executed transaction, doing that through us is still our quota being spent.
-
-    Fails closed on a database error, for the same reason the replay ledger does: a relay we cannot
-    check is a relay we cannot promise anything about.
-  */
   try {
     const claimed = await db().query(
       `DELETE FROM issued_quotes WHERE digest = $1 AND expires_at_ms > $2`,
@@ -519,8 +387,6 @@ export async function submitSigned(input: {
 
     const digest = (result as { Transaction?: { digest?: unknown } }).Transaction?.digest;
     if (typeof digest !== 'string' || digest === '') {
-      // Submitted, but we cannot name what. Reported as a failure so nothing is recorded as
-      // succeeded that cannot be pointed at — it may well have landed.
       return fail(
         'malformed',
         source,
@@ -535,7 +401,6 @@ export async function submitSigned(input: {
   }
 }
 
-/** Attach a plain-language explanation when the abort code is one we recognise. */
 function describeAbort(raw: string): string {
   const decoded = decodeAbort(raw);
   return decoded.explanation === null ? raw : `${decoded.explanation} (${raw})`;
@@ -554,19 +419,14 @@ interface SimulatedTransaction {
   balanceChanges?: Array<{ coinType?: string; address?: string; amount?: string }>;
 }
 
-// === Subscriptions ===
-
 export interface SubscribeQuote extends CheckoutQuote {
   tierName: string;
-  /** Price per period in `T`'s smallest units. */
   pricePerPeriod: string;
   periodDays: number;
-  /** What the creator receives, from the SDK's split — not restated arithmetic. */
   creatorReceives: string;
   platformReceives: string;
 }
 
-/** Why a subscription cannot proceed, before any transaction is built. */
 export type SubscribeBlocker =
   | { kind: 'no-account' }
   | { kind: 'self-payment' }
@@ -577,14 +437,6 @@ export type SubscribeBlocker =
   | { kind: 'price-moved'; listed: string; live: string }
   | { kind: 'tier-inactive' };
 
-/**
- * Build and simulate a subscription.
- *
- * Two refusals happen *before* a transaction is built, because both are knowable from a read and
- * a failed simulation is a worse way to learn them: a creator cannot pay their own vault, and a
- * buyer cannot pay with a coin they do not hold. Everything else is left to the simulation, which
- * is the authority.
- */
 export async function prepareSubscribe(input: {
   sender: string;
   vaultId: string;
@@ -604,7 +456,6 @@ export async function prepareSubscribe(input: {
   if (tier === undefined) return fail('not-found', source, `no tier at index ${input.tierIndex}`);
   if (!tier.active) return ok({ blocked: { kind: 'tier-inactive' } });
 
-  // Knowable without spending gas to find out.
   if (input.sender.toLowerCase() === vault.value.owner.toLowerCase()) {
     return ok({ blocked: { kind: 'self-payment' } });
   }
@@ -616,7 +467,6 @@ export async function prepareSubscribe(input: {
   const balance = await totalBalance(client, input.sender, input.coinType);
   if (!balance.ok) return balance;
   if (balance.value < tier.price) {
-
     return ok({
       blocked: {
         kind: 'insufficient-balance',
@@ -629,19 +479,9 @@ export async function prepareSubscribe(input: {
   try {
     const tx = new Transaction();
 
-    /*
-      The payment coin.
-
-      `tx.coin` sources from the address balance when there is one and falls back to owned coin
-      objects otherwise. That distinction is not cosmetic: Sui holds funds either as discrete
-      `Coin` objects or as a balance held directly at the address, and this account's USDC is
-      entirely the latter — `coinBalance` 0, `addressBalance` 700000.
-    */
     const [payment] = tx.coin({ type: input.coinType, balance: tier.price });
 
     const [change] = tx.moveCall({
-      // public fun subscribe<T>(platform: &Platform, vault: &mut CreatorVault<T>,
-      //   buyer: &SocialAccount, tier_index: u64, payment: Coin<T>, clock: &Clock, ctx): Coin<T>
       target: `${config.value.latestPackageId}::creator::subscribe`,
       typeArguments: [input.coinType],
       arguments: [
@@ -680,8 +520,6 @@ export async function prepareSubscribe(input: {
       (c) => c.coinType === SUI_TYPE && c.address === input.sender,
     );
 
-    // Computed by the SDK's compute_split — the same function the drift test asserts against the
-    // published package — rather than restated here.
     const split = computeSplit(
       tier.price,
       vault.value.feeBpsSnapshot,
@@ -722,19 +560,11 @@ async function totalBalance(
   }
 }
 
-// === Tips and content unlocks ===
-
 export interface TipQuote extends CheckoutQuote {
   creatorReceives: string;
   platformReceives: string;
 }
 
-/**
- * Build and simulate a tip.
- *
- * A tip takes the whole coin — there is no price to overpay, so unlike `subscribe` nothing is
- * split off and no change comes back. The minimum is the creator's own `min_tip`.
- */
 export async function prepareTip(input: {
   sender: string;
   vaultId: string;
@@ -779,8 +609,6 @@ export async function prepareTip(input: {
     const tx = new Transaction();
     const [coin] = tx.coin({ type: input.coinType, balance: amount });
     tx.moveCall({
-      // public fun tip<T>(platform: &Platform, vault: &mut CreatorVault<T>,
-      //                   buyer: &SocialAccount, payment: Coin<T>, ctx)
       target: `${config.value.latestPackageId}::creator::tip`,
       typeArguments: [input.coinType],
       arguments: [
@@ -837,15 +665,11 @@ export interface UnlockQuote extends CheckoutQuote {
   platformReceives: string;
 }
 
-/**
- * Build and simulate a content unlock.
- */
 export async function prepareUnlock(input: {
   sender: string;
   vaultId: string;
   coinType: string;
   contentKey: string;
-  /** What the app listed this post at. The contract is the authority and aborts on a mismatch. */
   expectedPrice: string;
 }): Promise<Reading<UnlockQuote | { blocked: SubscribeBlocker }>> {
   const config = siteConfig();
@@ -867,25 +691,6 @@ export async function prepareUnlock(input: {
 
   try {
     const tx = new Transaction();
-    // The price is read on chain inside `unlock`, so the coin has to cover it. Sourced generously
-    // and the contract returns change, which is transferred back.
-    /*
-      The price is not read here. `unlock` reads it from the vault itself and takes exactly that,
-      returning the rest — so the caller only has to supply a coin that covers it. The app knows
-      what it listed the post at, and if that disagrees with the chain the contract aborts, which
-      is the correct authority. Looking the price up first would be the same read done twice.
-    */
-    /*
-      The live price IS read here, since 2026-09-02, and it is the number the quote reports.
-
-      `expectedPrice` is what the page listed when the row was written. The contract takes the
-      vault's live price and returns change, so a listing that had gone stale still executed — at
-      the live price — while the quote below reported `creatorReceives` and `platformReceives` for
-      a price nobody paid, and the manifest claimed the two were checked against each other. Now
-      they are: a lower or higher live price is a `price-moved` block (a measured fact, 200), and
-      the buyer confirms the number that will actually leave their wallet. An unpriced key is
-      `not-for-sale`, before any coin is touched.
-    */
     const listed = BigInt(input.expectedPrice);
     const live = await readContentPrice(client, vault.value.contentPricesTableId, input.contentKey);
     if (!live.ok) return live;
@@ -909,7 +714,6 @@ export async function prepareUnlock(input: {
 
     const [coin] = tx.coin({ type: input.coinType, balance: price });
     const [change] = tx.moveCall({
-      // public fun unlock<T>(platform, vault, buyer, content_key: vector<u8>, payment, clock, ctx): Coin<T>
       target: `${config.value.latestPackageId}::creator::unlock`,
       typeArguments: [input.coinType],
       arguments: [
@@ -964,20 +768,6 @@ export async function prepareUnlock(input: {
   }
 }
 
-
-// === Creator studio ===
-
-/**
- * Build and simulate `set_content_price`.
- *
- * A paid post cannot be sold until its key has a price on the vault: `unlock` reads the price from
- * chain and refuses content that has none. So this runs before the post is stored, and the studio
- * will not publish a paid post whose pricing transaction has not landed — otherwise the feed would
- * show a buy button that aborts every time.
- *
- * Requires the creator's `CreatorCap`, which the wallet holds. Nothing here can price content on a
- * vault the signer does not control.
- */
 export async function prepareSetContentPrice(input: {
   sender: string;
   vaultId: string;
@@ -993,7 +783,6 @@ export async function prepareSetContentPrice(input: {
   if (!/^\d+$/.test(input.price)) return fail('malformed', source, 'price must be a whole number');
   const price = BigInt(input.price);
   if (price <= 0n) {
-    // The contract refuses zero, and rightly: unpriced means "not for sale", never "free".
     return fail('malformed', source, 'a price must be greater than zero — free posts are public');
   }
 
@@ -1001,8 +790,6 @@ export async function prepareSetContentPrice(input: {
     const client = createClient(config.value);
     const tx = new Transaction();
     tx.moveCall({
-      // public fun set_content_price<T>(vault: &mut CreatorVault<T>, cap: &CreatorCap,
-      //                                 content_key: vector<u8>, price: u64)
       target: `${config.value.latestPackageId}::creator::set_content_price`,
       typeArguments: [input.coinType],
       arguments: [
@@ -1045,20 +832,6 @@ export async function prepareSetContentPrice(input: {
   }
 }
 
-/**
- * Open a `SocialAccount` and claim a handle.
- *
- * The first transaction any user signs, and the one that gates every other. Simulated first like
- * the rest, which here also catches the two races a client cannot rule out on its own: the handle
- * being taken since it was checked, and the address having gained an account in another tab.
- *
- * The handle is validated locally before the build, using rules mirrored from `account.move` and
- * asserted against it by a drift test. A rejected handle should cost a message, not gas.
- *
- * `referrer` is fixed at creation and there is no setter anywhere in the protocol — so it is passed
- * exactly as given and never inferred. Guessing one would permanently attribute a user's referral
- * revenue to somebody who did not refer them.
- */
 export async function prepareOpenAccount(input: {
   sender: string;
   handle: string;
@@ -1082,7 +855,6 @@ export async function prepareOpenAccount(input: {
   }
 
   if (input.referrer !== null && input.referrer.toLowerCase() === input.sender.toLowerCase()) {
-    // The contract aborts on this (ESelfReferral). Caught here so the message names the cause.
     return fail('malformed', source, 'you cannot refer yourself');
   }
 
@@ -1118,8 +890,6 @@ export async function prepareOpenAccount(input: {
         result?.balanceChanges?.find((c) => c.coinType === SUI_TYPE && c.address === input.sender)
           ?.amount ?? '0',
       gasMist: gasMist.toString(),
-      // Registration is free. The protocol charges a creation fee for creator vaults, never for
-      // an identity — a signup paywall on a social product leaves nobody to monetise.
       amountMist: '0',
     });
   } catch (error) {
@@ -1127,17 +897,6 @@ export async function prepareOpenAccount(input: {
   }
 }
 
-/**
- * Publish or rotate the sender's X25519 encryption key.
- *
- * The only transaction in this module that moves no money, and it still goes through the same
- * gate. The contract aborts on a key that is not 32 bytes or is all zeros, and a user who signs a
- * doomed transaction has still paid for the abort — so the simulation runs first and the failure
- * arrives as a sentence.
- *
- * `amountMist` is `"0"`. There is no amount; only gas. Reporting a fabricated figure to fill the
- * field would put a number in front of a user that means nothing.
- */
 export async function prepareKeyPublish(input: {
   sender: string;
   x25519PublicBase64: string;
@@ -1150,7 +909,6 @@ export async function prepareKeyPublish(input: {
 
   const source = 'key_registry::publish simulation';
 
-  // Both rules the contract enforces, checked here so they fail before the user is asked to sign.
   const key = decodeKey(input.x25519PublicBase64);
   if (!key.ok) return key;
 
@@ -1193,20 +951,6 @@ export async function prepareKeyPublish(input: {
   }
 }
 
-/**
- * Open a creator vault.
- *
- * The fee is read from the Platform object and split from the gas coin — never assumed, and never
- * taken from the client. `creation_fee_mist` is a value a capability holder can change, so a
- * hardcoded zero would be wrong the moment it does, silently and at the creator's expense.
- *
- * The contract returns a `CreatorCap` **and** the change from the fee. Both must be dealt with or
- * the transaction aborts on an unused value, so the builder transfers both back to the sender.
- *
- * The coin type is the vault's type parameter and cannot be changed afterwards: a vault priced in
- * USDC will only ever take USDC. It is passed in rather than defaulted, because defaulting it would
- * pick a currency for somebody's business.
- */
 export async function prepareOpenVault(input: {
   sender: string;
   accountId: string;
@@ -1224,23 +968,6 @@ export async function prepareOpenVault(input: {
     return fail('malformed', source, `"${input.coinType}" is not a coin type`);
   }
 
-  /*
-    The coin must be one this deployment offers, checked here rather than in the route.
-
-    `coinType` arrives in the request body. It was validated for *shape* and then used, so the
-    configured denomination was only ever a suggestion the form happened to follow — anyone posting
-    directly to `/api/creator/vault` could name any coin and get a signable transaction back for a
-    vault denominated in it. The type parameter is fixed at creation, so that vault would be
-    permanent.
-
-    This is the enforcement point instead of the route because it is what actually builds the
-    transaction: a second route reaching the same builder inherits the check rather than needing to
-    remember it.
-
-    Note what this is not. `open_vault<T>` remains generic with no on-chain allowlist, so the chain
-    still permits any coin — see `vaultCoinTypes`. This bounds what we will build and sign for,
-    which is the part we are responsible for.
-  */
   const offered = vaultCoinTypes();
   if (!offered.includes(input.coinType)) {
     return fail(
@@ -1255,9 +982,6 @@ export async function prepareOpenVault(input: {
   try {
     const client = createClient(config.value);
     const tx = new Transaction();
-    // Split even when the fee is zero: `collect_creation_fee` takes a `Coin<SUI>` regardless, and a
-    // zero-value coin is a legal one. Branching here would give the free and paid cases different
-    // transaction shapes, and only one of them would ever be exercised.
     const [payment] = tx.splitCoins(tx.gas, [BigInt(input.creationFeeMist)]);
     openCreatorVault(
       { config: config.value, tx },
@@ -1301,29 +1025,6 @@ export async function prepareOpenVault(input: {
   }
 }
 
-/**
- * Add a subscription tier.
- *
- * `price` and `period_ms` are two `u64`s in a row in the Move signature, which is exactly the
- * swap that produces a transaction that builds, signs and then sells a 30-day subscription for
- * 2,592,000,000 USDC. They are named separately here and asserted in order by `test/tx.test.ts`.
- *
- * The bounds are the contract's — one day to about ten years — and are checked before simulation so
- * the message names the rule rather than an abort code.
- */
-/**
- * Close a creator vault to new payments, or reopen it.
- *
- * # Retiring a page is this, and only this
- *
- * `creator.move` has no destroy, close or delete. A `CreatorVault` is shared and permanent, which is
- * correct: subscriptions and unlocks already sold point at it, and removing it would orphan things
- * people paid for. So retiring means refusing new money.
- *
- * Nothing is taken from anyone. Earnings stay withdrawable, entitlements already bought keep
- * working, and posts stay readable. That is why the control is safe to offer and why it is
- * reversible — a creator who closes on a bad week must be able to reopen on a better one.
- */
 export async function prepareSetAccepting(input: {
   sender: string;
   vaultId: string;
@@ -1346,7 +1047,6 @@ export async function prepareSetAccepting(input: {
       },
     ),
     input.sender,
-    // Nothing is paid to anybody: this moves no value, it flips a flag on the vault.
     '0',
   );
 }
@@ -1426,18 +1126,6 @@ export async function prepareAddTier(input: {
   }
 }
 
-/**
- * Withdraw creator earnings.
- *
- * The only transaction here that moves money *out* to the person who signs it, and it goes through
- * exactly the same gate as the ones that move money in — build, simulate, quote, then offer to
- * sign. That symmetry is the point: a withdrawal quoted against a stale balance aborts at the
- * creator's expense, and "your own money" is not a reason to skip a check.
- *
- * `amount` is in the coin's smallest units and stays a `bigint` throughout. The contract refuses
- * more than the balance; asking for exactly the balance is the normal case and must work to the
- * last unit, which is why nothing here ever becomes a `Number`.
- */
 export async function prepareClaimEarnings(input: {
   sender: string;
   vaultId: string;
@@ -1464,9 +1152,6 @@ export async function prepareClaimEarnings(input: {
         vaultId: input.vaultId,
         capId: input.capId,
         amount,
-        // Back to the signer. The contract returns a `Coin<T>` that must be dealt with or the
-        // transaction aborts on an unused value, and sending it anywhere else would be this
-        // application choosing a destination for someone else's money.
         recipient: input.sender,
       },
     );
@@ -1503,24 +1188,6 @@ export async function prepareClaimEarnings(input: {
   }
 }
 
-/**
- * Every `CreatorCap` this address holds, indexed by the vault each one governs.
- *
- * # Why a map and not one cap
- *
- * `CreatorCap { id: UID, vault: ID }` is bound to a single vault, and `assert_cap` checks the
- * binding on every privileged call. A creator with two vaults holds two caps, and using the first
- * one against the second vault aborts.
- *
- * `findCreatorCap` — which returns whichever cap came back first — is therefore only correct for a
- * creator who owns exactly one vault. It was used to build the earnings page and produced a page
- * offering to withdraw from a second vault with a cap that governs the first. Nothing failed,
- * because the second vault had earned nothing yet; the first payment into it would have turned a
- * withdraw button into an abort the creator paid gas for.
- *
- * The `vault` field is read from each cap rather than inferred, so the mapping is the chain's and
- * not a guess about the order objects are returned in.
- */
 export async function findCreatorCaps(owner: string): Promise<Reading<Map<string, string>>> {
   const config = siteConfig();
   if (!config.ok) return config;
@@ -1550,9 +1217,6 @@ export async function findCreatorCaps(owner: string): Promise<Reading<Map<string
             ? Uint8Array.from(Buffer.from(raw, 'base64'))
             : null;
 
-      // `CreatorCap` is 32 bytes of id followed by 32 bytes of vault id. A shorter buffer is a
-      // different struct that happened to match the type filter, and decoding it would produce a
-      // plausible-looking vault id pointing at nothing.
       if (bytes === null || bytes.length < 64) {
         return fail(
           'malformed',
@@ -1572,12 +1236,6 @@ export async function findCreatorCaps(owner: string): Promise<Reading<Map<string
   }
 }
 
-/**
- * The caller's first `CreatorCap`.
- *
- * Correct only where the caller owns one vault — the studio's content pricing, which already works
- * against a single named vault. Anything that iterates vaults must use {@link findCreatorCaps}.
- */
 export async function findCreatorCap(owner: string): Promise<Reading<string | null>> {
   const config = siteConfig();
   if (!config.ok) return config;

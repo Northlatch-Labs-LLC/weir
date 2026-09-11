@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The real server, over a real unix socket, with a throwaway key and no network.
- *
- * `purse.test.ts` proves the decision. This file proves the process around it: the order of the
- * checks at start, the socket's mode, the framing, and that a request over the wire produces the
- * same value a direct call does.
- */
 
 import { describe, expect, it } from 'vitest';
 import { chmod, readFile, stat, writeFile } from 'node:fs/promises';
@@ -47,13 +40,9 @@ interface Laid {
   readonly socketPath: string;
   readonly auditPath: string;
   readonly logged: string[];
-  /** The hot key's own address. */
   readonly hotAddress: string;
-  /** The address the purse is expected to sign as: the multisig's when laid with one, else the hot key's. */
   readonly address: string;
-  /** The multisig public key, when laid with one, for verifying what comes back over the socket. */
   readonly multisigKey: MultiSigPublicKey | null;
-  /** Where the members document was written, so a test can tamper with it before start. */
   readonly multisigDocPath: string;
 }
 
@@ -61,13 +50,9 @@ async function laid(
   overrides: {
     readonly pin?: string;
     readonly env?: Record<string, string | undefined>;
-    /** Lay out a 1-of-2 multisig of the hot key and a throwaway brake, and pass --multisig. */
     readonly multisig?: boolean;
-    /** Write the policy for the hot key's own address even though the purse signs as the multisig. */
     readonly policyForHot?: boolean;
-    /** Name a stranger as the multisig's first member instead of the hot key. */
     readonly hotNotMember?: boolean;
-    /** Write the policy for the multisig but start the purse WITHOUT --multisig. */
     readonly dropFlag?: boolean;
   } = {},
 ): Promise<Laid> {
@@ -195,8 +180,6 @@ describe('starting', () => {
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error('unreachable');
-    // The environment complaint, not the pin complaint: the surface check runs first, so a process
-    // started wrongly dies at its first instruction rather than after creating a socket.
     expect(outcome.refused.reason).toContain('ANYTHING');
     await expect(stat(laidOut.socketPath)).rejects.toThrow();
   });
@@ -225,8 +208,6 @@ describe('signing as the multisig', () => {
     if (!('digest' in answered.value)) throw new Error('a transaction was expected');
     const bytes = new Uint8Array(Buffer.from(answered.value.txBytesB64, 'base64'));
     expect(await laidOut.multisigKey!.verifyTransaction(bytes, answered.value.signature)).toBe(true);
-    // The audit line carries the multisig address: the ledger and the chain are about the address
-    // that spends, which is the multisig's.
     const audit = await readFile(laidOut.auditPath, 'utf8');
     const last = JSON.parse(audit.trim().split('\n').at(-1)!) as { address: string; outcome: string };
     expect(last.outcome).toBe('signed');
@@ -305,9 +286,6 @@ describe('over the socket', () => {
     const s = await started();
     await new Promise<void>((resolve) => {
       const socket = connect(s.socketPath, () => socket.end('give me the key\n'));
-      // The `data` listener is not decoration: a socket with no consumer stays paused, never reads
-      // the answer, and therefore never sees the FIN behind it — so `close` never fires and this
-      // test hangs rather than failing. Attaching it is what puts the socket into flowing mode.
       socket.on('data', () => undefined);
       socket.on('close', () => resolve());
       socket.on('error', () => resolve());
@@ -319,13 +297,6 @@ describe('over the socket', () => {
     await s.running.stop();
   });
 
-  /*
-    A2 from Security's review of 2026-09-05.
-
-    `serve` answered an oversize request itself and never called the purse, so the one probe most
-    likely to be somebody feeling out the socket left no line at all — in the file `audit-file.ts`
-    says the purse keeps its own chain for.
-  */
   it('chains a refused line for a request over the size limit', async () => {
     const s = await started();
     const oversize = `{"intent":"${'x'.repeat(MAX_REQUEST_BYTES + 1024)}"}\n`;

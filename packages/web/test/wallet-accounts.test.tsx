@@ -1,33 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What `SignerProvider` still decides about wallets, now that it does not implement them.
- *
- * # What moved, and why this file is shorter than it was
- *
- * Discovery, connecting, disconnecting, autoconnect, the remembered wallet and the extension's own
- * `standard:events` account changes are `@mysten/dapp-kit`'s. Eighteen assertions in the previous
- * version of this file tested that plumbing against a hand-built mock of `standard:connect` and
- * `standard:events` — they were testing an implementation this repository no longer has, and
- * keeping them would have meant maintaining a second, worse copy of dapp-kit's own suite.
- *
- * They are not dropped quietly. Each is named below with what now covers it:
- *
- *   reconnecting from a stored record, and not reconnecting from a stale one
- *     -> `WalletProvider autoConnect` and its `storageKey`
- *   following the extension when the bound address stops being authorised, re-binding when one
- *   address remains, signing out when access is revoked, ignoring an empty change
- *     -> dapp-kit's wallet store, which subscribes to `standard:events` itself
- *   reading the authorised set from the wallet object rather than only from `connect()`
- *     -> `useAccounts`, which reports the wallet's set rather than a connect result
- *
- * # What is left is the part nobody else can test for us
- *
- * Whether several authorised addresses produce a QUESTION rather than a guess; that choosing one
- * switches to that one; that re-authorising asks the extension from nothing rather than accepting
- * its cached answer; that signing out reaches the server; and that no signature is ever requested
- * against a chain this deployment did not name. Those are product decisions, and they are here.
- */
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,13 +15,6 @@ const account = (address: string, label?: string) => ({
 const A = account('0x' + 'a'.repeat(64), 'Trading');
 const B = account('0x' + 'b'.repeat(64));
 
-/**
- * The wallet the kit reports.
- *
- * `accounts` is on the wallet itself, which is where the authorised set lives now — the previous kit
- * exposed it through a `useAccounts` hook, the rewrite removed that, and the migration guide points
- * at the connection's wallet. Rebuilt per test by {@link walletWith} so the two never disagree.
- */
 const WALLET = {
   name: 'Test Wallet',
   chains: ['sui:mainnet'],
@@ -57,7 +22,6 @@ const WALLET = {
   accounts: [] as unknown[],
 };
 
-/* What the kit reports. Set per test, before rendering. */
 let currentWallet: unknown = null;
 let currentAccount: unknown = null;
 let connectResult: { accounts: unknown[] } = { accounts: [] };
@@ -66,18 +30,10 @@ const disconnect = vi.fn(async () => undefined);
 const switchAccount = vi.fn();
 const order: string[] = [];
 
-/** The connected wallet, carrying exactly the addresses this test wants it to authorise. */
 function walletWith(accounts: unknown[]) {
   return { ...WALLET, accounts };
 }
 
-/*
-  The kit is one object with methods, not a set of mutation hooks.
-
-  `useConnectWallet`/`useDisconnectWallet`/`useSwitchAccount` were react-query mutations in the
-  deprecated kit; the rewrite dropped react-query entirely and put the actions on the instance
-  `useDAppKit()` returns. The provider calls them directly, so that is what is mocked.
-*/
 const kit = {
   connectWallet: async () => {
     order.push('connect');
@@ -90,14 +46,6 @@ const kit = {
   switchAccount,
 };
 
-/*
-  The app router, which this provider now touches.
-
-  `proveSession` calls `router.refresh()` after the server accepts a signature: entitlement is
-  resolved on the server, so without it the reader sits looking at their own paid posts, locked.
-  `useRouter` throws outside a router context, so it is stubbed here rather than the refresh being
-  dropped to keep a test quiet.
-*/
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/',
@@ -120,7 +68,6 @@ vi.mock('@mysten/sui/grpc', () => ({ SuiGrpcClient: class {} }));
 const { SignerProvider, useSigner } = await import('../components/SignerProvider');
 const { SESSION_STORAGE_KEY } = await import('../lib/zklogin');
 
-/** Renders what the provider reports, and exposes its actions as buttons. */
 function Probe() {
   const s = useSigner();
   return (
@@ -201,11 +148,6 @@ describe('several authorised addresses are a question, not a guess', () => {
   });
 
   it('asks which, when the wallet authorised several', async () => {
-    /*
-      dapp-kit binds the first account it is handed. That is the wrong answer here: which address
-      is bound decides whose vault, whose earnings and whose messages are on screen, and picking
-      one silently is how somebody reads the wrong account's money.
-    */
     connectResult = { accounts: [A, B] };
     currentWallet = walletWith([A, B]);
     mount();
@@ -294,10 +236,6 @@ describe('what the provider reports about the wallet', () => {
 });
 
 describe('a deployment that does not know its network signs nothing', () => {
-  /*
-    A wallet is asked to sign for `sui:<network>`. With the configuration unread there is no honest
-    value for that, and the failure a guess produces is a signature valid on a chain nobody chose.
-  */
   it('builds no signer, even with a wallet and an account connected', async () => {
     currentWallet = walletWith([A]);
     currentAccount = A;
@@ -324,11 +262,6 @@ describe('signing out', () => {
 
     expect(disconnect).toHaveBeenCalled();
     expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
-    /*
-      The DELETE is the part that matters. Clearing this browser leaves a cookie that still proves
-      a reader for as long as it has left to live, so signing out without it means the server has
-      not agreed that anybody signed out.
-    */
     const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
     expect(
       calls.some(

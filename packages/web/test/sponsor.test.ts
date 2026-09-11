@@ -1,22 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Sponsored registration — the guard, the key, and the cap.
- *
- * # What is actually at risk here
- *
- * This is the one path in the application where the server signs a gas payment. Everything else it
- * signs moves nothing. So the tests below are not about whether the happy path works — they are
- * about whether the three things that bound our exposure hold:
- *
- *   1. We only ever sign a transaction that is EXACTLY one `account::open`. If that check can be
- *      slipped past, our sponsor key pays for whatever the caller wanted.
- *   2. The key is loaded strictly, and a missing key is a calm refusal rather than a crash — and
- *      the key's value never appears in an error.
- *   3. "The first fifty" holds under concurrency. A cap enforced by reading a count and then
- *      acting on it has a window; this one is enforced by the database.
- *
- * The first is mutation-tested at the end: a weakened guard must fail a test.
- */
 
 import { beforeEach, afterAll, describe, expect, it } from 'vitest';
 import { Transaction } from '@mysten/sui/transactions';
@@ -34,7 +16,6 @@ const OTHER = `0x${'e'.repeat(64)}`;
 const config = { latestPackageId: LATEST } as unknown as Parameters<typeof assertIsOnlyAccountOpen>[1];
 const SENDER = `0x${'9'.repeat(64)}`;
 
-/** A transaction with a single MoveCall at a chosen target. */
 function callTo(target: string): Transaction {
   const tx = new Transaction();
   tx.setSender(SENDER);
@@ -50,28 +31,17 @@ describe('the guard on what we will pay gas for', () => {
   });
 
   it('refuses a call to any other function', () => {
-    // creator::claim_earnings is a real function that moves money. Sponsoring it would be paying
-    // an attacker's gas to withdraw somebody's earnings.
     const r = assertIsOnlyAccountOpen(callTo(`${LATEST}::creator::claim_earnings`), config);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.failure.detail).toContain('claim_earnings');
   });
 
   it('refuses the right function on the wrong package', () => {
-    /*
-      The ORIGINAL package id resolves and executes — it is the older bytecode of this same
-      package. A sponsored call there would run code we did not intend to sponsor, and would look
-      correct in every log that prints only the function name.
-    */
     const r = assertIsOnlyAccountOpen(callTo(`${OTHER}::account::open`), config);
     expect(r.ok).toBe(false);
   });
 
   it('refuses a transaction that opens an account AND does something else', () => {
-    /*
-      This is the attack the equality check exists for. A filter that asked "does it contain an
-      account::open?" would pass this, and we would have paid for the transfer beside it.
-    */
     const tx = new Transaction();
     tx.setSender(SENDER);
     tx.moveCall({ target: `${LATEST}::account::open`, arguments: [tx.pure.string('kaela')] });
@@ -80,8 +50,6 @@ describe('the guard on what we will pay gas for', () => {
 
     const r = assertIsOnlyAccountOpen(tx, config);
     expect(r.ok).toBe(false);
-    // The message now names the allowed shape per action — "exactly [MoveCall] and nothing else"
-    // for an account, "[SplitCoins, MoveCall]" for a vault. Still an equality, still a refusal.
     if (!r.ok) expect(r.failure.detail).toMatch(/exactly \[MoveCall\] and nothing else/);
   });
 
@@ -104,7 +72,6 @@ describe('loading the sponsor key', () => {
   it('is unconfigured, not broken, when the variable is absent', () => {
     const r = loadSponsor({} as unknown as NodeJS.ProcessEnv);
     expect(r.ok).toBe(false);
-    // The route turns this into 501, not 500. A deployment that does not run the offer is fine.
     if (!r.ok) expect(r.failure.kind).toBe('unconfigured');
   });
 
@@ -115,7 +82,6 @@ describe('loading the sponsor key', () => {
   });
 
   it('never puts the key value in the error', () => {
-    // The one thing an error from this function must never contain is the thing it failed to read.
     const secret = 'suiprivkey1thisisnotarealkeyandmustnotappearinanymessage';
     const r = loadSponsor({ PROJECTX_SOCIAL_SPONSOR_KEY: secret } as unknown as NodeJS.ProcessEnv);
     expect(r.ok).toBe(false);
@@ -158,17 +124,10 @@ describe('the cap, enforced by the database', () => {
   });
 
   it('reuses a seat whose hold expired instead of jamming on it', async () => {
-    /*
-      The defect this exists for: an expired hold leaves its row behind holding its seat. With
-      `ON CONFLICT DO NOTHING` the next request selected that seat as free, collided with the
-      stale row, and came back empty — reported as "the offer is fully taken" at three seats of
-      fifty. The offer jammed permanently on the first hold that ever expired.
-    */
     const t0 = 1_000_000;
     const first = await reserveSeat({ address: `0x${'1'.repeat(64)}`, handle: 'expiredone', gasBudgetMist: 1n, nowMs: t0 });
     expect(first.ok).toBe(true);
 
-    // Long past the hold, a different agent asks. It must get a seat, not a refusal.
     const later = t0 + SEAT_HOLD_MS + 1;
     const second = await reserveSeat({ address: `0x${'2'.repeat(64)}`, handle: 'freshone', gasBudgetMist: 1n, nowMs: later });
     expect(second.ok).toBe(true);
@@ -176,7 +135,6 @@ describe('the cap, enforced by the database', () => {
   });
 
   it('never takes over a seat that was actually claimed', async () => {
-    // The guard that makes the takeover safe. A claimed seat is gone forever, however old it is.
     const t0 = 2_000_000;
     const r = await reserveSeat({ address: `0x${'3'.repeat(64)}`, handle: 'claimedone', gasBudgetMist: 1n, nowMs: t0 });
     expect(r.ok).toBe(true);
@@ -189,10 +147,6 @@ describe('the cap, enforced by the database', () => {
   });
 
   it('refuses a handle another seat already claimed', async () => {
-    /*
-      Without this, fifty seats could be spent racing for one desirable name and forty-nine of them
-      would buy a transaction that aborts on chain — the offer exhausted with two accounts opened.
-    */
     await reserveSeat({ address: addr(1), handle: 'atlas', gasBudgetMist: 0n, nowMs: now });
     const clash = await reserveSeat({ address: addr(2), handle: 'atlas', gasBudgetMist: 0n, nowMs: now });
     expect(clash.ok).toBe(false);
@@ -210,7 +164,6 @@ describe('the cap, enforced by the database', () => {
     expect(overflow.ok).toBe(false);
     if (!overflow.ok) {
       expect(overflow.failure.kind).toBe('budget-exhausted');
-      // And it tells them registration still works — the offer ending is not the door closing.
       expect(overflow.failure.detail).toContain('0.006 SUI');
     }
   });
@@ -234,24 +187,15 @@ describe('the cap, enforced by the database', () => {
 
   it('sweeps a seat that was held and never claimed, once the hold expires', async () => {
     await reserveSeat({ address: addr(1), handle: 'one', gasBudgetMist: 0n, nowMs: now });
-    // The same instant: still held.
     const held = await seatsRemaining(now);
     expect(held.ok).toBe(true);
     if (held.ok) expect(held.value).toBe(SPONSORSHIP_SEATS - 1);
-    // One millisecond past the hold: available again.
     const later = await seatsRemaining(now + SEAT_HOLD_MS + 1);
     expect(later.ok && later.value).toBe(SPONSORSHIP_SEATS);
   });
 
   it('does not sweep a seat that was actually claimed', async () => {
-    /*
-      A claimed seat is permanent. Sweeping one would offer somebody else a handle that is already
-      taken on chain, and their sponsored transaction would abort — our gas, their failure.
-    */
     await reserveSeat({ address: addr(1), handle: 'one', gasBudgetMist: 0n, nowMs: now });
-    // Marked claimed the way confirmClaimsFromChain marks it: a timestamp, nothing else. There is
-    // no digest column, because a digest could only come from the party it benefits — the chain is
-    // the authority on whether a registration happened.
     await testDb().query(
       'UPDATE agent_sponsorships SET claimed_at_ms = $1 WHERE address = $2',
       [now, addr(1)],
@@ -261,11 +205,6 @@ describe('the cap, enforced by the database', () => {
   });
 
   it('the gas ceiling is a chosen constant, not whatever a simulation returned', () => {
-    /*
-      What we sign becomes the most an attacker can burn per seat. It has to be a number decided
-      here. Fifty seats at this ceiling is the worst case for the whole offer, and it must stay
-      small enough that losing all of it is an annoyance rather than an incident.
-    */
     expect(SPONSORED_GAS_BUDGET_MIST).toBe(20_000_000n);
     const worstCaseSui = Number(SPONSORED_GAS_BUDGET_MIST * BigInt(SPONSORSHIP_SEATS)) / 1e9;
     expect(worstCaseSui).toBeLessThanOrEqual(1);
@@ -274,11 +213,6 @@ describe('the cap, enforced by the database', () => {
 
 describe('the vault guard — what it must let through and what it must not', () => {
   const VAULT_CFG = config;
-  /*
-    The payment is MINTED empty, not split off the gas coin. In a sponsored transaction the gas
-    belongs to the sponsor and Sui rejects the sender spending it as an input, so a fixture built
-    with splitCoins would test a shape that cannot execute on chain.
-  */
   const mk = (target: string, opts: { transfers?: number; recipient?: string } = {}) => {
     const tx = new Transaction();
     tx.setSender(SENDER);
@@ -291,17 +225,11 @@ describe('the vault guard — what it must let through and what it must not', ()
   };
 
   it('accepts the real shape: mint an empty coin, open, transfer home', () => {
-    /*
-      Three commands, each mandatory: a zero payment coin `open_vault` can consume, the open
-      itself, and the transfer that rehomes the CreatorCap and change Move will not let us drop.
-    */
     const r = assertIsOnlyAccountOpen(mk(`${LATEST}::creator::open_vault`), VAULT_CFG, 'vault');
     expect(r.ok).toBe(true);
   });
 
   it('refuses a vault transaction that transfers to somebody else', () => {
-    // The attack the recipient check exists for: we pay the gas, an attacker receives the
-    // CreatorCap, and controls a creator's earnings from that moment on.
     const stranger = `0x${'a'.repeat(64)}`;
     const r = assertIsOnlyAccountOpen(
       mk(`${LATEST}::creator::open_vault`, { recipient: stranger }),
@@ -313,12 +241,6 @@ describe('the vault guard — what it must let through and what it must not', ()
   });
 
   it('refuses a vault that pays out of the sponsor gas coin', () => {
-    /*
-      The bug a real mainnet run caught. Splitting the payment off `tx.gas` builds and passes a
-      naive shape check, then fails on chain with "Gas object is not an owned object with owner:
-      AddressOwner(sender)" — because in a sponsored transaction that coin is the sponsor's. This
-      keeps the dead shape dead.
-    */
     const tx = new Transaction();
     tx.setSender(SENDER);
     const [coin] = tx.splitCoins(tx.gas, [0n]);
@@ -338,7 +260,6 @@ describe('the vault guard — what it must let through and what it must not', ()
   });
 
   it('refuses the vault shape when the action is an account', () => {
-    // An account open is exactly one MoveCall. The extra commands are not permitted there.
     const r = assertIsOnlyAccountOpen(mk(`${LATEST}::account::open`), VAULT_CFG, 'account');
     expect(r.ok).toBe(false);
   });

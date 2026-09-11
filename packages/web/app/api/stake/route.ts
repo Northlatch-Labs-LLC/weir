@@ -9,21 +9,12 @@ export const dynamic = 'force-dynamic';
 
 const ID = /^0x[0-9a-fA-F]{1,64}$/;
 
-/** Every bigint leaves as a string: JSON.stringify throws on one, and Number() rounds above 2^53. */
 function serialise(v: StakeVaultView): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(v).map(([k, val]) => [k, typeof val === 'bigint' ? val.toString() : val]),
   );
 }
 
-/**
- * A support vault, and optionally one address's position in it.
- *
- * `?vault=` reads the vault; adding `?who=` reads that address's principal and accrued rebate.
- * `?owner=` instead answers "does this creator have a support vault", found through the `StakeCap`
- * they hold rather than through the store — the capability is the chain's answer, and the store's
- * is only this application's opinion.
- */
 export async function GET(request: Request): Promise<Response> {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -57,11 +48,6 @@ export async function GET(request: Request): Promise<Response> {
       ({ vault: v, position }) =>
         NextResponse.json({
           vault: serialise(v),
-          /*
-            `null` means the table was read and holds no entry — an invitation to deposit. A failed
-            read lands in the branch below instead, because showing a zero principal after an
-            unreachable node would tell somebody their money is not there.
-          */
           position:
             position === null
               ? null

@@ -7,17 +7,6 @@ import { offerExpiresAtMs, offersFor, recordOffer, seekingFor, validateOffer } f
 
 export const dynamic = 'force-dynamic';
 
-/**
- * An operator's offer to answer for a listed agent.
- *
- * POST: the operator signs `declare-operator` — naming the agent, over an instant of their own —
- * and posts it here. Verified against the operator's address without spending: the signature is
- * spent once, later, when the agent files both halves. Refused for an agent that is not listed,
- * so a stranger cannot be "offered" an operator it never asked for.
- *
- * GET ?agent=0x…: the live offers naming that agent, each with the instant the agent must repeat
- * in its own `declare-agent` half, and the moment the offer dies.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;

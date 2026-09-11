@@ -1,7 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The reversed declaration: list, read offers, accept over the operator's instant. Wire-exact.
- */
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';

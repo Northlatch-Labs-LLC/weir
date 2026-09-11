@@ -1,14 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The waiting room, end to end: an agent posts its half, the operator's list shows it, both halves
-  file through the register route, and the list is empty again.
-
-  Mutations predicted: skip the verification in POST pending → "a half that does not verify is
-  refused" red; spend the signature in POST pending → "filing after a pending post succeeds" red
-  (the register route would refuse the spent signature); drop the window filter in the list →
-  "an expired request is not listed" red.
-*/
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -27,9 +18,6 @@ vi.mock('@/lib/chain', () => ({
     observedAtMs: 0,
   }),
 }));
-// A store fault the pending route's catch branch must turn into the fixed sentence, never echo.
-// Named the way `agent-mind.test.ts` names its walrus fault: a flag one test arms and the mock
-// checks, so every other test in this file still hits the real, disposable database.
 const declarationStoreFault = vi.hoisted(() => ({ next: null as string | null }));
 vi.mock('@/lib/agent-declarations', async (importActual) => {
   const actual = await importActual<typeof import('../lib/agent-declarations')>();
@@ -46,8 +34,6 @@ vi.mock('@/lib/agent-declarations', async (importActual) => {
   };
 });
 
-// Same shape, for the register route's own write: `recordDeclaration` in `lib/agents`, faulted
-// once per arming, real database otherwise. See the note beside `declarationStoreFault` above.
 const declarationRecordFault = vi.hoisted(() => ({ next: null as string | null }));
 vi.mock('@/lib/agents', async (importActual) => {
   const actual = await importActual<typeof import('../lib/agents')>();
@@ -109,11 +95,9 @@ describe('the waiting room', () => {
     expect(listed.requests).toHaveLength(1);
     expect(listed.requests[0]).toMatchObject({ address: AGENT, agentSignature: half.agentSignature, expiresAtMs: issued + SIGNATURE_WINDOW_MS });
 
-    // Another operator sees nothing: the list is per wallet.
     const other = (await (await listPending(Ed25519Keypair.generate().toSuiAddress())).json()) as { requests: unknown[] };
     expect(other.requests).toEqual([]);
 
-    // The operator signs; the register route verifies both and files. The agent's signature was not spent by the waiting room.
     const filed = await postDeclare({ ...half, operatorSignature: await operatorHalf(issued) });
     expect(filed.status, await filed.clone().text()).toBe(201);
 
@@ -125,7 +109,6 @@ describe('the waiting room', () => {
 
   it('a half that does not verify is refused and never listed', async () => {
     const issued = Date.now();
-    // Signed for a different operator than the one named in the body: the rebuilt statement differs.
     const r = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued, { operator: Ed25519Keypair.generate().toSuiAddress() }) });
     expect(r.status).toBe(401);
     const listed = (await (await listPending(OPERATOR)).json()) as { requests: unknown[] };
@@ -140,7 +123,6 @@ describe('the waiting room', () => {
 
   it('an expired request is not listed, and a second post by the same agent replaces the first', async () => {
     const stale = Date.now() - SIGNATURE_WINDOW_MS - 1_000;
-    // The route refuses a stale half outright — the window is checked at verification.
     expect((await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: stale, agentSignature: await agentHalf(stale) })).status).toBe(401);
 
     const first = Date.now() - 60_000;
@@ -151,7 +133,6 @@ describe('the waiting room', () => {
     expect(listed.requests).toHaveLength(1);
     expect(listed.requests[0]?.issuedAtMs).toBe(second);
 
-    // Age the surviving row past the window in the table itself: the list must drop it.
     await testDb().query('UPDATE agent_declaration_requests SET issued_at_ms = $2 WHERE address = $1', [AGENT, stale]);
     const aged = (await (await listPending(OPERATOR)).json()) as { requests: unknown[] };
     expect(aged.requests).toEqual([]);
@@ -163,8 +144,6 @@ describe('the waiting room', () => {
   });
 
   it('a write that throws after the signature verifies answers a fixed sentence, never the raw database error — Security F1, 2026-09-04', async () => {
-    // A realistic Postgres-shaped message: names a table and a constraint, the exact detail a
-    // caller — now including an MCP-connected agent through `weir_declare` — must never see.
     declarationStoreFault.next = 'duplicate key value violates unique constraint "agent_declaration_requests_pkey" on agent_declaration_requests';
     const issued = Date.now();
     const r = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) });
@@ -174,7 +153,6 @@ describe('the waiting room', () => {
     expect(body.error).not.toContain('constraint');
     expect(body.error).not.toContain('agent_declaration_requests');
 
-    // The fault was one-shot: the next attempt, against the real database, succeeds normally.
     expect(declarationStoreFault.next).toBeNull();
     const retried = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) });
     expect(retried.status, await retried.clone().text()).toBe(201);
@@ -191,8 +169,6 @@ describe('the waiting room', () => {
     expect(body.error).not.toContain('constraint');
     expect(body.error).not.toContain('agent_accounts');
 
-    // The fault was one-shot; both signatures were spent by the failed attempt, so the honest
-    // retry the fixed sentence tells the caller to make needs fresh ones, not a resend of these.
     expect(declarationRecordFault.next).toBeNull();
     const freshIssued = Date.now() + 1;
     const freshHalf = { address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: freshIssued, agentSignature: await agentHalf(freshIssued) };
@@ -201,32 +177,12 @@ describe('the waiting room', () => {
   });
 });
 
-/*
-  The register's own objection to a pair — `operatorConflict` against real rows, and the routes
-  refusing on it with 409 before any signature is spent.
-
-  Mutations predicted: drop the first UNION branch → "a machine cannot answer for a machine" red;
-  drop the second → "the person other machines answer for cannot become one" red; drop the window
-  on the third → "an expired request is no objection" red; move the call after `verifyAction` in the
-  declare route → the spent-signature assertion in the first test red.
-
-  NOT RUN on 2026-09-03 when written: Postgres was not running on the laptop and was not started on
-  an agent's own decision. It runs with the database project; if it is red, the code is wrong or this
-  file is, and the report says which was not checked.
-*/
 const { operatorConflict } = await import('../lib/agents');
 
 describe('operators and agents are disjoint sets', () => {
   const third = Ed25519Keypair.generate();
   const THIRD = third.toSuiAddress();
 
-  /*
-    `resetDatabase` truncates the content tables and nothing else, and the waiting-room tests above
-    file AGENT into the register for real. Left there, that row makes "a fresh pair" not fresh and
-    "AGENT was not recorded" false before this describe has done anything. Cleared for exactly the
-    three addresses this describe uses — not the whole table — so a register row another suite is
-    mid-assertion on is never removed from under it.
-  */
   beforeEach(async () => {
     await testDb().query(
       'DELETE FROM agent_accounts WHERE address = ANY($1) OR operator_address = ANY($1)',
@@ -247,16 +203,14 @@ describe('operators and agents are disjoint sets', () => {
   });
 
   it('a machine cannot answer for a machine: an operator who is a live declared agent', async () => {
-    await fileRow(OPERATOR, THIRD); // OPERATOR is itself an agent, operated by THIRD
+    await fileRow(OPERATOR, THIRD);
     const why = await operatorConflict(AGENT, OPERATOR);
     expect(why).toMatch(/is itself a declared agent/);
 
-    // The declare route refuses on it with 409 and spends neither signature.
     const issued = Date.now();
     const agentSig = await agentHalf(issued);
     const r = await postDeclare({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: agentSig, operatorSignature: await operatorHalf(issued) });
     expect(r.status, await r.clone().text()).toBe(409);
-    // `verifyAction` spends by SHA-256 of the signature string (lib/identity.ts); the same digest here.
     const spent = await testDb().query('SELECT 1 FROM used_signatures WHERE digest = $1', [createHash('sha256').update(agentSig).digest()]);
     expect(spent.rowCount).toBe(0);
     const rows = await testDb().query('SELECT 1 FROM agent_accounts WHERE address = $1', [AGENT]);
@@ -270,13 +224,13 @@ describe('operators and agents are disjoint sets', () => {
   });
 
   it('the person other machines answer for cannot become one: an agent who is a live operator', async () => {
-    await fileRow(THIRD, AGENT); // AGENT operates THIRD
+    await fileRow(THIRD, AGENT);
     expect(await operatorConflict(AGENT, OPERATOR)).toMatch(/is the declared operator of other agents/);
   });
 
   it('the two-key loop is refused at its second declaration', async () => {
-    await fileRow(AGENT, OPERATOR); // A operated by B
-    expect(await operatorConflict(OPERATOR, AGENT)).toMatch(/is itself a declared agent/); // B by A: A is an agent
+    await fileRow(AGENT, OPERATOR);
+    expect(await operatorConflict(OPERATOR, AGENT)).toMatch(/is itself a declared agent/);
   });
 
   it('an address with a live request to be declared cannot be named as an operator; an expired request is no objection', async () => {
@@ -287,10 +241,8 @@ describe('operators and agents are disjoint sets', () => {
       [OPERATOR, THIRD, issued],
     );
     expect(await operatorConflict(AGENT, OPERATOR)).toMatch(/has a live request to be declared an agent/);
-    // The waiting room refuses the half too, before proving it.
     const r = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) });
     expect(r.status, await r.clone().text()).toBe(409);
-    // Once the window has passed, the request is dead and the pair is clean.
     expect(await operatorConflict(AGENT, OPERATOR, issued + SIGNATURE_WINDOW_MS + 1)).toBeNull();
   });
 });

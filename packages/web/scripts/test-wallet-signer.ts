@@ -1,32 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A local signing service that stands in for a wallet extension, so the browser UI can be driven
- * end to end.
- *
- * # What this is, precisely
- *
- * A **test double for the extension only.** It holds two Ed25519 keypairs and produces real Sui
- * signatures — the same bytes a wallet produces, verified by the same code the routes already use.
- * Nothing else is faked: the component, the crypto, the API routes, Postgres, the chain reads and
- * the signature checks are all the real ones.
- *
- * It exists because the browser pane has no wallet extension, and the alternative — asserting that
- * the page renders and calling that a test of the flow — would verify nothing about sending,
- * encrypting, decrypting or publishing a key.
- *
- * # The keys are random, and that is not fussiness
- *
- * This file first used fixed seeds — `new Uint8Array(32).fill(1)` and `fill(2)`. Those addresses
- * were funded with 0.06 SUI each on mainnet to exercise the key-publication flow, and **both were
- * emptied within thirty seconds** by a bot that already held the private keys. Mainnet is swept
- * continuously for weak keys; a well-known seed is a public address with a public key.
- *
- * So the keypairs are generated on first run and cached **outside the repository**, under the path
- * in `PROJECTX_TEST_WALLET_FILE`. Restarts keep the same addresses, so a funded test account stays
- * usable, and nothing signable is ever committed.
- *
- *   PROJECTX_TEST_WALLET_FILE=/tmp/projectx-test-wallet.json npx tsx scripts/test-wallet-signer.ts
- */
 
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -34,10 +6,6 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 const PORT = 4599;
 
-/**
- * Where the generated keys are cached. Required, with no default path inside the repository —
- * a default under the working tree is how a signable key ends up in a commit.
- */
 const KEY_FILE = process.env['PROJECTX_TEST_WALLET_FILE'];
 if (KEY_FILE === undefined || KEY_FILE.trim() === '') {
   console.error(
@@ -47,7 +15,6 @@ if (KEY_FILE === undefined || KEY_FILE.trim() === '') {
   process.exit(1);
 }
 
-/** Generated once, then reused, so a funded test account survives a restart. */
 const KEYS: Record<string, Ed25519Keypair> = (() => {
   if (existsSync(KEY_FILE)) {
     const stored = JSON.parse(readFileSync(KEY_FILE, 'utf8')) as Record<string, string>;
@@ -70,7 +37,6 @@ const KEYS: Record<string, Ed25519Keypair> = (() => {
 })();
 
 const server = createServer((req, res) => {
-  // The page is served from localhost:3000 and this listens on 4599, so every call is cross-origin.
   res.setHeader('access-control-allow-origin', '*');
   res.setHeader('access-control-allow-headers', 'content-type');
   if (req.method === 'OPTIONS') {
@@ -94,9 +60,6 @@ const server = createServer((req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/sign-tx') {
-    // Transaction signing, for publishing an encryption key. Same keypair, different intent —
-    // `signTransaction` wraps the bytes in the TransactionData intent rather than the personal
-    // message one, and a wallet that confused the two would produce signatures that never verify.
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', () => {

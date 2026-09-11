@@ -4,12 +4,6 @@ import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { ACC_SCALE, claimableRebateMist, listStakePositions } from '../src/stakevault.js';
 
-/**
- * The members walk and the claimable formula.
- *
- * The layout is written out here rather than imported, so the test pins the wire shape the
- * contract actually emits and not whatever the module under test happens to believe.
- */
 const Position = bcs.struct('Position', { principal: bcs.u64(), rebateDebt: bcs.u128(), pending: bcs.u64() });
 const Field = bcs.struct('Field', { id: bcs.Address, name: bcs.Address, value: Position });
 
@@ -46,7 +40,6 @@ function client(pages: Array<{ dynamicFields: unknown[]; cursor: string | null; 
 
 describe('claimableRebateMist', () => {
   it('is the contract\'s claimable_rebate: pending plus what the accumulator has added since', () => {
-    // entitled = 1e9 * (2 * ACC_SCALE) / ACC_SCALE = 2e9; owed since last touch = 2e9 - 5e8.
     const position = { principalMist: 1_000_000_000n, pendingRebateMist: 100_000_000n, rebateDebt: 500_000_000n };
     expect(claimableRebateMist(position, 2n * ACC_SCALE)).toBe(100_000_000n + 1_500_000_000n);
   });

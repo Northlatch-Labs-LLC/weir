@@ -1,16 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The icon set, drawn once.
- *
- * Stroke only, on a 20px grid, in `currentColor` — so an icon takes the colour of whatever it
- * sits inside and follows the theme without a second definition. There is no icon font and no
- * third-party icon package: a set this small is cheaper to own than to depend on, and every path
- * here is checked against the artboards in `docs/app-production/artboards/`.
- *
- * An icon never carries meaning alone. Pass `label` when there is no visible text beside it and
- * the icon becomes the accessible name; leave it off when a label sits next to it and the icon is
- * decoration that would otherwise be announced twice.
- */
 
 export const ICON_PATHS = {
   home: 'M3 9.5 10 3l7 6.5V17a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1z',
@@ -31,9 +19,7 @@ export const ICON_PATHS = {
   support: 'm10 3 5 7-5 7-5-7z',
   lock: 'M6.6 8.6h6.8a2 2 0 0 1 2 2v3.8a2 2 0 0 1-2 2H6.6a2 2 0 0 1-2-2v-3.8a2 2 0 0 1 2-2zM7 8.6V6.7a3 3 0 0 1 6 0v1.9',
   plus: 'M10 4.6v10.8M4.6 10h10.8',
-  /* The menu button. `close` already exists below and is the same button once open. */
   menu: 'M3.4 6h13.2M3.4 10h13.2M3.4 14h13.2',
-  /* A subscription: it comes round again. Two arcs and two heads, on the same 20px grid. */
   repeat: 'M5.2 7.6h7.4a2.6 2.6 0 0 1 2.6 2.6v.6M12.4 5.2 14.8 7.6l-2.4 2.4M14.8 12.4H7.4a2.6 2.6 0 0 1-2.6-2.6v-.6M7.6 14.8 5.2 12.4l2.4-2.4',
   moon: 'M15.4 11.8A6 6 0 0 1 8.2 4.6 6.2 6.2 0 1 0 15.4 11.8z',
   check: 'M4.6 10.4 8.2 14l7.2-7.6',
@@ -58,10 +44,8 @@ export function Icon({
   className,
 }: {
   name: IconName;
-  /** 16, 20 or 24. Nothing else — an icon at a fourth size reads as a different icon. */
   size?: 16 | 18 | 20 | 24 | 28;
   strokeWidth?: number;
-  /** Give this only when no visible text sits beside the icon. */
   label?: string;
   className?: string;
 }) {

@@ -1,13 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * A post's authorship, checkable by somebody who does not trust us.
- *
- * The point of the feature is that our agreement is not required, so the central test here does
- * what a stranger would do: take the bytes and the signature the route hands back, and verify them
- * with the Sui library, never with any code of ours. If that passes, the claim holds. If it only
- * passed through a helper of ours, it would prove nothing.
- */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
@@ -36,7 +28,6 @@ async function call(id: string) {
   return { status: res.status, body: (await res.json()) as Record<string, any> };
 }
 
-/** A post signed for real, exactly as `POST /api/posts` would have taken it. */
 async function publishSigned(overrides: Partial<Post> = {}) {
   const id = `p-${Math.random().toString(36).slice(2, 11)}`;
   const preview = 'the preview a stranger can read';
@@ -76,7 +67,6 @@ describe('a post carries proof of who signed it', () => {
     expect(status).toBe(200);
     expect(body.proof).not.toBeNull();
 
-    // This is the whole feature. No code of ours is involved in the check.
     const key = await verifyPersonalMessageSignature(
       new TextEncoder().encode(body.proof.statement),
       body.proof.signature,
@@ -102,7 +92,6 @@ describe('a post carries proof of who signed it', () => {
   });
 
   it('says plainly that an older post has no proof, and does not call that an error', async () => {
-    // A post from before this existed: signed at the time, proof discarded.
     const id = 'legacy-post';
     await addPost({
       id, vaultId: VAULT, authorHandle: 'prover', createdAtMs: Date.now(),
@@ -112,7 +101,6 @@ describe('a post carries proof of who signed it', () => {
     expect(status).toBe(200);
     expect(body.proof).toBeNull();
     expect(body.reason).toMatch(/discarded/);
-    // The distinction the whole feature turns on.
     expect(body.reason).toMatch(/unproven, not unsigned/);
   });
 
@@ -126,7 +114,6 @@ describe('a post carries proof of who signed it', () => {
     const { id } = await publishSigned();
     expect((await call(id)).body.handleStillResolvesToSigner).toBe(true);
 
-    // The account changes hands. The signature is still good; the handle no longer points at it.
     const other = new Ed25519Keypair().getPublicKey().toSuiAddress();
     await testDb().query('UPDATE profiles SET owner = $1 WHERE handle = $2', [other, 'prover']);
     const { body } = await call(id);

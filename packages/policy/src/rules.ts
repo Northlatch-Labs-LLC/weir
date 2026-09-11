@@ -1,32 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The rules, one function each, in a table.
- *
- * # Why a table and not a single `evaluate` function full of `if`s
- *
- * A policy engine whose rules have never been shown to *do* anything is decoration, and it is
- * worse than no engine because it is trusted. The only proof that a rule works is that removing
- * it changes an outcome — so the rules are addressable, `evaluateWith` takes the list, and
- * `test/mutation.test.ts` deletes each rule in turn and asserts that a transaction the full set
- * refuses becomes one the reduced set permits.
- *
- * That test is not a nicety. It is the difference between a list of rules and a list of comments.
- *
- * # First denial wins, and the order is fixed
- *
- * Evaluation stops at the first rule that refuses. The order below is chosen so the earliest
- * refusals are the ones that make later rules meaningless: there is no point reporting a ceiling
- * breach on a document whose schema version we do not understand, or on a simulation belonging to
- * a different address entirely. A caller that wants every violation can call the rules directly;
- * the exported {@link RULES} array is the whole list, in order.
- *
- * # Every rule fails closed
- *
- * A rule that cannot decide — a malformed address, an unparseable amount, a name that does not
- * normalise — refuses. None of them return "pass" on input they did not understand. This is the
- * property that makes an unrecognised future command kind, a renamed field or a corrupted policy
- * file a refusal rather than a signature.
- */
 
 import { outflowMagnitude, parseSignedAmount, parseUnsignedAmount } from './amounts.js';
 import type { SimulatedEffects } from './effects.js';
@@ -57,32 +29,11 @@ export interface RuleInput {
 
 export interface Rule {
   readonly id: RuleId;
-  /** One line, for the mutation table and for a reviewer reading the list rather than the code. */
   readonly summary: string;
-  /**
-   * Property-function syntax, not a method.
-   *
-   * `check(input: RuleInput): string | null` and `check: (input: RuleInput) => string | null`
-   * differ in TypeScript: method parameters are compared **bivariantly** and property-function
-   * parameters **contravariantly**. Under the method form a rule declared to take a narrower
-   * input than `RuleInput` is accepted silently, and it then reads a field the caller never
-   * promised. That exact hole let an under-specified implementation through on this branch once
-   * already, which is why every interface member in these two packages is written this way.
-   */
   readonly check: (input: RuleInput) => string | null;
-  /**
-   * Set only on a rule whose refusal an operator's approval would lift.
-   *
-   * It changes nothing about the refusal — {@link evaluate} still returns `allow: false` and a
-   * caller that reads only `allow` still stops, which is the whole reason the flag lives on the
-   * refusal rather than in a third verdict. What it gives a surface that wants to say "your
-   * operator has to approve this" is a way to know that sentence is true, instead of matching on
-   * the text of a reason.
-   */
   readonly approvalRequired?: true;
 }
 
-/** Normalise the agent's own address once; `null` if the policy names something that is not one. */
 function agentAddress(policy: PolicyDoc): string | null {
   return normaliseAddress(policy.agentAddress);
 }
@@ -229,71 +180,10 @@ const transferRecipient: Rule = {
   },
 };
 
-/**
- * The rule the others leave a hole under.
- *
- * # What the other rules do not bound
- *
- * `move-call-target` bounds the verb. `type-argument` bounds the currency. `transfer-recipient`
- * bounds where objects end up. `outflow-ceiling` and `gas-budget` bound the size. Between them
- * they describe a transaction completely — except for **which objects it acts on**.
- *
- * On this protocol that gap is the whole payment. `creator::unlock` is declared
- * (`sui-contracts/sources/creator.move:661`) as:
- *
- * ```move
- * public fun unlock<T>(
- *     platform: &Platform,
- *     vault: &mut CreatorVault<T>,   // <- this argument decides who is paid
- *     buyer: &SocialAccount,
- *     content_key: vector<u8>,
- *     mut payment: Coin<T>,
- *     clock: &Clock,
- *     ctx: &mut TxContext,
- * ): Coin<T>
- * ```
- *
- * Swap the vault and everything else still passes: the permitted target, the permitted coin type,
- * the change transferred home to the agent, the spend inside the rolling ceiling. Eleven rules
- * report allow and the money lands in a stranger's vault. Vault creation is open to anyone for
- * 29 SUI (`UPDATE.md`, 2026-08-30, read live from mainnet), so the attacker supplies the
- * destination, it costs them almost nothing, and the agent will do it again on the next
- * instruction. The ceiling caps a single drain; it does not stop one.
- *
- * # Why this cannot simply refuse shared objects
- *
- * The obvious defence — treat every shared object as suspect — refuses every legitimate call in
- * the same breath. `unlock` takes the `Platform` and the `Clock` as shared objects too, and both
- * are mandatory. A rule that fired on shared-ness would deny the transaction it exists to permit,
- * would be turned off within a day, and would then be a comment. So the discrimination is by
- * **id**, from a list the operator writes, exactly like every other allow-list in this package.
- *
- * # Why an unclassified input is refused rather than skipped
- *
- * An input whose shape the translator could not read carries no id that can be compared. Skipping
- * it produces a shorter list, and a shorter list is a *cleaner-looking* transaction — the vault
- * argument would simply not be there, and this rule would find nothing to object to. So
- * `ownership: 'unclassified'` refuses on sight, before any id comparison. The same fail-closed
- * reasoning as `command-kind`: a shape nobody has looked at is not a shape anybody has approved.
- */
 const objectInput: Rule = {
   id: 'object-input',
   summary: 'Every object the transaction takes as an input must appear in the allow-list.',
   check: ({ effects, policy }) => {
-    /*
-      Absence means opposite things on the two sides, and both readings are the strict one.
-
-      On the POLICY side an absent or malformed `allowedObjects` is read as the EMPTY list, which
-      permits no object at all. A document written before this evaluator bounded objects said
-      nothing about which vault may be paid, and "said nothing" is not "said yes". Reading it as
-      empty refuses every object input it ever sees; the only transaction it still permits is one
-      that takes no object inputs, which has no vault in it to get wrong.
-
-      On the EVIDENCE side an absent `objectInputs` is read as UNKNOWN and refused outright — the
-      same distinction `balance-evidence` draws. An empty list is the translator stating that the
-      transaction takes no objects. A missing list is nobody stating anything, and a policy engine
-      that treats silence about the destination as an empty destination is one that signs.
-    */
     if (!Array.isArray(effects.objectInputs)) {
       return `the simulation carries no object-input evidence at all. An empty list and an ` +
         `absent one are different facts — one says this transaction touches no objects, the ` +
@@ -305,9 +195,6 @@ const objectInput: Rule = {
     const declared = Array.isArray(policy.allowedObjects) ? policy.allowedObjects : [];
     const allowed = new Set<string>();
     for (const entry of declared) {
-      // Object ids are 32-byte addresses and fold exactly like one, so the same normaliser
-      // applies. A policy written with `0x6` for the Clock must match the padded `0x000…006` the
-      // node reports, or the rule would deny every call for a reason invisible in the file.
       const normalised = normaliseAddress(entry);
       if (normalised === null) {
         return `allowedObjects contains ${JSON.stringify(entry)}, which is not a Sui object id. ` +
@@ -403,14 +290,6 @@ const amountWellformed: Rule = {
   },
 };
 
-/**
- * Every coin type the agent loses value in, with the magnitude summed.
- *
- * Only the agent's own address is counted. A counterparty's balance changing is the transaction
- * working, not the agent spending. Unparseable amounts are skipped here because
- * `amount-wellformed` has already refused them; when that rule is deleted by the mutation test
- * this must still not throw, which is why the parse is checked again rather than assumed.
- */
 function agentOutflows(
   effects: SimulatedEffects,
   agent: string,
@@ -481,17 +360,6 @@ const coinTypeUnlisted: Rule = {
   },
 };
 
-/**
- * What the ledger says already went out in this coin type, inside `[nowMs - periodMs, nowMs]`.
- *
- * Shared by `outflow-ceiling` and `approval-threshold` on purpose. The bar and the ceiling must be
- * measured over the same arithmetic or they disagree silently — a threshold that counted one entry
- * differently would be a gate an operator believes in that does not fire where they think it does,
- * and the two would only be found to differ by an audit nobody runs. One function, one window.
- *
- * Inclusive at both ends. An entry recorded at exactly `nowMs - periodMs` is still inside the
- * window; excluding it would open a one-millisecond hole a loop could be timed against.
- */
 function priorInWindow(
   ledger: LedgerState,
   coinType: string,
@@ -569,35 +437,12 @@ const outflowCeiling: Rule = {
   },
 };
 
-/**
- * The operator's bar: above it, the transaction is permitted only with a live approval.
- *
- * # Why this rule is last
- *
- * It is the only refusal in the list an operator can answer with a yes rather than an edit, so it
- * must never be the refusal a caller sees when something else is also wrong. A transaction over
- * the ceiling, calling a target nobody allowed, is refused by those rules first — and it should
- * be, because "your operator can approve this" is a false sentence about a transaction the policy
- * forbids outright. Last in the list, first denial wins, and this one is reached only when
- * everything else already said yes.
- *
- * # A bar at or above its own ceiling is refused, not ignored
- *
- * An operator who writes a threshold of 20 SUI under a ceiling of 10 has written a gate that can
- * never fire: every total large enough to cross the bar is refused by the ceiling before this rule
- * runs. Ignoring it would leave them believing they are asked about large spends when nothing will
- * ever ask them — a false belief about a safety control, held by the one person the control exists
- * for. That is worse than an outage, because an outage is noticed. So it is refused, by name, with
- * the two numbers in the sentence.
- */
 const approvalThreshold: Rule = {
   id: 'approval-threshold',
   approvalRequired: true,
   summary: "A windowed total above the operator's bar needs a live approval from the operator.",
   check: ({ effects, policy, ledger }) => {
     const thresholds = policy.approvalThresholds;
-    // Absent means no bar was configured — see `PolicyDoc.approvalThresholds` for why absence
-    // reads permissively HERE and strictly everywhere else in that document.
     if (thresholds === undefined) return null;
     if (!Array.isArray(thresholds)) {
       return `approvalThresholds is present and is not a list. A policy document arrives as JSON, ` +
@@ -627,12 +472,6 @@ const approvalThreshold: Rule = {
           `about every transaction until somebody switched the gate off.`;
       }
 
-      /*
-        The ceiling supplies the window. This is also the check that a threshold cannot be written
-        for a coin type the policy never let out at all: `coin-type-unlisted` would refuse the
-        outflow anyway, but a bar with no window is a malformed document and it is named here
-        rather than left to be discovered as a gate that never fired.
-      */
       let ceiling: { readonly maxPerPeriod: string; readonly periodMs: number } | null = null;
       for (const candidate of policy.outflowCeilings) {
         const candidateType = normaliseType(candidate.coinType);
@@ -700,7 +539,6 @@ const approvalThreshold: Rule = {
             `${String(approval.expiresAtMs)}, which is not an integer millisecond. An approval ` +
             `whose lifetime cannot be read is not treated as one that has not expired.`;
         }
-        // Exclusive: at exactly `expiresAtMs` the grant is over. See `OperatorApproval`.
         if (ledger.nowMs >= approval.expiresAtMs) continue;
         if (amount < total) continue;
 
@@ -721,13 +559,6 @@ const approvalThreshold: Rule = {
   },
 };
 
-/**
- * The rules, in evaluation order. First denial wins.
- *
- * Exported as the whole list so `evaluateWith` can be handed a subset — which is how the mutation
- * test deletes one rule at a time and proves the remaining rules no longer refuse what the whole
- * did.
- */
 export const RULES: readonly Rule[] = [
   policyVersion,
   senderMismatch,
@@ -741,7 +572,5 @@ export const RULES: readonly Rule[] = [
   amountWellformed,
   coinTypeUnlisted,
   outflowCeiling,
-  // Last, and the header above this rule says why: it is the only refusal an operator can answer
-  // with a yes, so it must never be the one reported about a transaction another rule forbids.
   approvalThreshold,
 ];

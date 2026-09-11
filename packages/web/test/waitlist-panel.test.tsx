@@ -1,12 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The gate is checked elsewhere; this is about what is rendered once somebody is through it. The
- * test that matters is the last one: an email address must not reach the DOM by any path, including
- * a `title`, an `aria-label` or a key. The type has nowhere to put one and no query selects one —
- * this is the third lock, on the surface itself, because that is where a leak would actually be
- * read by somebody.
- */
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WaitlistInsightPanel } from '../components/WaitlistInsight';
@@ -65,7 +58,6 @@ describe('the panel reports what was measured', () => {
 
   it('draws a column for every day in the window, quiet ones included', () => {
     const { container } = render(<WaitlistInsightPanel insight={insight()} />);
-    // Every column carries its own `title`, so 30 days is 30 titled bars whatever the counts are.
     const bars = container.querySelectorAll('div[title*="2026-"]');
     expect(bars).toHaveLength(30);
   });
@@ -93,11 +85,6 @@ describe('an unread list is not an empty one', () => {
 
 describe('no email address reaches the page', () => {
   it('renders none, even when every row is carrying one alongside', () => {
-    /*
-      The rows are given extra fields the type does not declare — exactly what a careless future
-      query would hand this component. Nothing may render them, so a leak has to be an added
-      element rather than an accident of spreading a row into the DOM.
-    */
     const leaky = insight({
       recent: [
         {
@@ -116,7 +103,6 @@ describe('no email address reaches the page', () => {
     });
     const { container } = render(<WaitlistInsightPanel insight={leaky} />);
 
-    // Not in the text, and not in any attribute either — a `title` is as readable as a cell.
     expect(container.innerHTML).not.toContain('ada@example.com');
     expect(container.innerHTML).not.toContain('example.com');
     expect(container.innerHTML).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);

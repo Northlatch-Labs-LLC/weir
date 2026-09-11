@@ -1,23 +1,10 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What `/explore` shows once it has been asked something.
- *
- * The frame's search box submits `q` here. Before this, the page read no query at all, so a search
- * was a navigation and nothing else. These assertions are about the four answers a search can have
- * — matches, nothing, too short, and the store not answering — and that the four stay four.
- *
- * The one that matters most is the third. "You have typed two characters" and "there is nobody
- * called that" are different sentences, and a page that prints both at once has told the reader
- * something it just said it had not looked for.
- */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-// The frame reaches the wallet, the account menu and `usePathname`. None of that is what is under
-// test here, and a search result must not depend on any of it.
 vi.mock('@/components/app/AppFrame', () => ({
   AppFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -98,10 +85,6 @@ describe('a search that matched nothing', () => {
 });
 
 describe('a query too short to run', () => {
-  /*
-    The whole point of this case. `discover` never ran, so the page knows nothing about whether
-    anything matches — and must not imply that it does.
-  */
   it('says to keep typing and never says nothing matched', () => {
     screenFor({ query: 'ka', rows: [], posts: [], refusal: 'Keep going — a search needs at least 3 characters.' });
     expect(screen.getByText(/Keep going/)).toBeTruthy();
@@ -119,7 +102,6 @@ describe('the directory, unchanged', () => {
     screenFor({ rows: [ROW] });
     expect(screen.getByText('everyone with a page here')).toBeTruthy();
     expect(screen.getByText(/1 creator, read from the store/)).toBeTruthy();
-    // No search happened, so no section headings and no way "back" to where you already are.
     expect(screen.queryByText('Accounts')).toBeNull();
     expect(screen.queryByText('Back to everyone')).toBeNull();
   });

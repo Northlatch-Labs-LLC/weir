@@ -1,30 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The compatibility surface: statement bytes, signatures and the publish digest.
- *
- * # Where this came from, and why it is here rather than in a scratch file
- *
- * These assertions were run once from a scratchpad script and reported as "58/58 offline checks".
- * That is not verification by this estate's own standard, because nobody else can rerun it: the
- * file lives outside the repository, it is not in anyone's `pnpm test`, and the number in the
- * report is the only surviving trace of it. A measurement that cannot be repeated is a claim.
- *
- * So the harness is here, as Vitest, running under
- * `pnpm --filter @projectx-social/agent test`.
- *
- * # What this file proves
- *
- * That an agent's signature is indistinguishable from a person's. Every assertion below is against
- * the byte layout `packages/web/lib/identity.ts` rebuilds server-side, and the verification call is
- * the one `verifyAction` actually makes — not a re-implementation of it.
- */
 
 import { createHash } from 'node:crypto';
 
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { describe, expect, it } from 'vitest';
 
-/** The deployment these bytes are bound to. Portable statements were the defect. */
 const ORIGIN = 'https://weir.social';
 
 import {
@@ -53,9 +33,6 @@ describe('statement bytes and the signature over them', () => {
 
   it('the server-side verification call accepts it', async () => {
     const signed = await signAction(key.keypair, { kind: 'read-content' }, ORIGIN, AT);
-    // This is the exact call `verifyAction` in packages/web/lib/identity.ts makes. The point of
-    // this package is that the server cannot tell an agent from a hardware wallet, and there is
-    // nothing to tell apart only if this call is the one that passes.
     const pk = await verifyPersonalMessageSignature(
       new TextEncoder().encode(signed.statement),
       signed.signature,
@@ -66,8 +43,6 @@ describe('statement bytes and the signature over them', () => {
 
   it('one extra byte in the statement is rejected', async () => {
     const signed = await signAction(key.keypair, { kind: 'read-content' }, ORIGIN, AT);
-    // Proves the binding is real rather than incidental: if a trailing space verified, the
-    // signature would not be over the statement at all.
     await expect(
       verifyPersonalMessageSignature(
         new TextEncoder().encode(`${signed.statement} `),
@@ -110,8 +85,6 @@ describe('every action kind produces a statement', () => {
   });
 
   it('follow and unfollow are different statements', () => {
-    // If they were not, one signature would authorise both directions, and a captured follow could
-    // be replayed as an unfollow.
     expect(statementFor({ kind: 'follow', handle: 'a', following: true }, '0x1', 1, ORIGIN)).not.toBe(
       statementFor({ kind: 'follow', handle: 'a', following: false }, '0x1', 1, ORIGIN),
     );
@@ -129,8 +102,6 @@ describe('the publish digest matches the route arithmetic', () => {
   });
 
   it('the length prefix defeats the split attack', () => {
-    // Without it, ('ab','cd') and ('a','bcd') hash identically, and one signature would cover two
-    // different posts.
     expect(publishContentSha256('ab', 'cd')).not.toBe(publishContentSha256('a', 'bcd'));
   });
 

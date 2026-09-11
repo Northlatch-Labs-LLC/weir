@@ -8,24 +8,6 @@ import { normaliseAddress } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * The agent's half of a declaration, handed to the site so the operator can sign in a browser.
- *
- * # Verified, not spent
- *
- * The agent's signature is checked here against the agent's address and the statement this server
- * rebuilds — a request that does not verify is refused, so the operator's waiting room never shows
- * a claim nobody made. It is deliberately NOT spent: spending is what makes a signature single-use,
- * and this same signature must still verify once more, in `POST /api/agents/declare`, beside the
- * operator's. Two verifications, one spend, in the route that writes the register.
- *
- * # What this cannot do
- *
- * Nothing here enters the register, marks a post, or grants a seat. It is a note left for one
- * operator, readable by anyone who asks for that operator's list — the halves are public evidence
- * the moment they are filed, and a request that was never filed says only that an agent wanted to
- * be declared.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
@@ -41,9 +23,6 @@ export async function POST(request: Request) {
   if (!checked.ok) return NextResponse.json({ error: checked.why }, { status: 400 });
   const half = checked.half;
 
-  // The register's own objection, decided before the half is proved: see `operatorConflict`. A
-  // waiting room that lists a request the declare route will refuse sends an operator to sign for
-  // nothing.
   const conflict = await operatorConflict(half.address, half.operatorAddress);
   if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
 
@@ -71,20 +50,11 @@ export async function POST(request: Request) {
       {
         request: stored,
         expiresAtMs: requestExpiresAtMs(stored),
-        // Relative, never an origin: the operator opens it on whichever name this deployment answers to.
         operatorPage: '/agents/declare',
       },
       { status: 201 },
     );
   } catch (error) {
-    /*
-      The write failed and the agent is told so. The message is logged, not returned: a Postgres
-      error can name a table, a column or a constraint, and that is a description of our schema
-      handed to an unauthenticated caller — now including any MCP-connected agent reaching this
-      route through `weir_declare`. What goes back is that it failed and that nothing was stored,
-      which is what the caller actually needs in order to decide to try again. See the same pattern
-      in `app/api/waitlist/route.ts`.
-    */
     console.error(
       JSON.stringify({
         declarationRequestRecordFailed: error instanceof Error ? error.message : String(error),
@@ -97,7 +67,6 @@ export async function POST(request: Request) {
   }
 }
 
-/** The live requests naming one operator. `?operator=0x…` is required; there is no "all". */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;

@@ -1,27 +1,9 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// One place knows how a simulation answers, and it is not this package.
-//
-// Sixteen call sites in `lib/` unwrapped the response by hand as
-// `(sim as { Transaction?: … }).Transaction` followed by
-// `result?.effects?.status ?? result?.status`. Every one of them read only the SUCCESS envelope.
-// A genuine abort arrives under `FailedTransaction` — the SDK says so at `client.ts`, quoting the
-// upstream library — so a chain refusal produced `undefined` and was reported to the caller as
-// "no status returned" rather than as the reason the chain gave.
-//
-// One of those sites read `sim.Transaction?.effects?.status` FIRST, which the SDK documents as
-// always `undefined` on the gRPC shape. That branch was dead from the day it was written, so the
-// code had been running on its fallback while saying otherwise.
-//
-// This test pins the absence, because the defect is a SHAPE rather than a value: nothing fails at
-// runtime, nothing fails to compile, and the divergence only appears on the failure path in
-// production.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** Comments stripped: the docblock above explains the defect and must not count as one. */
 function code(path: string): string {
   return readFileSync(path, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')

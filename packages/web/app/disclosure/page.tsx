@@ -4,42 +4,6 @@ import { ColumnHeader } from '@projectx-social/ui';
 import { listDeclaredAgents } from '@/lib/agents';
 import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 
-/**
- * `/disclosure` — the public register of which accounts here are machines, and who answers for them.
- *
- * # Why this page exists at this URL
- *
- * The register itself is not new: `agent_accounts` has held it since 023, `GET /api/agents` has
- * served it, and `/agents/{handle}` has shown any single declaration with both of its signatures.
- * What did not exist was one address a person could be sent to. A compliance posture that rests on
- * "we publish a disclosure register" and answers 404 at the obvious place is worse than one that
- * never claimed it, because the first thing anybody checking does is try the obvious place.
- *
- * So this adds no data, no write path and no permission. It is an index, and its whole job is to
- * be findable and to be true.
- *
- * # What it does not claim
- *
- * It lists what the two parties signed. Nothing here verifies that the model named is the model
- * running — `023` says so about the columns and the same limit applies to the page. The evidence a
- * reader can actually check is the pair of signatures, and the link on each row goes to them.
- *
- * `force-dynamic` for the same reason `/agents` is: a cached copy would show a register that was
- * true when the page was built. A stale disclosure is the one kind this page must not serve.
- *
- * # The rules, and why they are not typed out here
- *
- * A register answers "who declared". It does not answer "what were they held to", and a reader
- * checking a disclosure posture wants both. Those rules existed — they are the `disclosure` block
- * of the signed agent manifest — but they were served only as JSON at the manifest path, so a
- * machine could read them and a person could not.
- *
- * They are rendered here from `AGENT_DISCLOSURE`, which is the very object `manifestFrom` puts in
- * that document. Not a copy of it: the same object, pinned by identity in
- * `test/agent-manifest.test.ts`. Typing the clauses out again would mean the published rule and
- * the served rule could disagree after any edit, and two contradictory statements of the same
- * obligation is a worse compliance position than the 404 this page was written to fix.
- */
 export const metadata: Metadata = {
   title: "Who's behind each agent",
   description:
@@ -49,14 +13,6 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Render a millisecond timestamp as a plain UTC day.
- *
- * UTC and not the reader's locale: this is a record, two readers comparing it must see the same
- * string, and the value is the instant both parties signed rather than a moment in anyone's day.
- * @param ms - the signed `issued` value.
- * @returns an ISO date, or a dash when the value cannot be read as one.
- */
 function day(ms: number): string {
   const d = new Date(ms);
   return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10);

@@ -4,12 +4,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { creditTip, KIND_TIP } from '../lib/supporters';
 
-/*
-  The event body is a boundary: gRPC hands back a bag of fields with no types, and a u64 arrives as
-  a decimal string. Nothing the compiler sees can catch a wrong field name or a swapped kind, so
-  the folding is tested directly.
-*/
-
 const VAULT = '0xabc123';
 function tip(over: Record<string, unknown> = {}): Record<string, unknown> {
   return { vault: VAULT, payer: '0xF00D', kind: KIND_TIP, gross: '500', ...over };
@@ -66,10 +60,6 @@ describe('crediting a tip', () => {
 
 describe('the kind constant mirrors the contract', () => {
   it('is what creator.move calls KIND_TIP', () => {
-    /*
-      A copied constant is only safe if something fails when the original moves. Reading the Move
-      source is the assertion: at a wrong value this module would silently tally subscriptions.
-    */
     const move = readFileSync(
       resolve(process.cwd(), '../../sui-contracts/sources/creator.move'),
       'utf8',

@@ -1,19 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * # One copy change, and it is not optional
- *
- * The design says a chest takes "no platform fee, because nothing was sold". That is not true of this
- * deployment: a chest is a tip, `prepareTip` returns `platformReceives`, and the fee comes off at
- * settlement like everywhere else. The words are corrected and the figure is read, because the page
- * two clicks away tells a sceptic to check us against the chain — and this is the claim they would
- * check first.
- *
- * Everything else is the designer's, including the line the whole screen turns on: this is the one
- * place on Weir where money leaves you for good, said plainly.
- */
-
 import NextLink from 'next/link';
 import { PageHead } from '@/components/design/PageHead';
 import { Fragment, useState, type ReactNode } from 'react';
@@ -32,15 +19,6 @@ export interface DesignChest {
   potSize: string;
   potStyle: string;
   potColor: string;
-  /**
-   * Where the figure above came from, in one line.
-   *
-   * Required rather than optional, so a caller cannot add a pot without saying how it was arrived
-   * at. It carries the difference between the states that matter: "3 gifts from 2 people" is a
-   * measured total, "no gifts yet — the log was read" is a measured zero, and a failure names what
-   * could not be read. The figure alone cannot express that, and a reader deciding whether to give
-   * is exactly the person who should not have to guess.
-   */
   potNote: string;
   split: string;
   note: string;
@@ -49,7 +27,6 @@ export interface DesignChest {
   href: string;
   amounts: readonly {
     label: string;
-    /** The figure this chip prefills. Data, not a handler — see `chests-data.tsx`. */
     sui: number;
     bg: string;
     color: string;
@@ -57,7 +34,6 @@ export interface DesignChest {
   }[];
 }
 
-/** The comparison table's columns; the header row and each stacked cell's label read the same list. */
 const COMPARE_COLS = ['', 'Chest', 'Pool', 'Subscription'] as const;
 
 export function DesignChests({
@@ -69,7 +45,6 @@ export function DesignChests({
   signedIn: boolean;
   myHandle: string | null;
   chests: readonly DesignChest[];
-  /** Live, from the Platform object. Null when it could not be read. */
   feeBps: number | null;
 }) {
   const [chestDeposit, setDeposit] = useState('100');
@@ -78,12 +53,6 @@ export function DesignChests({
   const given = Number(chestDeposit);
   const valid = Number.isFinite(given) && given >= 0;
 
-  /*
-    What they receive, after the fee that is actually taken.
-
-    Rounded down, matching the contract's integer arithmetic — showing a supporter a figure a
-    fraction higher than the chain will pay is a small lie that compounds across every tip.
-  */
   const net =
     !valid || feeBps === null ? null : Math.floor(given * (10000 - feeBps)) / 10000;
 
@@ -91,25 +60,9 @@ export function DesignChests({
     net === null
       ? 'not measured'
       : `${net.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`;
-  /*
-    The bar's own width, as a real percentage of the amount given.
-
-    Not the same value as the sentence below it: this used to hand the bar's `width` a phrase
-    like "after the 2.9% taken at settlement", which is not a length CSS can draw, so the bar
-    never rendered — the fee note simply looked like an empty track. `null` when the fee itself
-    could not be read, so the bar is withheld rather than drawn at a width nobody measured.
-  */
   const chestWeightWidthPct =
     feeBps === null ? null : `${((10000 - feeBps) / 100).toFixed(2)}%`;
-  /* The honest answer to "what do I get back", and the reason this screen exists. */
   const chestWithdrawable = "never the money; the creator's perks, if they offer any";
-  /*
-    The fee as a phrase, for the prose that has to name it.
-
-    Derived from the same live read as every other figure on this page. When the read failed it says
-    so in words rather than naming a rate — a sentence that reads "less 2.9%" when we could not
-    confirm 2.9% is exactly the kind of confident wrong number `/security` invites people to catch.
-  */
   const feeLabel =
     feeBps === null
       ? 'the platform fee'
@@ -120,12 +73,6 @@ export function DesignChests({
       ? 'The platform fee could not be read just now, so this figure is not measured rather than estimated.'
       : 'The transfer is one transaction between two addresses, and you can read it on chain afterwards.';
 
-  /*
-    Handlers are attached here, in the browser.
-
-    The server supplies the chips as data; a function cannot cross that boundary. Clicking one only
-    prefills the give box — the signature is asked for on the creator's own page.
-  */
   const withHandlers = chests.map((chest) => ({
     ...chest,
     amounts: chest.amounts.map((amount) => ({
@@ -134,7 +81,6 @@ export function DesignChests({
     })),
   }));
 
-  /* The design marks sections `data-reveal`; without an observer they stay at opacity 0. */
   useReveals();
 
   return (

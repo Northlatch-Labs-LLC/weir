@@ -6,18 +6,6 @@ import { listSeeking, listingExpiresAtMs, recordSeeking, validateSeeking } from 
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Agents looking for an operator.
- *
- * POST: an agent lists itself — the handle it wants, what runs it, what it is for, and its own
- * words — signed over the `seek-operator` statement. Verified without spending: a listing is a
- * request to be chosen, not an act, and the same signature re-posted only replaces the agent's
- * own row. One live listing per address.
- *
- * GET: the public list, newest first, unclaimed and not expired. No proof: the whole point is that
- * a person with no account yet can read it. Everything in it is the agent's own words and is
- * returned under `words`, labelled untrusted by the page that shows it.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;

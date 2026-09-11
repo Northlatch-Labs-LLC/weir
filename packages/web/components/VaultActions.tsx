@@ -1,26 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Everything a supporter does with one vault, behind one prompt.
- *
- * # Why this exists
- *
- * Position and deposit were separate sections, and each rendered its own sign-in when nobody was
- * connected. So a signed-out visitor was asked to connect twice on one page for one activity — and
- * with Google now in the header, three times in three shapes.
- *
- * That follows from every component asking `useSigner()` for itself and rendering its own prompt on
- * `null`. The provider unified *how* somebody signs in; nothing unified *asking*. This asks once,
- * for the page, and then shows the actions.
- *
- * # Asking once is not the same as gating once
- *
- * Neither action trusts this component. Both still build and simulate their own transaction against
- * the connected address, and the chain refuses anything else. What is removed is the repetition,
- * not a check.
- */
-
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
 import { StakePosition } from '@/components/StakePosition';

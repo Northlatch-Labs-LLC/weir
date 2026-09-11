@@ -23,30 +23,11 @@ export default async function Join({
 }) {
   const { ref } = await searchParams;
 
-  /*
-    A referrer is accepted only if it is shaped like an address. Anything else is dropped rather
-    than passed through: the value is written into the account permanently and there is no setter,
-    so a malformed one would abort the registration, and a plausible-but-wrong one would attribute
-    someone's referral revenue to a stranger for the life of the account.
-  */
   const referrer = ref !== undefined && SUI_ADDRESS.test(ref) ? ref : null;
 
   const protocol = await readProtocol();
 
   return (
-    /*
-      A signup screen, not an essay with a form at the bottom.
-
-      This page was three stacked explanation cards — roughly 250 words — and then the registration
-      flow, which itself renders nothing until a wallet connects. So the page titled "Pick your
-      name" had nowhere to type a name anywhere above the fold, said "what you need first: Google or
-      a wallet" and offered neither button, and on a 1440 screen was one narrow column with 600px of
-      empty ground either side. The first thing a new visitor met was a red block reading "THIS DID
-      NOT LOAD".
-
-      The action is first and the explanation is beside it, which is what every signup screen does
-      and what a desktop width is for.
-    */
     <div className="w-join">
       <div className="w-join__main">
         <PageHead title="Pick your name" lede="A handle nobody can take off you, claimed on chain." />
@@ -63,11 +44,6 @@ export default async function Join({
               </div>
             ) : null,
           (failure) => (
-            /*
-              Quiet, and under the form rather than over it. This is a failed read of the platform
-              object — worth stating, because it means the page cannot promise registration is open
-              — but it is not the headline of somebody's first visit.
-            */
             <p
               style={{
                 marginTop: 18,

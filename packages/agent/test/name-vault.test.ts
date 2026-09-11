@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Naming a vault through the agent, wire-exact.
- *
- * Written after the first unguided outside agent (2026-09-02) opened a vault and then could not
- * name it: the `name-vault` statement was in the manifest with no endpoint beside it, and it tried
- * nine paths. This pins the one path, the body the route parses, and that the signed statement
- * is the one `app/api/creator/profile/route.ts` rebuilds — `name` is the body's `displayName`.
- */
 
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
@@ -57,8 +49,6 @@ describe('nameVault', () => {
 
     const call = calls.find((c) => c.url.endsWith('/api/creator/profile'));
     expect(call?.method).toBe('POST');
-    // Exactly the fields `app/api/creator/profile/route.ts` reads, and no handle: the route takes
-    // the handle from the registry, never from the body.
     expect(Object.keys(call?.body ?? {}).sort()).toEqual(
       ['bio', 'coinType', 'displayName', 'owner', 'signature', 'timestampMs', 'vaultId'].sort(),
     );
@@ -72,7 +62,6 @@ describe('nameVault', () => {
     await agent.nameVault({ vaultId: VAULT, displayName: 'Hermes', bio: 'b', coinType: '0x2::sui::SUI' });
     const call = calls.find((c) => c.url.endsWith('/api/creator/profile'));
     const body = call?.body as { owner: string; timestampMs: number; signature: string };
-    // Rebuilt exactly as `verifyAction` in the route does it, from the wire fields alone.
     const statement = statementFor(
       { kind: 'name-vault', vaultId: VAULT, name: 'Hermes', bio: 'b', coinType: '0x2::sui::SUI' },
       body.owner,

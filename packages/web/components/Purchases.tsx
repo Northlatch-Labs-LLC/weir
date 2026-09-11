@@ -1,30 +1,12 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * What you have bought.
- *
- * # An expired subscription still belongs here
- *
- * `readEntitlements` drops them, correctly — an expired subscription grants nothing and a gate
- * should not see it. A receipt is the opposite: hiding a lapsed subscription makes a renewal look
- * like a first purchase, and it removes the one record that shows somebody supported a creator for
- * a year. Both are shown, with the state said plainly.
- *
- * # These are objects, not rows
- *
- * Every line is a `Subscription` or `Unlock` the reader owns on chain. This platform cannot revoke
- * one, edit one, or take one away by shutting down — which is the strongest claim the product makes,
- * so each line links to the object rather than asking to be believed.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
 import { formatUnits } from '@/lib/units';
 
 interface Coin {
-  /** From the coin's metadata on chain; null when unread, in which case the amount is not formatted. */
   decimals: number | null;
   symbol: string | null;
 }
@@ -42,7 +24,6 @@ type Load =
   | { state: 'ready'; subscriptions: Sub[]; unlocks: Unlock[]; truncated: boolean }
   | { state: 'unmeasured'; detail: string };
 
-/** Formatted at the ROW's decimals — a SUI vault has nine, USDC six — or said to be unmeasured. */
 const units = (raw: string, coin: Coin) =>
   coin.decimals === null ? `${raw} units (decimals not measured)` : `${formatUnits(BigInt(raw), coin.decimals)} ${coin.symbol ?? ''}`.trim();
 
@@ -79,7 +60,6 @@ export function Purchases() {
   useEffect(() => {
     if (signer !== null) void refresh(signer.address);
   }, [signer, refresh]);
-
 
   if (signer === null) {
     return (

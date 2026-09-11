@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The stake vault and one depositor's position, read from mainnet.
- *
- * Proves the decoder that moved into the SDK still reads real state, and that a position derives
- * correctly from the vault's `positions` table — which is a different table from the vault's own
- * id, and deriving against the wrong one returns "no deposit" for everybody.
- */
 import { createClient, loadConfig, readStakePosition, readStakeVault, fold } from '@projectx-social/sdk';
 
 const cfg = loadConfig(process.env);
@@ -33,7 +26,6 @@ console.log('creator yield  ', sui(v.creatorYieldMist), 'SUI unclaimed');
 console.log('rebate pool    ', sui(v.rebatePoolMist), 'SUI');
 console.log('positions table', v.positionsTableId);
 
-// The solvency invariant, checked against the numbers rather than trusted.
 const backing = v.liquidMist + v.tranches.reduce((a, t) => a + t.principalMist, 0n);
 console.log('\nsolvent        ', backing >= v.totalPrincipalMist,
   `(backing ${sui(backing)} >= principal ${sui(v.totalPrincipalMist)})`);

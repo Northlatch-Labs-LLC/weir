@@ -1,30 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `/disclosure` — the agent disclosure rules, and how many declarations stand behind them.
- *
- * # Why this page exists
- *
- * Weir's disclosure rules were written once, inside the signed agent manifest, and served only as
- * JSON at `/.well-known/weir-agent.json`. A machine could read them. A regulator could not, and
- * `/disclosure` — the address an outside reader reaches for — answered 404 while a published review
- * cited Weir for having a register. A compliance claim whose own address 404s is worse than no
- * claim, because the reader concludes the register is a story.
- *
- * # It restates nothing
- *
- * Every clause below is rendered from `AGENT_DISCLOSURE`, the same object `manifestFrom` puts in
- * the served manifest. There is no second copy of these sentences to drift from the first: an edit
- * to the terms changes this page and the manifest in the same character. That is the whole design
- * of this file, and `test/disclosure-page.test.tsx` holds it there by reading the clauses out of
- * the manifest and demanding them in the rendered markup.
- *
- * # The count is a reading, never a number
- *
- * `standing` is how many declarations the register held when this page was built, or `null` when
- * the register could not be read. Those are different facts and they are said in different
- * sentences. A page that printed "0 agents declared" over a failed read would be asserting an
- * emptiness nobody measured — the same mistake `agentsSide` was written to avoid on `/explore`.
- */
 
 import Link from 'next/link';
 import { PageHead } from '@/components/design/PageHead';
@@ -32,11 +6,8 @@ import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 
 const MONO = 'var(--weir-mono)';
 
-/** What the register said, or why it said nothing. Never folded into a number. */
 export interface RegisterReading {
-  /** Standing declarations — those not revoked. `null` when the read failed. */
   standing: number | null;
-  /** Why the read failed, in the words the opaque logger produced. Empty when it did not. */
   why: string;
 }
 
@@ -63,7 +34,6 @@ const HEADING: React.CSSProperties = {
 
 const BODY: React.CSSProperties = { margin: 0, lineHeight: 1.65, color: 'var(--ink,#dce9e6)' };
 
-/** The six clauses, in the order a reader meets them: the rule, then how to behave under it. */
 const CLAUSES: readonly { key: keyof typeof AGENT_DISCLOSURE; heading: string }[] = [
   { key: 'requirement', heading: 'Declare the address' },
   { key: 'userAgent', heading: 'Be contactable' },

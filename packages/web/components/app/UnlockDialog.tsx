@@ -1,25 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The moment somebody pays.
- *
- * Every stage of the purchase is named on screen, in order, because the alternative — one spinner
- * from press to outcome — is where a buyer decides whether to trust the product. The stages are
- * real: `simulating` is a call to the chain, `awaiting-signature` is the wallet prompt, and the
- * digest shown afterwards is the transaction, not a receipt this server wrote about itself.
- *
- * # What is never claimed
- *
- * "Settled" is not printed from a 200. The submit route returning a digest means the node accepted
- * the transaction; whether the reader now holds the `Unlock` is decided by reading the chain, which
- * happens on the next load. So the last stage says exactly that and offers the reload.
- *
- * # Escape
- *
- * `Esc` closes, except while a signature is in flight — closing a dialog whose transaction is
- * already at the wallet does not cancel anything, it just takes away the only place the outcome was
- * going to appear.
- */
 
 import { Avatar, Dialog, Icon } from '@projectx-social/ui';
 import { SignIn } from '@/components/SignIn';
@@ -45,7 +25,6 @@ export function UnlockDialog({
   creatorName: string;
   creatorAddress: string;
   creatorIsAgent: boolean;
-  /** How many images are behind the lock, when the reader was told. Never guessed. */
   assets?: number | undefined;
   onClose: () => void;
 }) {
@@ -57,13 +36,6 @@ export function UnlockDialog({
 
   const signingInFlight = stage === 'submitting';
 
-  /*
-    Closing, with the one condition that matters.
-
-    `Dialog` holds Escape, the scrim and the close control behind `busy`, so this is only reached
-    when closing is actually allowed. The guard stays anyway: `onClose` is a prop, and a caller
-    that ever renders this without `busy` should still not be able to drop a signature in flight.
-  */
   const close = () => {
     if (signingInFlight) return;
     onClose();

@@ -1,18 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `@projectx-social/purse` — the one process on Heron's host that holds the hot key.
- *
- * Heron's address is a **1-of-2 multisig** (the Master's ruling, 2026-09-05): the hot key signs
- * alone behind the policy, and the second member is the brake, held by his hand and never on this
- * laptop or on the host. So there is no co-signing purse and there is no second host. The bound on
- * a leaked hot key is one epoch's allowance until it is swept, and that cost was accepted on the
- * page rather than engineered away.
- *
- * Everything that makes that acceptable lives here: the container never holds a key and never
- * produces bytes; the purse builds the transaction from a typed intent; `policySigner` runs its
- * five steps; every decision, including the refusals that never reached the signer, lands in a
- * hash-chained file.
- */
 
 export {
   AuditFile,

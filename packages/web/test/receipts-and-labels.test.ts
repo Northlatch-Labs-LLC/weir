@@ -1,10 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  A receipt names the post it opened — the post under THIS vault, not whichever row shares the key.
-
-  Mutation predicted: match titles on the key alone → "two creators, one key, two titles" red.
-*/
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 

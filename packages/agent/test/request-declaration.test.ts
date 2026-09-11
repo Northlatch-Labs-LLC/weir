@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  `requestDeclaration` — the agent hands its half to the site so its operator can sign in a browser.
-
-  Mutations predicted: send the half to /api/agents/declare instead of the waiting room → "posts
-  the agent half to the waiting room" red; sign a statement naming a different operator → the
-  verify in the test red; treat a 4xx as success → "a refusal is a failure with the server's
-  sentence" red.
-*/
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { statementFor } from '@projectx-social/sdk';
@@ -54,7 +46,6 @@ describe('Agent.requestDeclaration', () => {
     expect(body['operatorSignature']).toBeUndefined();
     expect(body['timestampMs']).toBe(r.value.issuedAtMs);
 
-    // The signature is over exactly the statement the server will rebuild, by exactly this key.
     const text = statementFor({ kind: 'declare-agent', operator: OPERATOR, model: 'claude', purpose: 'audits' }, address, r.value.issuedAtMs, 'https://weir.social');
     const key = await verifyPersonalMessageSignature(new TextEncoder().encode(text), String(body['agentSignature']), { address });
     expect(key.toSuiAddress()).toBe(address);

@@ -1,18 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The names this wallet holds, and what each one does.
- *
- * Two separate settings, kept separate because SuiNS keeps them separate and collapsing them would
- * be a lie about the chain:
- *
- *   * **where a name points** — `alice.sui` → an address. One name, one destination.
- *   * **what an address is displayed as** — the reverse record. One address, one name, and setting
- *     it for a second name replaces the first.
- *
- * Every change is built and simulated by the server before the wallet is asked, so a change that
- * would abort is never offered — the same sequence the name purchase uses.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { formatSui } from '@/lib/units';
@@ -47,7 +34,6 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [digest, setDigest] = useState<string | null>(null);
-  /* What the reverse record says now: the server's answer at load, then whatever we have set since. */
   const [displayed, setDisplayed] = useState<string | null>(reverseName);
 
   const load = useCallback(async () => {
@@ -120,7 +106,6 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
       const response = await fetch('/api/checkout/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // The bytes that were simulated, unchanged. Nothing is rebuilt here.
         body: JSON.stringify({ bytes: pending.bytes, signature }),
       });
       const body = (await response.json()) as { digest?: string; error?: string };
@@ -128,7 +113,6 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
         setError(body.error ?? 'the change was not accepted');
       } else {
         setDigest(body.digest);
-        // What we just did, reflected without waiting for a re-read that may lag the chain.
         if (pending.key === 'display-clear') setDisplayed(null);
         else if (pending.key.startsWith('display-')) setDisplayed(pending.key.slice('display-'.length));
         setPending(null);
@@ -240,10 +224,6 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
       )}
 
       {owned !== null && owned.unconfirmed > 0 && (
-        /*
-          A count with no names is what a stale layout looks like. Said plainly rather than shown as
-          "you own nothing", which would be a different and wrong claim.
-        */
         <p className="form-note warn">
           {owned.unconfirmed} object{owned.unconfirmed === 1 ? '' : 's'} in this wallet look like
           names but the registry did not confirm {owned.unconfirmed === 1 ? 'it' : 'them'}. Nothing

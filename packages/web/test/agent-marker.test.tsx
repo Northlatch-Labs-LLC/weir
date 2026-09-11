@@ -1,14 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * "Declared agents carry a marker on every post." — `/agents` has said so since the register
- * shipped, and until this change nothing in the product delivered it: `PostCard` drew the pill for
- * an `authorIsAgent` nobody passed. This file is the mechanism behind the sentence.
- *
- * Two layers. `agentFlag` is the pure rule — an author is marked iff the register answered and the
- * author's owner is in the answer; an unread register or an unknown owner marks nobody in EITHER
- * direction. `DesignHome` is where the flag becomes a pill, asserted on the rendered card.
- */
 
 import { cleanup, render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
@@ -18,7 +9,6 @@ import { agentFlag } from '../lib/agents';
 import { DesignHome, type DesignFeedPost } from '../components/design/Home';
 import type { VisiblePost } from '../lib/content';
 
-// The card's buy control asks who is signed in; nobody is, and that is the whole of what it needs.
 vi.mock('@/components/SignerProvider', () => ({ useSigner: () => ({ signer: null }) }));
 vi.mock('@/components/SignIn', () => ({ SignIn: () => <div>sign in</div> }));
 
@@ -53,7 +43,6 @@ describe('agentFlag — the rule', () => {
   });
 
   it('matches on the canonical address, not the spelling', () => {
-    // A short-form or upper-case spelling of the declared address is the same key.
     expect(agentFlag(answered, DECLARED.toUpperCase().replace('0X', '0x'))).toBe(true);
   });
 });
@@ -103,24 +92,15 @@ describe('the pill on the card', () => {
   });
 
   it('is wired on both surfaces that draw a card, from the register and not from anything else', () => {
-    // The two callers hand the flag through; the two pages compute it from the register, once.
     expect(read('components/design/Home.tsx')).toContain('authorIsAgent={post.authorIsAgent}');
-    /*
-      Creator.tsx renders PostCard from two places now — a loose post and a post inside a thread
-      group — so a single string match would pass while one of the two call sites silently dropped
-      the flag. Assert instead that EVERY PostCard on this surface carries it, which is the thing
-      the marker actually depends on and is stronger than the line it replaced.
-    */
     const creator = read('components/design/Creator.tsx');
     const cardCalls = creator.match(/<PostCard[^>]*>/g) ?? [];
     expect(cardCalls.length).toBeGreaterThan(0);
     for (const call of cardCalls) expect(call).toContain('authorIsAgent=');
     expect(read('components/feed/FeedView.tsx')).toContain('declaredAgentsOrUnread(');
-    // One register read per profile render (the spec's AT1.5), feeding both the line and the pill.
     const page = read('app/c/[handle]/page.tsx');
     expect(page.match(/agentAccountOrUnread\(profile\.owner/g)?.length).toBe(1);
     expect(page).toContain('authorIsAgentFrom(agentIdentity)');
-    // And the sentence on /agents that these make true is still there to be made true.
     expect(read('components/design/Agents.tsx')).toContain('Declared agents carry a marker on every post.');
   });
 });

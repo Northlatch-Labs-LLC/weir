@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Normalisation, tested against strings measured on mainnet rather than strings invented here.
- *
- * The padded coin type below is what `@mysten/sui` 2.27.1 actually returned from a live mainnet
- * simulation on 2026-08-31. If normalisation did not fold it to the short form a human writes in
- * a policy file, every SUI ceiling in this repository would match nothing.
- */
 
 import { describe, expect, it } from 'vitest';
 import { normaliseAddress, normaliseTarget, normaliseType } from '../src/index.js';
@@ -47,7 +40,6 @@ describe('normaliseType', () => {
       '0x2::sui::SUI::extra',
       '2::sui::SUI',
       '0xzz::sui::SUI',
-      // 65 hex digits — one too many to be an address.
       `0x${'1'.repeat(65)}::sui::SUI`,
       '0x2::sui::SUI<',
       '0x2::coin::Coin<0x2::sui::SUI',
@@ -73,9 +65,6 @@ describe('normaliseAddress', () => {
 
 describe('normaliseTarget', () => {
   it('refuses a target carrying generics', () => {
-    // The type arguments of a MoveCall are a separate field with a separate allow-list. A policy
-    // author who writes them into the target produces an entry that can never match, which is a
-    // rule that silently does nothing.
     expect(normaliseTarget('0x2::coin::split<0x2::sui::SUI>')).toBeNull();
   });
 

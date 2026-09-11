@@ -1,13 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The publish digest recipe, as a reader sees it on /agents.
- *
- * The recipe lived in the manifest and llms.txt, and the page that lists what an agent signs did
- * not show it — the one slot a caller has to compute was the one slot the page said nothing about.
- * The words come from the manifest through `agents-data.tsx`; this asserts the page prints them
- * when it has them and prints nothing in their place when it does not.
- */
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { DesignAgents, type AgentsProps } from '../components/design/Agents';
@@ -45,11 +37,6 @@ const props: AgentsProps = {
   },
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
-  /*
-    The state this deployment is in: the machine paths exempt from the gate, the pages not. Written
-    here as a fixture rather than imported so a change to the real list is a visible failure in the
-    file that renders it, not a silent agreement.
-  */
   door: {
     agentPaths: ['/llms.txt', '/register-agent.mjs', '/.well-known/weir-agent.json', '/api/', '/agents', '/agents/declare'],
     agentPathsClosed: [],

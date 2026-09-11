@@ -6,7 +6,6 @@ import { prepareOpenVault, type CheckoutQuote } from '@/lib/checkout';
 
 export const dynamic = 'force-dynamic';
 
-/** Build and simulate opening a creator vault. Submission goes through /api/checkout/submit. */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;

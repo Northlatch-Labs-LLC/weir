@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * What the purse builds from an intent.
- *
- * The load-bearing assertion here is the absence of an `UnresolvedObject` input. An unresolved
- * input means `Transaction.build()` goes to the chain to resolve it, and that resolution is a
- * second observation of the world: the purse would evaluate a policy against one reading and sign
- * bytes assembled from another. The registration-then-call pattern in `build.ts` is what keeps it
- * absent, and it is quiet enough that a refactor could lose it with nothing else failing.
- */
 
 import { describe, expect, it } from 'vitest';
 import { fixedGas, buildIntent } from '../src/build.js';
@@ -81,15 +72,6 @@ describe('a price intent', () => {
 });
 
 describe('a settle_epoch intent', () => {
-  /*
-    There is no TypeScript client for the soul package anywhere in the estate (the CTO's F1). The
-    call is assembled from the Move signature and this test pins the argument order to it:
-
-      public fun settle_epoch(
-          _: &LedgerCap, registry: &mut SoulRegistry, soul: &mut EmployeeSoul,
-          vault_sui: u64, epoch_net_nonneg: bool, clock: &Clock, ctx: &TxContext,
-      )
-  */
   const SOUL_PACKAGE = `0x${'9'.repeat(64)}`;
   const LEDGER_CAP = `0x${'a'.repeat(64)}`;
   const REGISTRY = `0x${'b'.repeat(64)}`;

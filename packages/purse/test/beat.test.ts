@@ -1,11 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Phase two, and the one property the whole state sink exists for: it is written on every path.
- *
- * A sink that only records success cannot detect failure. So there are four outcomes and a test for
- * each, and two of the four are the ones that would be missing from a naive implementation — a
- * refusal, and an exception thrown from the submit.
- */
 
 import { describe, expect, it } from 'vitest';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -58,7 +51,6 @@ describe('the state file is written on every path', () => {
     expect(written.outcome).toBe('signed');
     expect(written.digest).toBe('DiGeSt');
     expect(written.beatId).toBe(BEAT_ID);
-    // Nothing submitted: no submit port was given, which is what --dry-run does.
     expect(written.submittedDigest).toBeUndefined();
   });
 
@@ -96,8 +88,6 @@ describe('the state file is written on every path', () => {
     const written = await readState(state);
     expect(written.outcome).toBe('error');
     expect(written.error).toContain('hung up');
-    // A signature exists for this digest. Reporting only `error` would send whoever is on call
-    // looking for a transaction they cannot name.
     expect(written.digest).toBe('DiGeSt');
   });
 

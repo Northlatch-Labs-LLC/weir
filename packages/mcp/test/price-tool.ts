@@ -1,24 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
-/**
- * `weir_price` — the tool that makes an agent's paid post buyable — and the order it teaches.
- *
- * # What this pins
- *
- *   1. The gate. `weir_price` moves no coin and is gated like a spend anyway: absent with no signer,
- *      absent with a signer and no policy, present when both are bound and the port has the method.
- *   2. The refusals come BEFORE the port: an empty key, the reserved `#machine` marker, a price that
- *      is not a positive u64 — each answered with its named reason and ZERO calls on the stub port.
- *   3. The receipt runs under the idempotency ledger: the same JSON-RPC request id replayed reaches
- *      the port ONCE and both answers carry the same idempotencyKey. Driven over a raw transport,
- *      because the SDK client mints its own ids and a replay needs the same one twice.
- *   4. `weir_post` teaches the order. `paid` without a price is refused as `unpriced` with
- *      `next: weir_price`; the route's own 409 for an unpriced key, surfaced by the port as an error
- *      whose text says so, becomes the same refusal — not a generic `call_failed` the model would retry.
- *   5. The marker is the web's, read from its source — the same pin the agent's test uses — so
- *      the copies cannot drift.
- */
-
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -52,7 +33,6 @@ class StubCreator implements WeirPort {
   readonly posted: unknown[] = [];
   readonly asked: unknown[] = [];
   postRefusesUnpriced = false;
-  /** What the deployment says about the machine edition; `undefined` removes the method entirely. */
   machineBodyAnswer: unknown = 'sealed';
   machineBody = async (input: { vaultId: string; contentKey: string }) => {
     this.asked.push(input);
@@ -68,13 +48,6 @@ class StubCreator implements WeirPort {
     if (this.postRefusesUnpriced) throw new Error(ROUTE_409);
     return { postId: 'p001' };
   };
-  /*
-    A live declaration for whoever is bound. `weir_post` costs the platform a seal and a lease, so it
-    is registered only on a port that can read the register and refuses unless the entry is live —
-    see `requireLiveTether` in src/tools.ts. This stub answers "declared, not revoked" so the cases
-    below can go on testing what they are about, which is pricing. The tether itself is tested in
-    test/live-tether.ts, where the answer varies.
-  */
   declaration = async ({ address }: { address: string }) => ({
     address,
     operatorAddress: hex('e'),
@@ -127,13 +100,6 @@ async function main(): Promise<void> {
   }
 
   console.log('=== the machine edition ===');
-  /*
-    `edition: 'machine'` prices `<key>#machine`, derived by the tool and never typed. Before the
-    port is asked to price, the deployment is asked whether the edition can be delivered: `absent`
-    (a post sealed before machine editions were) and not-knowing both refuse; `no-post` and
-    `sealed` let it through. Mutation predicted: remove the guard → the `absent` case reaches the
-    port and this section goes red on `port.priced.length`.
-  */
   const machinePort = new StubCreator();
   const machine = await connect({ port: machinePort, signer: { kind: 'signing', signer }, policyAvailable: true });
   const machineArgs = { ...base, edition: 'machine' };
@@ -205,7 +171,6 @@ async function main(): Promise<void> {
     assert.equal(value.idempotencyKey, sent.idempotencyKey);
   });
 
-  // The replay, over a raw transport: the same request id, twice.
   const replayPort = new StubCreator();
   const rawServer = new McpServer({ name: 'weir-mcp', version: '1.0.0', title: 'weir.social' });
   registerTools(rawServer, { port: replayPort, signer: { kind: 'signing', signer }, policyAvailable: true });
@@ -256,8 +221,6 @@ async function main(): Promise<void> {
   });
 
   console.log('=== the marker ===');
-  // The web application is not part of the published tree. Absent, this pin is reported as not
-  // verified here rather than failed: the monorepo runs it on every commit.
   const webPricing = join(import.meta.dirname, '..', '..', 'web', 'lib', 'machine-pricing.ts');
   if (existsSync(webPricing)) {
     check("is the web's, read from its source — the one source every copy is pinned to", () => {

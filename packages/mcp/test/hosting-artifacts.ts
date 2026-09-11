@@ -1,25 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
-/**
- * The hosting artifacts name only what the server reads, and never a secret.
- *
- * # What this pins, statically
- *
- * A Dockerfile and a service definition are prose the machine executes. What can go wrong in them
- * is quiet: an ENV that hands a key to a public container, a variable the server has never heard
- * of, a ceiling that drifted from the shape. So every variable both files name is checked against
- * the two lists the code exports — `AGENT_ENVIRONMENT` (what the agent library reads) and `ENV`
- * (what the server reads) — plus the two the platform sets (`PORT`, `NODE_ENV`); the two names
- * that must NEVER appear are asserted absent; the image runs as a named non-root user and copies
- * no `.env`; the build context excludes every `.env*`; the service carries the shape's ceilings.
- *
- * # What this does not do
- *
- * It does not build the image and it does not start the server. Both are processes on the machine
- * this runs on and are exercised only against a real deployment; `scripts/acceptance-probes.sh` is what
- * runs against the deployed URL. The PR that carries these files says so.
- */
-
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -54,7 +34,6 @@ const code = (s: string) => s.split('\n').filter((l) => !/^\s*#/.test(l)).join('
 const ALLOWED = new Set<string>([...AGENT_ENVIRONMENT, ...Object.values(ENV), 'PORT', 'NODE_ENV']);
 const FORBIDDEN = new Set<string>([ENV.key, 'PROJECTX_SOCIAL_AGENT_SECRET']);
 
-/** ENV names the Dockerfile sets. `ENV A=1 \` continuation lines included. */
 function dockerEnvNames(src: string): string[] {
   const names: string[] = [];
   let inEnv = false;
@@ -68,7 +47,6 @@ function dockerEnvNames(src: string): string[] {
   }
   return names;
 }
-/** `- name: X` entries under env in the service YAML. */
 const yamlEnvNames = (src: string) => [...code(src).matchAll(/- name:\s*([A-Z_][A-Z0-9_]*)/g)].map((m) => m[1]!);
 
 console.log('=== variables ===');
@@ -84,7 +62,7 @@ check('the service definition names only variables the server or the agent libra
 });
 check('the service definition supplies every variable the agent library requires', () => {
   for (const n of AGENT_ENVIRONMENT) {
-    if (n === 'PROJECTX_SOCIAL_KEY_REGISTRY_ID') continue; // optional, by the SDK's own word
+    if (n === 'PROJECTX_SOCIAL_KEY_REGISTRY_ID') continue;
     assert.ok(yamlNames.includes(n), `${n} missing from the service definition`);
   }
 });
@@ -146,15 +124,6 @@ check('the probe script carries all seven probes from the shape', () => {
   }
 });
 
-/*
-  The read set, derived rather than typed.
-
-  This line used to pin `READ_SET='weir_balance weir_quote weir_read weir_search'` — four names, one of
-  which the hosted build never registers (a balance needs a signer) and none of the three read tools
-  added since. The probe would have failed against the live endpoint, and the test would have passed,
-  because both were copies of the same stale list. Now the expected set is what `registerTools`
-  returns for a keyless binding over a port that offers every read, sorted the way the script sorts.
-*/
 const keylessReadSet = ((): string[] => {
   const noop = async () => ({ ok: true, value: null });
   const port = {
@@ -172,12 +141,6 @@ check('the probe script expects exactly the read set the keyless build registers
   assert.ok(!keylessReadSet.includes('weir_balance'), 'a keyless build must not register a balance tool');
 });
 
-/*
-  The signed manifest's `mcp.tools` is a list written by hand in packages/web. It described four
-  tools including `weir_balance` for two days while the endpoint registered three. Read here as text
-  — the web application is not a dependency of this package — and compared to the same derivation.
-  Absent (the published library tree), the pin is reported as not verified rather than passed.
-*/
 check('the web manifest lists exactly the tools the keyless build registers', () => {
   const manifestSource = join(root, 'packages', 'web', 'lib', 'agent-manifest.ts');
   let src: string;

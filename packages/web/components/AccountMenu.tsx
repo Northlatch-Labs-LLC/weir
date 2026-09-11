@@ -1,70 +1,18 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The account menu.
- *
- * # Why a menu and not a button
- *
- * The header previously carried the whole `SignIn` panel — a heading, two ways in, and a paragraph
- * explaining what a Google sign-in does to your custody. That is the right content for a page and
- * the wrong content for a header bar, and dropping it into one is what made the control look
- * stranded rather than placed.
- *
- * So the header gets a control and the explanation gets a page (`/signin`). Signed in, this becomes
- * the menu every account-bearing surface hangs off — the thing the application did not have. Ten
- * routes existed in the rail with no way to tell, from the top of the screen, whose they were.
- *
- * # This is also how recovery became reachable
- *
- * `AccountRecovery` existed for weeks and was rendered by nothing but its own test. The component
- * argues in its own header that an escape hatch nobody can reach is not an escape hatch; it was
- * right, and it was describing itself. A signed-in menu is the first surface where it belongs.
- *
- * # Built by hand rather than from a library
- *
- * A menu button is four behaviours — Escape closes, pointer-outside closes, focus returns to the
- * trigger, arrows move between items — and each is a few lines here. Taking a dependency for that
- * adds a bundle and a version to track in exchange for code that fits on one screen.
- *
- * The rules come from the ARIA authoring practices, and they are not decoration: a dropdown that
- * leaves focus on a hidden element after closing is unusable by keyboard, and invisible as a bug to
- * everyone who does not navigate that way.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSigner } from '@/components/SignerProvider';
 import { WalletConnect } from '@/components/WalletConnect';
 
-/**
- * What belongs to *you*, as opposed to where you can go.
- *
- * These overlap the rail deliberately. The rail is navigation; this is possession, and somebody
- * looking for their own earnings looks under their own name before they scan a list of ten links.
- */
 const MINE = [
   { href: '/purchases', label: 'Purchases' },
-  /*
-    Names live here rather than in the header, because a .sui name is a thing this address owns —
-    the same category as what it has bought and who it referred. It replaced the standalone
-    registrar at `suins.protocolx.io`, now retired, which nobody would find from a profile.
-  */
   { href: '/names', label: 'Register your .sui name' },
   { href: '/referrals', label: 'Referrals' },
 ] as const;
 
-/**
- * Offered only to somebody who owns a vault.
- *
- * These were listed for everybody, so a reader with no vault was invited into a studio that can
- * only tell them to open one, and an earnings page with nothing to report. A menu entry is a
- * promise that there is something at the other end of it.
- *
- * Derived from the chain rather than stored, exactly as the rail is. There is no creator role
- * anywhere, and adding one here would be a second answer to a question the chain already settles.
- */
 const CREATOR_ITEMS = [
   { href: '/creator', label: 'Creator studio' },
   { href: '/earnings', label: 'Earnings' },
@@ -75,49 +23,16 @@ export function AccountMenu() {
   const { signer, signOut, reopenAccountChoice, reauthorizeWallet, proof, proveSession } =
     useSigner();
   const [open, setOpen] = useState(false);
-  /**
-   * The handle this address holds on chain.
-   *
-   * Three states, and the third is the point: `undefined` means not looked up yet, `null` means the
-   * chain was read and this address holds no account. Collapsing them would tell a registered
-   * creator they have no account for as long as the request takes — on the one control that is
-   * supposed to know who they are.
-   *
-   * The lookup is not new. `/join` has called it since it was written and used the answer to say
-   * "there is nothing to do here" — knowing the handle and offering no way to reach it. This is the
-   * same call, put where somebody would actually look for their own page.
-   */
   const [handle, setHandle] = useState<string | null | undefined>(undefined);
-  /** Whether this address owns a vault. `undefined` until the chain answers, and on a failure. */
   const [stage, setStage] = useState<'no-account' | 'no-vault' | 'ready' | undefined>(undefined);
-  /**
-   * The `.sui` name this address answers to, if it has set one.
-   *
-   * `null` means asked and there is none — most addresses — and renders as the plain address.
-   * `undefined` means not asked yet or the lookup failed, which renders the same way but leaves
-   * the possibility open on the next read. Neither is an error worth showing somebody.
-   */
   const [suiName, setSuiName] = useState<string | null | undefined>(undefined);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemsRef = useRef<(HTMLAnchorElement | HTMLButtonElement | null)[]>([]);
 
-  /**
-   * Nothing until mounted.
-   *
-   * `signer` is rebuilt in the browser from storage and from `/api/zklogin/session`, so the server
-   * always renders the signed-out branch. Without this gate the first paint tells a signed-in
-   * person to sign in, and React then swaps it — which reads as the session dropping and returning
-   * on every single navigation.
-   */
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  /*
-    Keyed on the address, not the signer object. Switching account in the wallet changes who this
-    is, and the previous address's handle is not an answer about this one — it would leave somebody
-    looking at a menu offering a page that belongs to a different account of theirs.
-  */
   useEffect(() => {
     const address = signer?.address;
     if (address === undefined) {
@@ -131,17 +46,6 @@ export function AccountMenu() {
     setStage(undefined);
     setSuiName(undefined);
 
-    /*
-      One request for both facts.
-
-      `/api/creator` answers with the handle *and* how far along this address is, so calling
-      `/api/account` as well would be a second round trip for something already in the reply — and
-      two sources for one answer eventually disagree.
-    */
-    /*
-      The name every other Sui application shows. Asked separately from the creator stage: it is a
-      different question of a different registry, and a failure in one must not blank the other.
-    */
     void fetch(`/api/names/reverse?address=${encodeURIComponent(address)}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((body: { name?: string | null } | null) => {
@@ -155,7 +59,6 @@ export function AccountMenu() {
       .then((body: { stage?: 'no-account' | 'no-vault' | 'ready'; handle?: string } | null) => {
         if (cancelled || body?.stage === undefined) return;
         setStage(body.stage);
-        // `no-account` carries no handle, and that is a measured "none" rather than a failed look.
         setHandle(body.stage === 'no-account' ? null : (body.handle ?? null));
       })
       // A failed read leaves both `undefined`. "We could not look" is not "you have nothing", and
@@ -169,8 +72,6 @@ export function AccountMenu() {
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
-    // Focus has to go somewhere deliberate. Left on a node that is about to unmount, the browser
-    // drops it to `body`, and the reader's next Tab restarts from the top of the document.
     if (returnFocus) triggerRef.current?.focus();
   }, []);
 
@@ -186,8 +87,6 @@ export function AccountMenu() {
       // focus is already headed somewhere on purpose and must not be dragged back to the trigger.
       else if (event.key === 'Tab') close(false);
     }
-    // `pointerdown`, not `click`: closing on click can beat a link's own navigation to the event
-    // loop, so the menu closes and the reader stays exactly where they were.
     function onPointerDown(event: PointerEvent) {
       if (!rootRef.current?.contains(event.target as Node)) close(false);
     }
@@ -200,8 +99,6 @@ export function AccountMenu() {
     };
   }, [open, close]);
 
-  // Opening moves focus to the first item. Without this the menu is openable by keyboard and then
-  // unreachable, which is worse than not having it.
   useEffect(() => {
     if (open) itemsRef.current[0]?.focus();
   }, [open]);
@@ -223,50 +120,9 @@ export function AccountMenu() {
     else if (event.key === 'End') go(items.length - 1);
   }
 
-  // A same-sized placeholder, so the header does not jump when the real control arrives.
   if (!mounted) return <div className="account-slot" aria-hidden />;
 
   if (signer === null) {
-    /*
-      Signing in, from the header itself.
-
-      This was a link to `/signin`, so the most common action on the site cost a page load before
-      anything happened. Google is offered directly here because it is the path somebody without a
-      wallet takes, and it needs no extension, no prompt to install anything and no second screen.
-
-      The link stays beside it, quieter, for the wallet paths and the explanation. Those genuinely
-      need a page: the trade-offs of a Google-derived address are a paragraph, and a paragraph does
-      not belong in a header.
-
-      `next` is carried so signing in returns the reader to what they were looking at, guarded
-      against pointing at itself — which would survive the round trip and land somebody back on the
-      sign-in page having just signed in.
-    */
-    /*
-      The wallet path, from the header.
-
-      One wallet installed is the common case, and it connects here directly — the extension is the
-      only thing that needs to open, and sending somebody to a page first to press the same button
-      is a page load for nothing.
-
-      Several wallets is a choice, and a header is the wrong place to make it: the names are what
-      distinguish them and they need room. That goes to `/signin`, where they are listed with the
-      Google alternative and the trade-offs written out.
-
-      None installed also goes there, because the useful thing to say — which wallets work, and
-      that Google needs no extension at all — is a paragraph.
-    */
-    /*
-      Every installed wallet gets a button that connects it.
-
-      This was one button that connected when exactly one wallet was installed and became a *link*
-      to `/signin` otherwise — so somebody with both Slush and Phantom pressed it and was navigated
-      rather than connected. It read as broken because, for that person, it was: the control did
-      nothing a connect button is for.
-
-      Listing them is the honest shape. A site cannot choose between somebody's wallets, and the
-      names are short enough to sit in a header when there are two or three of them.
-    */
     return (
       <div className="account-slot account-signin__group">
         <WalletConnect />
@@ -274,8 +130,6 @@ export function AccountMenu() {
     );
   }
 
-  // Index the refs by hand: the recovery entry is conditional, so a fixed offset for "sign out"
-  // would leave a null hole in the middle of the list for wallet users and break arrow movement.
   let cursor = 0;
   const nextIndex = () => cursor++;
 
@@ -526,4 +380,3 @@ export function AccountMenu() {
     </div>
   );
 }
-

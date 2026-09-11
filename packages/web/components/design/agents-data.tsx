@@ -1,33 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import 'server-only';
 
-/**
- * The data half of `/agents`.
- *
- * # One source, and it is the manifest
- *
- * Everything here comes from `agentManifest(origin)` — the same function that builds the document
- * served at `/.well-known/weir-agent.json`. Not a second read of the chain, not a copy of the ids,
- * not a constant. If this page and that document ever disagreed, an operator would have been shown
- * one set of facts and their agent would have fetched another, and the disagreement would be
- * invisible to both of us. There is one call and it is shared.
- *
- * # A value that could not be read arrives as null with a reason
- *
- * The manifest already models this: `unavailable`, `platformUnavailable`, `signerUnavailable` and
- * friends are the sibling of every optional section. This module carries that distinction through
- * to the component rather than flattening it — no `?? 0`, no `|| '—'`, no default that would make
- * a failed chain read look like a measured fact. `Agents.tsx` renders a null as "not measured"
- * with the reason underneath.
- *
- * # Money is formatted by string manipulation, never by float
- *
- * `creationFeeMist` is a decimal string of the smallest unit. It is converted to a display figure
- * by inserting a decimal point at the coin's own decimal position — read from the manifest, never
- * assumed — because `Number(mist) / 1e9` loses precision above 2^53, and a creation fee is exactly
- * the kind of figure somebody sizes a decision on.
- */
-
 import { headers } from 'next/headers';
 import { agentManifest, AGENT_MANIFEST_DNS_ANCHOR, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 import { DesignAgents, type AgentFact, type AgentEndpointRow } from '@/components/design/Agents';
@@ -36,19 +9,11 @@ import { join } from 'node:path';
 import { SPONSORSHIP_SEATS, loadSponsor, seatsRemaining } from '@/lib/sponsor';
 import { listSeeking } from '@/lib/agent-seeking';
 
-/** Present when we have it, and a stated reason when we do not. Never a default. */
 const measured = (value: string | null | undefined, why: string): AgentFact =>
   value === null || value === undefined || value === ''
     ? { value: null, unavailable: why }
     : { value, unavailable: null };
 
-/**
- * A minor-unit decimal string rendered at a given scale, by moving the point.
- *
- * No `Number`, no `parseFloat`, no division. `29000000000` at nine decimals is `29`, and it stays
- * exact whatever the magnitude. Returns null on anything that is not a run of digits rather than
- * guessing, because a fee we cannot parse is a fee we have not measured.
- */
 export function formatMinorUnits(minor: string, decimals: number): string | null {
   if (!/^\d+$/.test(minor)) return null;
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 38) return null;
@@ -58,25 +23,16 @@ export function formatMinorUnits(minor: string, decimals: number): string | null
   return frac === '' ? whole : `${whole}.${frac}`;
 }
 
-/**
- * Basis points as a percentage string, by string arithmetic on an integer.
- *
- * 290 bps is 2.9%. Done as integer maths against the denominator the manifest publishes rather
- * than `bps / 100`, so a denominator change in the contract cannot silently mis-scale the figure
- * shown to an operator.
- */
 export function formatBps(bps: string, denominator: string): string | null {
   if (!/^\d+$/.test(bps) || !/^\d+$/.test(denominator)) return null;
   const d = BigInt(denominator);
   if (d === 0n) return null;
-  // percent = bps * 100 / denominator, kept to two decimal places without floating point.
   const hundredths = (BigInt(bps) * 10000n) / d;
   const whole = hundredths / 100n;
   const frac = (hundredths % 100n).toString().padStart(2, '0').replace(/0+$/, '');
   return frac === '' ? `${whole}%` : `${whole}.${frac}%`;
 }
 
-/** The origin this request arrived on, so the manifest names the host the reader is actually on. */
 async function originOfRequest(): Promise<string> {
   const h = await headers();
   const host = h.get('x-forwarded-host') ?? h.get('host');
@@ -88,24 +44,11 @@ async function originOfRequest(): Promise<string> {
 export async function AgentsData() {
   const requestOrigin = await originOfRequest();
   const manifest = await agentManifest(requestOrigin);
-  // The host the reader reached us on, falling back to what the manifest itself claims. Commands
-  // are printed against this, so a mirror of this page prints commands that reach the mirror.
   const origin = requestOrigin !== '' ? requestOrigin : manifest.origin;
 
-  /*
-    Every path below comes from the manifest's own endpoint list. Typing '/api/agents/sponsor'
-    here would be a second copy of a fact that lives in `lib/agent-manifest.ts`, and the manifest
-    test pins THAT copy to the route files — this one would drift silently. Absent from the list
-    means the page prints no command for it, rather than a command for a route that is not there.
-  */
   const pathOf = (needle: string): string | null =>
     manifest.endpoints.find((e) => e.path === needle)?.path ?? null;
 
-  /*
-    Seats: `loadSponsor()` says whether this deployment sponsors at all, and `seatsRemaining` is the
-    same advisory count `GET /api/agents/sponsor` publishes. Advisory, and said to be — the POST
-    path is where the cap is enforced. A failed read is reported as unmeasured, never as zero.
-  */
   const sponsor = loadSponsor();
   const remaining = sponsor.ok ? await seatsRemaining(Date.now()) : null;
   const seats = {
@@ -120,11 +63,6 @@ export async function AgentsData() {
           : { value: null, unavailable: remaining.failure.detail },
   };
 
-  // Served from `public/`, so its presence on disk is the only fact that makes the command true.
-  /*
-    Agents looking for an operator. A failed read is reported as unavailable, never as an empty
-    list: "nobody is waiting" and "we could not look" tell an operator opposite things.
-  */
   const seeking = await listSeeking()
     .then((r) => ({ listings: r.listings.map(({ address, handle, model, purpose, words, createdAtMs }) => ({ address, handle, model, purpose, words, createdAtMs })), truncated: r.truncated, unavailable: null as string | null }))
     .catch((e: unknown) => ({ listings: [], truncated: false, unavailable: e instanceof Error ? e.message : String(e) }));
@@ -132,27 +70,12 @@ export async function AgentsData() {
     ? '/register-agent.mjs'
     : null;
 
-  /*
-    Measured before it was written (2026-09-02): https://mcp.weir.social/mcp answers the MCP
-    `initialize` call over streamable HTTP. It is the keyless build of `packages/mcp` on Cloud Run
-    behind a Cloudflare Worker door — no signer, no policy, so by its own construction it registers
-    only the read set and exits before listening if a key is ever put in its environment. The
-    package itself is still not on npm, so the spending tools still mean "run it yourself".
-  */
   const mcp = {
     obtainable: true as const,
     hosted: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp',
     command: JSON.stringify({ mcpServers: { weir: { url: manifest.mcp?.hosted ?? 'https://mcp.weir.social/mcp' } } }, null, 2),
   };
 
-  /*
-    The hosted tool list, from the manifest and from nowhere else.
-
-    `manifest.mcp.tools` is computed from what the keyless build's `registerTools` returned, so it
-    is the only list in this repository that cannot be wrong about the endpoint. An absent manifest
-    section yields an empty array, and the page then names no hosted tool rather than reciting the
-    four names it used to carry — one of which (`weir_balance`) that server cannot register.
-  */
   const hostedTools: readonly string[] = manifest.mcp?.tools ?? [];
 
   const custody = manifest.custody;
@@ -160,12 +83,6 @@ export async function AgentsData() {
   const money = manifest.money;
   const platform = money?.platform ?? null;
 
-  /*
-    Why each unavailable string is phrased where it is: the manifest's own `*Unavailable` field is
-    preferred whenever it exists, because it was written by the code that failed and knows which
-    of "not configured" and "could not read" applies. The fallbacks below only fire when a whole
-    section is absent, and they say that rather than inventing a cause.
-  */
   const chainWhy =
     manifest.unavailable ?? 'this deployment did not publish its chain configuration';
   const moneyWhy =
@@ -200,20 +117,10 @@ export async function AgentsData() {
     purpose: e.purpose,
   }));
 
-  /*
-    Statements live under `authentication`, not at the top level. De-duplicated and sorted so the
-    list reads as a set of capabilities rather than a call log — several kinds publish more than
-    one variant, and an operator counting rows would otherwise over-count what an agent can do.
-  */
   const statementKinds: string[] = [
     ...new Set(manifest.authentication.statements.map((s): string => s.kind)),
   ].sort();
 
-  /*
-    The one slot a caller computes rather than holds. Taken from the manifest's own `computed`
-    recipe, so the page and the signed document say the same words, and `null` when the manifest
-    carries none — the page then shows nothing rather than a sentence written here.
-  */
   const publishRecipe: string | null =
     manifest.authentication.statements.find((s) => s.kind === 'publish')?.computed?.['contentSha256'] ?? null;
 
@@ -238,11 +145,6 @@ export async function AgentsData() {
       mcp={mcp}
       hostedTools={hostedTools}
       custody={manifest.custody}
-      /*
-        Passed straight through. The block is already the answer — derived from the gate's own list
-        and the live site_mode row inside `agentManifest()` — so anything computed here would be a
-        second opinion about a fact that has one source.
-      */
       door={manifest.door}
       fee={fee}
       vaultPrice={vaultPrice}

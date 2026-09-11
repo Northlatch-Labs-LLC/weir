@@ -9,30 +9,14 @@ import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { verifyAction } from '@/lib/identity';
 import { provenReaderFor } from '@/lib/read-session';
 
-/**
- * The creator reads and answers the discussion under her own post without holding an Unlock.
- *
- * Found 2026-09-02: kaela_ai, with a proven session, was refused 403 under her own paid posts,
- * because `canRead` asks only whether the reader BOUGHT the post, and nobody sells a post to
- * themselves. The vault's owner is read from the profile row that links the handle to the vault,
- * never taken from the request.
- */
 async function ownsPost(address: string | null, post: { authorHandle: string }): Promise<boolean> {
   if (address === null) return false;
   const profile = await findProfile(post.authorHandle);
   return profile !== null && normaliseAddress(profile.owner) === normaliseAddress(address);
 }
 
-
 export const dynamic = 'force-dynamic';
 
-/**
- * Comments on one post.
- *
- * Reading them requires the same entitlement as reading the post. A locked post's comments are
- * part of what was paid for, and leaking them would leak the discussion — often the substance —
- * of content someone bought.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -41,14 +25,6 @@ export async function GET(request: Request) {
   const postId = url.searchParams.get('postId');
   if (postId === null) return NextResponse.json({ error: 'postId is required' }, { status: 400 });
 
-  /*
-    Proved, not named. This took the reader from `?reader=` and resolved entitlements for whoever
-    was named, so anybody could read the discussion under a paid post by naming somebody who had
-    bought it.
-
-    Note that `POST` below was never wrong: it resolves entitlements for `author`, which
-    `verifyAction` has already proved. The two halves of this one file disagreed.
-  */
   const readerReading = await provenReaderFor(request);
   const reader = fold(
     readerReading,
@@ -65,11 +41,6 @@ export async function GET(request: Request) {
     () => ({ ...NO_ENTITLEMENTS, truncated: false }),
   );
   if (!canRead(post, entitlements) && !(await ownsPost(reader, post))) {
-    // A partial entitlement read cannot distinguish "did not buy it" from "we stopped counting at
-    // fifty" — see the note in the media route. 503 so the reader retries instead of being shown a
-    // paywall for something they own.
-    // A session that could not be read joins `truncated`: both are incomplete answers, and the
-    // alternative is telling somebody who paid that they did not. See the media route.
     if (entitlements.truncated || !readerReading.ok) {
       return NextResponse.json(
         { error: 'your entitlements could not be read in full — try again', truncated: true },
@@ -82,14 +53,6 @@ export async function GET(request: Request) {
   return NextResponse.json({ comments: await listComments(postId) });
 }
 
-/**
- * Post a comment.
- *
- * Two gates, and both are necessary. The signature proves the author controls the address they
- * claim — without it anyone could comment as anyone. The entitlement check stops a non-buyer
- * commenting under a post they cannot read, which would otherwise be a way to write into a paid
- * thread from outside it.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
@@ -122,12 +85,6 @@ export async function POST(request: Request) {
   const post = await findPost(postId);
   if (post === null) return NextResponse.json({ error: 'no such post' }, { status: 404 });
 
-  // The statement is rebuilt here from the trimmed text that will actually be stored, so a
-  // signature cannot authorise one comment while a different one is written.
-  /*
-    Held rather than inlined: the same origin goes into the verification AND into the retained
-    proof below. Deriving it twice is how a stored record drifts from the bytes that were verified.
-  */
   const origin = new URL(request.url).origin;
 
   const proven = await verifyAction({
@@ -147,15 +104,6 @@ export async function POST(request: Request) {
     () => ({ ...NO_ENTITLEMENTS, truncated: false }),
   );
   if (!canRead(post, entitlements) && !(await ownsPost(author, post))) {
-    /*
-      Same distinction as the GET, and it costs more here.
-
-      Signatures are single-use, and this check runs *after* `verifyAction` — it has to, because
-      the entitlement is checked against the address the signature proved. So telling a subscriber
-      with 51 unlocks "you are not entitled" does not merely refuse their comment: it spends their
-      signature doing it, and the retry needs a fresh wallet prompt. 503 says the answer was
-      incomplete, which is what it was.
-    */
     if (entitlements.truncated) {
       return NextResponse.json(
         { error: 'your entitlements could not be read in full — try again', truncated: true },
@@ -174,11 +122,6 @@ export async function POST(request: Request) {
     author,
     text: trimmed,
     createdAtMs: Date.now(),
-    /*
-      The proof, kept — see `db/040_comment_authorship.sql`. These are the exact values
-      `verifyAction` accepted, not a re-derivation: a proof that differs from what was checked is
-      not a proof. `trimmed` is what was signed and what is stored, so the bytes rebuild exactly.
-    */
     authorship: { issuedAtMs: timestampMs, origin, signature },
   };
   await addComment(comment);

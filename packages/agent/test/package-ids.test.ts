@@ -1,31 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The two package ids, checked at every site that uses one — not merely shown to be different.
- *
- * # The rule
- *
- * Sui does not resolve a package address to its newest version. After an upgrade there are two
- * addresses and each has exactly one correct use:
- *
- *   - `latestPackageId` (`0xfa7eb18b…3694`, version 3) — **every `moveCall` target, and nothing
- *     else.** A call at the original address runs the ORIGINAL bytecode, and it does not error in a
- *     way that names the cause: a module added after publication is simply absent, and a function
- *     whose behaviour changed quietly does the old thing.
- *   - `packageId` (`0xc5c83399…404d`, the original publication) — **struct type tags, event
- *     filters, and the Seal identity namespace.** A struct's type identity is bound to the address
- *     it was first published at and does not move on upgrade, so filtering owned objects by the
- *     latest id matches nothing at all.
- *
- * # Why this is a test and not a paragraph
- *
- * The estate has already paid for this once. `UPDATE.md`, 2026-08-30: the harvest daemon was
- * pinned to package v2 against a v3 deployment, so every harvest it built executed v2 bytecode.
- * Nothing was at risk only because that daemon holds no capability. **An agent that spends does.**
- *
- * "The two ids are distinct" proves nothing about which one reaches which call. So each assertion
- * below builds the real transaction or intercepts the real read, and inspects the address that
- * actually went out.
- */
 
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
@@ -58,7 +31,6 @@ const CONFIG = loaded.value.config;
 const OBJ = (n: string) => `0x${n.repeat(64)}`;
 const SENDER = OBJ('9');
 
-/** Every `moveCall` package address in a built transaction, in command order. */
 function moveCallPackages(tx: { getData: () => unknown }): string[] {
   const data = tx.getData() as {
     commands: Array<{ MoveCall?: { package: string; module: string; function: string } }>;
@@ -113,8 +85,6 @@ describe('every moveCall target is the LATEST package', () => {
     expect(targets.length, `${name} built no moveCall at all`).toBeGreaterThan(0);
     for (const target of targets) {
       expect(target.startsWith(`${MAINNET_RECORD.latestPackageId}::`), target).toBe(true);
-      // Stated the other way round as well, because "starts with the latest id" would also be
-      // satisfied if the two ids ever shared a prefix.
       expect(target.startsWith(`${MAINNET_RECORD.packageId}::`), target).toBe(false);
     }
   });
@@ -141,14 +111,6 @@ describe('every moveCall target is the LATEST package', () => {
 
 describe('every struct type tag is the ORIGINAL package', () => {
   it('findAgentAccount filters owned objects on the original id', async () => {
-    /*
-      The opposite choice from a moveCall target, and it is not a preference. A `SocialAccount`
-      minted before the upgrade and one minted after both carry the ORIGINAL address in their type
-      tag, because a struct's identity is bound to where the package was first published. Filtering
-      on the latest id matches nothing — and `ok(null)` from this function means "we looked and
-      there is none", which is the prompt to open an account. So the wrong id here does not error;
-      it tells a funded agent it has no account and sends it to open a second one.
-    */
     let asked: string | undefined;
     const client = {
       listOwnedObjects: async (args: { type: string }) => {
@@ -174,8 +136,6 @@ describe('the ids themselves', () => {
   });
 
   it('match the recorded mainnet deployment', () => {
-    // Pinned so an accidental edit to MAINNET_RECORD is a failing test rather than a silent
-    // re-pointing of every agent that loads it.
     expect(MAINNET_RECORD.packageId).toBe(
       '0xc5c833991ed1123d70b1001c0bcdb01ec5728b09f25dfc42a0edaf16005d404d',
     );

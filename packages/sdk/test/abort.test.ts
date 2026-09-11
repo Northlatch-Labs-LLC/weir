@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Abort decoding, against strings the chain actually produced.
- *
- * The first case below is copied verbatim from a mainnet simulation of a sub-minimum deposit. It
- * is here because the original decoder read it as module `MoveAbort`, code `2` — finding the `2`
- * in "2nd command" — and would have shown a user a confident explanation belonging to a different
- * error in a module that does not exist.
- */
 
 import { describe, expect, it } from 'vitest';
 import { decodeAbort } from '../src/client.js';
@@ -25,7 +17,6 @@ describe('decodeAbort', () => {
   });
 
   it('is not fooled by the command ordinal', () => {
-    // "2nd command" and "instruction 55" both contain numbers before and after the real code.
     expect(decodeAbort(REAL_ABORT).code).not.toBe(2);
     expect(decodeAbort(REAL_ABORT).code).not.toBe(55);
   });
@@ -47,7 +38,6 @@ describe('decodeAbort', () => {
     const decoded = decodeAbort("abort code: 9999, in '0xabc::creator::subscribe'");
     expect(decoded.module).toBe('creator');
     expect(decoded.code).toBe(9999);
-    // Silence rather than a guess. An opaque code can be searched for; a wrong sentence cannot.
     expect(decoded.explanation).toBeNull();
   });
 
@@ -68,12 +58,6 @@ describe('decodeAbort', () => {
 
 describe('creator abort 2 — the wrong capability', () => {
   it('explains that a CreatorCap is bound to one vault', () => {
-    /*
-      Found on mainnet while building the earnings page. A `CreatorCap` carries the id of the vault
-      it governs and `assert_cap` checks it, so a creator with two vaults holds two caps and the
-      first one aborts against the second vault. Before this entry the failure surfaced as
-      "abort code: 2", which tells somebody nothing about why their own money will not come out.
-    */
     const decoded = decodeAbort(
       "MoveAbort in 1st command, abort code: 2, in " +
         "'0xa7fd154039f77780f808c7262511a9f4a860620d57e17b58e0e2ca010e1d214d::creator::claim_earnings'",

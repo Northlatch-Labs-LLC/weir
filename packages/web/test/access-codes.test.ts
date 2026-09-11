@@ -1,25 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * Access codes: shape, spending a use, the pass, and the gate's decision.
- *
- * The database is scripted per call, because redemption is two statements whose second depends on
- * the first matching nothing, and a single canned answer cannot express that.
- */
 type Result = { rows: unknown[] };
 let script: Array<Result | Error> = [];
 const queries: Array<{ sql: string; params: unknown[] }> = [];
 
-/*
-  Transaction control is recorded and does NOT consume the script.
-
-  Redemption became one transaction — the spend and the pass are one edit, and were two statements.
-  Making BEGIN/COMMIT/ROLLBACK draw from the script would have meant rewriting every scripted
-  sequence in this file to interleave them, which is a lot of churn to assert nothing. They are
-  recorded in `queries` instead, so the tests below can assert the ORDER of the real statements
-  against the control ones.
-*/
 const CONTROL = /^\s*(BEGIN|COMMIT|ROLLBACK)\s*$/i;
 let released = 0;
 
@@ -61,7 +46,6 @@ beforeEach(() => {
   released = 0;
   script = [];
   queries.length = 0;
-  // The pass cache lives on globalThis; each test starts without one.
   delete (globalThis as Record<symbol, unknown>)[Symbol.for('projectx.social.access-pass')];
 });
 afterEach(() => vi.restoreAllMocks());
@@ -81,7 +65,7 @@ describe('the code itself', () => {
     expect(normaliseCode('ABCDEFGHJKLM')).toBe('ABCD-EFGH-JKLM');
     expect(normaliseCode(' abcd-efgh-jklm ')).toBe('ABCD-EFGH-JKLM');
     expect(normaliseCode('ABC')).toBeNull();
-    expect(normaliseCode('ABCD-EFGH-JKL0')).toBeNull(); // zero is not in the alphabet
+    expect(normaliseCode('ABCD-EFGH-JKL0')).toBeNull();
     expect(normaliseCode('ABCD-EFGH-JKLO')).toBeNull();
   });
 
@@ -101,8 +85,6 @@ describe('redeeming', () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    // Control statements are recorded too, so the real ones are selected rather than counted off
-    // by position — an index that shifts when a BEGIN appears is a test about the wrong thing.
     const [spend, insert, sweep] = queries.filter((q) => !CONTROL.test(q.sql));
     expect(spend!.sql).toMatch(/UPDATE access_codes SET uses = uses \+ 1/);
     expect(spend!.sql).toMatch(/uses < max_uses/);
@@ -119,15 +101,6 @@ describe('redeeming', () => {
   });
 
   it('spends the use and issues the pass in ONE transaction', async () => {
-    /*
-      The defect. The UPDATE is atomic on its own — `uses < max_uses` in the WHERE means two callers
-      racing for the last use cannot both take it. What was wrong is what happened after: the spend
-      committed, and the pass was a separate statement. An instance frozen or killed between them
-      left a use permanently consumed from a code with a hard ceiling and no pass to show for it,
-      with no compensating delete and nothing to reconcile it.
-
-      On a single-use code handed to one person, that is that person locked out for good.
-    */
     script = [{ rows: [{ expires_at_ms: null }] }, { rows: [] }, { rows: [] }];
     await redeemAccessCode('abcd-efgh-jklm', NOW);
 
@@ -139,7 +112,6 @@ describe('redeeming', () => {
 
     expect(begin).toBeGreaterThan(-1);
     expect(commit).toBeGreaterThan(-1);
-    // Both writes strictly inside, and in that order.
     expect(spend).toBeGreaterThan(begin);
     expect(insert).toBeGreaterThan(spend);
     expect(commit).toBeGreaterThan(insert);
@@ -157,10 +129,6 @@ describe('redeeming', () => {
   });
 
   it('undoes the spend when the pass cannot be written', async () => {
-    /*
-      The whole point of the transaction, asserted from the failure side: a redemption that could
-      not issue a pass must not have cost the caller a use. Before this it did, permanently.
-    */
     script = [{ rows: [{ expires_at_ms: null }] }, new Error('connection terminated')];
 
     await expect(redeemAccessCode('abcd-efgh-jklm', NOW)).rejects.toThrow('connection terminated');
@@ -171,8 +139,6 @@ describe('redeeming', () => {
   });
 
   it('rolls back rather than committing when nothing was spent', async () => {
-    // An exhausted code writes nothing. Committing an empty transaction would work and would make
-    // the two outcomes indistinguishable in a log.
     script = [{ rows: [] }, { rows: [{ revoked_at_ms: null, expires_at_ms: null, uses: 3, max_uses: 3 }] }];
 
     const outcome = await redeemAccessCode('abcd-efgh-jklm', NOW);
@@ -182,7 +148,6 @@ describe('redeeming', () => {
   });
 
   it('always returns the client, on every path', async () => {
-    // A connection kept on a failure is a connection the pool never gets back, and the pool is three.
     script = [{ rows: [] }, { rows: [{ revoked_at_ms: null, expires_at_ms: null, uses: 3, max_uses: 3 }] }];
     await redeemAccessCode('abcd-efgh-jklm', NOW);
     expect(released).toBe(1);

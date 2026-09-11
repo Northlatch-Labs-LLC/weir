@@ -1,11 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// `listProfiles` took no arguments and returned the whole table.
-//
-// Three callers then threw most of it away in JavaScript: the entity markers kept the handles on
-// the current page, the earnings page kept the rows belonging to one address, and the sidebar kept
-// the first few. `RightRail` sits in the shell, so that last one happened on EVERY page of the site.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,8 +31,6 @@ describe('narrowing happens in SQL', () => {
   });
 
   it('treats an empty handle list as an empty answer, not as everybody', async () => {
-    // "These creators" with an empty list is nobody. Falling back to an unfiltered read is how a
-    // narrowed query silently becomes a full one.
     const { listProfiles } = await import('../lib/content');
     await listProfiles({ handles: [] });
     expect(sql()).toMatch(/WHERE handle = ANY/i);
@@ -66,11 +58,6 @@ describe('narrowing happens in SQL', () => {
   });
 
   it('still returns everything when nothing is narrowed', async () => {
-    /*
-      Deliberate, and the reason there is no DEFAULT limit here as there is on posts. The remaining
-      callers build a lookup map over every creator, and a silently truncated map is not a smaller
-      answer — it is a wrong one, in which a missing creator renders as though they do not exist.
-    */
     const { listProfiles } = await import('../lib/content');
     await listProfiles();
     expect(sql()).toBe('SELECT * FROM profiles ORDER BY handle');
@@ -90,16 +77,6 @@ describe('the callers that discarded most of what they asked for', () => {
     readFileSync(join(process.cwd(), p), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/[^\n]*/g, '');
-
-  /*
-    The sidebar's case is gone with the sidebar.
-
-    It read `components/shell/RightRail.tsx` and asserted that it asked the database for a bounded
-    list rather than the whole table — worth pinning while it sat in the shell and ran on every
-    page. That component was part of the site chrome the application replaced, it had been mounted
-    by nothing for some time, and it is deleted. A test that reads a deleted file's source is not a
-    test of anything.
-  */
 
   it('the entity markers ask for the handles on the page', () => {
     const code = read('components/EntityType.tsx');

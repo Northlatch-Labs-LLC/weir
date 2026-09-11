@@ -1,8 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The multisig document and the wrap: the purse signs AS the multisig address, and the signature it
- * returns is one the multisig public key itself accepts.
- */
 
 import { describe, expect, it } from 'vitest';
 import { symlink, writeFile } from 'node:fs/promises';
@@ -123,7 +119,6 @@ describe('the document, hardened', () => {
     const heavy = { ...docFor(hot, brake), members: [{ ...docFor(hot, brake).members[0]!, weight: 256 }, docFor(hot, brake).members[1]!] };
     expect((await loadMultisigDoc(await written(heavy))).ok).toBe(false);
     expect((await loadMultisigDoc(await written(docFor(hot, brake, { threshold: 65536 })))).ok).toBe(false);
-    // The bounds' inside edge still loads.
     expect((await loadMultisigDoc(await written(docFor(hot, brake, { threshold: 2 })))).ok).toBe(true);
   });
 });
@@ -137,7 +132,6 @@ describe('the wrap', () => {
     expect(wrapped.ok).toBe(true);
     if (!wrapped.ok) throw new Error('unreachable');
 
-    // The source of truth for the address: the SDK's own derivation over the same members.
     const expected = MultiSigPublicKey.fromPublicKeys({
       threshold: 1,
       publicKeys: [
@@ -157,7 +151,6 @@ describe('the wrap', () => {
     expect(signature.ok).toBe(true);
     if (!signature.ok) throw new Error('unreachable');
     expect(await expected.verifyTransaction(bytes, signature.value)).toBe(true);
-    // And it is a multisig signature, not the hot key's bare one.
     expect(await hot.getPublicKey().verifyTransaction(bytes, signature.value).catch(() => false)).toBe(false);
   });
 
@@ -173,8 +166,6 @@ describe('the wrap', () => {
     const hot = throwawayKeypair();
     const brake = throwawayKeypair();
     const wrapped = wrapAsMultisig(docFor(hot, brake, { threshold: 2 }), signerFor(hot));
-    // Construction passes (the members' total weight reaches 2); signing is where the hot key alone
-    // falls short, and the signer package refuses there with the missing weight named.
     expect(wrapped.ok).toBe(true);
     if (!wrapped.ok) throw new Error('unreachable');
     const signature = await wrapped.value.signer.signTransaction(new Uint8Array([9]));

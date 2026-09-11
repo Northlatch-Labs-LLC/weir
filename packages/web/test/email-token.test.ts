@@ -1,10 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// The unsubscribe token is the only thing standing between a mailing list and anybody who can guess
-// an address. If it can be forged, one request takes a stranger off the list; if it cannot be
-// verified, the promise on `weir.social/waitlist` — "one click unsubscribes" — is broken for the
-// person holding a real link. Both failures are silent from the outside, so they are pinned here.
 import { describe, expect, it } from 'vitest';
 import { createHmac } from 'node:crypto';
 import {
@@ -39,7 +34,6 @@ describe('a token round-trips, and only with the secret that made it', () => {
     for (const address of ['first.last+tag@sub.domain.org', 'a@b.co', "o'brien@example.com"]) {
       const token = mintUnsubscribeToken(address, SECRET);
       expect(readUnsubscribeToken(token, SECRET), address).toBe(address);
-      // Nothing in the token needs escaping once it is in a query string.
       expect(unsubscribeUrl('https://weir.social', address, SECRET)).toContain('token=');
     }
   });
@@ -50,18 +44,12 @@ describe('a token round-trips, and only with the secret that made it', () => {
   });
 
   it('refuses a token minted for a different purpose under the same secret', () => {
-    /*
-      The forgery a domain separator exists to stop: the same key, the same payload, a different
-      purpose string. Without `UNSUBSCRIBE_PURPOSE` inside the signed bytes, any other signed link
-      this deployment ever mints becomes an unsubscribe for whatever address it names.
-    */
     const payload = Buffer.from(ADDRESS, 'utf8').toString('base64url');
     const elsewhere = createHmac('sha256', SECRET)
       .update(`weir.something.else.v1:${payload}`, 'utf8')
       .digest('base64url');
     expect(readUnsubscribeToken(`${payload}.${elsewhere}`, SECRET)).toBeNull();
 
-    // And the real purpose, over the same bytes, does verify — so the test above is not vacuous.
     const right = createHmac('sha256', SECRET)
       .update(`${UNSUBSCRIBE_PURPOSE}:${payload}`, 'utf8')
       .digest('base64url');
@@ -84,10 +72,6 @@ describe('a tampered token is refused', () => {
   });
 
   it('refuses every single-character edit of the whole token', () => {
-    /*
-      Not one hand-picked mutation. Every position, changed to something else, so a comparison that
-      stopped early or ignored a suffix would show up as a token that still verified.
-    */
     for (let i = 0; i < token.length; i += 1) {
       const at = token[i] as string;
       const swapped = at === 'x' ? 'y' : 'x';
@@ -112,7 +96,6 @@ describe('the secret is required and is never echoed', () => {
   });
 
   it('does not put the secret in the refusal', () => {
-    // A short secret is still a secret, and a message that quotes it puts it in a log.
     const short = 'hunter2-hunter2';
     try {
       requireSecret(short);
@@ -150,7 +133,6 @@ describe('the link and the headers', () => {
     const url = unsubscribeUrl('https://weir.social', ADDRESS, SECRET);
     const headers = listUnsubscribeHeaders(url);
     expect(headers['List-Unsubscribe']).toBe(`<${url}>`);
-    // The value is specified, not chosen. A mail client matches it literally.
     expect(headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
   });
 

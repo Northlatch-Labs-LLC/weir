@@ -1,23 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Deposit checkout.
- *
- * # The confirm button does not exist until a simulation has passed
- *
- * That is structural rather than a disabled attribute: the button is rendered only in the `quoted`
- * state, and the only way to reach that state is a `prepare` response carrying signable bytes. A
- * disabled button can be re-enabled by anything that flips a boolean; a button that is not in the
- * tree cannot be pressed.
- *
- * # What is signed is what was simulated
- *
- * The bytes come back from the server, go to the wallet unchanged, and go back to the server
- * unchanged. Nothing is rebuilt between the simulation and the signature, so the numbers shown
- * below are the numbers that will execute.
- */
-
 import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
@@ -42,7 +25,6 @@ type Stage =
   | { name: 'done'; digest: string }
   | { name: 'failed'; message: string };
 
-/** Format MIST as SUI, exactly. String arithmetic — no float ever touches an amount. */
 function sui(mist: bigint): string {
   const negative = mist < 0n;
   const abs = negative ? -mist : mist;
@@ -51,7 +33,6 @@ function sui(mist: bigint): string {
   return `${negative ? '-' : ''}${whole}${frac === '' ? '' : `.${frac}`}`;
 }
 
-/** Parse a SUI decimal string into MIST by string manipulation. `parseFloat` is never used. */
 function toMist(input: string): bigint | null {
   const text = input.trim();
   if (!/^\d+(\.\d{1,9})?$/.test(text)) return null;
@@ -63,7 +44,6 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
   const { signer } = useSigner();
   const [amount, setAmount] = useState('1');
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
-
 
   async function simulate() {
     if (signer === null) return;
@@ -88,8 +68,6 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
 
       if (body.needsAccount === true) return setStage({ name: 'needs-account' });
       if (body.quote === undefined) {
-        // The server's message, unmodified. It already carries the plain-language explanation when
-        // the abort code is one we recognise, and the raw text when it is not.
         return setStage({ name: 'failed', message: body.error ?? 'the simulation failed' });
       }
       setStage({ name: 'quoted', quote: body.quote });
@@ -102,7 +80,6 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
     if (signer === null) return;
     setStage({ name: 'signing' });
     try {
-      // The exact bytes the server simulated, whichever way this session signs.
       const signature = await signer.signTransaction(quote.bytes);
 
       setStage({ name: 'submitting' });
@@ -147,16 +124,8 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
           inputMode="decimal"
           onChange={(event) => {
             setAmount(event.target.value);
-            // Any edit invalidates the quote. Keeping it would let someone change the number
-            // after the simulation and sign bytes that no longer match what is on screen.
             if (stage.name === 'quoted') setStage({ name: 'idle' });
           }}
-          /*
-            The amount is the one figure on this panel somebody checks twice before signing, so it
-            keeps its own size: larger than a field, and only as wide as the number needs. Colour,
-            border and background come from `.field` — what was wrong here was the boundary, not
-            the proportions.
-          */
           style={{ fontSize: 18, padding: '9px 12px', width: 160 }}
         />
         <button

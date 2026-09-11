@@ -14,10 +14,6 @@ describe('what a creator may store', () => {
   });
 
   it('keeps a threshold exact above 2^53, where Number would round it', () => {
-    /*
-      A 9-decimal coin passes 2^53 at about 9 million SUI. Rounding a threshold silently refuses a
-      supporter a perk they have paid for, which is the failure this parse exists to prevent.
-    */
     const result = validatePerks([one({ thresholdUnits: '9007199254740993' })]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -60,8 +56,6 @@ describe('the limits match the constraints in the migration', () => {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const sql = readFileSync(resolve(process.cwd(), 'db/017_creator_perks.sql'), 'utf8');
-    // A limit the application enforces and the table does not is a limit one psql prompt away from
-    // being wrong; these two are the same number or this test says so.
     expect(sql).toContain(`BETWEEN 1 AND ${MAX_TITLE}`);
     expect(sql).toContain(`length(detail) <= ${MAX_DETAIL}`);
     expect(sql).toContain('threshold_units >= 0');
@@ -71,8 +65,6 @@ describe('the limits match the constraints in the migration', () => {
 describe('typing an amount', () => {
   it('converts a decimal to the smallest unit by string, never by float', async () => {
     const { toUnits, fromUnits } = await import('../components/PerksEditor');
-    // 0.1 + 0.2 arithmetic in binary floats is wrong in the last unit, and the last unit is where a
-    // threshold decides whether somebody qualifies.
     expect(toUnits('1.1', 9)).toBe('1100000000');
     expect(toUnits('0.000000001', 9)).toBe('1');
     expect(toUnits('5', 9)).toBe('5000000000');
@@ -85,7 +77,6 @@ describe('typing an amount', () => {
 
   it('refuses more precision than the coin has, rather than rounding it away', async () => {
     const { toUnits } = await import('../components/PerksEditor');
-    // Rounding here would store a threshold the creator did not type.
     expect(toUnits('0.0000000001', 9)).toBeNull();
     expect(toUnits('1.1234567', 6)).toBeNull();
   });

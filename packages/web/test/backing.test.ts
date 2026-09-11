@@ -1,15 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The one rule `/vault` cannot get wrong.
- *
- * "We could not look" and "you have backed nobody" are different facts, and only one of them means
- * somebody's money is missing. If the walk over vault-opening events fails, `readBacking` must fail
- * — never answer `ok` with an empty list, which the page would draw as a balance of zero.
- *
- * The rest of the discipline is here too: a vault whose position cannot be read is counted and left
- * out rather than taking the page down with it, and a truncated walk is reported so the total can
- * be labelled a floor rather than a balance.
- */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -67,8 +56,6 @@ describe('readBacking', () => {
     const reading = await readBacking(ADDRESS);
 
     expect(reading.ok).toBe(false);
-    // The specific defect this guards: an ok with no rows renders as a balance of zero, which tells
-    // somebody their money is gone because a node was slow.
     expect((reading as { value?: unknown }).value).toBeUndefined();
   });
 
@@ -88,7 +75,7 @@ describe('readBacking', () => {
 
     expect(reading.ok).toBe(true);
     if (!reading.ok) return;
-    expect(reading.value.rows.map((r) => r.vaultId)).toEqual(['0xc', '0xa']); // largest first
+    expect(reading.value.rows.map((r) => r.vaultId)).toEqual(['0xc', '0xa']);
     expect(reading.value.totalPrincipalMist).toBe(85_000_000_000n);
     expect(reading.value.totalPendingRebateMist).toBe(180_000_000n);
     expect(reading.value.unreadable).toBe(0);

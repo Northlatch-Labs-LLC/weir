@@ -1,22 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What `/treasury` is allowed to say.
- *
- * This is the page somebody reads before putting money behind a stranger, so the three rules it
- * has to keep are the three this file holds down:
- *
- *   1. A figure nobody could read is never a value, and never printed twelve times either — the
- *      reason is stated once, above the list.
- *   2. "No pool open" is the store answering and is shown. It is not the same sentence as "we
- *      could not look", and the two never share a typography.
- *   3. A rung whose position is unknown is never drawn as open. That is the one error that costs
- *      somebody a withdrawal they were counting on.
- *
- * The simulator quotes no yield, deliberately, and that is asserted here too: returns vary by
- * validator and epoch, and a number invented on this page would be the thing the rest of it argues
- * against.
- */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
@@ -86,11 +69,6 @@ describe('a creator with no pool', () => {
       pools: [pool({ pooled: 'no pool open', pooledState: 'none', yieldShare: 'no pool', yieldState: 'none', funded: [false, false] })],
     });
     expect(screen.getByText('no pool open')).toBeTruthy();
-    /*
-      Not a bare `0` — the simulator states "functions that can move your principal: 0", which is a
-      count of functions in the contract and is exactly right. What must never appear is a POOLED
-      figure of zero for somebody who has no pool.
-    */
     expect(screen.queryByText('0 SUI')).toBeNull();
     expect(screen.queryByText('0%')).toBeNull();
   });
@@ -104,10 +82,6 @@ describe('a creator with no pool', () => {
 });
 
 describe('an index that could not be read', () => {
-  /*
-    The repetition rule. Two figures times six creators printed the same dash twelve times, on the
-    page whose job is to show a stranger that money moves here.
-  */
   it('states the reason once and prints no figure at all', () => {
     const { container } = view({
       poolNote: 'The pool index could not be read just now.',
@@ -119,7 +93,6 @@ describe('an index that could not be read', () => {
     expect(screen.getByText('The pool index could not be read just now.')).toBeTruthy();
     expect(screen.queryAllByText('—')).toHaveLength(0);
     expect(container.querySelectorAll('.w-figs')).toHaveLength(0);
-    // The people are still listed. An unreadable index is not an empty platform.
     expect(screen.getByText('Wren')).toBeTruthy();
     expect(screen.getByText('Kaela')).toBeTruthy();
   });
@@ -145,11 +118,6 @@ describe('the ladder', () => {
 
   it('says the position once, not once per rung', () => {
     view({ ladder: LADDER_UNPLACED, epochLabel: 'The epoch could not be read.', epochUnread: true });
-    /*
-      Counted in the rendered text rather than in elements: two rungs must not each carry the
-      sentence, and a query that matches a paragraph and the span inside it would count one
-      sentence twice and prove nothing.
-    */
     const said = document.body.textContent?.match(/The epoch could not be read/g) ?? [];
     expect(said).toHaveLength(1);
   });
@@ -160,7 +128,6 @@ describe('the simulator', () => {
     view();
     expect(screen.getByText('all of it, any time')).toBeTruthy();
     expect(screen.getByText('the staking yield it earns')).toBeTruthy();
-    // No APY, no percentage return, no projection. The capture figure is the contract's own.
     expect(screen.queryByText(/APY/i)).toBeNull();
     expect(screen.queryByText(/you would earn/i)).toBeNull();
   });
@@ -168,7 +135,6 @@ describe('the simulator', () => {
   it('carries the capture figure it was given rather than one of its own', () => {
     view({ capturePct: '85.7%' });
     expect(screen.getByText('85.7% of theoretical maximum')).toBeTruthy();
-    // The remainder is derived from it, so the two can never disagree.
     expect(screen.getByText(/costs 14.3% of the/)).toBeTruthy();
   });
 });

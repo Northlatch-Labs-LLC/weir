@@ -10,18 +10,6 @@ import { Transaction } from '@mysten/sui/transactions';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Execute bytes the wallet signed.
- *
- * Deliberately cannot build a transaction. It submits what it is given, which is what was
- * simulated and what the wallet displayed — there is no path here that constructs something new.
- */
-/**
- * The sender is read from the transaction bytes themselves, never from a body field: a body can
- * name anyone, but the bytes name the address whose signature `submitSigned` verifies. A caller
- * that sends `Idempotency-Key` and retries after a timeout is answered with the first digest
- * rather than a second submission.
- */
 function senderOf(body: unknown): string | null {
   const bytes = (body as { bytes?: unknown })?.bytes;
   if (typeof bytes !== 'string') return null;
@@ -46,16 +34,6 @@ async function submitOnce(request: Request) {
     return NextResponse.json({ error: 'bytes and signature are required' }, { status: 400 });
   }
 
-  /*
-    The purchase quota is spent HERE, at the one step that is a purchase, keyed on the address the
-    signature proves — never on a body field, and never at prepare, whose sender is an
-    unauthenticated claim (a per-address bucket spent there is a free denial-of-purchase against
-    any buyer). `QUOTAS.purchase` — ten at once, then one every six minutes — bounded nothing until
-    this line; the breaker for the `purchase` bucket lands here through the same call.
-
-    The signature is checked locally first so a forged sender cannot spend a stranger's tokens; the
-    node would refuse the bytes anyway, but only after the bucket had been debited.
-  */
   let signer: string;
   try {
     const key = await verifyTransactionSignature(Buffer.from(body.bytes, 'base64'), body.signature);

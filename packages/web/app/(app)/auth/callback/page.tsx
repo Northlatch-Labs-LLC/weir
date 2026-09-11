@@ -1,25 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Where Google sends the user back.
- *
- * # Why this page is entirely client-side
- *
- * The identity token arrives in the URL *fragment*, and browsers do not send fragments to servers.
- * That is not an inconvenience to work around — it is the security property of the implicit flow.
- * The token reaches this deployment only because this page chooses to POST it, over TLS, to one
- * endpoint. No web server log, no proxy, no CDN and no analytics tag ever sees it in transit.
- *
- * Reading `window.location.hash` on the server is impossible, so there is no version of this page
- * that could accidentally become a server component and start leaking the token into request logs.
- *
- * # The page does nothing else
- *
- * It completes the session and leaves. Whatever the user was doing before signing in is where they
- * go back to — a sign-in that dumps somebody on a home page has lost them the thing they came to do.
- */
-
 import { useEffect, useState } from 'react';
 import { readIdTokenFromFragment, SESSION_STORAGE_KEY, type PendingSession } from '@/lib/zklogin';
 import { completeGoogleSignIn } from '@/components/SignerProvider';
@@ -29,39 +10,16 @@ type State =
   | { phase: 'failed'; detail: string }
   | { phase: 'done'; address: string };
 
-/**
- * The fragment, taken exactly once per page load.
- *
- * Module scope rather than a ref, and this is load-bearing. Reading the token and clearing the
- * fragment is a *destructive* read: the credential is deliberately wiped from the address bar so it
- * cannot reach browser history or a screenshot. React StrictMode mounts every effect twice in
- * development, so the second pass found an already-cleared fragment and reported "no identity token
- * came back" over a sign-in that had in fact just succeeded — proof generated, route returned 200,
- * session stored, and the screen said it had failed.
- *
- * A ref would not fix it: StrictMode remounts the component, so refs are re-initialised too. This
- * has to outlive the component, and it does, while still being scoped to one page load.
- */
 let captured: string | null = null;
 
 function takeFragmentOnce(): string {
   if (captured === null) {
     captured = window.location.hash;
-    // Cleared here, in the same breath as the read, so there is no window in which the token is
-    // both consumed and still sitting in the URL.
     window.history.replaceState(null, '', window.location.pathname);
   }
   return captured;
 }
 
-/**
- * The sign-in itself, also once.
- *
- * Same reason, different cost. Generating a proof takes about seven seconds of real computation on
- * the proving service, so a second mount firing a second identical request wastes that work, races
- * with the first to write the session, and doubles the load a deployment sees for every user who
- * signs in. Holding the promise means a repeat mount awaits the original rather than starting again.
- */
 let inFlight: Promise<{ address: string }> | null = null;
 
 function completeOnce(idToken: string): Promise<{ address: string }> {
@@ -76,8 +34,6 @@ export default function AuthCallbackPage() {
     let cancelled = false;
 
     void (async () => {
-      // Reads the fragment on the first pass and returns the same value on any later one, so a
-      // second mount cannot mistake a consumed token for a missing one.
       const token = readIdTokenFromFragment(takeFragmentOnce());
 
       if (!token.ok) {
@@ -94,9 +50,6 @@ export default function AuthCallbackPage() {
         if (cancelled) return;
         setState({ phase: 'done', address: session.address });
 
-        // A full navigation rather than a router push: the provider reads the completed session
-        // from storage when it mounts, so the new signer is picked up by the destination page
-        // without any cross-component state to keep in sync.
         const stored = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
         const returnTo =
           stored === null ? '/' : ((JSON.parse(stored) as PendingSession).returnTo || '/');

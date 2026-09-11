@@ -5,45 +5,12 @@ import { deriveUserSalt, verifyGoogleIdToken, zkLoginConfig } from '@/lib/zklogi
 
 export const dynamic = 'force-dynamic';
 
-/**
- * The escape hatch: hand a user their own salt.
- *
- * # Why this route has to exist
- *
- * This platform's claim is that identity and payments are on-chain objects rather than database
- * rows. zkLogin, as deployed here, quietly puts an asterisk on that: the salt is derived from a
- * seed this deployment holds, so an account created through Google is reachable only for as long
- * as this deployment keeps that seed. If it disappeared, so would every zkLogin address it issued.
- *
- * That is a real dependency and it cannot be argued away. It can be *ended*, which is what this
- * route does. Salt plus a Google sign-in plus any proving service reconstructs the address and
- * signs from it with nothing from us — the same address, the same funds, no permission asked.
- *
- * A user who exports their salt has converted a hosted convenience into self-custody. That is the
- * property that lets the rest of the design stand up honestly.
- *
- * # Why it is a POST, and separate
- *
- * It costs a fresh, nonce-bound, Google-signed token: the same proof of control that signing in
- * requires, spent again, deliberately, for this one purpose. Folding it into `/complete` would hand
- * the salt to every page that ever signed a user in, which is how a secret ends up in a log, an
- * analytics payload, or a session store that was never designed to hold one.
- */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
   const body = (await request.json()) as Record<string, unknown>;
 
-  /*
-    The commitment is required here, exactly as it is on `/complete`, and for a sharper reason.
-
-    This route answers with the salt. When the nonce was taken from the request body the check was
-    a self-comparison, so any Google identity token for this client id — however obtained — was
-    enough to be handed the salt for the account it named. Requiring the ephemeral key, the epoch
-    and the randomness means a caller must hold the sign-in that token was issued to, not merely
-    the token.
-  */
   const required = ['jwt', 'extendedEphemeralPublicKey', 'jwtRandomness'] as const;
   const missing = required.filter((key) => typeof body[key] !== 'string' || body[key] === '');
   if (missing.length > 0) {
@@ -85,10 +52,6 @@ export async function POST(request: Request) {
     sub: claims.value.sub,
   });
 
-  // The claims come back too. A salt on its own recovers nothing — the address is a function of
-  // `iss`, `aud`, `sub` *and* the salt, so a user who keeps only the number has kept a quarter of
-  // what they need. Anyone building a recovery tool needs all four, and finding that out later,
-  // without a working deployment to ask, is too late.
   return NextResponse.json({
     salt: salt.toString(),
     iss: claims.value.iss,

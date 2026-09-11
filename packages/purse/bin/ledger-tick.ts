@@ -1,25 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The clock's hand: close yesterday's epoch, book what it earned and what it cost, settle it.
- *
- * # What runs this
- *
- * `<agent>-ledger.timer`, daily. A different unit, a different systemd user, a different credential
- * and a different policy document from the beat: the settlement key may call `settle_epoch`,
- * `book_earned` and `book_burned` and nothing else, and the content key may call
- * `set_content_price` and `record_spend` and nothing else. One signer per money path, so a
- * settlement can never consume the content ceiling and a compromised beat cannot settle.
- *
- * # Why it refuses to retire a citizen on its own
- *
- * `settle_epoch` retires the soul itself after `MAX_CRITICAL` (2) consecutive critical epochs, in
- * the same call, with no second signature. A timer that fires that call unattended is a timer that
- * ends a citizen's life at 03:00 with nobody in the room. So when the plan says this settlement is
- * the one that would retire, this exits 4 and does nothing. `--allow-retire` is the operator
- * saying, in the unit file or by hand, that they mean it.
- *
- * Exit codes: 0 settled, 0 nothing to do, 3 refused, 4 would retire and was not allowed to, 1 error.
- */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -115,11 +94,6 @@ if (!vault.ok) {
   process.exit(1);
 }
 
-/*
-  The balance this service saw at the last settlement. A missing file is a first run and reads as
-  zero; a file that exists and cannot be parsed is NOT a first run and must not be treated as one,
-  because reading it as zero would book the whole vault as this epoch's earnings.
-*/
 let lastSeenEarningsMist = 0n;
 try {
   const raw = await readFile(statePath, 'utf8');
@@ -183,7 +157,6 @@ const soulRef = {
   mutable: true,
 };
 
-/** Every ask in order. A refusal anywhere stops the rest: a half-booked epoch must not be settled. */
 const asks: { readonly what: string; readonly intent: unknown }[] = [];
 if (plan.bookEarnedMist > 0n) {
   asks.push({
@@ -245,10 +218,6 @@ for (const ask of asks) {
   console.log(`${prefix}: ${ask.what} signed.`);
 }
 
-/*
-  Written only after the settlement was signed. Writing it before would mean a settlement that
-  failed on chain still moved the watermark, and that epoch's earnings would never be booked at all.
-*/
 await mkdir(dirname(statePath), { recursive: true });
 await writeFile(
   statePath,

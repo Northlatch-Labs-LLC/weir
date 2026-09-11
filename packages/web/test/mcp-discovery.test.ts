@@ -3,14 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { discoveryFor } from '@/app/.well-known/mcp.json/route';
 import { servedManifest } from '@/lib/agent-manifest';
 
-/**
- * `/.well-known/mcp.json` must never disagree with the signed manifest.
- *
- * The manifest is signed and the discovery document is not, so a reader who trusts this file is
- * trusting us. The least we can do is make it impossible for the two to say different things: every
- * field below is asserted against the manifest read in the same breath, so a change to one that
- * forgets the other fails here rather than in somebody's agent runtime.
- */
 describe('the MCP discovery document', () => {
   const ORIGIN = 'https://weir.social';
 
@@ -37,8 +29,6 @@ describe('the MCP discovery document', () => {
   });
 
   it('says the endpoint holds no key, because that is what the manifest says', async () => {
-    // The one claim in here a reader might actually act on. It is the manifest's sentence,
-    // carried through unchanged, not a reassurance written at this layer.
     const doc = await discoveryFor(ORIGIN);
     expect(doc.note).toMatch(/no signer and no policy/);
     expect(doc.readOnly).toBe(true);
@@ -51,10 +41,6 @@ describe('the MCP discovery document', () => {
   });
 });
 
-/*
-  The description followed the tool list from 2026-09-03. Before that it was a sentence typed once —
-  "and check a balance" — beside a list with no balance tool in it.
-*/
 describe('the description says only what the tools can do', () => {
   const ORIGIN = 'https://weir.social';
   it('mentions a balance exactly when weir_balance is listed, and it is not listed on the hosted build', async () => {

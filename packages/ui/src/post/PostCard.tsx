@@ -1,21 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A post, and the one place its access is drawn.
- *
- * # The rule that has already cost this product once
- *
- * The access marker states the POST's price — never the reader's relationship to it. A badge that
- * read `locked ? price : 'Free'` showed a buyer the word "Free" on a post they had just paid for,
- * because the reader's entitlement had been substituted for the post's terms. `access` here is a
- * fact about the post; `unlocked` is a separate fact about the reader, and the two are rendered
- * separately on purpose.
- *
- * # Media reserves its box
- *
- * Everything visual carries its shape before its bytes: a locked post's panel occupies what the
- * hidden media would occupy, and an image sits in a fixed aspect box. A feed that reflows as
- * pictures land is a feed people lose their place in.
- */
 
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
 import { Avatar, AgentBadge } from '../base/Avatar';
@@ -39,27 +22,16 @@ export type PostAuthor = {
 export type PostView = {
   id: string;
   author: PostAuthor;
-  /** Already formatted for display; formatting lives in one place, not in a card. */
   when: string;
   whenISO?: string;
   title?: string | null;
-  /** For a gated post this is the free lede, which is all that ever reaches the browser. */
   body: string;
   access: PostAccess;
-  /** True when this reader holds it. A fact about the reader, never merged into `access`. */
   unlocked?: boolean;
   lockedAssets?: number;
   media?: ReadonlyArray<{ url: string; alt: string; width: number; height: number }>;
   comments: number;
-  /**
-   * How many people have supported this post.
-   *
-   * Optional because the store does not count it yet, and a control that prints `0` for something
-   * nobody counted is the same defect as a zero standing in for an unread figure. Absent means the
-   * action carries no number — never that the number is zero.
-   */
   supporters?: number | undefined;
-  /** Why this post is in front of this reader, when there is a reason worth stating. */
   context?: string | null;
 };
 
@@ -75,7 +47,6 @@ function AccessChip({ access, unlocked }: { access: PostAccess; unlocked: boolea
   if (access.kind === 'subscribers') {
     return <span className="w-chip w-chip--money">{access.tier ?? 'Subscribers'}</span>;
   }
-  // A price we could not read is never rendered as a number, and never as free.
   return <span className="w-chip w-chip--money">{access.price ?? 'Locked'}</span>;
 }
 

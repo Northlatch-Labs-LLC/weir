@@ -1,47 +1,17 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * `POST /api/creator/profile` against a real database.
- *
- * # The defect this exists to catch
- *
- * The endpoint keys a row by the handle the chain reports. An account whose row was filed under an
- * older name therefore got a *second* row on every save: the write returned 200, and every page
- * carried on reading the first row. From the creator's side their display name simply refused to
- * change, and saving again produced another duplicate rather than fixing it.
- *
- * None of that is visible without a database. The SQL was valid, the handler returned success, and
- * the row it wrote was exactly the row it meant to write — the mistake was *which row it looked
- * for*. A mocked store returns what the mock was told to return, and agrees with the bug.
- *
- * # What is mocked, and why only this much
- *
- * The chain is mocked: ownership and the handle come from Sui, and reaching mainnet here would make
- * the test slow, flaky, and dependent on state nobody controls. Everything below the handler —
- * `lib/content`, `lib/db`, the schema, its constraints and the unique index — is real, which is
- * where the defect lived.
- */
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from '../helpers/database';
 
-// Before the route is imported, so `lib/db` can only ever see the disposable database.
 useTestDatabase();
 
-/** Synthetic throughout — no address here corresponds to anything on chain. */
 const OWNER = `0x${'a1'.repeat(32)}`;
 const VAULT = `0x${'b2'.repeat(32)}`;
 const COIN = '0xdba34672::usdc::USDC';
 
-/** What the registry says this address's handle is. Reassigned per test. */
 let chainHandle: string | null = 'newname';
 
-/*
-  The signature check is stubbed for the tests below, which are about which row gets written. It is
-  exercised on its own at the end of this file — a mock that always passes would otherwise remove
-  the gate from every test here without anybody noticing.
-*/
-/** What the vault's type parameter says its coin is. Reassigned by the mismatch test. */
 let vaultCoin: string | null = '0xdba34672::usdc::USDC';
 vi.mock('@/lib/creator-setup', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -67,7 +37,6 @@ vi.mock('@/lib/accounts', () => ({
 vi.mock('@projectx-social/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createClient: () => ({}),
-  // The vault exists and belongs to OWNER. Ownership is read from chain, never taken from the body.
   readCreatorVault: async () => ({ ok: true, value: { owner: OWNER } }),
 }));
 
@@ -96,7 +65,6 @@ afterAll(async () => {
 
 describe('POST /api/creator/profile', () => {
   it('updates the row that already names the vault, whatever handle it is filed under', async () => {
-    // A row filed under a name the chain no longer reports — the drift that caused the defect.
     await testDb().query(
       `INSERT INTO profiles (handle, vault_id, owner, display_name, bio, coin_type)
        VALUES ('oldname', $1, $2, 'Before', 'old bio', $3)`,
@@ -112,7 +80,6 @@ describe('POST /api/creator/profile', () => {
     });
 
     expect(response.status).toBe(200);
-    // The existing row's handle is kept: the row pages already read is the row that is written.
     expect(await response.json()).toEqual({ handle: 'oldname' });
 
     const { rows } = await testDb().query('SELECT handle, display_name, bio FROM profiles');
@@ -133,11 +100,6 @@ describe('POST /api/creator/profile', () => {
     expect(rows[0]?.n).toBe(1);
   });
 
-  /*
-    The other half of the same family: a full-row upsert wrote NULL over a column the caller does
-    not send, so naming a vault unlinked that creator's no-loss vault while it carried on holding
-    deposits.
-  */
   it('refuses a vault owned by somebody else', async () => {
     const response = await save({
       owner: `0x${'99'.repeat(32)}`,
@@ -168,12 +130,6 @@ describe('POST /api/creator/profile', () => {
   });
 });
 
-/**
- * The route compared the request's `owner` against the vault's owner read from chain. That reads
- * like a check and is not one: a vault's owner is public, so anybody could read it, send it, and
- * rename somebody else's vault. Ownership still has to match — this asserts the *other* half, that
- * the caller has to prove they are that owner.
- */
 describe('proving the caller is the owner', () => {
   it('refuses a request whose signature does not verify', async () => {
     proofOk = false;
@@ -199,13 +155,6 @@ describe('proving the caller is the owner', () => {
 });
 
 describe('what the signature covers is what gets stored', () => {
-  /*
-    `displayName` and `bio` used to be sliced to 60 and 280 AFTER verifyAction returned, so the
-    stored value was not the value the signature covered. These two fields ARE the payload — the
-    docblock above says a signature authorising "some change to this vault" would authorise every
-    later one too — so a signature over bytes that were never stored authorises a thing that never
-    happened.
-  */
   it('refuses a display name over the limit rather than shortening it', async () => {
     const response = await save({
       owner: OWNER,
@@ -252,16 +201,10 @@ describe('what the signature covers is what gets stored', () => {
     const { rows } = await testDb().query('SELECT display_name FROM profiles WHERE vault_id = $1', [
       VAULT,
     ]);
-    // Byte for byte. Not "starts with", not "is 60 characters long" — the same string.
     expect(rows[0]?.display_name).toBe(name);
   });
 
   it('does not spend a signature to refuse an over-long field', async () => {
-    /*
-      The check runs BEFORE verifyAction, for the reason POST /api/posts gives for its own length
-      checks: signatures are single-use, so refusing afterwards charges the creator a signature for
-      a request that was never going to be stored.
-    */
     proofOk = false;
     const response = await save({
       owner: OWNER,
@@ -273,7 +216,6 @@ describe('what the signature covers is what gets stored', () => {
     });
     proofOk = true;
 
-    // 400 for the length, not 401 for the signature — so the length was decided first.
     expect(response.status).toBe(400);
   });
 });

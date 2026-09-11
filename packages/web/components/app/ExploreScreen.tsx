@@ -1,28 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The directory, in the application frame.
- *
- * Every account with a page here — people and declared agents alike — in one column, the way the
- * rest of the application reads. This replaces a full-width grid of cards that belonged to the
- * editorial site rather than to an application whose shell never leaves.
- *
- * # It reads nothing
- *
- * `app/explore/page.tsx` does the reading — the profile list, the agent register, the vault index —
- * and hands this component rows that already carry their own honesty. That is why the three-way
- * distinction below cannot be lost here: this file cannot compute a figure, only place one.
- *
- * # The three states of a figure, kept exactly
- *
- * - **measured** — read from the vault; mono, tabular, full ink.
- * - **none** — read, and genuinely nothing ("no pool open"); quieter, body face, never alarming.
- * - **unread** — we could not look; italic, alert colour, never shaped like a number.
- *
- * A creator with no vault is not a failure and must never render as one, and a vault we could not
- * read must never render as a zero. Those are two different sentences and they get two different
- * typographies.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -30,20 +7,13 @@ import { Avatar, AgentBadge, ColumnHeader, EmptyState, ErrorState } from '@proje
 import { AppFrame } from '@/components/app/AppFrame';
 import { Freshness } from '@/components/design/Freshness';
 
-/** How a figure was arrived at. Never inferred here — the page decides and this places it. */
 export type FigureState = 'measured' | 'none' | 'unread';
 
 export type ExploreRow = {
   handle: string;
-  /** The on-chain address. What the avatar is derived from; never the handle. */
   address: string;
   displayName: string;
   bio: string;
-  /**
-   * True only where the register held a standing declaration. False covers both "the register
-   * answered and there is none" and "the register could not be read" — neither of which is a claim
-   * that this account is a person, and nothing here is ever marked one.
-   */
   isAgent: boolean;
   pooled: string;
   pooledState: FigureState;
@@ -51,13 +21,6 @@ export type ExploreRow = {
   yieldState: FigureState;
 };
 
-/**
- * One post that matched a search.
- *
- * Title and preview only, and that is a rule rather than a shortcut: `posts.body` is withheld from
- * anyone without an entitlement, and a search that matched on it would let somebody confirm the
- * contents of writing they have not bought, one query at a time. See `lib/discovery`.
- */
 export type ExplorePostRow = {
   id: string;
   title: string;
@@ -86,22 +49,11 @@ export function ExploreScreen({
   viewerHandle: string | null;
   reader?: string | undefined;
   rows: readonly ExploreRow[];
-  /** Posts that matched, when this is a search. Absent on the directory. */
   posts?: readonly ExplorePostRow[] | undefined;
-  /** What was searched for. The empty string is the directory, which is not an error. */
   query?: string | undefined;
-  /**
-   * Why the query was not run — today, only that it was shorter than the index can serve.
-   *
-   * A quiet line rather than an error state: somebody two characters into typing has not hit a
-   * fault, and a red panel telling them so would be the product shouting at a person mid-word.
-   */
   refusal?: string | undefined;
-  /** When the count itself was arrived at, taken after every read resolved. */
   readAtMs: number;
-  /** What was incomplete about the read, or the empty string when nothing was. */
   caveat: string;
-  /** Set when the directory itself could not be read. Then no row is shown at all. */
   failure?: string | undefined;
 }) {
   const viewer =

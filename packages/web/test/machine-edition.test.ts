@@ -1,31 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * A machine buyer receives what it paid for: both editions sealed at publish, and nothing else.
- *
- * # The defect this pins
- *
- * `POST /api/posts` sealed one body, to `unlock_identity(vault, key)`. The composer and `weir_price`
- * could already price `<key>#machine`, and `creator::unlock` mints a real `Unlock` for it. So a
- * machine buyer paid, held a valid object, and there was no ciphertext its identity could open.
- *
- * # Real route, real database, stub sealer
- *
- * The route, the signature proof, the transaction and the row are real. Only `storeBody` is a
- * stub, because it reaches Walrus and a Seal committee — and the stub RECORDS every gate it is
- * handed, which is exactly the fact under test: how many seals, to which keys, of which words.
- *
- * # Mutations these must catch (predicted before the run)
- *
- *   1. Delete the second seal (`sealBothEditions` → a single `storeBody` call) → "seals both
- *      editions" red: one gate recorded, `machine_*` columns NULL.
- *   2. Write the row when the second seal fails → "writes nothing when the second seal fails" red.
- *   3. Remove the untrimmed-key 400 → "refuses an untrimmed paid key before the signature" red.
- *   4. Guard returns `sealed` for a pre-034 row → "refuses to price the machine edition of a pre-034
- *      post" red (200 quote where a 409 is expected).
- *   5. Drop `AND access_kind = 'paid'` from the CHECK → "refuses a machine body on a subscriber row" red.
- *   6. Title a machine unlock by its own key → "titles a machine Unlock by the post it opens" red.
- */
 
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,11 +19,6 @@ const COIN = '0xdba34672::usdc::USDC';
 
 const keypair = new Ed25519Keypair();
 const address = keypair.getPublicKey().toSuiAddress();
-
-/* ---------------------------------------------------------------------------------------------
- * The chain, modelled at the fidelity the route reads it: a vault this author owns, a price table
- * that answers per key, and — for the purchases receipt — the Unlock objects one buyer holds.
- * ------------------------------------------------------------------------------------------- */
 
 let priceOf: (contentKey: string) => bigint | null = () => 250_000n;
 let unlocksHeld: Array<{ id: string; contentKey: string }> = [];
@@ -107,7 +76,6 @@ vi.mock('@projectx-social/sdk', async (importOriginal) => ({
   }),
 }));
 
-/** The sealer, recording. `failOnCall` makes the n-th seal fail, so a half-publish can be forced. */
 const sealed: Array<{ contentKey: string; body: string }> = [];
 let failOnCall: number | null = null;
 
@@ -149,7 +117,6 @@ const { POST: publish } = await import('../app/api/posts/route');
 const { POST: priceRoute } = await import('../app/api/studio/price/route');
 const { GET: contentPrice } = await import('../app/api/studio/content-price/route');
 
-/** `contentDigest` in the route, reproduced: length-prefixed preview then body. */
 const digestOf = (preview: string, text: string): string =>
   createHash('sha256').update(`${preview.length}:${preview}${text.length}:${text}`).digest('hex');
 
@@ -215,18 +182,8 @@ beforeEach(async () => {
 });
 afterAll(closeDatabase);
 
-/*
-  The proof of authorship is written BY THE ROUTE, not by a test that constructs a row.
-
-  `test/authorship-proof.test.ts` proves the endpoint serves a verifiable proof, but it builds its
-  post directly — so it passed unchanged when the route was mutated to store an empty author. This
-  is the test that mutation should have failed. It drives the real publish path and then verifies
-  the stored bytes against the Sui library, which is the only combination that proves the chain from
-  a signed request to a checkable receipt.
-*/
 describe('publishing keeps the proof of who signed it', () => {
   it('stores the exact signature and bytes the route verified', async () => {
-    // `alice` is seeded by the file's beforeEach; seeding again is a duplicate key.
     await priceQuote('proof-key');
     const body = await signedPublish({ contentKey: 'proof-key', title: 'Kept its receipt' });
     const res = await post(body);
@@ -238,14 +195,12 @@ describe('publishing keeps the proof of who signed it', () => {
     );
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, string>;
-    // Not "something was stored" — the same values that were signed and sent.
     expect(row['author_address']).toBe(address);
     expect(String(row['issued_at_ms'])).toBe(String(body['timestampMs']));
     expect(row['origin']).toBe(ORIGIN);
     expect(row['signature']).toBe(body['signature']);
     expect(row['content_sha256']).toBe(digestOf('the same words', 'The same words, sold twice.'));
 
-    // And it is a real signature over the real statement, checked without any code of ours.
     const statement = statementFor(
       {
         kind: 'publish', handle: 'alice', title: 'Kept its receipt', access: 'paid',
@@ -268,7 +223,6 @@ describe('publishing a paid post', () => {
     const response = await post(await signedPublish({ contentKey: 'post-7' }));
     expect(response.status, await response.clone().text()).toBe(200);
 
-    // Two seals, the human key first, then the derived key — and the SAME words in both.
     expect(sealed.map((s) => s.contentKey)).toEqual(['post-7', MACHINE('post-7')]);
     expect(new Set(sealed.map((s) => s.body)).size).toBe(1);
 
@@ -283,9 +237,7 @@ describe('publishing a paid post', () => {
       sha256: createHash('sha256').update('The same words, sold twice.').digest('hex'),
       contentKey: MACHINE('post-7'),
     });
-    // Same plaintext, proven by the digest the reader verifies after decrypting.
     expect(row?.machineBody?.sha256).toBe(row?.sealedBody?.sha256);
-    // And the plaintext column is empty — the platform keeps no copy of either edition.
     expect(row?.body).toBe('');
   });
 
@@ -296,10 +248,8 @@ describe('publishing a paid post', () => {
     expect(response.status).toBe(503);
     expect(((await response.json()) as { error: string }).error).toContain('the committee did not answer');
 
-    // No half-published row: a row with one edition would sell a machine Unlock for nothing.
     expect((await testDb().query('SELECT count(*)::int AS n FROM posts')).rows[0]?.n).toBe(0);
 
-    // The signature was proved and never claimed, so the author does not sign again.
     const replay = await verifyAction({
       origin: ORIGIN, address, signature: body['signature'] as string,
       timestampMs: body['timestampMs'] as number,
@@ -313,8 +263,6 @@ describe('publishing a paid post', () => {
   });
 
   it('refuses an untrimmed paid key before the signature is checked', async () => {
-    // A garbage signature: if the 400 arrives, the trim check ran first, which is the claim. A key
-    // sealed under one name and stored under another is the B1 defect in miniature.
     const response = await post(await signedPublish({ contentKey: 'post-9 ', signature: 'not-a-signature' }));
     expect(response.status).toBe(400);
     expect(((await response.json()) as { error: string }).error).toContain('whitespace');
@@ -323,7 +271,6 @@ describe('publishing a paid post', () => {
 });
 
 describe('the pricing guard', () => {
-  /** A paid post written the way every pre-034 row looks: sealed for humans, nothing for machines. */
   async function pre034(contentKey: string): Promise<void> {
     await addPost({
       id: `p-${contentKey}`, vaultId: normaliseAddress(VAULT), authorHandle: 'alice', createdAtMs: 1,
@@ -358,7 +305,6 @@ describe('the pricing guard', () => {
     expect(body.machineBody).toBe('absent');
     expect(body.error).toBe(`"post-11" ${NO_MACHINE_BODY}`);
 
-    // The composer reads the same answer from content-price, beside the prices.
     const read = await contentPrice(new Request(
       `${ORIGIN}/api/studio/content-price?vaultId=${VAULT}&contentKey=post-11`,
     ));
@@ -366,8 +312,6 @@ describe('the pricing guard', () => {
   });
 
   it('calls a key absent when ANY sealed post under it lacks a machine body', async () => {
-    // One Unlock opens every post under a key (a season pass). One post that cannot deliver makes
-    // the key unsellable to machines, however many newer posts under it can.
     await pre034('season-1');
     expect((await post(await signedPublish({ contentKey: 'season-1', title: 'Episode 2' }))).status).toBe(200);
     expect(await machineBodyState(VAULT, 'season-1')).toBe('absent');

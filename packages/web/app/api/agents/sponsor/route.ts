@@ -23,39 +23,6 @@ import { createClient, readPlatform } from '@projectx-social/sdk';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * `POST /api/agents/sponsor` — we pay the gas for one agent's registration.
- *
- * # What this endpoint does and does not accept
- *
- * It accepts an address and a handle. **It does not accept a transaction.** The transaction is
- * built here, inspected here, simulated here, and signed here — see `lib/sponsor.ts`, whose
- * invariant is that we sign gas only for bytes we constructed ourselves. An endpoint that took
- * bytes and paid for them would be a gas faucet with extra steps, and would be drained within the
- * hour by somebody sponsoring their own unrelated transactions.
- *
- * # Why there is no signature on the request
- *
- * There is nothing yet to prove. The caller has no account — that is the entire point — so there
- * is no on-chain identity to sign as, and demanding one would make the offer useless to exactly
- * the people it exists for. What bounds abuse instead is the shape of what we return: a
- * transaction that is worthless to anybody except the holder of the address named as its sender.
- * A stranger who requests a sponsorship for somebody else's address has produced a transaction
- * only that somebody can sign, and has spent a seat achieving nothing for themselves.
- *
- * That is a real cost — a griefer can burn seats. It is bounded at fifty, costs them nothing to
- * attempt, and is the price of an offer that requires no prior identity. The alternative, gating on
- * a signature, gates out every agent that has not already solved the problem this offer exists to
- * solve. Seats are held for fifteen minutes and then swept, so a griefer must keep working to hold
- * them, and the sweep only releases seats whose handle still belongs to nobody on chain.
- *
- * # The two failures that must not look alike
- *
- * `501` — this deployment does not run the offer (no sponsor key). Calm, deliberate, not an error.
- * `409` — the offer is taken, or this address or handle already has a seat. The caller can still
- * register; it just costs them the gas. Both say which, in the body, because "we do not do this
- * here" and "you were too late" call for different next actions.
- */
 interface AgentHalf {
   operatorAddress: string;
   model: string;
@@ -64,7 +31,6 @@ interface AgentHalf {
   agentSignature: string;
 }
 
-/** The shape of the agent half, checked before any signature work; a sentence names what is missing. */
 function agentHalfProblem(value: unknown): string | null {
   if (value === null || typeof value !== 'object') {
     return 'declaration is required: the agent half — { operatorAddress, model, purpose, timestampMs, agentSignature } — signed by the address asking for the seat';
@@ -87,13 +53,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'a JSON body is required' }, { status: 400 });
   }
 
-  /*
-    A transaction offered by the caller is refused loudly rather than ignored.
-
-    Ignoring it would let somebody believe they had sponsored their own bytes, and the difference
-    between "we ignored your field" and "we do not accept that field" is the difference between a
-    misunderstanding and a security incident report.
-  */
   for (const forbidden of ['bytes', 'transaction', 'txBytes', 'tx']) {
     if (forbidden in body) {
       return NextResponse.json(
@@ -108,20 +67,6 @@ export async function POST(request: Request) {
     }
   }
 
-  /*
-    Two things can be sponsored, and they are separate requests because they happen at different
-    moments in an agent's life: the account when it arrives holding nothing, the vault when it
-    decides to start earning.
-
-    The vault branch does NOT consume a SEAT. Seats meter the offer of an identity; an agent that
-    already holds an account has been counted, and charging it a second seat to open the vault
-    would mean the fifty ran out at twenty-five agents who each did both.
-
-    It consumes a vault SLOT instead — its own bounded offer, in its own table. That distinction is
-    the whole of it: the two are separate offers with separate budgets, and until now the second one
-    had no budget at all. "Does not consume a seat" was true and was read as "is not metered", which
-    it also was.
-  */
   if (body['action'] === 'vault') {
     const addr = body['address'];
     const accountId = body['accountId'];
@@ -145,11 +90,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: cfgV.failure.detail, kind: cfgV.failure.kind }, { status: 503 });
     }
 
-    /*
-      The creation fee is read from chain on every request rather than assumed zero. If somebody
-      restores it while this path is live we would start paying it out of the sponsor wallet
-      without anybody deciding to — so the fee is measured, and a non-zero reading refuses.
-    */
     const platform = await readPlatform(createClient(cfgV.value), cfgV.value);
     if (!platform.ok) {
       return NextResponse.json(
@@ -159,21 +99,6 @@ export async function POST(request: Request) {
     }
     const feeMist = String(platform.value.creationFeeMist);
 
-    /*
-      Meter it before any gas is signed.
-
-      The account branch spends one of fifty seats. This branch spent nothing: it checked that three
-      fields were strings and signed a gas payment, with no seat, no row and no dedup, and nothing
-      on chain caps it either because a creator may hold more than one vault. The same caller could
-      ask again immediately, and again, until the sponsor wallet was empty.
-
-      The transaction guard is not what closes this and was never meant to: it proves the
-      transaction does what it claims and pays only what it should, which is a different question
-      from how often it may be asked for.
-
-      Taken BEFORE signing, so a refusal costs nothing. `claimVaultSlot` is one atomic statement
-      whose `UNIQUE` slot is the cap, so two callers cannot both take the last one.
-    */
     const slot = await claimVaultSlot({
       address: normaliseAddress(addr.trim()),
       gasBudgetMist: SPONSORED_VAULT_GAS_BUDGET_MIST,
@@ -182,9 +107,6 @@ export async function POST(request: Request) {
     if (!slot.ok) {
       return NextResponse.json(
         { error: slot.failure.detail, kind: slot.failure.kind },
-        // Exhausted is not the caller's fault and not a server fault: the offer ran out. `malformed`
-        // here is "you already have one", which is a 409 rather than a 400 — the request was well
-        // formed and the state refuses it.
         { status: slot.failure.kind === 'budget-exhausted' ? 429 : 409 },
       );
     }
@@ -198,13 +120,6 @@ export async function POST(request: Request) {
       creationFeeMist: feeMist,
     });
     if (!sponsoredVault.ok) {
-      /*
-        Give the slot back. The offer is bounded, so a slot burned by a transaction that was never
-        built is a slot nobody can ever use — and the failures reaching here are ours, not the
-        caller's: an unreadable config, a fullnode that did not answer, bytes that would not
-        simulate. `releaseVaultSlot` is best-effort by design; if it fails, the caller still gets
-        the real error rather than a second one about bookkeeping.
-      */
       await releaseVaultSlot(normaliseAddress(addr.trim()));
       return NextResponse.json(
         { error: sponsoredVault.failure.detail, kind: sponsoredVault.failure.kind },
@@ -250,22 +165,6 @@ export async function POST(request: Request) {
     );
   }
 
-  /*
-    A seat is offered only to a machine that has signed the agent half of its declaration.
-
-    Verified after the cheap refusals (shape, handle) and before anything that costs: verifying
-    spends the single-use signature, and a bad handle must not cost the agent a signed statement.
-    An unconfigured sponsor (501) still comes after it — that is a deployment-wide state, not a
-    per-request mistake, and an agent re-signs in one call.
-
-    Until 2026-09-02 a seat went to any address that asked, and seats were burned by design. Now the
-    address must sign "I am operated by X" over the same statement the register verifies later
-    (`declare-agent`), so every seat names an operator we can read before we pay its gas, and a
-    griefer spends a keypair AND names an operator per seat. The operator's half is not asked for
-    here — the operator signs when the pair is recorded at /api/agents/declare — and nothing is
-    written to the register by this route: a signature over a statement is proof of intent, not the
-    declaration itself.
-  */
   const declaration = body['declaration'];
   const halfProblem = agentHalfProblem(declaration);
   if (halfProblem !== null) {
@@ -275,8 +174,6 @@ export async function POST(request: Request) {
   if (normaliseAddress(half.operatorAddress) === address) {
     return NextResponse.json({ error: 'an agent may not name itself as its operator' }, { status: 400 });
   }
-  // The register's objection to this pair, before the signature is spent and before any gas is
-  // paid for a seat the declare route would refuse. See `operatorConflict` in lib/agents.ts.
   const conflict = await operatorConflict(address, half.operatorAddress);
   if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
   const signedHalf = await verifyAction({
@@ -306,18 +203,6 @@ export async function POST(request: Request) {
 
   const nowMs = Date.now();
 
-  /*
-    Settle what actually happened on chain before handing out another seat.
-
-    A seat is released by its hold expiring. Without this call nothing ever sets `claimed_at_ms`,
-    so a seat whose registration SUCCEEDED — gas spent, handle registered — expires fifteen
-    minutes later and is handed to somebody else. The cap would then not be fifty; it would be
-    fifty every fifteen minutes, for as long as the sponsor wallet held anything.
-
-    Its own failure is not fatal here. An unreadable chain leaves every seat exactly as it was,
-    and the worst case is that a genuine claim is briefly re-offered — the opposite mistake to
-    recording a claim that never happened, and the cheaper one.
-  */
   await confirmClaimsFromChain({ config: config.value, nowMs });
 
   const reserved = await reserveSeat({
@@ -343,8 +228,6 @@ export async function POST(request: Request) {
   });
 
   if (!sponsored.ok) {
-    // The seat goes back immediately. A seat consumed by a transaction that could not even be
-    // built is a seat nobody got, and the offer is small enough that each one matters.
     await releaseSeat(address);
     return NextResponse.json(
       { error: sponsored.failure.detail, kind: sponsored.failure.kind },
@@ -367,14 +250,6 @@ export async function POST(request: Request) {
   );
 }
 
-/**
- * `GET /api/agents/sponsor` — how many seats are left.
- *
- * Public and uncredentialed because the number is a fact about an offer we are advertising, and an
- * agent deciding whether to bother should not have to spend a seat to find out there are none. A
- * failed read returns 503 rather than a plausible zero: "none left" and "we could not count" are
- * opposite answers, and only one of them means stop.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -387,24 +262,8 @@ export async function GET(request: Request) {
     );
   }
 
-  /*
-    This counter does NOT settle against the chain, and that is deliberate.
-
-    It did. Settling here meant every anonymous request looped one sequential fullnode read per
-    unclaimed seat — up to the cap — plus an UPDATE per confirmation, on an endpoint that needs no
-    account and costs the caller one HTTP request. That is an amplification primitive against our
-    own fullnode quota, and it was introduced by the change that fixed the seat-recycling defect:
-    correct settlement put in the wrong path.
-
-    The number published here is therefore advisory and may briefly over-report free seats, for at
-    most one hold window. That is the right trade. The POST path settles before it reserves, so the
-    cap is still enforced exactly where enforcement happens, and a caller who acts on a stale count
-    is corrected by the attempt itself rather than by this number.
-  */
   const nowMs = Date.now();
 
-  // Typed as a plain Response: the two branches carry different bodies on purpose — a count and a
-  // failure are not the same shape and must not be flattened into one that has both optional.
   return fold<number, Response>(
     await seatsRemaining(nowMs),
     (remaining) =>

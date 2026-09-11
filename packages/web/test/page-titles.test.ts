@@ -3,14 +3,6 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * A page's title must not repeat the site's name.
- *
- * `app/layout.tsx` sets `template: '%s · Weir'`, so every page title gets the suffix appended. Three
- * pages carried it themselves as well and rendered "Recovery details · Weir · Weir" in the browser
- * tab and in every link preview — the kind of defect nobody reports because it looks like a typo
- * rather than a bug.
- */
 function pages(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -34,7 +26,6 @@ describe('page titles', () => {
   });
 
   it('is the layout that owns the suffix', () => {
-    // Guards the guard: with no template, the rule above would be wrong rather than merely unmet.
     expect(readFileSync(resolve(app, 'layout.tsx'), 'utf8')).toContain('template:');
   });
 });

@@ -1,23 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The discovery column every wrapped page gets.
- *
- * # Why this exists
- *
- * The rebuilt screens pass their own `aside` to `AppFrame` — the feed's is built from what it read
- * for the feed. Every other route passed none, so twenty-three pages rendered a 640px column with
- * 372px of empty ground beside it: a third of a wide screen, blank, on `/earnings`, `/purchases`,
- * `/security`, the legal pages and the rest. That emptiness is most of what made the application
- * look deserted next to the artboards, and it is not a per-page problem.
- *
- * So this reads once, in the layout, and every page that does not build its own frame gets it.
- *
- * # A failed read is a card that is not there
- *
- * `listProfiles` and `listSeeking` throw on a store they cannot reach. Each is caught separately
- * and its card is then omitted, rather than rendered with no rows: an empty "Who is here" asserts
- * that nobody is, which is a different fact from not having looked.
- */
 
 import { listProfiles, countFollowers } from '@/lib/content';
 import { listSeeking } from '@/lib/agent-seeking';
@@ -40,7 +21,6 @@ async function readPeople(): Promise<DiscoveryPerson[] | null> {
         handle: profile.handle,
         address: profile.owner,
         displayName: profile.displayName,
-        // Absent rather than zero when the count could not be read.
         meta: followers === null ? '' : `${followers} follower${followers === 1 ? '' : 's'}`,
         isAgent: agents.has(profile.owner.toLowerCase()),
       });

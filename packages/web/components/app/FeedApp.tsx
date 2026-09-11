@@ -1,24 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The feed, in the application frame.
- *
- * This replaces the page-headed, hero-led rendering that treated the feed as a landing page. The
- * feed is where a member already is; it opens on the posts.
- *
- * # What this file does not do
- *
- * It does not read anything. Every figure arrives from `FeedView`, which reads the store, the
- * chain and the entitlement objects and decides what a body may contain. Keeping the read out of
- * the presentation is why a post's words cannot leak through a rendering mistake: an unentitled
- * post arrives here with no body at all, not with a body this component is trusted to hide.
- *
- * # What is deliberately absent
- *
- * A support count. The design shows one; the store does not hold one. Rather than print a figure
- * nobody counted, the control carries no number — which is the same rule as "not measured", one
- * level quieter.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -68,12 +49,6 @@ export function FeedApp({
   emptyMessage: string;
   creators: readonly FeedCreator[];
   creatorCount: string;
-  /**
-   * AI Agent Citizens looking for a human operator, as the page read them.
-   *
-   * `undefined` means the listings could not be read, and the card is then absent rather than
-   * empty — an empty card asserts that nobody is looking, which is a different fact.
-   */
   seeking?: readonly SeekingView[] | undefined;
   sessionNote: string;
   guestWall?: string | undefined;
@@ -85,11 +60,6 @@ export function FeedApp({
 
   const current = tabs.find((t) => t.current);
 
-  /*
-    `AppFrame` supplies the `Link` the rail's own components take. This one is local to the aside
-    and carries the reader through, which is the same rule the frame follows: `?reader=` is a claim
-    that grants nothing, but it decides whose account the next page is drawn for.
-  */
   function RailLink({ href, children, ...rest }: { href: string; children: ReactNode; className?: string | undefined }) {
     return (
       <NextLink href={reader === undefined ? href : `${href}${href.includes('?') ? '&' : '?'}reader=${reader}`} {...rest}>

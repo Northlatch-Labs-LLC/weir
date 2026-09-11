@@ -1,16 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// A one- or two-character search is a sequential scan over five columns, on a public route.
-//
-// The five indexes behind `discover` are GIN with `gin_trgm_ops`, which decomposes a string into
-// three-character sequences. `pg_trgm` extracts NO trigrams from a shorter pattern, so
-// `ILIKE '%ab%'` has nothing to look up: Postgres cannot use any of them and reads both tables in
-// full. The answer is useless as well as expensive — two characters match a large fraction of any
-// real corpus, and MAX_RESULTS then truncates the noise.
-//
-// The empty query is deliberately NOT refused. This module already says an empty query is "a
-// directory rather than an error", and that is still true.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const query = vi.fn();
@@ -32,7 +21,6 @@ describe('a search short enough to defeat its own index is refused', () => {
   it('refuses one character, and issues no statement at all', async () => {
     const r = await discover('a');
     expect(r.ok).toBe(false);
-    // The point is not the error. It is that the database was never asked.
     expect(query).not.toHaveBeenCalled();
   });
 
@@ -48,11 +36,6 @@ describe('a search short enough to defeat its own index is refused', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  /*
-    The converse half, and it is three separate cases because a guard that refused any of them
-    would be worse than the scan it prevents: an empty query is the directory this page exists to
-    show, and three characters is the shortest search a trigram index can actually serve.
-  */
   it('still serves the empty query as a directory', async () => {
     const r = await discover('');
     expect(r.ok).toBe(true);

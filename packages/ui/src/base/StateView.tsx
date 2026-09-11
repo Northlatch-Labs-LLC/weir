@@ -1,21 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The three things a screen can be when it is not showing what it came to show.
- *
- * These are the only loading, empty and error surfaces in the application. A screen that draws its
- * own is a screen that will drift, and the drift always goes the same way: a spinner with no end,
- * an empty list standing in for a failed read, and an error that says "something went wrong" to
- * somebody who has just spent money.
- *
- * The distinction this file exists to keep: **empty and failed are not the same thing.** An empty
- * list means we looked and there is nothing. A failed read means we could not look. Rendering the
- * second as the first tells a creator their work is gone.
- */
 
 import type { ReactNode } from 'react';
 import { Icon } from './Icon';
 
-/** Skeletons shaped like what is coming — never a centred spinner on a whole page. */
 export function Loading({
   shape = 'lines',
   count = 3,
@@ -87,14 +74,6 @@ export function Loading({
   );
 }
 
-/**
- * We looked, and there is nothing.
- *
- * `fact` is a statement, never an apology. `narrowedBy` names the filter when the emptiness is
- * caused by one, so a reader is not told the network is empty when it is their own Following tab
- * that is. Weir is early and its lists are short; every empty state here should read as early
- * rather than broken, and no screen invents a row to look busier than it is.
- */
 export function EmptyState({
   fact,
   narrowedBy,
@@ -113,14 +92,6 @@ export function EmptyState({
   );
 }
 
-/**
- * We could not look, or something failed.
- *
- * `moneyState` is the field that makes this different from every other error screen, and it is
- * required on any surface where money is possible: somebody staring at a failure needs to know
- * what state their money is in before they need to know anything else. "Nothing was spent." is a
- * complete and often sufficient answer — say it rather than leaving them to guess.
- */
 export function ErrorState({
   cause,
   moneyState,
@@ -151,13 +122,6 @@ export function ErrorState({
   );
 }
 
-/**
- * A figure that could not be read.
- *
- * Never mono, never tabular, never shaped like a number — because a reader scanning a column of
- * figures will read anything in that shape as a measurement. This is the one rule in the codebase
- * that has already prevented a zero being shown for money nobody counted.
- */
 export function Unmeasured({ what = 'not measured' }: { what?: string }) {
   return <span className="w-unread">{what}</span>;
 }

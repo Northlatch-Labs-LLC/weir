@@ -1,19 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  A subscriber post is sealed to the tier the creator chose, validated against the vault.
-
-  Before B7 every subscriber post was sealed at tier 0 and there was no field to change it, so a
-  vault with two tiers sold the same access at two prices; `packages/room/src/publish.ts` refuses
-  non-zero tiers for exactly this reason. Now `tier` rides on the request and inside the signature
-  (the SDK's `accessStatement`), the route validates it against the vault's tiers, and the body is
-  sealed to it.
-
-  Mutations predicted: seal at `0n` regardless → "sealed to the chosen tier" red; drop the range
-  check → "an index past the last tier is refused" red; sign `access` without the tier → "the
-  tier is inside the signature" red (the route rebuilds `subscribers:2`, the client signed
-  `subscribers`, the proof fails).
-*/
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -62,7 +48,6 @@ vi.mock('@/lib/body-storage', () => ({
       value: {
         blobId: 'blob:period', endEpoch: 999, nonce: 'n', sealWrappedKey: 'w',
         sha256: createHash('sha256').update(input.body).digest('hex'), bytes: input.body.length,
-        // The real storeBody records the period gate on the sealed body; the row is written from it.
         ...(input.gate.kind === 'period' ? { tier: input.gate.tier!.toString(), period: (input.gate as { period: bigint }).period.toString() } : {}),
       },
     };
@@ -143,7 +128,6 @@ describe('a subscriber post and its tier', () => {
   });
 
   it('the tier is inside the signature: a body that names a tier the signer did not is refused', async () => {
-    // Signed as tier 0 (`subscribers`), sent as tier 1 — a relay lowering or raising the seat.
     const r = await post(await signedSubscribers(1, 0));
     expect(r.status).toBe(401);
     expect(gates).toEqual([]);

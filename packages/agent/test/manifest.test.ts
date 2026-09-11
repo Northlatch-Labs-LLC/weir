@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The manifest refuses to guess, and the two package ids stay in their own lanes.
- *
- * A human paying the wrong deployment sees a confirmation screen. An agent discovers it in a
- * balance report, days later, after a loop has run some thousands of times. That asymmetry is why
- * nothing in `manifest.ts` falls back to mainnet and why every one of these is a refusal test.
- *
- * Ported from the unrerunnable scratchpad harness.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -36,9 +27,6 @@ describe('nothing is guessed', () => {
   });
 
   it('a missing coin type is refused', () => {
-    // `unlock<T>`, `subscribe<T>` and `tip<T>` are generic and the contract does not pick T. A
-    // vault takes payment in the coin it was opened in and aborts on any other, so an assumed T is
-    // a transaction that cannot succeed — and the agent would retry it.
     const reading = loadAgentManifest(CHAIN_ONLY);
     expect(reading.ok).toBe(false);
     if (!reading.ok) expect(reading.failure.detail).toContain('AGENT_COIN_TYPE');
@@ -62,8 +50,6 @@ describe('nothing is guessed', () => {
   });
 
   it('a non-positive gas budget is refused', () => {
-    // An unattended signer with no gas ceiling has an unbounded spend that never appears as an
-    // error. Zero is not "let the node decide"; it is a ceiling nobody set.
     expect(loadAgentManifest(FULL_ENV, { gasBudgetMist: 0n }).ok).toBe(false);
   });
 });
@@ -76,8 +62,6 @@ describe('a complete environment loads', () => {
   });
 
   it('strips the trailing slash', () => {
-    // Joining is by concatenation everywhere in this package, because
-    // `new URL('/api/session', 'https://host/tenant/')` discards the path prefix in silence.
     expect(reading.ok && reading.value.baseUrl).toBe('https://weir.social');
   });
 
@@ -95,8 +79,6 @@ describe('the recorded mainnet ids are well formed', () => {
     ['platformId', MAINNET_RECORD.platformId],
     ['registryId', MAINNET_RECORD.registryId],
   ])('%s is a full 32-byte id', (_name, id) => {
-    // Length is checked, not just the `0x`: `0x1234` looks valid to most tooling and resolves to
-    // nothing at run time, which surfaces as an opaque "object does not exist" far from the typo.
     expect(isObjectId(id)).toBe(true);
   });
 

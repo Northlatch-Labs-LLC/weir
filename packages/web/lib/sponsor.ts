@@ -2,45 +2,6 @@
 import 'server-only';
 import { opaqueDetail } from './opaque';
 
-/**
- * Sponsored account creation — we pay the gas for the first N agents to claim a handle.
- *
- * # The problem this solves
- *
- * `account::open` costs about 0.006 SUI in gas. Measured, not estimated: opening the first agent
- * account moved 8,226,976 MIST to 2,152,388. That is a trivial amount of money and a total barrier,
- * because an agent arriving from another platform has no Sui address, no SUI, and no way to obtain
- * either without a human. The funnel ends there, every time.
- *
- * # Why sponsorship rather than a faucet
- *
- * A faucet sends spendable SUI to an address and hopes it is used for registration. Nothing
- * compels that. Addresses are free, so fifty claims can be one script that never registers
- * anything, and the money is gone the moment it lands.
- *
- * A sponsored transaction cannot be diverted. **This server builds the transaction; the caller
- * never supplies bytes.** We construct exactly one `account::open`, simulate it, assert its shape,
- * and only then sign as the gas payer. If it never executes we pay nothing, and there is no path
- * by which our SUI becomes anything other than gas for the registration we intended.
- *
- * That property is worth stating as an invariant, because every future change to this file must
- * preserve it: **we sign gas for bytes we built and inspected, never for bytes we were given.**
- *
- * # The key
- *
- * `PROJECTX_SOCIAL_SPONSOR_KEY` — a dedicated key, held apart from every other key in this system.
- * It must not be the deployer, the `PlatformCap` holder, the manifest signer, or any address that
- * holds anything but the offer's budget. Its only power is to pay gas for transactions this file
- * constructs, so the entire exposure of a compromised server is the SUI sitting in that one
- * address. Fund it with the offer and nothing more.
- *
- * # The cap
- *
- * Enforced in Postgres as a unique seat number, not as a count in this process. "The first fifty"
- * is a promise about a global limit under concurrency, and a count read then acted upon has a
- * window between the two. `db/027_agent_sponsorships.sql` carries the argument in full.
- */
-
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Transaction } from '@mysten/sui/transactions';
@@ -59,56 +20,18 @@ import {
 } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 
-/*
-  Destructured the same way `lib/checkout.ts` does. The SDK groups its transaction constructors
-  under `txBuilders` rather than exporting them individually, and reaching for the group keeps this
-  file importing from the same surface every other builder in this package uses.
-*/
 const { openAccount, openCreatorVault } = txBuilders;
 
-/** How many seats the offer has. The database constraint mirrors this; they are asserted equal. */
-/**
- * How many unclaimed seats one settlement pass will check against the chain.
- *
- * Each row costs a sequential fullnode read, so this is the ceiling on what a single request can
- * spend of somebody else's rate limit. It is deliberately NOT derived from `SPONSORSHIP_SEATS`:
- * raising the offer should not silently raise the cost of a request, and these two numbers answer
- * different questions.
- */
 export const SETTLE_SCAN_LIMIT = 12;
 
 export const SPONSORSHIP_SEATS = 50;
 
-/**
- * How long a reserved seat is held before it can be swept.
- *
- * Long enough that a slow agent is not punished for taking a minute to sign, short enough that a
- * script cannot reserve all fifty and sit on them. Fifteen minutes is the compromise, and a sweep
- * only releases a seat whose handle still resolves to nobody on chain — so a claim that succeeded
- * and was never reported back is never taken away from the agent that earned it.
- */
 export const SEAT_HOLD_MS = 15 * 60 * 1000;
 
 export const SPONSOR_KEY_ENV = 'PROJECTX_SOCIAL_SPONSOR_KEY';
 
-/**
- * The gas budget we are prepared to sign for one registration.
- *
- * A ceiling rather than a live estimate, and deliberately so: the value we sign becomes the most
- * an attacker can burn per seat, so it must be a number chosen here rather than one a simulation
- * hands us. 20 million MIST is a little over three times the measured cost of an `account::open`,
- * which absorbs a gas-price rise without absorbing a mistake. Fifty seats at this ceiling is 1 SUI
- * of worst-case exposure for the whole offer.
- */
 export const SPONSORED_GAS_BUDGET_MIST = 20_000_000n;
 
-/**
- * The ceiling for a sponsored vault open.
- *
- * Measured requirement was 6,119,412 MIST. 20,000,000 is a little over three times it, matching the
- * account ceiling for the same reason: what we sign is the most that can be burned per attempt, so
- * it is a number chosen here rather than one a simulation hands us.
- */
 export const SPONSORED_VAULT_GAS_BUDGET_MIST = 20_000_000n;
 
 export interface SponsorIdentity {
@@ -116,13 +39,6 @@ export interface SponsorIdentity {
   keypair: Ed25519Keypair;
 }
 
-/**
- * Load the sponsor key.
- *
- * `unconfigured` rather than `malformed` when the variable is absent, because a deployment that
- * does not run the offer is not broken — and the route turns that distinction into 501 rather than
- * 500, so an operator reading logs can tell "we do not do this here" from "this is failing".
- */
 export function loadSponsor(env: NodeJS.ProcessEnv = process.env): Reading<SponsorIdentity> {
   const source = 'sponsored registration';
   const raw = env[SPONSOR_KEY_ENV];
@@ -141,7 +57,6 @@ export function loadSponsor(env: NodeJS.ProcessEnv = process.env): Reading<Spons
     const keypair = Ed25519Keypair.fromSecretKey(parsed.secretKey);
     return ok({ address: keypair.toSuiAddress(), keypair });
   } catch (error) {
-    // The key itself is never echoed — only that it did not decode.
     return fail(
       'malformed',
       source,
@@ -152,29 +67,6 @@ export function loadSponsor(env: NodeJS.ProcessEnv = process.env): Reading<Spons
   }
 }
 
-/**
- * Every `moveCall` target in a built transaction, plus the kinds of every command.
- *
- * Read back off the constructed artefact rather than trusted from the builder, because the guard
- * below is the only thing standing between our gas and an arbitrary transaction. A builder that
- * changed behaviour, or a future edit that added a command, must be caught by inspecting what was
- * actually produced.
- */
-/**
- * The address a `TransferObjects` command actually sends to, or `null` if it cannot be decoded.
- *
- * `null` means REFUSE. It is not "no recipient found" — it is "this transaction names a recipient
- * in a form we do not read", and paying gas for something we cannot describe is the thing this
- * whole function exists to stop.
- *
- * The shape, taken from a transaction the SDK built rather than from documentation:
- *
- *     command.TransferObjects.address = { $kind: 'Input', Input: 0, type: 'pure' }
- *     data.inputs[0]                  = { $kind: 'Pure', Pure: { bytes: '<base64 of 32 bytes>' } }
- *
- * Only an `Input` pointing at a `Pure` is accepted. A `Result`, a `NestedResult` or the gas coin
- * is a recipient computed on chain, which we cannot evaluate here and therefore will not sponsor.
- */
 function transferRecipient(tx: Transaction, transfer: unknown): string | null {
   const address = (transfer as { address?: unknown } | undefined)?.address as
     | { $kind?: string; Input?: number }
@@ -187,13 +79,10 @@ function transferRecipient(tx: Transaction, transfer: unknown): string | null {
   if (typeof bytes !== 'string' || bytes === '') return null;
 
   const raw = Buffer.from(bytes, 'base64');
-  // A Sui address is exactly 32 bytes. A pure input of any other length is not one, whatever it
-  // decodes to, and guessing at it is how a check starts accepting things it never meant to.
   if (raw.length !== 32) return null;
   return `0x${raw.toString('hex')}`;
 }
 
-/** Both sides lower-cased and zero-padded before comparison, so `0x2` and `0x02` agree. */
 function sameAddress(a: string, b: string): boolean {
   const norm = (v: string): string | null => {
     if (!/^0x[0-9a-fA-F]{1,64}$/.test(v)) return null;
@@ -223,32 +112,8 @@ function shapeOf(tx: Transaction): { kinds: string[]; targets: string[]; transfe
   return { kinds, targets, transferArgs };
 }
 
-/**
- * Refuse anything that is not exactly one `account::open` on the latest package.
- *
- * THE INVARIANT OF THIS FILE. We are about to sign a gas payment; this is what bounds what that
- * gas can do. One command, one MoveCall, that target and no other. Not "contains an open" —
- * *is* an open, with nothing beside it.
- *
- * A transaction with a second command could transfer an object, split a coin, or call anything
- * else while we pay for it. There is no legitimate reason for one here, so the check is an
- * equality rather than a filter.
- */
 export type SponsoredAction = 'account' | 'vault';
 
-/**
- * The one call each action is allowed to be.
- *
- * Held as a map rather than a string built at the call site, so adding a sponsorable action is a
- * deliberate edit to this table and not something that falls out of a caller passing a different
- * string. Everything else in the transaction is still forbidden.
- */
-/**
- * The empty payment coin for a zero-fee vault open.
- *
- * `0x2` is the Sui framework and is the same on every network, so this is a genuine constant and
- * not a deployment value that ought to be configuration.
- */
 export const ZERO_COIN_TARGET = '0x0000000000000000000000000000000000000000000000000000000000000002::coin::zero';
 
 const SPONSORABLE: Record<SponsoredAction, (config: ProjectXSocialConfig) => string> = {
@@ -265,33 +130,6 @@ export function assertIsOnlyAccountOpen(
   const { kinds, targets, transferArgs } = shapeOf(tx);
   const expected = SPONSORABLE[action](config);
 
-  /*
-    A sponsored vault is three commands, and each one is here for a reason that cost a failed
-    mainnet run to learn.
-
-    1. `coin::zero<T>` — `open_vault` takes a `Coin<SUI>` payment by value, so one must exist.
-       The obvious way to make it is to split zero off `tx.gas`, and that is what this did first.
-       It fails on chain: in a sponsored transaction the gas coin belongs to the SPONSOR, and Sui
-       refuses to let the sender spend it as a transaction input — "Gas object is not an owned
-       object with owner: AddressOwner(sender)". Gas can only ever become gas. So the payment is
-       minted empty instead, which moves nothing and touches nobody's coins.
-
-       This is only sound because `collect_creation_fee` asserts `payment.value() >= due` and
-       takes nothing when `due` is zero. The route refuses unless the fee reads zero from chain,
-       so the zero coin is always sufficient. If the fee is ever restored, that refusal fires
-       first and this path stops — it does not silently start underpaying.
-
-    2. `creator::open_vault` — the call itself.
-
-    3. `TransferObjects` — `open_vault` RETURNS a CreatorCap and the change coin. Move cannot drop
-       either, so they must be transferred or the transaction will not build. But TransferObjects
-       is also precisely the command an attacker would add, so allowing it by kind is not enough:
-       the recipient is checked below and must be the sender. Sponsoring a vault whose CreatorCap
-       went to a third party would be us paying for somebody to take control of a creator's
-       earnings from the moment the vault existed.
-
-    An account open remains exactly one MoveCall.
-  */
   const allowedKinds = action === 'vault' ? ['MoveCall', 'MoveCall', 'TransferObjects'] : ['MoveCall'];
   if (kinds.length !== allowedKinds.length || kinds.some((k, i) => k !== allowedKinds[i])) {
     return fail(
@@ -301,8 +139,6 @@ export function assertIsOnlyAccountOpen(
     );
   }
 
-  // Both calls are pinned, in order. `coin::zero` is as much a part of the allowed shape as the
-  // open itself — an unpinned first call would be a free MoveCall riding on our gas.
   const expectedTargets = action === 'vault' ? [`${ZERO_COIN_TARGET}`, expected] : [expected];
   if (targets.length !== expectedTargets.length || targets.some((t, i) => t !== expectedTargets[i])) {
     return fail(
@@ -313,34 +149,6 @@ export function assertIsOnlyAccountOpen(
   }
 
   if (action === 'vault') {
-    /*
-      Exactly one transfer, and its recipient must BE the sender — decoded, not searched for.
-
-      The previous version of this check asked whether the sender's address bytes appeared
-      ANYWHERE in `JSON.stringify(inputs)`, and reasoned that "there is nowhere else for a second
-      recipient to hide". There is. A pure input does not have to be used by any command, and an
-      unused one does not add a command — so the kind list, the target list and the single-transfer
-      count are all unchanged by adding one.
-
-      Demonstrated against a real built transaction, not argued:
-
-        commands           MoveCall, MoveCall, TransferObjects   <- passes the kind check
-        transfer.address   { Input: 1 }                          <- the ATTACKER's address
-        inputs[0]          the sender's 32 bytes, referenced by nothing
-        inputs[1]          the attacker's 32 bytes
-
-      `JSON.stringify(inputs).includes(senderBytes)` is TRUE for that transaction. We would have
-      signed gas for a vault whose CreatorCap goes to somebody else — which is precisely the
-      outcome the paragraph above said could not happen, on the path we invite agents through.
-
-      So the recipient is resolved properly: take the transfer's `address` argument, require it to
-      be an Input, read that input's pure bytes, and compare them to the sender. It is a few lines
-      rather than "a second parser to keep in step with the SDK", and the shape it reads is pinned
-      by `test/sponsor-recipient.test.ts` against a transaction the SDK itself built.
-
-      A recipient that is not a pure Input — a result, a nested result, the gas coin — is refused
-      rather than interpreted. Anything we cannot decode exactly is something we do not pay for.
-    */
     if (transferArgs.length !== 1) {
       return fail('malformed', source, `a sponsored vault must contain exactly one transfer; this one has ${transferArgs.length}.`);
     }
@@ -365,14 +173,6 @@ export interface SeatReservation {
   handle: string;
 }
 
-/**
- * Take a seat, or say why there is none.
- *
- * The insert is the check. `seat` is unique and constrained to 1..50, so two concurrent callers
- * cannot both take the same one and nobody can take a fifty-first — the database refuses it rather
- * than this code deciding after a read. The lowest free seat is chosen by the same statement that
- * claims it, inside one round trip.
- */
 export async function reserveSeat(input: {
   address: string;
   handle: string;
@@ -383,20 +183,6 @@ export async function reserveSeat(input: {
   const address = input.address.toLowerCase();
   const handle = input.handle.toLowerCase();
 
-  /*
-    An expired hold leaves its ROW behind, and the row keeps its seat.
-
-    The first version ended `ON CONFLICT DO NOTHING`. `NOT EXISTS` would correctly report the
-    expired seat as available, the insert would then collide with the stale row's UNIQUE(seat),
-    the conflict clause would swallow it, and zero rows came back — reported to the caller as "the
-    offer is fully taken" at three seats of fifty. The offer jammed permanently on the first hold
-    that ever expired, and the message said the opposite of what had happened.
-
-    So the conflict TAKES OVER the expired row instead of giving up on it. Nothing is deleted: the
-    seat is reassigned in place, and the guard on the update — unclaimed, and past its hold — is
-    what makes that safe. A claimed seat can never be taken over, because `claimed_at_ms IS NULL`
-    fails and the statement returns no row, which is the correct "this seat is gone".
-  */
   try {
     const { rows } = await db().query<{ seat: number }>(
       `
@@ -437,11 +223,6 @@ export async function reserveSeat(input: {
     );
 
     if (rows.length === 0) {
-      /*
-        Three different reasons produce no row, and they are not the same answer. Asked separately
-        so the caller can say which — "you already have one" and "the offer is gone" send a reader
-        to opposite next actions, and returning one message for both would be a lie to one of them.
-      */
       const [mine, taken, seats] = await Promise.all([
         db().query('SELECT 1 FROM agent_sponsorships WHERE address = $1', [address]),
         db().query('SELECT 1 FROM agent_sponsorships WHERE handle = $1', [handle]),
@@ -470,7 +251,6 @@ export async function reserveSeat(input: {
   }
 }
 
-/** Give a seat back when the transaction could not be built or simulated. */
 export async function releaseSeat(address: string): Promise<void> {
   try {
     await db().query(
@@ -483,33 +263,12 @@ export async function releaseSeat(address: string): Promise<void> {
   }
 }
 
-/**
- * Confirm reserved seats against the chain, and mark the ones that were actually used.
- *
- * A seat is claimed when the handle it reserved resolves on chain to the address that reserved it.
- * Nothing is taken on trust: we do not ask the agent whether it succeeded, and we do not record a
- * digest it reports. The registry is the authority on whether a registration happened, and it is
- * the same registry the account itself lives in.
- *
- * Called before counting seats, so the count reflects reality rather than the last thing anybody
- * told us. A failure to read the chain leaves every seat exactly as it was — an unconfirmed seat
- * expires on its hold, which returns it to the pool, and the worst case of a chain outage is that
- * a genuine claim is briefly re-offered rather than a false one being recorded.
- */
 export async function confirmClaimsFromChain(input: {
   config: ProjectXSocialConfig;
   nowMs: number;
 }): Promise<Reading<number>> {
   const source = 'sponsored registration';
   try {
-    /*
-      Bounded, and the bound does not depend on a caller.
-
-      One chain read happens per unclaimed row, sequentially. That is fine at fifty seats and is
-      still an unbounded loop in a request path: the ceiling belongs here rather than in the size
-      the table happens to be today. A settlement pass that runs out of budget resolves the oldest
-      reservations first, and the next call resumes with what it did not reach.
-    */
     const { rows } = await db().query<{ address: string; handle: string }>(
       `SELECT address, handle FROM agent_sponsorships
         WHERE claimed_at_ms IS NULL
@@ -526,9 +285,9 @@ export async function confirmClaimsFromChain(input: {
     let confirmed = 0;
     for (const row of rows) {
       const owner = await resolveHandle(client, tables.value.byHandle, row.handle);
-      if (!owner.ok) continue; // Could not look. Not the same as "nobody owns it" — leave it alone.
-      if (owner.value === null) continue; // Looked; still free. The seat stays reserved until it expires.
-      if (owner.value.toLowerCase() !== row.address.toLowerCase()) continue; // Somebody else took it.
+      if (!owner.ok) continue;
+      if (owner.value === null) continue;
+      if (owner.value.toLowerCase() !== row.address.toLowerCase()) continue;
       await db().query(
         'UPDATE agent_sponsorships SET claimed_at_ms = $1 WHERE address = $2 AND claimed_at_ms IS NULL',
         [input.nowMs, row.address],
@@ -541,7 +300,6 @@ export async function confirmClaimsFromChain(input: {
   }
 }
 
-/** How many seats remain, for the public counter. */
 export async function seatsRemaining(nowMs: number): Promise<Reading<number>> {
   try {
     const { rows } = await db().query<{ n: string }>(
@@ -556,28 +314,13 @@ export async function seatsRemaining(nowMs: number): Promise<Reading<number>> {
 }
 
 export interface SponsoredTransaction {
-  /** Base64 transaction bytes. The agent signs THESE, unchanged. */
   bytes: string;
-  /** Our signature, as gas payer. */
   sponsorSignature: string;
   sponsorAddress: string;
   seat: number;
   gasBudgetMist: string;
 }
 
-/**
- * Build, inspect, simulate and sponsor one `account::open`.
- *
- * The order is the safety argument and must not be rearranged:
- *
- *   1. Build — from our own inputs, never from bytes a caller supplied.
- *   2. Inspect — assert the constructed artefact is exactly one `account::open`.
- *   3. Simulate — with the gas owner already set, so what we sign is what was measured.
- *   4. Sign — only now, and only over those exact bytes.
- *
- * Signing before simulating would mean paying for aborts. Simulating a different shape from the
- * one we sign would mean the measurement described a transaction nobody executed.
- */
 export async function sponsorAccountOpen(input: {
   config: ProjectXSocialConfig;
   sponsor: SponsorIdentity;
@@ -589,19 +332,16 @@ export async function sponsorAccountOpen(input: {
   try {
     const client = createClient(input.config);
 
-    // 1. Built here. The caller supplies a handle and an address, never a transaction.
     const tx = openAccount({ config: input.config }, { handle: input.handle, referrer: null });
     tx.setSender(input.sender);
     tx.setGasOwner(input.sponsor.address);
     tx.setGasBudget(SPONSORED_GAS_BUDGET_MIST);
 
-    // 2. Inspected before anything is signed or paid for.
     const shape = assertIsOnlyAccountOpen(tx, input.config);
     if (!shape.ok) return shape;
 
     const bytes = await tx.build({ client });
 
-    // 3. Simulated with the gas owner set, so the measurement describes the transaction we sign.
     const sim = (await client.simulateTransaction({
       transaction: bytes,
       include: { effects: true },
@@ -617,7 +357,6 @@ export async function sponsorAccountOpen(input: {
       );
     }
 
-    // 4. Only now.
     const { signature } = await input.sponsor.keypair.signTransaction(bytes);
 
     return ok({
@@ -632,38 +371,12 @@ export async function sponsorAccountOpen(input: {
   }
 }
 
-/**
- * Build, inspect, simulate and sponsor one `creator::open_vault`.
- *
- * # Why this exists, and what it cost to learn
- *
- * Sponsoring the account was only half a door. An agent we sponsor arrives holding nothing — that
- * is the entire point — and then meets a second wall at the vault, because opening one costs gas
- * even when the creation fee is zero. Measured on mainnet: 6,119,412 MIST required, against the
- * 2,152,388 our own first agent holds. She could not open her own vault either.
- *
- * So "free handle, free vault" was true about fees and false about the path, and it went out
- * publicly before anybody tested the path rather than the field. The lesson is written into the
- * launch rule now: the condition is never "is the number zero", it is "can an agent holding
- * nothing complete the whole thing".
- *
- * # The same safety argument, unchanged
- *
- * We build it, we inspect it, we simulate it, and only then do we sign as gas payer. Gas can only
- * ever become gas — which is precisely why the 29 SUI creation fee could never have been
- * sponsored this way: money handed to somebody can be kept, and a gas payment cannot.
- *
- * The zero-value payment coin is split off `tx.gas`, which belongs to the sponsor. At a fee of
- * zero that moves nothing. If the fee were ever raised while this path was live we would silently
- * begin paying it, so `assertIsOnlyAccountOpen` documents that and the caller checks the fee.
- */
 export async function sponsorVaultOpen(input: {
   config: ProjectXSocialConfig;
   sponsor: SponsorIdentity;
   sender: string;
   accountId: string;
   coinType: string;
-  /** Read from chain by the caller. Refused unless zero — see the note above. */
   creationFeeMist: string;
 }): Promise<Reading<{ bytes: string; sponsorSignature: string; sponsorAddress: string; gasBudgetMist: string }>> {
   const source = 'sponsored vault';
@@ -677,12 +390,6 @@ export async function sponsorVaultOpen(input: {
   try {
     const client = createClient(input.config);
     const tx = new Transaction();
-    /*
-      Minted empty, never split off `tx.gas`. The gas coin belongs to the sponsor and Sui refuses
-      to let the sender spend it as an input; see the shape guard for the full reasoning and the
-      on-chain error that proved it. Sound only while the fee is zero, which the caller has
-      already read from chain and refused otherwise.
-    */
     const [payment] = tx.moveCall({ target: ZERO_COIN_TARGET, typeArguments: ['0x2::sui::SUI'] });
     openCreatorVault(
       { config: input.config, tx },
@@ -716,39 +423,8 @@ export async function sponsorVaultOpen(input: {
   }
 }
 
-/**
- * How many vault openings the sponsored offer covers, in total, across everybody.
- *
- * Matching {@link SPONSORSHIP_SEATS} because the two are the same offer seen twice: an agent takes
- * a seat to get an identity, then opens a vault with it. At {@link SPONSORED_VAULT_GAS_BUDGET_MIST}
- * this is 1 SUI of gas, which sits inside the float the sponsor wallet holds.
- *
- * It is a budget rather than a promise. Exhausting it is a refusal, which is the point: the
- * alternative to a ceiling here is an empty wallet and a door that fails for everybody at once.
- */
 export const SPONSORED_VAULT_SLOTS = 50;
 
-/**
- * Take one of the sponsored vault slots for `address`, atomically.
- *
- * # The shape, and why it is one statement
- *
- * There is no count-then-insert anywhere here. A count read in one statement and acted on in
- * another is a ceiling with a gap in the middle, and this route is reachable by anybody. The
- * insert picks the lowest free slot and writes the row in the same statement, so the cap is
- * enforced by the `UNIQUE` column rather than by this function's arithmetic — two concurrent
- * callers cannot both take the last slot, because the database will not let them.
- *
- * # What it does NOT do
- *
- * It does not prove the caller controls `address`. The transaction guard does that work: the
- * sponsored transaction names the caller as sender and transfers to the sender, so a sponsorship
- * for an address you do not control is worthless to you. This meters how often it may be asked
- * for, which is the separate question, and the one nothing was answering.
- *
- * Sui addresses are free, so the primary key bounds one caller and the slot bounds everybody. One
- * without the other is not a limit.
- */
 export async function claimVaultSlot(input: {
   address: string;
   gasBudgetMist: bigint;
@@ -783,11 +459,6 @@ export async function claimVaultSlot(input: {
 
     if (rows.length > 0) return ok({ slot: rows[0]!.slot });
 
-    /*
-      No row, and the two reasons are not the same answer. "You already have one" and "the offer is
-      gone" send a reader to opposite next actions, and one message for both would be a lie to one
-      of them.
-    */
     const mine = await db().query<{ n: number }>(
       'SELECT count(*)::int AS n FROM agent_sponsored_vaults WHERE address = $1',
       [address],
@@ -809,12 +480,6 @@ export async function claimVaultSlot(input: {
         'slots are used. Opening a vault still works; it costs about 0.02 SUI in gas.',
     );
   } catch (error) {
-    /*
-      A unique violation here is the race the statement above is written to make harmless: two
-      callers picked the same free slot in the same instant and the database refused the second.
-      That is the cap working, not a transport failure, and reporting it as one would tell a caller
-      to retry a network problem that does not exist.
-    */
     if ((error as { code?: string } | null)?.code === '23505') {
       return fail(
         'budget-exhausted',
@@ -826,7 +491,6 @@ export async function claimVaultSlot(input: {
   }
 }
 
-/** How many sponsored vault slots remain. Advisory: the cap is enforced by the insert, not by this. */
 export async function vaultSlotsLeft(): Promise<Reading<number>> {
   const source = 'sponsor-vault-slot';
   try {
@@ -839,19 +503,6 @@ export async function vaultSlotsLeft(): Promise<Reading<number>> {
   }
 }
 
-/**
- * Give a vault slot back when the transaction could not be built or simulated.
- *
- * The mirror of {@link releaseSeat}, and for the same reason: the offer is bounded, so a slot
- * burned by a transaction that never existed is a slot nobody can use. The failures that reach this
- * are ours rather than the caller's — an unreadable configuration, a fullnode that did not answer,
- * bytes that would not simulate — and charging somebody a slot for our outage is the wrong way
- * round.
- *
- * Best-effort and silent: the caller is already returning a real failure, and a second error about
- * bookkeeping would bury it. A slot that fails to release is recoverable by hand; a masked error is
- * not.
- */
 export async function releaseVaultSlot(address: string): Promise<void> {
   try {
     await db().query('DELETE FROM agent_sponsored_vaults WHERE address = $1 AND vault_id IS NULL', [

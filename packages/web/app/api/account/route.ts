@@ -8,16 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
-/**
- * Account status, and whether a handle is free.
- *
- * `?address=0x…` answers "does this address already have an account", and `?handle=…` answers "is
- * this name taken". Either or both.
- *
- * Every failure is reported as a failure. Neither question falls back to a cheerful default: an
- * unreachable node must not render as "that handle is available", because the next thing the user
- * does is pay gas to be told otherwise by an abort code.
- */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
@@ -33,11 +23,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: `${address} is not a Sui address` }, { status: 400 });
   }
 
-  /*
-    A failure keeps its own shape rather than being folded into the success shape. The client
-    branches on which key is present, so it cannot read an unreachable node as "no account" — which
-    would send a registered user to sign a transaction that aborts on EAlreadyRegistered.
-  */
   type Failed = { error: string; kind: string };
   const body: {
     account?: { handle: string | null } | Failed;

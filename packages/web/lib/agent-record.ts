@@ -1,28 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The agent's record — everything a person would want to know before trusting an agent, assembled
- * from readings and never from guesses.
- *
- * # Every number is a fact or an explanation
- *
- * A `Fact` carries either a value or the sentence that says why there is none, never both and
- * never neither. A chain read that failed becomes "not measured: <kind> — <detail>", which the page
- * renders in place of the figure; a thing that does not exist to be measured (no vault yet, no
- * purchases yet) says so in its own words. The two are different states and are kept apart: a
- * creator whose vault could not be read has not earned nothing.
- *
- * # Amounts are formatted only against decimals that were read
- *
- * Every amount here is in a coin's smallest unit, and moving the decimal point needs the coin's
- * own metadata. When that metadata could not be read the amount is withheld, because SUI at nine
- * decimals and USDC at six differ by a thousand, and a figure at the wrong scale is a real number
- * that is simply wrong. A withheld figure says which read is missing.
- *
- * # Pure
- *
- * This module does no I/O. The page reads; this file folds. That keeps the assembly testable
- * against every combination of a failed and a successful read without a database or a node.
- */
 import { type CreatorVaultState, type Reading } from '@projectx-social/sdk';
 import type { AgentAccount } from '@/lib/agents';
 import type { Recovery } from '@/lib/agent-recovery';
@@ -32,7 +8,6 @@ import { formatUnits } from '@/lib/units';
 
 export const NOT_MEASURED = 'not measured';
 
-/** A value, or the reason there is none. Never both, never neither. */
 export interface Fact {
   value: string | null;
   unavailable: string | null;
@@ -46,28 +21,21 @@ export function unavailable(why: string): Fact {
   return { value: null, unavailable: why };
 }
 
-/** A failed reading, said as the page says it. */
 export function notMeasured(reading: { ok: false; failure: { kind: string; detail: string } }): Fact {
   return unavailable(`${NOT_MEASURED}: ${reading.failure.kind} — ${reading.failure.detail}`);
 }
 
-/**
- * Fold a reading into a fact. `whenAbsent` is the sentence for `null` — the thing does not exist
- * to be read — and is distinct from a read that failed.
- */
 export function factOf<T>(reading: Reading<T> | null, show: (value: T) => string, whenAbsent: string): Fact {
   if (reading === null) return unavailable(whenAbsent);
   if (!reading.ok) return notMeasured(reading);
   return measured(show(reading.value));
 }
 
-/** The coin's own short name from its type: `0x2::sui::SUI` → `SUI`. The type is the authority. */
 export function coinLabel(coinType: string): string {
   const last = coinType.split('::').at(-1);
   return last === undefined || last === '' ? coinType : last;
 }
 
-/** An amount in a coin's smallest unit, against decimals that were read, or the reason it is withheld. */
 export function amountFact(amount: bigint, coinType: string, decimals: Reading<number> | null): Fact {
   if (decimals === null) return unavailable(`${NOT_MEASURED}: the coin's decimals were not read`);
   if (!decimals.ok) return notMeasured(decimals);
@@ -87,13 +55,11 @@ export interface RecordWork {
   title: string;
   createdAtMs: number;
   access: 'public' | 'subscribers' | 'paid';
-  /** The stored price of a paid post, or null for the other kinds. Withheld when decimals are unread. */
   price: Fact | null;
 }
 
 export interface RecordPurchase {
   kind: 'unlock' | 'subscription';
-  /** The post title or the tier, and whose. */
   what: string;
   from: string;
   edition: 'human' | 'machine' | null;
@@ -111,11 +77,9 @@ export interface AgentRecord {
   purpose: string;
   declaredAtMs: number;
   revokedAtMs: number | null;
-  /** The exact bytes each party signed, rebuilt by the deployment; and the two signatures. */
   statements: { agent: string; operator: string };
   signatures: { agent: string; operator: string };
   recovery: Recovery;
-  /** Relative, never an origin. */
   apiPath: string;
   vault: {
     id: string | null;
@@ -137,7 +101,6 @@ export interface AgentRecord {
   };
 }
 
-/** How many purchases the page lists. The counts are whole; the rows are the most recent. */
 export const PURCHASE_ROWS = 20;
 
 function periodLabel(periodMs: bigint): string {
@@ -154,14 +117,11 @@ export function buildAgentRecord(input: {
   account: AgentAccount;
   recovery: Recovery;
   statements: { agent: string; operator: string };
-  /** `null` when the profile has no vault to read. */
   vault: Reading<CreatorVaultState> | null;
-  /** `null` when there is no coin to read decimals for. */
   decimals: Reading<number> | null;
   posts: readonly Post[];
   postsLimit: number;
   purchases: Reading<Purchases>;
-  /** Decimals for the coins the purchases were paid in, keyed by coin type; a missing coin withholds the amount. */
   purchaseDecimals: ReadonlyMap<string, Reading<number>>;
 }): AgentRecord {
   const { profile, account, vault, decimals } = input;

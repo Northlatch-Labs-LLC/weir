@@ -1,13 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The agent's record: every number is a fact or the sentence that says why there is none.
-
-  Mutations predicted: format an amount without decimals → "amounts are withheld when decimals
-  were not read" red; turn a failed vault read into zeros → "a vault that could not be read is not
-  a vault that earned nothing" red; drop the crumb rule → "the record page has a place in the
-  map" red; point the explore card back at the API → "explore links to the record page" red.
-*/
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { CreatorVaultState, Reading } from '@projectx-social/sdk';
@@ -89,7 +81,6 @@ describe('buildAgentRecord', () => {
     expect(r.vault.earnings.value).toBeNull();
     expect(r.vault.earnings.unavailable).toContain('metadata unreadable');
     expect(r.work.rows[0]?.price?.value).toBeNull();
-    // A purchase paid in a coin this deployment does not know is withheld too, never guessed at nine decimals.
     const sub = r.purchases.rows.find((p) => p.kind === 'subscription');
     expect(sub?.paid.value).toBeNull();
     expect(sub?.paid.unavailable).toContain("does not know the seller's coin");
@@ -100,7 +91,6 @@ describe('buildAgentRecord', () => {
     expect(r.vault.earnings.value).toBeNull();
     expect(r.vault.earnings.unavailable).toContain(NOT_MEASURED);
     expect(r.vault.tiers).toBeNull();
-    // No figure anywhere in the vault block: every fact carries its sentence and no value.
     for (const fact of [r.vault.accepting, r.vault.earnings, r.vault.platformFees, r.vault.minTip]) {
       expect(fact.value).toBeNull();
       expect(fact.unavailable).toContain('node away');

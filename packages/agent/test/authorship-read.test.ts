@@ -1,14 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Reading who signed a post, against a real server.
- *
- * Two answers matter and the whole value of the feature is that they stay apart: a proof, and an
- * honest absence. A post with no retained proof was still SIGNED — the deployment discarded the
- * signature — so reporting that as a failure would make every older post look fraudulent.
- *
- * A proof missing any signed part is refused rather than passed on. A caller handed half a proof
- * runs a verification that fails for our reasons and reads as the author's.
- */
 import { createServer, type Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MAINNET_RECORD, createAgent, type ReadOnlyAgent } from '../src/index.js';
@@ -25,7 +15,6 @@ const PROOF = {
 
 let server: Server;
 let baseUrl: string;
-/** What the next request is answered with. Set by each test before it reads. */
 let answer: { status: number; body: unknown } = { status: 200, body: {} };
 const paths: string[] = [];
 
@@ -76,7 +65,6 @@ describe('reading who signed a post', () => {
     const read = await reader().authorship({ postId: POST });
     expect(read.ok).toBe(true);
     if (!read.ok || read.value.proof === null) throw new Error('expected a proof');
-    // Not rebuilt and not normalised: these exact bytes are what the signature covers.
     expect(read.value.proof.statement).toBe(PROOF.statement);
     expect(read.value.proof.address).toBe(PROOF.address);
     expect(read.value.handleStillResolvesToSigner).toBe(true);

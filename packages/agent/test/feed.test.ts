@@ -1,24 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `feed` reads the shop window, and reports what it could not read.
- *
- * # Against a real server
- *
- * A loopback `node:http` server plays `GET /api/browse`: two pages, the second reachable only by the
- * cursor the first handed out, and a switch that makes it answer 500. Real sockets, real status
- * codes, real JSON — so the failure mapping is exercised where it lives, in the response handling,
- * and not in a stub that returns what the test wanted.
- *
- * # The three claims
- *
- *   1. The request is exactly the endpoint's: `kind=posts`, `handle` when given, `cursor` verbatim
- *      when given, and NO `limit` — the page size is the server's, and this package does not offer
- *      a way to ask for another.
- *   2. `truncated` and `nextCursor` reach the caller as the server said them; a cursor walk covers
- *      both pages with no gap and no repeat.
- *   3. A 500, a body that is not a page, and a server that is not there are three failure kinds —
- *      `malformed`, `malformed`, `transport` — and never `ok` with an empty page.
- */
 
 import { createServer, type Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -44,7 +24,6 @@ const PAGE_TWO = {
   nextCursor: null,
 };
 
-/** What the server was asked, in order, so the request shape is asserted and not assumed. */
 const requests: URL[] = [];
 let mode: 'pages' | 'fail500' | 'notapage' = 'pages';
 let server: Server;

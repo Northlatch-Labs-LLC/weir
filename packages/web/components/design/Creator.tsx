@@ -1,15 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * # Where the design supplies placement and this codebase supplies behaviour
- *
- * That split is deliberate. Re-deriving a Move call's entry-function arguments from a picture, for a
- * contract holding real balances, is the failure this project's own audit exists to prevent — and
- * those two components already carry quote simulation, blocker states and signature handling that no
- * amount of visual fidelity replaces.
- */
-
 import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-identity';
 import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 import { PageTabs } from '@/components/shell/PageTabs';
@@ -22,18 +13,8 @@ import { PostThreadGroup } from '@/components/PostThreadGroup';
 export interface DesignTier {
   price: string;
   cadence: string;
-  /** What the creator keeps, after the fee actually read from the Platform object. */
   net: string;
-  /**
-   * The control that buys *this* tier, rendered inside its own card.
-   *
-   * It belongs here rather than in the identity row. A single subscribe button at the top of the
-   * page, with the prices several hundred pixels below it, asks somebody to commit before they have
-   * seen what they are committing to — and gives them no way to say *which* tier they meant. A
-   * purchase control sits with its price or it is not a purchase control.
-   */
   action: ReactNode;
-  /** True when the reader already holds this tier. The card then confirms rather than sells. */
   held: boolean;
 }
 export interface DesignStat {
@@ -80,68 +61,29 @@ export function DesignCreator({
     displayName: string;
     bio: string;
     initials: string;
-    /** "@handle · N followers", counted on this request. */
     meta: string;
-    /** The creator's .sui name when they hold one, else the handle — never a guess. */
     sui: string;
-    /**
-     * What the declaration register says about this account. Absent renders nothing, exactly as
-     * `none` does: a caller that did not look must not read as "looked, and no".
-     */
     agent?: DesignAgentIdentity;
   };
   tiers: readonly DesignTier[];
   stats: readonly DesignStat[];
-  /**
-   * Posts, followers and subscribers, counted by the caller.
-   *
-   * The ported design puts these three under the name, always visible. They were only on the
-   * membership tab — one tap away from the reader deciding whether this account is worth
-   * following, which is exactly when they are wanted. `null` for a figure that was not read; it
-   * renders as an em dash rather than as a zero, because "nobody" and "we did not count" are
-   * different answers and only one of them is discouraging.
-   */
   counts: { posts: number; followers: number; subscribers: number | null };
   profilePosts: readonly DesignFeedPost[];
   viewingLabel: string;
   tiersHref: string | undefined;
   tiersLabel: string;
-  /** `FollowButton`, placed where the design puts the identity row's call to action. */
   subscribeSlot: ReactNode;
-  /**
-   * `DepositCheckout` — the *only* control in the pool card, and the only one that belongs there.
-   */
   depositSlot: ReactNode;
   depositLine: string;
-  /** A second line under the deposit control. Empty renders nothing. */
   depositNote: string;
-  /** This creator's support vault page, when they have one. Absent hides the link. */
   vaultHref?: string;
-  /** What this creator returns to depositors, when they return anything. Absent renders nothing. */
   depositShare?: string;
-  /**
-   * What a tip also brings, in the creator's words.
-   *
-   * `met` has three states on purpose: `true` earned, `false` a complete tally that fell short,
-   * `undefined` we cannot say — a guest, a failed read, or a tally cut short by the ceiling.
-   */
   perks?: readonly { title: string; detail: string; threshold: string; met?: boolean }[];
-  /** What the viewer has given this creator in total, when it is known and above nothing. */
   perksGiven?: string;
-  /** The tally is a lower bound: tips exist that the bounded walk did not reach. */
   perksPartial?: boolean;
-  /** This creator says they answer supporters first. Their statement, not a rule we enforce. */
   supportersFirst?: boolean;
-  /**
-   * A tip is denominated in the creator's own coin and settles against the *creator* vault, which
-   * is what the membership tiers above it buy from. The pool card is SUI, the stake vault, and a
-   * principal that comes back — three things a tip is not. Mounting it there put an irreversible
-   * payment under a heading promising the opposite.
-   */
   tipSlot: ReactNode;
-  /** Which of the page's two jobs is open. Posts by default; membership one tab away. */
   tab: CreatorTab;
-  /** The address of each tab, with the reader carried along. */
   tabHref: Record<CreatorTab, string>;
 }) {
   return (

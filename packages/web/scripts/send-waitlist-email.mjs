@@ -1,43 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * Send one templated message to the waiting list, or to one address, once.
- *
- *     node --env-file=.env.local scripts/send-waitlist-email.mjs --template=<path> --to=<address>
- *     node --env-file=.env.local scripts/send-waitlist-email.mjs --template=<path> --list
- *     WEIR_EMAIL_SEND_APPROVED=1 node --env-file=.env.local scripts/send-waitlist-email.mjs \
- *       --template=<path> --to=<address> --really-send
- *
- * # It does not send
- *
- * Every run is a dry run unless BOTH of these are true: `--really-send` is on the command line, and
- * `WEIR_EMAIL_SEND_APPROVED=1` is in the environment. Two switches rather than one, because they
- * are set by different acts — one is typed with the command, the other is placed deliberately
- * beforehand — and a single switch is one that gets left on in a shell history.
- *
- * A dry run renders every message in full, substitutes the same per-recipient unsubscribe link, and
- * touches neither the provider nor the send log. It needs no provider key, so it can be run by
- * anybody, at any time, and it is the only thing this script does by default.
- *
- * # It cannot send twice
- *
- * Before each message the row is claimed in `waitlist_email_sends` — `db/042` explains why the
- * claim comes first — and a claim that conflicts means that address has already had this template
- * and is skipped without the provider being called. On 2026-08-30 one recipient got the same card
- * twice, eight minutes apart, because a failed-looking attempt was retried with nothing remembering
- * the first. This is the thing that remembers.
- *
- * # Every message carries a way out
- *
- * The template is refused unless both bodies contain `{{unsubscribe_url}}`, and the link put in its
- * place is signed for that one recipient. There is no run of this script that sends a message
- * somebody cannot leave.
- *
- * # Nothing secret is printed
- *
- * Not the provider key, not the signing secret, not the connection string. The database is
- * identified by its name and host, because "which database am I about to write to" has to be
- * answerable out loud.
- */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import pg from 'pg';
@@ -62,18 +23,12 @@ import {
   waitlistRecipients,
 } from '../lib/waitlist-email-log.ts';
 
-/** The variable that stands for the word to send. Its NAME is here; nothing else is. */
 const APPROVAL_VAR = 'WEIR_EMAIL_SEND_APPROVED';
 
-/**
- * Where the links point on a real send, always. `--origin` can move them for a dry run and is
- * refused outright with `--really-send`, which is the check below rather than a promise here.
- */
 const DEFAULT_ORIGIN = 'https://weir.social';
 
 const argv = process.argv.slice(2);
 
-/** `--name=value`, or `--name value`. Both are typed by people and both are accepted. */
 function option(name) {
   const prefixed = argv.find((a) => a.startsWith(`--${name}=`));
   if (prefixed !== undefined) return prefixed.slice(`--${name}=`.length);
@@ -103,7 +58,6 @@ send-waitlist-email — one templated message to the waiting list, or to one add
 Dry run by default: renders every message, sends nothing, writes nothing.
 `;
 
-/** The database by name and host. Never the credential. */
 function describeDatabase(url) {
   try {
     const parsed = new URL(url);
@@ -133,14 +87,6 @@ async function main() {
   const asked = flag('really-send');
 
   const given = option('origin');
-  /*
-    `--origin` is a dry-run option and this is what makes that sentence true rather than a comment.
-    The value ends up in the `List-Unsubscribe` header and in both bodies of every message, so a run
-    that carries it for real hands the whole list a way out that points somewhere the deployment
-    does not serve — and the send log records every one of those as a clean send, because the
-    provider accepted the message and returned an id. There is nothing downstream that catches it.
-    An operator reruns a line out of shell history exactly once for this to happen to the list.
-  */
   if (asked && given !== undefined && given !== '') {
     fail(
       '--origin was given together with --really-send. It is a dry-run option: a real send always ' +
@@ -154,11 +100,6 @@ async function main() {
 
   const template = loadTemplate(templatePath);
 
-  /*
-    The signing secret is required even for a dry run. A dry run whose links were fake would prove
-    nothing about the links the real run puts in front of people, and this is the one check that
-    catches a deployment that cannot honour the unsubscribes it is about to promise.
-  */
   const secret = requireSecret(process.env[UNSUBSCRIBE_SECRET_VAR]);
 
   const approved = process.env[APPROVAL_VAR] === '1';
@@ -171,11 +112,6 @@ async function main() {
   const dryRun = !(asked && approved);
 
   const databaseUrl = (process.env['PROJECTX_DATABASE_URL'] ?? '').trim();
-  /*
-    A dry run to one named address needs no database: it reads no list and writes no log. Every
-    other combination does — the list comes from Postgres, and no real send happens without the row
-    that makes it unrepeatable.
-  */
   const needsDatabase = wantsList || !dryRun;
   if (needsDatabase && databaseUrl === '') {
     fail('PROJECTX_DATABASE_URL is not set. There is no default.');
@@ -195,7 +131,6 @@ async function main() {
   if (wantsList) {
     recipients = await waitlistRecipients(query);
   } else {
-    // A single address typed on a command line, lower-cased to match how the column stores one.
     recipients = [single.trim().toLowerCase()];
   }
 
@@ -206,11 +141,6 @@ async function main() {
   }
 
   if (pool !== null) {
-    /*
-      Claims from an earlier run that never came back with a provider id. Each one is an attempt
-      whose outcome is unknown, and each one will be skipped below. Printed first so the operator
-      learns about them before a run rather than during one.
-    */
     const unresolved = await unresolvedClaims(query, template.id);
     if (unresolved.length > 0) {
       console.log(
@@ -298,10 +228,6 @@ async function main() {
   if (refused > 0) process.exit(1);
 }
 
-/*
-  Run only when this file IS the command, not when something imports it — the same rule
-  `scripts/migrate.mjs` follows, so the pieces above stay importable by a test.
-*/
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
     console.error(`\n${error instanceof Error ? error.message : String(error)}\n`);

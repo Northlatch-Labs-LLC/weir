@@ -1,19 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-//
-// A sweep that fails after the signature was recorded is not a rejection.
-//
-// `verifyAction` spends a signature by inserting its digest, then sweeps expired digests. Both
-// statements used to sit inside one `try`, so a sweep that failed AFTER a successful insert
-// returned "could not record this signature, so it was not accepted" — a sentence that was false
-// precisely when it mattered. The digest WAS recorded, `rowCount` was 1, the signature was spent,
-// and the caller was told to sign again.
-//
-// `rememberQuote` in `lib/checkout.ts` had already reached the opposite conclusion in its own
-// words — "a failed sweep is housekeeping that did not happen" — and swallows. The two paths
-// disagreed and the security-critical one had it wrong.
-//
-// Found by an adversarial reviewer with no knowledge of how either was written.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const query = vi.fn();
@@ -23,7 +9,6 @@ vi.mock('@/lib/db', () => ({
   normaliseAddress: (a: string) => a.toLowerCase(),
 }));
 
-/** The signature itself is not under test here; only what happens after it is proved genuine. */
 vi.mock('@mysten/sui/verify', () => ({
   verifyPersonalMessageSignature: vi.fn(async () => undefined),
 }));
@@ -35,7 +20,6 @@ vi.mock('@/lib/chain', () => ({
 
 const ADDRESS = `0x${'1'.repeat(64)}`;
 
-/** An insert that claims the digest, then a sweep that fails. */
 function insertSucceedsThenSweepFails() {
   query.mockReset();
   query
@@ -66,8 +50,6 @@ describe('a signature that was recorded stays accepted', () => {
 
     const result = await verify();
 
-    // The claim this test carries: the insert succeeded, so the answer is yes. Before this change
-    // the caller was told the signature "was not accepted" while its digest sat in the table.
     expect(result.ok).toBe(true);
   });
 

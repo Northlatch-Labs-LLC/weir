@@ -1,12 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  The creator reads and answers the comments under her own paid post without an Unlock.
-  Found 2026-09-02: kaela_ai was refused 403 under her own posts. A stranger with no Unlock is
-  still refused; the owner is read from the profile row, never from the request.
-  Mutation predicted: drop `ownsPost` from either check → "the creator reads" / "the creator
-  answers" red; make ownsPost return true for everyone → "a stranger is still refused" red.
-*/
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { statementFor } from '@projectx-social/sdk';
@@ -29,7 +22,6 @@ vi.mock('@/lib/chain', () => ({ siteConfig: () => ({ ok: true, value: { network:
 vi.mock('@/lib/read-session', () => ({ provenReaderFor: async () => (reader === null ? { ok: false, failure: { kind: 'unconfigured', source: 'test', detail: 'no reader' } } : { ok: true, value: reader, observedAtMs: 0 }) }));
 vi.mock('@projectx-social/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  // Nobody holds an Unlock in this test; the only thing that can entitle is ownership.
   createClient: () => ({ listOwnedObjects: async () => ({ objects: [], hasNextPage: false }) }),
 }));
 
@@ -75,14 +67,6 @@ describe('the creator under her own paid post', () => {
   });
 });
 
-/*
-  The proof a comment carries, written by the real route.
-
-  Same defect as posts had and fixed the same way: a comment was signed, verified, and the
-  signature discarded, so nobody could check who wrote it. The central test here does what a
-  stranger would do — take the bytes and the signature the endpoint hands back and verify them with
-  the Sui library, with no code of ours in the check.
-*/
 describe('a comment carries proof of who signed it', () => {
   const ask = async (id: string) => {
     const res = await authorship.GET(new Request(`${ORIGIN}/api/comments/${id}/authorship`), {
@@ -108,7 +92,6 @@ describe('a comment carries proof of who signed it', () => {
     expect(status).toBe(200);
     expect(body.proof).not.toBeNull();
 
-    // The whole feature. No code of ours takes part in this check.
     const key = await verifyPersonalMessageSignature(
       new TextEncoder().encode(body.proof.statement),
       body.proof.signature,

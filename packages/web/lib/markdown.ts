@@ -1,21 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A parser for the markdown these legal documents actually use, and nothing else.
- *
- * # Why not a library, and why not HTML
- *
- * The documents are ours, they change rarely, and they use six constructs. A markdown dependency
- * would be a supply-chain addition for that; a hand-rolled one that emitted HTML strings would need
- * `dangerouslySetInnerHTML` and would put an injection hole in the one part of the site whose whole
- * job is to be trustworthy.
- *
- * So this parses to plain data. The renderer turns that data into React elements, which escape
- * their own text — there is no path from a document's bytes to markup.
- *
- * Anything it does not recognise is rendered as the paragraph it is, rather than silently dropped.
- * A legal page that quietly omits a clause because the parser did not know a syntax is the worst
- * failure available here, so there is no branch anywhere below that discards a line.
- */
 
 export type Inline =
   | { kind: 'text'; text: string }
@@ -30,12 +13,6 @@ export type Block =
   | { kind: 'table'; head: Inline[][]; rows: Inline[][][] }
   | { kind: 'rule' };
 
-/**
- * Bold, links and code, in one pass.
- *
- * Ordered alternation, longest-first: `**` must be tried before a single `*` would matter, and a
- * link's text may contain neither, which is true of every link in these documents.
- */
 const INLINE = /(\*\*[^*]+\*\*)|(\[[^\]]+\]\([^)]+\))|(`[^`]+`)/g;
 
 export function parseInline(source: string): Inline[] {
@@ -60,12 +37,10 @@ export function parseInline(source: string): Inline[] {
     at = index + token.length;
   }
   if (at < source.length) out.push({ kind: 'text', text: source.slice(at) });
-  // A line that matched nothing is still a line.
   return out.length === 0 ? [{ kind: 'text', text: source }] : out;
 }
 
 function cells(row: string): string[] {
-  // `| a | b |` — the split leaves an empty string at each end, which is not a column.
   return row
     .trim()
     .replace(/^\|/, '')
@@ -132,7 +107,6 @@ export function parseMarkdown(source: string): Block[] {
       }
       i -= 1;
       const head = cells(rows[0] ?? '');
-      // The `|---|---|` separator carries no content; its absence is not an error.
       const body = rows.slice(/^\|[\s:|-]+\|$/.test(rows[1] ?? '') ? 2 : 1);
       blocks.push({
         kind: 'table',

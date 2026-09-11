@@ -1,53 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The two surfaces content arrives on spend a durable bucket, keyed on a PROVEN address.
- *
- * # What was missing
- *
- * `POST /api/posts` and `POST /api/messages` were bounded by `rateLimit(request, 'write')` and by
- * nothing else. That counter is a module-level Map and its own header says what that means:
- * "Serverless multiplies instances, and each instance counts on its own." So the ceiling on how
- * much content one identity could produce was `limit x instances` — a number nobody chose, which
- * rises with exactly the traffic that makes it worth having. `quotaLimit` is one row in Postgres
- * and holds across every instance; until this change neither route called it.
- *
- * # The four properties, and why each is asserted rather than assumed
- *
- * **It is spent, and out of the right bucket.** A bucket named in a table and called by nothing is
- * documentation — which is what `QUOTAS.purchase` was until `test/checkout-submit-quota.test.ts`.
- * The bucket NAME is asserted, not merely that some quota was consulted: publishing out of `write`
- * would look limited and would still allow 120 posts at once and 3600 an hour.
- *
- * **It is keyed on the address the SIGNATURE proves, never on the body field.** This decides
- * whether the control is a spam limit or a weapon. Both routes are handed an address in the body —
- * `author`, `from` — and spending on it before proving it would let anybody empty any creator's
- * publishing budget with unsigned requests in their name: denial of publication, bought for the
- * price of a POST. So a request whose signature does not verify must spend NOTHING, asserted by
- * count rather than by status, because the 401 was already correct before this change.
- *
- * **It is spent before the route spends anything of ours.** A ceiling applied after the work
- * bounds the count and not the bill, and on the publish path the bill is real: a paid post seals
- * two durable blobs and the platform fronts the WAL for both. Asserted as an ordering — a refused
- * publish never reaches the on-chain price read that precedes the seal, and a refused paid message
- * never reaches the profile lookup.
- *
- * **A replay spends nothing.** This is where the quota half and the idempotency half meet, and it
- * is why they belong in one change. `lib/idempotent-route.ts` answers a retry out of the ledger
- * without running the route, so a well-behaved agent's backoff is free and a retry storm cannot
- * spend the budget of the caller it is retrying for. The contrast — no key, so nothing recognises
- * the retry, so each attempt pays — is asserted beside it, because a test in which everything is
- * free would pass against a route that spends nothing at all.
- *
- * # The seam, and what it deliberately does not prove
- *
- * `@/lib/rate-limit` is mocked to RECORD, exactly as `test/checkout-submit-quota.test.ts` does, and
- * the collaborators are mocked as `test/message-price-gate.test.ts` mocks them — these files are
- * about what the route DECIDES, not about what the store does underneath. The bucket arithmetic
- * (refill, capacity, the concurrency argument) is `test/quotas.test.ts`'s subject and is not
- * re-proved here. `idempotencyResponse` is the real one; only the three statements that touch
- * Postgres are replaced.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ADDRESS = `0x${'ab'.repeat(32)}`;
@@ -56,13 +8,9 @@ const VAULT = `0x${'a1'.repeat(32)}`;
 const TABLE = `0x${'c3'.repeat(32)}`;
 const ORIGIN = 'https://weir.social';
 
-/** Every bucket the routes spend, in order, with the address it was keyed on. */
 const spent: Array<{ address: string; name: string }> = [];
-/** When set, that bucket refuses, so the route's own handling of a 429 runs. */
 let refuse: string | null = null;
-/** What the signature check concludes. `value: null` means there is no deferred spend to make. */
 let proof: unknown = { ok: true, value: null };
-/** What the ledger says about the key on this request. */
 let claim: unknown = null;
 
 const addPost = vi.fn();
@@ -80,11 +28,6 @@ vi.mock('@/lib/rate-limit', () => ({
       : null;
   },
 }));
-/**
- * The agent register is not this file's subject. `refuseWithdrawnDeclaration` runs on the same two
- * routes, after the same proof and before the same costs; here it always lets the caller through so
- * that every refusal these tests see is the quota's.
- */
 vi.mock('@/lib/agent-standing', () => ({
   refuseWithdrawnDeclaration: async () => null,
 }));
@@ -114,12 +57,10 @@ vi.mock('@projectx-social/sdk', async (importOriginal) => ({
   readContentPrice: (...a: unknown[]) => readContentPrice(...a),
 }));
 vi.mock('@/lib/ids', () => ({ newId: (p: string) => `${p}1` }));
-/** One connection whose every statement succeeds: the transaction is not this file's subject. */
 vi.mock('@/lib/db', () => ({
   db: () => ({ connect: async () => ({ query: async () => ({ rowCount: 1, rows: [] }), release: () => undefined }) }),
   normaliseAddress: (a: string) => a.toLowerCase(),
 }));
-/** Only the three statements that reach Postgres. `idempotencyResponse` stays the real one. */
 vi.mock('@/lib/idempotency', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   claimIdempotencyKey: async () => claim,
@@ -179,11 +120,6 @@ describe('POST /api/posts spends the publish quota', () => {
   });
 
   it('a forged publish spends nothing — an unproven author cannot drain a stranger', async () => {
-    /*
-      The body still NAMES the honest author: this is exactly the request a stranger would send to
-      spend somebody else's budget. The empty list is the assertion that matters; the 401 was
-      already correct before this change and would stay correct if the bucket were drained first.
-    */
     proof = { ok: false, failure: { detail: 'the signature does not verify' } };
     const r = await publish(request('/api/posts', publicPost()));
     expect(r.status).toBe(401);
@@ -200,11 +136,6 @@ describe('POST /api/posts spends the publish quota', () => {
   });
 
   it('is spent before the on-chain read that precedes sealing, so a refusal costs no storage', async () => {
-    /*
-      Ordering. Sealing is what fronts WAL, and a `paid` publish reaches `sealBothEditions` only
-      after reading the content price from chain. If the quota were consulted lower down, that read
-      would happen and this would be a 409 or a 200 rather than a 429.
-    */
     refuse = 'publish';
     const r = await publish(request('/api/posts', paidPost()));
     expect(r.status).toBe(429);
@@ -245,11 +176,6 @@ describe('POST /api/messages spends the message quota', () => {
   });
 
   it('an encrypted message spends the same bucket — a flood is a flood either way', async () => {
-    /*
-      One bucket across both shapes. Two would mean a sender who alternated had twice the ceiling
-      the table states, and the resource being spent — the recipient's attention — does not care
-      which shape arrived.
-    */
     const r = await send(request('/api/messages', encryptedMessage()));
     expect(r.status, await r.clone().text()).toBe(200);
     expect(spent).toEqual([{ address: ADDRESS, name: 'message' }]);
@@ -281,7 +207,6 @@ describe('POST /api/messages spends the message quota', () => {
   });
 
   it('is spent before a paid message looks up the profile it would settle into', async () => {
-    // The same ordering argument as the publish path: refused first, so the work below never runs.
     refuse = 'message';
     const r = await send(request('/api/messages', paidMessage()));
     expect(r.status).toBe(429);

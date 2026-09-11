@@ -1,21 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Opening a page, in the application frame.
- *
- * This is not a directory — `/explore` is that. It is where somebody configures the page they are
- * about to open: the handle, the monthly tier, and the share of pool yield they hand back. Nothing
- * here is signed. The transaction is reviewed and signed on `/join`, which is the one place that
- * builds it, so there is one implementation of the write rather than two.
- *
- * # The fee is read, or it says it was not
- *
- * `feeBps` arrives from the Platform object on this request. When it could not be read the page
- * says "a platform fee" and what a creator keeps says "not measured" — never a plausible-looking
- * number, and never the 2.9% that happens to be true today. What a creator keeps is computed in the
- * contract's own integer basis-point arithmetic, rounded down, because quoting a fraction more than
- * settlement will actually pay is a small lie that repeats on every payment.
- */
 
 import { useState, type ChangeEvent, type ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -67,7 +51,6 @@ export function CreatorsScreen({
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
-  /** Live, from the Platform object. Null when it could not be read. */
   feeBps: number | null;
 }) {
   const [wanted, setWanted] = useState('');
@@ -115,7 +98,6 @@ export function CreatorsScreen({
       : feeBps === null
         ? 'not measured'
         : `${((tier * (10000 - feeBps)) / 10000).toFixed(4).replace(/\.?0+$/, '')} per period`;
-  /* "not measured" is a refusal, not a figure, and is never drawn in the shape of one. */
   const keepsUnread = keeps === 'not measured' || keeps === 'not a number';
 
   const shareNote =
@@ -135,15 +117,6 @@ export function CreatorsScreen({
     { label: 'Objects created', value: '1 tier object, 1 creator vault', unread: false },
   ];
 
-  /*
-    The summary is a preview of the form, so it goes where the form goes.
-
-    Signed out, the column says "Sign in to set your page up" and the rail beside it still drew
-    "Your page — Nothing has been sent", a handle of "not set" and "You keep: not measured": a
-    running commentary on a form that is not on screen, with a failed read as its headline number,
-    to somebody who has not typed anything. What stays is the explanation of the share, which is
-    worth reading before signing in.
-  */
   const aside: ReactNode = (
     <>
       {viewerAddress === null ? null : (

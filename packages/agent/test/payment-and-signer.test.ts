@@ -1,18 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  Policy-compatible payments, and the signer seam.
-
-  `packages/policy` refuses any object input whose id is not allow-listed, and a coin's id rotates
-  with every merge, so a payment sourced by `tx.coin` could never pass a policy. The builders now
-  take a `PaymentSource`: `gas` splits from the gas coin (a command result, never an input),
-  `object` splits from one named coin whose id is stable, `merge` is the old shape and is refused
-  the moment a policy signer is bound.
-
-  Mutations predicted: `gas` falls through to `tx.coin` → "a gas payment has no coin input" red;
-  drop `policyShaped` → "a bound signer refuses the merged shape before any read" red (the chain
-  is called); sign with the keypair when a signer is bound → "the bound signer signs, the key does
-  not" red (signAndExecuteTransaction called).
-*/
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
 import {
@@ -127,7 +113,6 @@ describe('a bound policy signer', () => {
       signTransaction: async () => ({ ok: false, failure: { kind: 'unconfigured', source: 'policy', detail: 'outflow ceiling exceeded' } }),
     };
     const refused = await simulateAndExecute({ client, transaction: tx, key, gasBudgetMist: 10_000_000n, what: 'test', transactionSigner: refusing });
-    // The simulation gate runs first and this stub client cannot simulate; what matters is that the KEY never signed.
     expect(refused.ok).toBe(false);
     expect(keySigned).toBe(false);
     expect(executedWith).toEqual([]);

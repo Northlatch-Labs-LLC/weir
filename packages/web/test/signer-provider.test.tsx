@@ -1,54 +1,12 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * `SignerProvider` — who is signed in, and how they sign.
- *
- * Every other component inherits its correctness from this one. It holds the ephemeral spending key
- * for a zkLogin session, decides when that session is dead, and is the only place in the
- * application that touches a wallet. The failures worth pinning are the ones that hand somebody a
- * signer they should not have, or take one away they should:
- *
- *   Restoring a session past its maxEpoch offers a signer the network will refuse, and the user
- *   discovers that after typing an amount and reading a quote.
- *   Discarding a live one throws away a valid session for no reason.
- *   Leaving the key in storage after signing out means signing out did nothing.
- *   Guessing the network would let a wallet on testnet sign against mainnet ids.
- *
- * Expiry is the sharpest of them, because it is compared against the chain's epoch rather than a
- * clock — Sui epochs do not advance on a schedule, so a wall-clock guess is wrong in both
- * directions.
- */
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
-/** Wallets the browser reports. Swapped per test. */
 let registered: unknown[] = [];
 
-/*
-  The kit stands in for the browser here, and that is the boundary this file tests.
-
-  Wallet discovery, connecting and account switching belong to `@mysten/dapp-kit-react` and its core.
-  What this provider still owns is the translation: which wallets it passes on, which it reports as
-  unusable, and when it builds a zkLogin signer. So the kit is mocked at its hooks and `registered`
-  is what it reports.
-
-  Two earlier versions of this mock were wrong in instructive ways. The first mocked
-  `@mysten/wallet-standard`'s `getWallets`, which stopped reaching anything the moment discovery
-  moved into a library that resolves its own copy — the tests then passed against an empty list, and
-  would have passed with discovery entirely broken. The second asserted `walletFilter`, a
-  `WalletProvider` prop that the rewrite deleted. Filtering is this provider's own line now, so what
-  is asserted is the output: how many wallets it passes on.
-*/
-/*
-  The app router, which this provider now touches.
-
-  `proveSession` calls `router.refresh()` after the server accepts a signature: entitlement is
-  resolved on the server, so without it the reader sits looking at their own paid posts, locked.
-  `useRouter` throws outside a router context, so it is stubbed here rather than the refresh being
-  dropped to keep a test quiet.
-*/
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/',
@@ -72,11 +30,6 @@ vi.mock('@mysten/dapp-kit-core', () => ({
 }));
 vi.mock('@mysten/sui/grpc', () => ({ SuiGrpcClient: class {} }));
 
-/*
- * The zkLogin signer is stubbed. Constructing a real one needs a proof, and what is under test is
- * *when* the provider builds one — not the cryptography, which the pipeline suite covers against a
- * real key.
- */
 const constructed = vi.fn();
 vi.mock('@mysten/sui/zklogin', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -90,7 +43,6 @@ vi.mock('@mysten/sui/zklogin', async (importOriginal) => ({
 const { SignerProvider, useSigner } = await import('../components/SignerProvider');
 const { SESSION_STORAGE_KEY } = await import('../lib/zklogin');
 
-/** Renders whatever the provider currently reports, so assertions read off the DOM. */
 function Probe() {
   const { signer, wallets, session } = useSigner();
   return (
@@ -105,7 +57,6 @@ function Probe() {
 
 const ADDRESS = '0xda784b6c20c5995f6b719a20a26eddee5ec971c8ecec890e61c8b4634dd1715d';
 
-/** A stored session that has completed. `maxEpoch` is the dial under test. */
 function storedSession(maxEpoch: number) {
   return JSON.stringify({
     ephemeralSecretKey: Ed25519Keypair.generate().getSecretKey(),
@@ -142,11 +93,6 @@ afterEach(() => {
 
 describe('an unconfigured deployment is not a broken one', () => {
   it('reports the network even when zkLogin is unavailable', async () => {
-    /*
-     * The wallet path needs the network whether or not Google sign-in exists. Returning it only
-     * alongside a working zkLogin config would break wallets on every deployment that had not set
-     * zkLogin up.
-     */
     mockSession({ network: 'mainnet', available: false, reason: 'not set: …' });
     render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
     await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
@@ -170,7 +116,6 @@ describe('restoring a stored zkLogin session', () => {
   });
 
   it('restores one at exactly maxEpoch, which the network still accepts', async () => {
-    // Inclusive. Treating maxEpoch as expired throws away the last valid day of every session.
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1222', maxEpoch: 1224 });
     render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
@@ -178,10 +123,6 @@ describe('restoring a stored zkLogin session', () => {
   });
 
   it('discards one the chain has moved past, and clears the key', async () => {
-    /*
-     * The ephemeral key is a spending key until maxEpoch passes. Leaving a dead session in storage
-     * would offer a signer the network refuses — discovered after the user has typed an amount.
-     */
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1223', maxEpoch: 1225 });
     render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
@@ -191,8 +132,6 @@ describe('restoring a stored zkLogin session', () => {
   });
 
   it('builds the signer with the expected address, so a wrong flag throws instead of signing', async () => {
-    // Without it, a wrong `legacyAddress` yields a working signer for an address the user does not
-    // control, and the first signature fails on chain with nothing explaining why.
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, storedSession(1222));
     mockSession({ network: 'mainnet', available: true, currentEpoch: '1220', maxEpoch: 1222 });
     render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
@@ -203,7 +142,6 @@ describe('restoring a stored zkLogin session', () => {
   });
 
   it('ignores a half-finished session left by an abandoned sign-in', async () => {
-    // A pending session has an ephemeral key but no address or proof. It cannot sign.
     window.sessionStorage.setItem(
       SESSION_STORAGE_KEY,
       JSON.stringify({ ephemeralSecretKey: Ed25519Keypair.generate().getSecretKey(), jwtRandomness: '1', maxEpoch: 1222, nonce: 'n', returnTo: '/' }),
@@ -238,11 +176,6 @@ describe('wallets the browser offers', () => {
   });
 
   it('hides one that cannot sign messages', async () => {
-    /*
-     * A wallet missing `sui:signPersonalMessage` can pay but cannot comment, follow, or read its
-     * own direct messages — so it would connect and then fail on the third thing tried, with an
-     * error about a missing feature.
-     */
     registered = [{ ...usable, features: ['standard:connect', 'sui:signTransaction'] }];
     mockSession({ network: 'mainnet', available: false });
     render(<SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
@@ -261,11 +194,6 @@ describe('wallets the browser offers', () => {
 
 describe('using the hook outside the provider', () => {
   it('throws rather than reporting nobody signed in', () => {
-    /*
-     * A wiring mistake the developer must see at once. Returning `null` would render every signed
-     * action as "not connected" on a page where the user is, in fact, connected — which reads as a
-     * product bug and gets investigated everywhere except the missing provider.
-     */
     expect(() => render(<Probe />)).toThrow(/SignerProvider/);
   });
 });

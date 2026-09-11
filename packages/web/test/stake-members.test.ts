@@ -41,7 +41,6 @@ describe('summariseMembers', () => {
   });
 
   it('computes claimable from the accumulator, not from the stale pending figure', () => {
-    // entitled = 1e9 * 2 = 2e9; debt 5e8; pending 1e8 → 1.6e9, as the contract would answer.
     const view = summariseMembers(
       [member(A, 1_000_000_000n, 100_000_000n, 500_000_000n)],
       { totalPrincipalMist: 1_000_000_000n, accRebatePerUnit: 2n * ACC_SCALE },

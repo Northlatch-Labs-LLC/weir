@@ -1,21 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * `priceContent` — the one call that makes an agent's paid post buyable.
- *
- * # What is pinned
- *
- *   1. The transaction: one MoveCall at `…::creator::set_content_price<T>` with the vault, the cap,
- *      the key's bytes and the price as u64 — the SDK's own builder, called with this agent's
- *      arguments. Read back from the built transaction, not from a spy.
- *   2. The cap: of two `CreatorCap`s the agent owns, the one whose vault field equals the vault
- *      being priced. A cap for another vault is never chosen — the chain would abort `EWrongVault`
- *      after gas was spent. A 32-byte object that matched the type filter is refused; none → not-found.
- *   3. The refusals come BEFORE any read: an empty key, a zero price, the reserved `#machine` marker.
- *      A fake client records every call it receives; those three must leave it at zero.
- *   4. The marker is the web's. It is read from `packages/web/lib/machine-pricing.ts`, so the two
- *      cannot drift apart silently.
- *   5. Nothing here is on the read-only surface: `priceContent` signs.
- */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -50,7 +33,6 @@ const OTHER_VAULT = hex('b');
 const CAP_FOR_VAULT = hex('c');
 const CAP_FOR_OTHER = hex('d');
 
-/** `CreatorCap { id: UID, vault: ID }` as bytes: 32 of the cap's id, 32 of the vault's. */
 function capBytes(capId: string, vaultId: string): Uint8Array {
   const out = new Uint8Array(64);
   out.set(Buffer.from(capId.slice(2), 'hex'), 0);
@@ -60,7 +42,6 @@ function capBytes(capId: string, vaultId: string): Uint8Array {
 
 type Seen = { calls: string[] };
 
-/** A gRPC client that owns the given cap objects and counts every call. */
 function fakeClient(caps: Array<{ objectId: string; content: Uint8Array }>): { client: SuiGrpcClient; seen: Seen } {
   const seen: Seen = { calls: [] };
   const fake = {
@@ -104,15 +85,12 @@ describe('the transaction', () => {
     expect(`${call.package}::${call.module}::${call.function}`).toBe(`${manifest.config.latestPackageId}::creator::set_content_price`);
     expect(call.typeArguments).toEqual([manifest.coinType]);
     expect(call.arguments).toHaveLength(4);
-    // The two objects, in order, then the key as bytes, then the price as a u64.
     const inputs = data.inputs as Array<{ UnresolvedObject?: { objectId: string }; Pure?: { bytes: string } }>;
     const objectIds = inputs.filter((i) => i.UnresolvedObject !== undefined).map((i) => i.UnresolvedObject!.objectId);
     expect(objectIds).toEqual([VAULT, CAP_FOR_VAULT]);
     const pure = inputs.filter((i) => i.Pure !== undefined).map((i) => Buffer.from(i.Pure!.bytes, 'base64'));
     expect(pure).toHaveLength(2);
-    // vector<u8> "chapter-1": ULEB length 9 then the bytes.
     expect(Array.from(pure[0]!)).toEqual([9, ...Array.from(new TextEncoder().encode('chapter-1'))]);
-    // u64 250000 little-endian.
     expect(pure[1]!.readBigUInt64LE(0)).toBe(250_000n);
   });
 });
@@ -169,9 +147,6 @@ describe('priceContent refuses before it reads', () => {
 });
 
 describe('the marker and the abort', () => {
-  // The web application is not part of the published tree. Where it is absent this mirror check is
-  // SKIPPED and says so, rather than failing a checkout that cannot contain the file; the monorepo
-  // still runs it on every commit, and a skipped pin is reported, never counted as a pass.
   const webPricing = join(process.cwd(), '..', 'web', 'lib', 'machine-pricing.ts');
   it.skipIf(!existsSync(webPricing))('uses the same reserved marker the web does, read from its source', () => {
     const src = readFileSync(webPricing, 'utf8');
@@ -192,16 +167,6 @@ describe('the marker and the abort', () => {
   });
 });
 
-/*
-  The machine edition — one input on two packages, ruled by the desk for B1.
-
-  `edition: 'machine'` prices `<key>#machine`, derived here from the HUMAN key by the web's rule
-  (trim, then append the marker); the hand-typed marker stays refused. `machineBody` asks the
-  deployment whether that edition can be delivered before anything is priced. Mutation predicted:
-  derive the machine key by NOT appending the marker → "derives the machine key" red (the cap read
-  happens under the human key's source); return `sealed` for a missing field → "does not read an
-  absent field as sealed" red.
-*/
 describe('the machine edition', () => {
   const fetchAnswering = (body: unknown, ok = true) =>
     (async () => ({ ok, status: ok ? 200 : 503, json: async () => body })) as unknown as NonNullable<Parameters<typeof createAgent>[0]['fetchImpl']>;
@@ -222,15 +187,11 @@ describe('the machine edition', () => {
   });
 
   it('derives the machine key and reaches the cap read under it', async () => {
-    // No cap for this vault, so the call stops at the cap read — after the derived key passed every
-    // refusal a hand-typed one would fail. The source of that reading names the vault; the key it
-    // was derived for is pinned through the MCP receipt and the web, which share the rule.
     const { client, seen } = fakeClient([{ objectId: CAP_FOR_OTHER, content: capBytes(CAP_FOR_OTHER, OTHER_VAULT) }]);
     const result = await keyed(client).priceContent({ vaultId: VAULT, contentKey: 'chapter-1', edition: 'machine', price: 250_000n });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.failure.kind).toBe('not-found');
-      // The refusal is sourced under the call, and the call names the DERIVED key.
       expect(result.failure.source).toContain(`chapter-1${MACHINE_EDITION_MARKER}`);
     }
     expect(seen.calls).toEqual(['listOwnedObjects creator::CreatorCap']);
@@ -254,7 +215,6 @@ describe('the machine edition', () => {
   }
 
   it('does not read an absent field as sealed', async () => {
-    // An older deployment answers without `machineBody`. Not knowing is not "can be sold".
     const result = await keyedWithFetch(fakeClient([]).client, fetchAnswering({ priced: false, price: null })).machineBody({ vaultId: VAULT, contentKey: 'chapter-1' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure.kind).toBe('malformed');

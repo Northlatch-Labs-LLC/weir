@@ -1,29 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Buy one paid post.
- *
- * # The route existed and nothing called it
- *
- * `prepareUnlock` and `/api/checkout/unlock` were written, tested and complete. The feed rendered
- * the lock, the price and the words "one payment", and the only control was a link to the creator
- * page — which has no unlock control either. Two hops to nowhere, for the product's own paid-post
- * economics. The reachability test names this as the first gap it found.
- *
- * # What the buyer keeps
- *
- * An `Unlock` object at their own address. Not a row saying they may read: entitlement is checked
- * against objects the reader owns, so it survives this platform and cannot be revoked by it. That
- * is why the copy is allowed to say permanent.
- *
- * # Nothing is signed before a simulation passes
- *
- * `unlock` reads the price from the vault, so a client-supplied one buys nothing. The quote states
- * what the creator and the platform each receive before a signing button exists, and the bytes
- * submitted are the bytes that were simulated.
- */
-
 import { useUnlock } from '@/components/app/use-unlock';
 import { SignIn } from '@/components/SignIn';
 
@@ -35,21 +12,9 @@ export function UnlockButton({
 }: {
   vaultId: string;
   contentKey: string;
-  /**
-   * The price this reader was shown, in smallest units.
-   *
-   * A guard, not an instruction: it lets the contract refuse a purchase at a price that changed
-   * between the page rendering and the button being pressed. `unlock` reads the real price from the
-   * vault and takes exactly that.
-   */
   expectedPrice: string;
-  /** The same figure already formatted, so this component assumes nothing about decimals. */
   priceLabel: string;
 }) {
-  /*
-    The sequence lives in `use-unlock`, shared with the dialog the application frame opens. It was
-    extracted rather than copied: two implementations of one payment is how they stop agreeing.
-  */
   const { signer, quote, blocked, digest, busy, error, simulate, signAndSubmit, cancel } = useUnlock({
     vaultId,
     contentKey,
@@ -83,10 +48,6 @@ export function UnlockButton({
   }
 
   if (blocked !== null) {
-    /*
-      Each refusal names what to do about it. All are knowable from a read, so none of them needs a
-      transaction to discover — an abort code is a poor way to learn you needed an account.
-    */
     return (
       <p className="unmeasured" style={{ margin: 0 }}>
         {blocked.kind === 'no-account' ? (
@@ -96,10 +57,6 @@ export function UnlockButton({
         ) : blocked.kind === 'self-payment' ? (
           'This is your own vault, so there is nothing to buy.'
         ) : blocked.kind === 'insufficient-balance' ? (
-          /*
-            A dead end became a next step. It read "Not enough to cover 2 SUI." and stopped — true,
-            and the one moment where a reader who has decided to pay is told only that they cannot.
-          */
           <>
             Your wallet holds {blocked.have}, and this costs {blocked.need}.{' '}
             <a href="/add-funds">Add funds</a>, then try again.
@@ -135,17 +92,6 @@ export function UnlockButton({
     );
   }
 
-  /*
-    Nothing to sign with.
-
-    `simulate()` opens with `if (signer === null) return`, so before this existed the button was
-    live, took the press, and did nothing at all — no message, no error, no next step. That is the
-    single worst state in the product: a reader recruited by a page promising writing they can pay
-    for, at the exact moment they try to pay, given silence.
-
-    A reader who arrived to read is not a reader who already holds SUI. So this states the whole
-    path, in the order it happens, and does not pretend the first two steps are not there.
-  */
   if (signer === null) {
     return (
       <div className="ramp">

@@ -1,72 +1,22 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The way in.
- *
- * # Google is not here, and that is deliberate
- *
- * `Continue with Google` lives in the header, on every screen. It was in both places at once, which
- * put the same button twice on the sign-in page — and a choice offered twice reads as two different
- * choices. This component is the wallet half: the paths that need an extension, and the trade-offs
- * worth stating in prose.
- *
- * # What the user is told before they choose
- *
- * That a Google sign-in creates a real Sui address, that this deployment can work out which address
- * belongs to which Google account, and that it cannot spend from it. Those are the true trade-offs
- * and they belong in the interface rather than in a document nobody opens — a person handing over
- * money is owed the actual shape of what they are agreeing to.
- */
-
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSigner } from '@/components/SignerProvider';
 
-/**
- * `compact` is for inline prompts — a comment row, a follow button — where the full panel would
- * dominate the thing it sits next to. It drops the explanation, never the choice: both ways in are
- * still offered, because a compact control that silently supported only one of them would decide
- * for the user based on where they happened to be standing.
- */
 export function SignIn({
   compact = false,
   returnTo,
 }: { compact?: boolean; returnTo?: string } = {}) {
   const pathname = usePathname();
-  /*
-    Where Google sends the reader back to. Defaults to where they are standing, which is right for
-    the inline prompts; `/signin` passes the `next` it was given, so signing in successfully does
-    not return somebody to the sign-in page.
-  */
   const destination = returnTo ?? pathname;
   const { signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount, cancelAccountChoice, reopenAccountChoice, signInWithGoogle, reauthorizeWallet, connectWallet, signOut, error } = useSigner();
 
-  /**
-   * Everything this renders depends on things that exist only in a browser: installed wallets, and
-   * an answer from `/api/zklogin/session`. On the server both are empty, so the markup React
-   * produced during SSR ("no way to sign in here") never matched what the client produced a moment
-   * later, and React discarded and re-rendered the whole subtree on every page load.
-   *
-   * Rendering nothing until mounted makes the two passes agree by construction. The alternative —
-   * guessing on the server what the browser will have — is guaranteed wrong for anyone whose wallet
-   * set differs from the guess, which is everyone.
-   */
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return <div className={compact ? 'signin signin--compact' : 'signin'} />;
 
-  /*
-    A wallet holding several addresses, asking which one this session is for.
-
-    It replaces the panel rather than sitting under it. The reader has already answered "which
-    wallet"; leaving that list on screen invites re-answering it and makes the open question the
-    second thing on the page instead of the only thing.
-
-    The choice is offered in the compact variant too. `compact` drops the explanation, never the
-    choice — and a compact control that picked an address on the reader's behalf, because they
-    happened to be standing next to a comment box, is precisely the defect this replaces.
-  */
   if (accountChoice !== null) {
     return (
       <div className={compact ? 'signin signin--compact' : 'signin'}>
@@ -310,26 +260,6 @@ export function SignIn({
   );
 }
 
-/**
- * What the wallet told us, stated on the page and kept there.
- *
- * # Why this is permanent and not debugging scaffolding
- *
- * Both Slush and Phantom bound one fixed address per wallet regardless of which account was selected
- * inside the extension. From the page there was no way to tell whether the wallet had shared only
- * that address or whether this application had received several and dropped the rest. Those are
- * opposite faults with opposite fixes, and the only place the answer exists is in what the wallet
- * returned — so the page says what the wallet returned.
- *
- * Anybody who cannot find their expected address here now knows which half to go and fix: an address
- * absent from this list was never shared, and the extension is where that is changed. That is a
- * standing need, not a need that ended when one bug was closed.
- *
- * # Two ways forward, because there are two different problems
- *
- * An address that is listed but not bound is ours to switch to. An address that is not listed at all
- * cannot be reached from this page at any price — only the wallet can widen what it shares.
- */
 function WalletAccountReport({
   wallet,
   accounts,
@@ -381,7 +311,6 @@ function WalletAccountReport({
   );
 }
 
-/** Google's mark, inline. An external request here would be a third-party beacon on every page. */
 function GoogleMark() {
   return (
     <svg viewBox="0 0 18 18" width="15" height="15" aria-hidden focusable="false">

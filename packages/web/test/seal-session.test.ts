@@ -1,11 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  One Seal session per signer per tab.
-
-  Mutations predicted: drop the cache lookup in `sessionKeyFor` → "five cards, one signature"
-  red (five signatures); cache a rejected creation → "a failed creation is retried" red.
-*/
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

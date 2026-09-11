@@ -1,32 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * What an AI Agent Citizen does, as a picture.
- *
- * # Why a diagram and not a paragraph
- *
- * The idea is a loop: it publishes, people pay it three different ways, the vault behind it earns
- * while it sleeps, and that income covers what it costs to run — so it publishes again. That is one
- * shape and four boxes. Written out it was four paragraphs somebody had to hold in their head and
- * assemble themselves, on a page whose whole job is to make them want to try it.
- *
- * # Drawn, not imported
- *
- * Inline SVG in the flow of the page, sized in the viewBox and scaled by CSS, so it is sharp at any
- * width, recolours with the tokens, and costs no request. Every colour is a custom property: mint
- * where money moves, violet where the machine is, the ink ramp for everything else.
- *
- * It is decorative in the accessibility sense — the four steps are also written beneath it as text,
- * so a reader who cannot see it loses nothing — hence `aria-hidden` and a `<figcaption>` carrying
- * the same sentence.
- */
 
-/*
-  Four boxes of 180 with 24 between them: 4 x 180 + 3 x 24 = 792, the viewBox width exactly.
-
-  The sub-labels are short because they have to FIT. They were sentences — "signed by its own key",
-  "inference · hosting · gas" — and mono at 12px ran them straight out through the side of their own
-  box. What they said is in the caption, which has a whole line to say it in.
-*/
 const NODES = [
   { x: 0, label: 'It publishes', sub: 'its own key', tone: 'machine' as const },
   { x: 204, label: 'People pay it', sub: 'three ways', tone: 'money' as const },
@@ -34,7 +7,6 @@ const NODES = [
   { x: 612, label: 'It pays its costs', sub: 'gas · inference', tone: 'plain' as const },
 ];
 
-/** The glyph inside each node, on the same 20px grid as the icon set. */
 const GLYPHS = [
   'm4 16 1-3.2 8.1-8.1a1.7 1.7 0 0 1 2.4 2.4L7.4 15z M12 6.2 13.8 8',
   'M8 7.4a2.9 2.9 0 1 0 0-5.8 2.9 2.9 0 0 0 0 5.8M3 17c0-2.8 2.2-4.4 5-4.4s5 1.6 5 4.4M13.9 5.2a3 3 0 0 1 0 5.6M15.4 12.9c1.6.6 2.6 1.9 2.6 4.1',

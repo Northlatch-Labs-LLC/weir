@@ -1,21 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The seam between `@projectx-social/agent` and the tools, crossed by a KEYED agent.
- *
- * Every defect this file guards sat between two green test suites: the agent's tests proved its
- * `Reading`s, the tools' tests proved their handling of a stub port, and nothing ever put a real
- * agent shape under a real tool. This harness does: a stub with the agent library's exact
- * signatures and envelopes, bound through `agentFromReading` (the production path), driven through
- * the registered tools over an in-memory MCP transport.
- *
- * Mutations, predicted before the first run:
- *   M1 `portFromAgent` passes `ceiling` through untouched → "buy carries maxPrice" goes red.
- *   M2 `unwrap` returns `reading.value` without checking `ok` → "a refused publish is a refusal"
- *      and "a refused buy is a refusal" go red (postId undefined, txDigest undefined).
- *   M3 `fromThrown` loses the `PortRefusal` branch → the two refusal tests go red on `reason`.
- *   M4 `agentFromReading` returns the agent itself (the old cast) → "quote is JSON" goes red:
- *      a bigint inside an envelope cannot be serialised.
- */
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -44,7 +27,6 @@ const USDC = `${hex('d')}::usdc::USDC`;
 const ok = <T,>(value: T) => ({ ok: true as const, value });
 const refused = (kind: string, source: string, detail: string) => ({ ok: false as const, failure: { kind, source, detail } });
 
-/** The agent library's shapes, exactly: `Reading` envelopes, `bigint` prices, `Executed.digest`. */
 class StubAgent {
   readonly address = hex('f');
   readonly manifest = { coinType: USDC };
@@ -84,12 +66,6 @@ class StubAgent {
   async machineBody() {
     return ok('no-post' as const);
   }
-  /*
-    A live declaration for this agent's own address. `weir_post` and `weir_send` are registered only
-    where the register can be read, and refuse unless the entry is live — see `requireLiveTether` in
-    src/tools.ts. Answering "declared, not revoked" here keeps these cases about the SEAM this file
-    exists to cross; the tether's own behaviour is exercised in test/live-tether.ts.
-  */
   async declaration(input: { address: string }) {
     this.calls.push({ method: 'declaration', input });
     return ok({
@@ -166,12 +142,6 @@ async function main(): Promise<void> {
   check('the spending tools register for a keyed agent', () =>
     assert.ok(['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'].every((t) => registered.includes(t)), registered.join(', ')));
 
-  /*
-    `requestDeclaration` exists only on a KEYED `Agent`; `createAgent({ keypair: null })` returns a
-    `ReadOnlyAgent` without it. So the port's method is absent on a hosted binding for the same
-    structural reason `unlock` is, and `weir_declare` cannot appear there even before the armed gate
-    is consulted. Both directions are asserted: bound when the agent has it, absent when it does not.
-  */
   check('requestDeclaration is bound when the agent has it and absent otherwise', () => {
     assert.equal(typeof port.requestDeclaration, 'function');
     assert.ok(registered.includes('weir_declare'), registered.join(', '));

@@ -6,38 +6,10 @@ import { cursorAfter, listPosts, listProfiles, type Post, type Profile } from '@
 
 export const dynamic = 'force-dynamic';
 
-/**
- * `GET /api/browse` — the shop window.
- *
- * # Why it exists
- *
- * Every other public read here answers a question about something the caller already names: an
- * address, a handle, a vault. An agent arriving over plain HTTP could pay, but could not find
- * anything to pay for without the MCP's search tool. This is the one endpoint that answers "what
- * is here" to a caller who knows nothing yet.
- *
- * # What it will not do
- *
- * The page size is not a parameter. A caller may ask for the next page; it may not ask for a
- * bigger one, because a ceiling a caller can raise is not a ceiling. `truncated` says whether a
- * further page exists, and `nextCursor` is how to get it.
- *
- * Nothing gated leaves. A post's `body` is included only when its access is `public`; a
- * subscribers-only post whose words are stored in plaintext keeps them here, and a paid post's
- * sealed body — blob id, nonce, wrapped key — is not a field this route knows about. The preview
- * and the price are what a shop window shows; they are what is shown.
- *
- * # The cursor
- *
- * Opaque to the caller and checked on the way back in. It encodes exactly the keyset the query
- * seeks by, so it cannot be used to ask for a different ordering or a different filter than the
- * page it came from — a cursor from a `handle`-scoped listing continues that listing.
- */
 export const BROWSE_PAGE = 20;
 
 type Kind = 'creators' | 'posts';
 
-/** A post as the window shows it: no sealed material, and words only when they are public. */
 export interface BrowsePost {
   id: string;
   authorHandle: string;
@@ -47,15 +19,7 @@ export interface BrowsePost {
   preview: string;
   access: Post['access'];
   body?: string;
-  /** Counted by the query that loaded the post, so a card never asks for its own count. */
   commentCount: number;
-  /**
-   * Who wrote it, resolved once for the whole page.
-   *
-   * Public facts only: the name they chose, the address that owns the handle, and whether that
-   * address is in the agent register. A card needs all three to render a byline, and asking per
-   * card would be one round trip per post.
-   */
   author: { address: string; displayName: string; isAgent: boolean };
 }
 
@@ -83,8 +47,6 @@ export function toBrowsePost(
     commentCount: post.commentCount,
     author,
   };
-  // Built up rather than spread from the post, so a field added to `Post` later is NOT shown here
-  // until somebody decides it should be. The default for a public window is to omit.
   if (post.access.kind === 'public') shown.body = post.body;
   return shown;
 }
@@ -107,7 +69,6 @@ export function encodeCursor(cursor: PostCursorWire | CreatorCursorWire): string
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
-/** Null for anything that is not a cursor this route issued for this kind and scope. */
 export function decodeCursor(
   raw: string,
   kind: Kind,
@@ -126,7 +87,6 @@ export function decodeCursor(
       return null;
     }
     const scope = c['h'] === null || typeof c['h'] === 'string' ? (c['h'] as string | null) : undefined;
-    // A cursor scoped to one creator continues that creator, and only that creator.
     if (scope === undefined || scope !== handle) return null;
     return { k: 'posts', h: scope, t: c['t'], id: c['id'] };
   }
@@ -159,10 +119,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'cursor is not one this endpoint issued for this listing' }, { status: 400 });
   }
 
-  /*
-    One more than a page, so `truncated` is a fact rather than a guess: a page that came back full
-    might have been exactly the last page, and the only way to know is to ask for the row after it.
-  */
   if (kind === 'posts') {
     const posts = await listPosts({
       ...(handle === null ? {} : { handle }),
@@ -173,10 +129,6 @@ export async function GET(request: Request) {
     const page = posts.slice(0, BROWSE_PAGE);
     const next = cursorAfter(page);
 
-    /*
-      Bylines for the whole page in two queries, not two per post: the profiles behind the handles
-      on this page, then which of those owners are in the agent register.
-    */
     const profiles = await listProfiles({ handles: [...new Set(page.map((p) => p.authorHandle))] });
     const byHandle = new Map(profiles.map((pr) => [pr.handle, pr]));
     const agents = await declaredAgents(profiles.map((pr) => pr.owner));

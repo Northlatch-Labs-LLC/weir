@@ -10,13 +10,6 @@ import { SealedMedia } from '@/components/SealedMedia';
 import { SealedBody } from '@/components/SealedBody';
 import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 
-/**
- * What kind of post this is — never what the reader may do with it.
- *
- * A paid post stays amber after it is unlocked, and a subscriber post stays green after the reader
- * subscribes. The colour is the post's category, so it does not change under someone the moment
- * they pay; only the word inside does.
- */
 function badgeClass(post: VisiblePost): string {
   switch (post.access.kind) {
     case 'paid':
@@ -28,19 +21,9 @@ function badgeClass(post: VisiblePost): string {
   }
 }
 
-/**
- * The price first, then this reader's standing in one word.
- *
- * `price` is the formatted amount the caller looked up on chain; it is `undefined` when nobody
- * looked or the lookup failed, and the label degrades to bare "Locked" rather than inventing a
- * figure. Naming the state without naming the cost tells a reader they cannot read this and not
- * what it would take to — so the amount rides along wherever there is one.
- */
 function badgeLabel(post: VisiblePost, price?: string): string {
   switch (post.access.kind) {
     case 'paid':
-      // "Unlocked", not "Purchased": the reader may hold this `Unlock` because it was gifted, and
-      // the badge should not assert how they came by it.
       if (!post.locked) return 'Unlocked';
       return price === undefined ? 'Locked' : `Locked · ${price}`;
     case 'subscribers': {
@@ -53,15 +36,6 @@ function badgeLabel(post: VisiblePost, price?: string): string {
   }
 }
 
-/**
- * One post.
- *
- * A locked post shows its preview and what would open it. It never renders an empty body: `body` is
- * **absent** rather than blank when withheld, so there is nothing to render by accident — an empty
- * string can be rendered as an empty post, a missing field cannot.
- *
- * # The locked state is the product, not an error
- */
 export function PostCard({
   post,
   price,
@@ -69,24 +43,13 @@ export function PostCard({
   entities,
   authorIsAgent,
 }: {
-  /** What the author is, when the caller looked it up. Absent renders no marker. */
   entities?: Entity[];
-  /**
-   * Whether this author is in the agent register, when the caller looked it up.
-   *
-   * A boolean rather than the record, and supplied by the caller rather than read here, for the
-   * same two reasons `entities` is: this card renders inside client components and cannot reach a
-   * `server-only` module, and a feed answers this for a dozen authors in one query instead of once
-   * per card. Absent renders no badge — an unlooked-up author is not a human, it is unknown, and
-   * the badge never claims otherwise in either direction.
-   */
   authorIsAgent?: boolean;
   post: VisiblePost;
   price?: string;
   reader?: string;
 }) {
   const initial = post.authorHandle.slice(0, 2);
-
 
   return (
     <article className="card card--railed">
@@ -176,16 +139,6 @@ export function PostCard({
           {post.assetIds.map((assetId) => {
             const href = `/api/media/${post.id}/${assetId}${reader === undefined ? '' : `?reader=${reader}`}`;
 
-            /*
-              Not an `<img>`, because a sealed asset is not an image until the reader opens it.
-
-              This card is rendered inside `Creator` and `Home`, both client components, so nothing
-              here may reach `siteConfig()` or any `server-only` module — PostCard is in the browser
-              bundle whether or not it says so. `SealedMedia` therefore *asks* the server for the
-              deployment's public settings, exactly as `Footer` asks `/api/deployment` and sign-in
-              asks `/api/zklogin/session`. That is this codebase's settled answer to configuration
-              in the browser, and this is not the place to make it the exception.
-            */
             return <SealedMedia key={assetId} className="post-media" src={href} />;
           })}
         </div>

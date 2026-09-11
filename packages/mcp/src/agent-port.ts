@@ -1,55 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The adapter between `@projectx-social/agent` and this server's {@link WeirPort}.
- *
- * # Why this file exists
- *
- * Until 2026-09-02 `agentFromReading` returned the agent object *as* the port — one cast. The two
- * shapes disagree on every write:
- *
- * - the port's `unlock` carries `ceiling: { maxPrice, currency }`; the agent's takes `maxPrice`
- *   and `priceMinorUnits` as bare fields, so under the cast an armed `weir_buy` reached the agent
- *   with `maxPrice === undefined` and was refused every time ("maxPrice is required");
- * - the agent answers every call with a `Reading<T>` — `{ ok, value }` or `{ ok, failure }` —
- *   while the port promises bare receipts, so `weir_post` read `created.postId` off an envelope
- *   and reported success with `postId: undefined` on a REFUSED publish; `weir_price` reported no
- *   digest; `weir_quote` spread an envelope holding a `bigint`, which `JSON.stringify` cannot
- *   serialise.
- *
- * Every one of those is a seam between two tested modules that no test crossed. This file is the
- * seam made explicit, and `test/agent-port.ts` crosses it.
- *
- * # The two rules
- *
- * 1. **A failed `Reading` is a refusal, never a throw of convenience and never a success.** It
- *    surfaces as a {@link PortRefusal} carrying the agent's own failure kind and source, which
- *    `tools.ts` turns into the tool's refusal shape. A tool result that says `ok: true` therefore
- *    means the agent said `ok: true`.
- * 2. **Nothing here applies a ceiling.** The ceiling is carried to the agent, whose `guardPrice`
- *    compares it against the live price it reads itself. This file only translates the shape.
- *
- * # What a receipt can and cannot carry
- *
- * The agent's `Executed` is `{ digest, simulation }` — no created object ids (the executor reads
- * no effects, by its own documented decision). So `unlockObjectId` and `subscriptionObjectId` are
- * `null` here, and the type says so; the object is on chain under the digest. `pricePaid` on an
- * unlock is the live price the adapter read immediately before the buy — the same number the
- * agent funds and guards, unless the creator repriced in the milliseconds between the two reads,
- * in which case the agent's own guard still bounds the spend. A subscription's tier price is not
- * exposed by the agent's read surface, so its `pricePaid` is `null`: not read, never guessed.
- */
 import type { WeirPort, Currency, WeirAuthorship, WeirDeclaration, WeirDeclaredAgent, WeirSeekingAgent } from './transport.js';
 
-/** The agent library's `Reading`, structurally — this file must not depend on the package at type level. */
 type Reading<T> =
   | { ok: true; value: T }
   | { ok: false; failure: { kind: string; source?: string; detail: string } };
 
-/**
- * A refusal that crossed the seam. `kind` and `source` are the agent library's own words
- * (`transport`, `timeout`, `malformed`, `not-found`, `precondition`, `denied`, `unconfigured`, …) so a
- * caller can decide whether to retry, and so a log line reads the same on both sides.
- */
 export class PortRefusal extends Error {
   constructor(
     readonly kind: string,
@@ -67,11 +22,6 @@ function unwrap<T>(reading: Reading<T>, source: string): T {
   throw new PortRefusal(f.kind, f.source ?? source, f.detail);
 }
 
-/**
- * The denomination of a coin type, for the port's `currency` field. Only the two the tools accept
- * are named; anything else is a refusal, because printing a price without saying what it is
- * denominated in is how "100000000" is read as a dollar amount.
- */
 export function currencyOf(coinType: string): Currency {
   if (/::sui::SUI$/.test(coinType)) return 'SUI';
   if (/::usdc::USDC$/i.test(coinType)) return 'USDC';
@@ -82,7 +32,6 @@ export function currencyOf(coinType: string): Currency {
   );
 }
 
-/** The agent surface this adapter reads, structurally. Optional everywhere: absence is a capability answer. */
 interface AgentLike {
   address?: string;
   manifest?: { coinType?: string };
@@ -91,11 +40,9 @@ interface AgentLike {
   >;
   balance?: (coinType?: string) => Promise<Reading<bigint>>;
   feed?: WeirPort['feed'];
-  /** See `Authorship` in the agent library; the port mirrors its shape. */
   authorship?: (input: { postId: string }) => Promise<Reading<WeirAuthorship>>;
   commentAuthorship?: (input: { commentId: string }) => Promise<Reading<WeirAuthorship>>;
   agents?: (input?: { operator?: string }) => Promise<Reading<WeirDeclaredAgent[]>>;
-  /** `Reading<Declaration | null>` in the library: a 404 is `ok(null)`, not a failure. */
   declaration?: (input: { address: string }) => Promise<Reading<WeirDeclaration | null>>;
   seeking?: () => Promise<Reading<WeirSeekingAgent[]>>;
   requestDeclaration?: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<
@@ -125,26 +72,15 @@ const has = <K extends keyof AgentLike>(
   name: K,
 ): agent is AgentLike & { [P in K]-?: NonNullable<AgentLike[P]> } => typeof agent[name] === 'function';
 
-/**
- * Bind an agent to the port, method by method. A method is present on the port only when the
- * agent has it, so {@link capabilitiesOf} keeps reading the truth: a keyless `ReadOnlyAgent`
- * yields a port with `quote` and `feed` and nothing that spends.
- */
 export function portFromAgent(candidate: unknown): WeirPort {
   const agent = (candidate ?? {}) as AgentLike;
   const port: WeirPort = {};
 
   if (has(agent, 'feed')) port.feed = (input) => agent.feed(input);
   if (has(agent, 'readPreview')) {
-    // `null` means "exists, not entitled" on both sides; a failed Reading is a refusal, as everywhere.
     port.readPreview = async (input) => unwrap(await agent.readPreview(input), 'readPreview');
   }
   if (has(agent, 'machineBody')) port.machineBody = (input) => agent.machineBody(input);
-  /*
-    A failed READ is a failure; a post with no retained proof is not. `unwrap` turns a failed
-    Reading into a thrown refusal, which is right for the first and would be a lie about the second
-    — so the absence passes through as the value it is.
-  */
   if (has(agent, 'authorship')) {
     port.authorship = async (input) => unwrap(await agent.authorship(input), 'authorship');
   }
@@ -152,25 +88,10 @@ export function portFromAgent(candidate: unknown): WeirPort {
     port.commentAuthorship = async (input) => unwrap(await agent.commentAuthorship(input), 'commentAuthorship');
   }
   if (has(agent, 'agents')) port.agents = async (input) => unwrap(await agent.agents(input), 'agents');
-  /*
-    `null` — the address has no entry — is a VALUE and crosses as one; a failed `Reading` is a
-    refusal and is thrown, like everywhere else in this file. The distinction is the whole point of
-    binding this method rather than deriving the answer from `agents()`: "not in the register" and
-    "the register could not be read" reach the tether check as different things, and it treats them
-    as different things. `unwrap` already draws that line, so nothing extra is needed here beyond
-    NOT flattening the null into a refusal.
-  */
   if (has(agent, 'declaration')) {
     port.declaration = async (input) => unwrap(await agent.declaration(input), 'declaration');
   }
   if (has(agent, 'seeking')) port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
-  /*
-    Present only on a KEYED agent: `requestDeclaration` signs, and `createAgent({ keypair: null })`
-    returns a `ReadOnlyAgent` that does not carry it. So the port's method is absent on a hosted
-    binding for the same structural reason `unlock` is, and `capabilitiesOf` never sees `declare`
-    there even before the armed gate is consulted. Untrimmed passthrough: the library trims and
-    signs what it trimmed, and a second trim here would make what is signed depend on two files.
-  */
   if (has(agent, 'requestDeclaration')) {
     port.requestDeclaration = async (input) => unwrap(await agent.requestDeclaration(input), 'requestDeclaration');
   }
@@ -236,8 +157,6 @@ export function portFromAgent(candidate: unknown): WeirPort {
   }
 
   if (has(agent, 'post')) {
-    // The tool's key travels to the route as `Idempotency-Key`, so a retried tool call is answered
-    // with the first publish rather than a second post (B3; `lib/idempotent-route.ts` on the web).
     port.post = async (article) => {
       const created = unwrap(await agent.post(article), 'post');
       return { postId: created.postId };

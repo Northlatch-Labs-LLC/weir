@@ -1,16 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  Recovery is read from the stored agent signature, never from a claim.
-
-  A multisig signature carries its committee, so the register can say — from the bytes it already
-  holds — whether the declared operator is one of the agent's keys. A single-key agent has no
-  committee and its operator cannot recover it by construction.
-
-  Mutations predicted: compare the operator against the signer instead of the committee → "an
-  operator who is a member" red; drop the threshold comparison → "a member below the threshold"
-  red; return single for every scheme → both multisig tests red.
-*/
 import { describe, expect, it } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { MultiSigPublicKey } from '@mysten/sui/multisig';
@@ -30,7 +19,6 @@ async function multisigSignature(input: {
   });
   const partial = await input.signer.signPersonalMessage(MESSAGE);
   const signature = committee.combinePartialSignatures([partial.signature]);
-  // The fixture must be a signature the register would have accepted, or the test proves nothing.
   await verifyPersonalMessageSignature(MESSAGE, signature, { address: committee.toSuiAddress() });
   return { signature, address: committee.toSuiAddress() };
 }
@@ -68,8 +56,6 @@ describe('recoveryOf', () => {
     const agentKey = new Ed25519Keypair();
     const operator = new Ed25519Keypair();
     const third = new Ed25519Keypair();
-    // 2-of-3: the agent alone cannot sign either, so the fixture combines the agent's and the
-    // third key's halves — what a real 2-of-3 declaration looks like on the wire.
     const committee = MultiSigPublicKey.fromPublicKeys({
       threshold: 2,
       publicKeys: [agentKey, operator, third].map((k) => ({ publicKey: k.getPublicKey(), weight: 1 })),

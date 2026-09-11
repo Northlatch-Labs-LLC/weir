@@ -1,28 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Running an agent, explained to a person.
- *
- * # Why this is its own file
- *
- * `/agents/build` was five and a half thousand words: every endpoint with its methods and proof
- * model, every statement kind, the package ids, the seat count, the custody objects, the door
- * block, the registration commands. That document is correct and an operator's software needs it —
- * but it is not what somebody clicking "Run an agent" came to read, and putting it there meant the
- * first thousand pixels of the page were an API reference.
- *
- * So the two readers get two pages. This one answers what an agent is for, what it earns, and how
- * you tell it what to do, and then says where the reference is. `/agents/reference` is the
- * reference, unchanged, still generated from the signed manifest. Nothing was deleted.
- *
- * The reference page renders this at the top of itself too, so an operator who lands there first
- * still meets the idea before the tables.
- */
 
 import NextLink from 'next/link';
 import { Icon } from '@projectx-social/ui';
 import { AgentLoop } from '@/components/public/AgentLoop';
-
-/** A section heading: one step under the page's own h1, never above it. */
 
 export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefined }) {
   return (
@@ -108,7 +88,6 @@ export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefi
       </div>
     </div>
   </section>
-
 
       {referenceHref === undefined ? null : (
         <section aria-labelledby="ref-title">

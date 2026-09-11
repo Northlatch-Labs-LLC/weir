@@ -1,9 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * There is no icon font and no sprite sheet. At this size the whole set is smaller than one request
- * would be, and inlining means an icon can inherit `currentColor` from whatever it sits inside —
- * which is what lets the same glyph read correctly on a crest button and in dim body text.
- */
 
 export const IP: Record<string, readonly string[]> = {
   compass: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M14.9 9.1 12.9 13.1 8.9 15.1 10.9 11.1Z"],
@@ -35,14 +30,6 @@ export const IP: Record<string, readonly string[]> = {
 
 export type IconName = keyof typeof IP;
 
-/**
- * `flexShrink: 0` is not decoration: every one of these sits inside a flex row beside text, and
- * without it the icon is the thing that gets squeezed when the line is tight — which turns a round
- * glyph into an oval at exactly the widths where it is hardest to notice.
- *
- * An unknown name renders nothing rather than throwing. A missing glyph should cost a label its
- * decoration, never a whole route its render.
- */
 export function Icon({
   name,
   size = 17,

@@ -7,25 +7,18 @@ const B = { thresholdUnits: '5000000000', title: 'Name in the credits', detail: 
 
 describe('the canonical form', () => {
   it('is exactly these bytes', () => {
-    // Pinned. If this string changes, every signature made by an older client stops verifying, and
-    // the failure a creator sees is "your wallet declined" — so it changes deliberately or not at all.
     expect(canonicalPerks([A], false)).toBe(
       'perks/v1\ncount:1\nsupporters-first:no\n10:1000000000|14:A monthly call|15:Thirty minutes.',
     );
   });
 
   it('separates two lists that differ only in where a boundary falls', () => {
-    /*
-      The reason for length prefixes. Without them "a|b" and "a" + "|b" collapse to the same bytes,
-      and a captured signature could be replayed against a list the creator never wrote.
-    */
     const split = canonicalPerks([{ thresholdUnits: '1', title: 'a|b', detail: '' }], false);
     const other = canonicalPerks([{ thresholdUnits: '1', title: 'a', detail: 'b' }], false);
     expect(split).not.toBe(other);
   });
 
   it('counts bytes, not characters', () => {
-    // A three-byte character must not be able to stand in for three one-byte ones.
     expect(canonicalPerks([{ thresholdUnits: '1', title: '€', detail: '' }], false)).toContain('3:€');
   });
 

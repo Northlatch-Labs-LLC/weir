@@ -1,67 +1,23 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The run journal, and the single-instance lock.
- *
- * # Two jobs, one connection, on purpose
- *
- * A daemon that signs mainnet transactions unattended needs two things this file provides, and
- * they belong together because both are only meaningful while the process is alive.
- *
- * **The journal** makes the daemon checkable. Without it, "is it running" is answered by looking at
- * a terminal and "did vault X harvest last epoch" cannot be answered at all after the logs rotate.
- *
- * **The lock** stops two copies running. `harvest` is permissionless, so a second instance is not a
- * correctness problem — the contract refuses a second rung in an epoch — but it is a *money*
- * problem: the loser pays gas for a transaction that changes nothing, every tick, forever. That is
- * exactly the failure a supervisor makes more likely, because restarting something that has not
- * actually died is what supervisors do.
- *
- * # Why Postgres and not a pid file
- *
- * A pid file survives the process that wrote it. A machine that loses power leaves a lock nobody
- * holds, and the next start either refuses forever or ignores the file and defeats the point.
- * A Postgres session advisory lock is released by the database when the connection drops — a
- * crashed daemon releases it, and a *hung* one does not. That is the correct behaviour for both.
- *
- * # The journal is not optional for a live run
- *
- * `run` requires it. A daemon spending real gas with no record of what it did is one you can only
- * trust, and this system is built so that nothing has to be trusted. `--dry-run` does not require
- * it, because a dry run spends nothing and records nothing worth auditing.
- */
 
 import { Pool, type PoolClient } from 'pg';
 import { classify, fail, ok, type Reading } from '@projectx-social/sdk';
 import type { TickResult } from '../engine.js';
 
-/**
- * The advisory lock key.
- *
- * A fixed 64-bit constant rather than a hash of the package id, because two deployments sharing one
- * database *should* contend — they would be harvesting the same vaults with different keys, and
- * both paying. Derived keys would let that happen silently.
- */
-const LOCK_KEY = 0x70783a68617276n; // "px:harv"
+const LOCK_KEY = 0x70783a68617276n;
 
 export interface RunHandle {
   id: number;
 }
 
 export interface Journal {
-  /** Records a tick starting. The row is left `running` until {@link finish} is called. */
   begin(input: { mode: 'live' | 'dry-run'; signer: string }): Promise<Reading<RunHandle>>;
   finish(run: RunHandle, result: TickResult & { discoveryTruncated: boolean }): Promise<Reading<true>>;
   abandon(run: RunHandle, failure: { kind: string; detail: string }): Promise<Reading<true>>;
-  /**
-   * Anchors the signer's audit chain head for a finished or abandoned run. One row per run; a second
-   * anchor for the same run is refused by the primary key rather than overwritten, because an anchor
-   * that can be replaced is not an anchor. See `db/002_audit_anchor.sql`.
-   */
   anchorAudit(
     run: RunHandle,
     head: { signer: string; headHash: string; entries: number; intact: boolean },
   ): Promise<Reading<true>>;
-  /** Runs left `running` by a process that died. The only way to see a crash after the fact. */
   stuckRuns(olderThanMs: number): Promise<Reading<Array<{ id: number; startedAtMs: number }>>>;
   recentRuns(limit: number): Promise<Reading<RunSummary[]>>;
   lastHarvestOf(vaultId: string): Promise<Reading<{ atMs: number; digest: string } | null>>;
@@ -81,17 +37,9 @@ export interface RunSummary {
   outcome: string;
   failureDetail: string | null;
   truncated: boolean;
-  /** The anchored audit head, or `null` when the run wrote none (a daemon older than 002). */
   auditHead: { headHash: string; entries: number; intact: boolean } | null;
 }
 
-/**
- * Open the journal and take the single-instance lock.
- *
- * Fails rather than proceeding when the lock is held. Two daemons both harvesting is not a state to
- * warn about and continue from — the second one silently spends gas on transactions that do
- * nothing, and nothing anywhere goes red.
- */
 export async function openJournal(databaseUrl: string): Promise<Reading<Journal>> {
   const source = 'daemon journal';
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
@@ -106,11 +54,6 @@ export async function openJournal(databaseUrl: string): Promise<Reading<Journal>
   }
 
   try {
-    /*
-      A *session* lock, not a transaction lock. It is held for as long as this connection lives and
-      released by the server the moment it drops — so a crashed daemon frees it automatically and a
-      hung one does not, which is what you want in both cases.
-    */
     const { rows } = await lockConnection.query<{ locked: boolean }>(
       'SELECT pg_try_advisory_lock($1::bigint) AS locked',
       [LOCK_KEY.toString()],
@@ -288,14 +231,10 @@ export async function openJournal(databaseUrl: string): Promise<Reading<Journal>
           [vaultId],
         );
         const row = rows[0];
-        // `null` is "we looked and it has never harvested" — a real answer for a new vault, and
-        // not the same as the query failing, which lands in the failure branch above.
         return row === undefined ? null : { atMs: Number(row.at_ms), digest: row.digest };
       }),
 
     close: async () => {
-      // Releasing the connection returns it to the pool, which does NOT drop the session — so the
-      // advisory lock would survive. Ending the pool closes it, and the server frees the lock.
       lockConnection.release();
       await pool.end().catch(() => undefined);
     },

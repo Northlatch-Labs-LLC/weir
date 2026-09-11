@@ -1,17 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * `DepositCheckout` — putting money into a stake vault.
- *
- * The deposit is the moment somebody trusts this product with real value, and the thing that makes
- * it safe to do is that they see exactly what will happen before they sign. So the tests are about
- * what is shown and when, not about arithmetic:
- *
- *   Nothing is signable until a simulation against live objects has come back clean.
- *   The bytes signed are the bytes simulated — no rebuild between the quote and the signature.
- *   A refusal says nothing was signed, because a failed checkout that looks ambiguous sends
- *   somebody hunting for a transaction that never existed.
- */
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +17,6 @@ const QUOTE = {
   suiDeltaMist: '-1001417384',
 };
 
-/** Returns the mock itself — `vi.stubGlobal` returns nothing, and the calls are the assertion. */
 function mockRoutes(routes: { prepare?: unknown; submit?: unknown }) {
   const fetchMock = vi.fn(async (url: string, init?: { body?: string }) => ({
     ok: true,
@@ -46,7 +33,6 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-/** Drives the component to the quoted state, which is where every interesting assertion lives. */
 async function quoted() {
   const view = render(<DepositCheckout vaultId="0xv" />);
   fireEvent.click(screen.getByText('Check the deposit'));
@@ -70,10 +56,6 @@ describe('before anything is signed', () => {
   });
 
   it('refuses an amount that is not a number before touching the network', async () => {
-    /*
-     * Parsed by string, never `parseFloat`. A rejected amount should cost a message rather than a
-     * round trip, and more importantly must never reach the transaction builder as NaN.
-     */
     const fetchMock = mockRoutes({});
     render(<DepositCheckout vaultId="0xv" />);
     const input = document.querySelector('input') as HTMLInputElement;
@@ -88,20 +70,16 @@ describe('the quote', () => {
   it('shows what the deposit does before offering to sign it', async () => {
     mockRoutes({});
     await quoted();
-    // Named as the thing it is: money that stays theirs.
     expect(screen.getByText(/stays yours, withdrawable/i)).toBeTruthy();
   });
 
   it('shows the total leaving the wallet, not just the deposit', async () => {
-    // Deposit plus gas. Showing only the deposit understates what actually leaves, and the
-    // difference is the part somebody notices afterwards.
     mockRoutes({});
     await quoted();
     expect(screen.getByText(/Total leaving your wallet/i)).toBeTruthy();
   });
 
   it('says the account object is required rather than failing at signing time', async () => {
-    // `deposit` authenticates against a SocialAccount; without one the contract aborts.
     mockRoutes({ prepare: { needsAccount: true } });
     render(<DepositCheckout vaultId="0xv" />);
     fireEvent.click(screen.getByText('Check the deposit'));
@@ -109,10 +87,6 @@ describe('the quote', () => {
   });
 
   it('reports a refused simulation as nothing signed', async () => {
-    /*
-     * A failed checkout must be unambiguous. "Nothing was signed" is the sentence that stops
-     * somebody hunting an explorer for a transaction that never existed.
-     */
     mockRoutes({ prepare: { error: 'insufficient balance' } });
     render(<DepositCheckout vaultId="0xv" />);
     fireEvent.click(screen.getByText('Check the deposit'));
@@ -122,10 +96,6 @@ describe('the quote', () => {
 
 describe('signing', () => {
   it('signs exactly the bytes that were simulated', async () => {
-    /*
-     * The gate the whole application is built on. Anything rebuilt between the quote and the
-     * signature means the user approved one transaction and signed another.
-     */
     mockRoutes({});
     await quoted();
     fireEvent.click(screen.getByText("Confirm and sign"));

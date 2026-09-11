@@ -7,22 +7,6 @@ import { formatUnits } from '@/lib/units';
 import { Icon } from '@/components/design/icons';
 import { DesignChests, type DesignChest } from '@/components/design/Chests';
 
-/**
- * Chests' data.
- *
- * # The pot is now read
- *
- * Three states, and they are different facts:
- *
- * - **measured** — the walk completed and this vault has tips. The figure is `gross`, formatted
- *   against that vault's own coin.
- * - **Early** — the walk completed and found none. A genuine zero, and the design has a state for
- *   it that does not look like a failure.
- * - **not measured** — the walk failed, or the ceiling truncated it, or the coin's scale could not
- *   be read. A subtotal shown as a total understates what somebody has been given, which is the one
- *   direction this page must never be wrong in.
- */
-
 const CREST = 'var(--crest,#8be3c6)';
 const SAND = 'var(--sand,#d9c9a3)';
 const DIM = 'var(--dim,#a3bcb8)';
@@ -52,28 +36,12 @@ export async function ChestsData({
 
   const profiles = await listProfiles();
 
-  /*
-    Every tip on the deployment, in one walk, indexed by vault.
-
-    `null` when the walk failed outright — distinct from a walk that completed and found nothing,
-    which is an empty map. The rows below branch on that difference rather than collapsing it.
-  */
   const potsReading = await readChestPots();
   const pots = fold(
     potsReading,
     (value) => value,
     () => null,
   );
-  /*
-    Why the totals are absent, in words, once.
-
-    This was `${kind}: ${source}` — "denied: PaymentSettled events" — and it was printed under
-    "not measured" on every card, six times down the page, at somebody who came to give a creator
-    money. That is an internal cause built for a log, and the reader cannot act on it.
-
-    The two cases a reader can tell apart are stated instead: the walk hit its ceiling, or the log
-    could not be read. The cause is logged for whoever runs this.
-  */
   if (!potsReading.ok) {
     console.warn(
       `chest totals unavailable: ${potsReading.failure.kind} — ${potsReading.failure.source}`,
@@ -84,13 +52,8 @@ export async function ChestsData({
       ? 'more settled payments than one page can total'
       : ''
     : '';
-  /* A truncated walk holds subtotals. They are not totals and are not shown as any. */
   const potsUsable = pots !== null && !pots.truncated;
 
-  /*
-    Decimals once per distinct coin, not once per creator. Creators on a deployment usually share a
-    denomination, so this is normally a single metadata read for the whole page.
-  */
   const decimalsByCoin = new Map<string, number | null>();
   for (const coinType of new Set(
     profiles.map((p) => p.coinType).filter((c): c is string => c != null && c !== ''),
@@ -99,22 +62,11 @@ export async function ChestsData({
     decimalsByCoin.set(coinType, read !== null && read.ok ? read.value : null);
   }
 
-  /*
-    The corrected split line.
-
-    The design promises the whole amount reaches them. It does not, and saying so here costs less
-    than a supporter discovering it from a block explorer.
-  */
   const split =
     feeLabel === null
       ? 'A platform fee is taken at settlement; the rate could not be read just now.'
       : `${feeLabel} is taken at settlement, in the same transaction. The rest reaches them directly.`;
 
-  /**
-   * Returns the figure and the type it is set in, because the whole scheme rests on an unread value
-   * never being mistakable for a read one: measured figures are mono and ink, "Early" is the body
-   * face in sand, and a failure is italic and alert-coloured, shaped nothing like a number.
-   */
   const potOf = (profile: (typeof profiles)[number]) => {
     const MONO = 'var(--weir-mono)';
     const measured = (value: string, note: string) => ({
@@ -125,8 +77,6 @@ export async function ChestsData({
       potColor: 'var(--ink,#dce9e6)',
       potNote: note,
     });
-    /* An empty `pot` renders nothing at all — see `Chests`. `why` is shown only when there is a
-       reader-facing one, which today is the truncated walk. */
     const unmeasured = (why: string) => ({
       pot: '',
       potFont: BODY,
@@ -136,7 +86,6 @@ export async function ChestsData({
       potNote: why,
     });
 
-    // No vault is not a failure to measure — there is genuinely nowhere for a tip to have landed.
     if (profile.vaultId === null) {
       return {
         pot: 'No chest yet',
@@ -147,25 +96,12 @@ export async function ChestsData({
         potNote: 'this creator has not opened a vault',
       };
     }
-    /*
-      No figure at all, rather than "not measured" on every card.
-
-      The rule is that a failed read is never a value, and it is not one here either: the line above
-      the list says the totals could not be read, once, for the whole page. What this drops is the
-      repetition — six cards each carrying the same red italic and the same explanation, on the one
-      screen whose job is to make giving somebody money feel like a thing that works.
-    */
     if (!potsUsable) return unmeasured(potsWhy);
 
     const decimals = profile.coinType == null ? null : (decimalsByCoin.get(profile.coinType) ?? null);
     const symbol = profile.coinType?.split('::').pop() ?? '';
     const held = pots?.byVault.get(profile.vaultId);
 
-    /*
-      The walk completed and this vault has no tips. "Early" rather than a zero: a mono `0` beside
-      the other rows' real figures reads as a measured emptiness about a person, and the design has
-      a state for "we looked and there is little yet" that does not.
-    */
     if (held === undefined || held.totalMinor === 0n) {
       return {
         pot: 'Early',
@@ -176,7 +112,6 @@ export async function ChestsData({
         potNote: 'no tips yet; the log was read',
       };
     }
-    // A total exists and cannot be priced. Refused rather than shown against a guessed scale.
     if (decimals === null) return unmeasured("the coin's decimals could not be read");
 
     return measured(
@@ -205,12 +140,6 @@ export async function ChestsData({
     noteColor: profile.vaultId === null ? SAND : DIM,
     giveLabel: signedIn ? `Give to @${profile.handle}` : 'Sign in to give',
     href: signedIn ? `/c/${profile.handle}` : `/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`,
-    /*
-      Suggestions that prefill the give box, never a committed transaction.
-
-      Data only — no handler. A server component cannot pass a function to a client one, and trying
-      to is a 500 rather than a warning. `DesignChests` attaches the click.
-    */
     amounts: [1, 5, 25].map((sui) => ({
       label: `${sui} SUI`,
       sui,

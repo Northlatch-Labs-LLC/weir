@@ -13,12 +13,6 @@ import {
   WAITLIST_ROLES,
 } from '@/lib/waitlist';
 
-/*
-  The list is the only unauthenticated write on this platform, so the guards around it are the whole
-  of its security. These tests pin the pure half; the route's status contract is asserted
-  structurally at the foot of the file.
-*/
-
 describe('an address has to be one we could actually send to', () => {
   it('accepts ordinary addresses', () => {
     for (const address of ['a@b.co', 'someone@example.com', 'first.last+tag@sub.domain.org']) {
@@ -78,23 +72,6 @@ describe('a handle is checked for shape before it is ever looked up', () => {
     }
   });
 
-  /*
-    This test is the reason the bug lived.
-
-    It was written with the literals 32 and 33 while `account.move` has capped handles at 30
-    since it was written, and its name says "what the contract accepts". So it did not merely
-    fail to catch the defect — it asserted the defect was correct, under a name claiming the
-    contract had been consulted. A green suite said the boundary was right every time it ran.
-
-    The bounds are now imported from the SDK, which `packages/sdk/test/drift.test.ts` asserts
-    against `account.move` itself. That makes the chain of custody: Move source → SDK constant →
-    this test → the form. No literal anywhere in it, so the next time the contract's ceiling
-    moves, everything below it moves with it or fails loudly.
-
-    Pinned explicitly as well, because a test written entirely in terms of the thing it is
-    testing can agree with a wrong constant. If MAX_HANDLE_LEN ever stops being 30, this line
-    fails and a human reads the diff — which is what should have happened the first time.
-  */
   it('is pinned to the contract ceiling of 30', () => {
     expect(MAX_HANDLE_LEN).toBe(30);
     expect(MIN_HANDLE_LEN).toBe(3);
@@ -115,26 +92,13 @@ describe('closed sets, because both are written to our table from a request body
   });
 });
 
-/*
-  The invariant that matters most, asserted against the source rather than by calling the route.
-
-  Every failure branch has to be reachable and distinct, and none of them may return a 2xx. A route
-  that answered 201 on a failed write would tell somebody they had joined a list that never received
-  them — the single outcome this feature exists to prevent, and the one no test of the pure functions
-  would catch.
-*/
 describe('the route never turns a failure into a success', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/waitlist/route.ts'), 'utf8');
 
   it('answers every rejection with a 4xx or 5xx', () => {
-    // The only 201s permitted: a real insert, and the honeypot — which stores nothing and must not
-    // reveal that it tripped.
     const created = route.match(/status:\s*201/g) ?? [];
     expect(created).toHaveLength(2);
 
-    // 424 rather than 502 for the failed write: the edge in front of this deployment
-    // replaces 502 bodies with its own HTML error page, which the browser then fails to
-    // parse as JSON — 424 carries the route's honest message through untouched.
     for (const status of ['400', '422', '424', '503']) {
       expect(route, `status ${status} is unreachable`).toContain(`status: ${status}`);
     }
@@ -146,8 +110,6 @@ describe('the route never turns a failure into a success', () => {
   });
 
   it('does not return the database error to an unauthenticated caller', () => {
-    // The message is logged; the response says only that it failed. A Postgres error names tables,
-    // columns and constraints, which is a description of our schema handed to anyone who asks.
     const returnsRaw = /NextResponse\.json\(\s*\{\s*error:\s*(?:error|String\(error\))/.test(route);
     expect(returnsRaw).toBe(false);
     expect(route).toContain('console.error');

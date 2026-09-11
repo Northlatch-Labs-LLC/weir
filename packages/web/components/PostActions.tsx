@@ -1,33 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * The actions on a post, as a column beside it.
- *
- * # Why this shape
- *
- * The pattern is the one every reader already has muscle memory for: a vertical stack of round
- * controls welded to the content, thumb-reachable, each labelled underneath. It is worth copying
- * because it is *learned* — not because it is novel.
- *
- * What it replaces is worse than a different layout. The actions on a post were scattered through
- * the card's prose: the only way to reach the comments was to scroll past the whole body, and there
- * was **no way to share a post at all** — on a social network. A reader who wanted to send a post
- * to somebody had to copy the browser's address bar, which does not contain the post.
- *
- * # Only actions that exist
- *
- * There is no like button here, and its absence is deliberate. Nothing in this product stores a
- * like: no table, no column, no on-chain object. A heart that incremented a number in the browser
- * and forgot it on reload would be the exact defect this codebase refuses everywhere else — a
- * screen that looks alive because somebody drew it that way.
- *
- * Tipping is a panel with an amount to enter, not a button, and it lives on the creator's page
- * where their vault and denomination are already resolved. "Support" therefore travels there rather
- * than duplicating a payment flow into a 44px circle. Unlocking stays in the locked block, beside
- * the price it charges — an action that costs money belongs next to the number.
- */
-
 import { useState } from 'react';
 import Link from 'next/link';
 
@@ -65,7 +38,6 @@ export function PostActions({
   postId: string;
   authorHandle: string;
   reader?: string;
-  /** False on a locked post — there is no thread rendered to jump to. */
   showComments: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -73,17 +45,6 @@ export function PostActions({
 
   const creatorHref = `/c/${authorHandle}${reader === undefined ? '' : `?reader=${reader}`}`;
 
-  /*
-    The link a reader would want to send.
-
-    Built from `location.origin` rather than a configured host, because the correct answer is
-    literally "the site you are looking at" — hardcoding one would hand somebody on a preview
-    deployment a link to production, which is a different post list.
-
-    `?reader=` is deliberately stripped. It names the account *you* are viewing as; sending it to
-    somebody else asks the server about the wrong person, and since the read-session change it
-    grants them nothing anyway. Sharing your own reader parameter is at best noise.
-  */
   async function share() {
     const url = `${window.location.origin}/c/${authorHandle}#${postId}`;
     try {
@@ -92,8 +53,6 @@ export function PostActions({
       setShareFailed(false);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard access can be refused — an insecure origin, a permission policy, an older
-      // browser. Saying so beats a button that appears to work and silently does nothing.
       setShareFailed(true);
       window.setTimeout(() => setShareFailed(false), 3000);
     }

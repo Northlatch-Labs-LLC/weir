@@ -1,27 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The calls to action on `/agents` promise only what the deployment does.
- *
- * # Why this file exists
- *
- * The page explained the gate and asked the reader to do nothing. It now carries four actions —
- * verify, get an account with no funds, connect the MCP, declare an operator — and each one is
- * two things: a link a person can click, and a complete instruction an agent can paste.
- *
- * A pasted instruction is followed literally. If it names a route that does not exist, an address
- * that has moved, or a command for a package nobody can install, the agent fails once and does
- * not come back. So every path here is pinned to the manifest's own endpoint list, every command
- * is built against the live origin, and the one thing a stranger genuinely cannot obtain today —
- * the MCP server — is said to be unobtainable rather than dressed up as an `npx` line.
- *
- * # Two kinds of assertion
- *
- * Render assertions check what the component says given what it was told. Pinning assertions
- * check that what it is told is true of the repository: the script it links to is on disk, the
- * paths it prints are in the manifest, and the statement templates it prints are byte-for-byte
- * what `statementFor` produces once the placeholders are filled in.
- */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -64,11 +42,6 @@ const healthy: AgentsProps = {
   },
   registerScriptPath: '/register-agent.mjs',
   seeking: { listings: [], truncated: false, unavailable: null },
-  /*
-    The state this deployment is in: the machine paths exempt from the gate, the pages not. Written
-    here as a fixture rather than imported so a change to the real list is a visible failure in the
-    file that renders it, not a silent agreement.
-  */
   door: {
     agentPaths: ['/llms.txt', '/register-agent.mjs', '/.well-known/weir-agent.json', '/api/', '/agents', '/agents/declare'],
     agentPathsClosed: [],
@@ -78,12 +51,9 @@ const healthy: AgentsProps = {
     peopleOnboardLabel: 'people onboard from',
   },
   mcp: { obtainable: false, why: 'The package is not published and its repository is private.' },
-  // No hosted server in this fixture, so no hosted tool list: the page must name none rather
-  // than recite one.
   hostedTools: [],
 };
 
-/** Everything an agent could paste, joined, so a command can be asserted on wherever it sits. */
 function pasted(container: HTMLElement): string {
   return Array.from(container.querySelectorAll('pre'))
     .map((pre) => pre.textContent ?? '')
@@ -107,7 +77,6 @@ describe('the four actions are on the page', () => {
     expect(script).toHaveProperty('href', expect.stringContaining('/register-agent.mjs'));
     expect(seats).toHaveProperty('href', expect.stringContaining('/api/agents/sponsor'));
     for (const link of [manifest, script, seats]) {
-      // `.btn` is what every button on this site is. A new visual language was not the brief.
       expect(link.className.split(' ')).toContain('btn');
     }
   });
@@ -169,8 +138,6 @@ describe('the sponsored account, which is the primary action', () => {
   });
 
   it('states the handle rule the route enforces, in the numbers the SDK uses', () => {
-    // `handleProblem` in the SDK: 3 to 30 bytes, a-z 0-9 _ only. A rule quoted wrong here is a
-    // 400 the agent cannot explain.
     const { container } = render(<DesignAgents {...healthy} />);
     expect(pasted(container)).toMatch(/3-30 characters, a-z 0-9 _ only/);
   });
@@ -186,7 +153,6 @@ describe('the MCP server, which a stranger cannot obtain today', () => {
     const { container } = render(<DesignAgents {...healthy} />);
     expect(screen.getByText(/not yet obtainable/i)).toBeTruthy();
     const everything = container.textContent ?? '';
-    // The three shapes a plausible-looking but false instruction would take.
     expect(everything).not.toMatch(/npx\s+@projectx-social/);
     expect(everything).not.toMatch(/git clone/);
     expect(everything).not.toMatch(/pnpm --filter @projectx-social\/mcp/);
@@ -215,11 +181,6 @@ describe('the declaration', () => {
   }
 
   it('prints the agent statement byte-for-byte as statementFor produces it', () => {
-    /*
-      The strongest pin on this page. The agent will sign exactly these bytes; if the template and
-      the server's statement differ by one character, the signature verifies as a forgery and the
-      declaration is refused with a message that cannot say why.
-    */
     const { container } = render(<DesignAgents {...healthy} />);
     const template = Array.from(container.querySelectorAll('pre'))
       .map((p) => p.textContent ?? '')
@@ -266,11 +227,6 @@ describe('what the page is told is true of the repository', () => {
   });
 
   it('looks up only paths the manifest publishes, by the exact string the manifest uses', () => {
-    /*
-      The data layer resolves each path through the manifest's endpoint list rather than typing it.
-      This asserts both halves: the lookups it makes are these, and each is a real catalogue entry.
-      A path renamed in the catalogue then fails here instead of silently printing nothing.
-    */
     const source = readFileSync(join(ROOT, 'components', 'design', 'agents-data.tsx'), 'utf8');
     const looked = Array.from(source.matchAll(/pathOf\('([^']+)'\)/g)).map((m) => m[1] as string);
     expect(looked).toEqual(
@@ -281,7 +237,6 @@ describe('what the page is told is true of the repository', () => {
   });
 
   it('types no route path into the component itself', () => {
-    // Every path arrives through props. A literal here would be a second copy of a manifest fact.
     const source = readFileSync(join(ROOT, 'components', 'design', 'Agents.tsx'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/^\s*\/\/.*$/gm, ' ');

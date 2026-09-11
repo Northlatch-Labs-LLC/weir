@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The parts that decide whether the daemon survives a bad night.
- *
- * Each test here maps to a specific way an unattended process burns money or goes quiet: a backoff
- * that overflows into a delay measured in millennia, several daemons retrying in lockstep, a
- * SIGTERM ignored until a one-hour timer fires and the supervisor escalates to SIGKILL, or a
- * shutdown that cancels a transaction already in flight.
- */
 
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,8 +12,6 @@ import {
 
 describe('exit codes', () => {
   it('are distinct, because a supervisor branches on them', () => {
-    // `misconfigured` and `alreadyRunning` must never be retried; `runFailed` should be. Collapsing
-    // any two produces either a restart loop or a daemon that silently stays down.
     const codes = Object.values(EXIT);
     expect(new Set(codes).size).toBe(codes.length);
   });
@@ -51,17 +41,10 @@ describe('createBackoff', () => {
       b.fail();
       seen.push(b.delayMs());
     }
-    // Strictly increasing until the cap. `random: () => 1` takes the top of each window, so this
-    // measures the window growing rather than the draw.
     for (let i = 1; i < seen.length; i += 1) expect(seen[i]!).toBeGreaterThan(seen[i - 1]!);
   });
 
   it('never exceeds the cap, even after an absurd number of failures', () => {
-    /*
-      The overflow this prevents is real: `baseMs * 2 ** 60` is a delay of millennia, which is
-      indistinguishable from the daemon having stopped — and it would arrive precisely during the
-      long outage where you most need it to keep trying.
-    */
     const b = createBackoff({ baseMs: base, maxMs: max, random: () => 1 });
     for (let i = 0; i < 500; i += 1) b.fail();
     expect(b.delayMs()).toBeLessThanOrEqual(max);
@@ -69,7 +52,6 @@ describe('createBackoff', () => {
   });
 
   it('never returns less than the base interval', () => {
-    // Backing off must not make the daemon busier. `random: () => 0` takes the bottom of the window.
     const b = createBackoff({ baseMs: base, maxMs: max, random: () => 0 });
     for (let i = 0; i < 10; i += 1) {
       b.fail();
@@ -78,11 +60,6 @@ describe('createBackoff', () => {
   });
 
   it('spreads retries instead of synchronising them', () => {
-    /*
-      Two daemons that failed together must not retry together. Without jitter both would compute
-      the identical delay forever, turning a brief outage into a synchronised spike at every
-      interval. Full jitter draws across the whole window, so the two diverge on the first retry.
-    */
     const draws = [0.01, 0.99];
     const delays = draws.map((d) => {
       const b = createBackoff({ baseMs: base, maxMs: max, random: () => d });
@@ -96,7 +73,6 @@ describe('createBackoff', () => {
   });
 
   it('returns to the base interval after a success', () => {
-    // A daemon that recovers must not keep waiting as though it were still broken.
     const b = createBackoff({ baseMs: base, maxMs: max, random: () => 1 });
     for (let i = 0; i < 8; i += 1) b.fail();
     expect(b.delayMs()).toBeGreaterThan(base);
@@ -106,7 +82,6 @@ describe('createBackoff', () => {
   });
 });
 
-/** A stand-in for `process` that records `exit` instead of ending the test run. */
 function fakeProcess() {
   const emitter = new EventEmitter() as EventEmitter & { exit(code: number): never; exited: number[] };
   emitter.exited = [];
@@ -131,8 +106,6 @@ describe('installShutdown', () => {
   });
 
   it('exits immediately on a second signal', () => {
-    // Waiting politely through a second SIGTERM is how a process becomes the one you have to
-    // `kill -9`, and a SIGKILL mid-harvest is exactly the case the graceful path exists to avoid.
     const p = fakeProcess();
     const shutdown = installShutdown(p, ['SIGTERM']);
     p.emit('SIGTERM');
@@ -142,8 +115,6 @@ describe('installShutdown', () => {
   });
 
   it('removes its handlers on dispose', () => {
-    // Without this, every test — and every reload in a long-lived process — leaks a listener, and
-    // Node eventually warns about it in production logs for no reason anyone can trace.
     const p = fakeProcess();
     const shutdown = installShutdown(p, ['SIGTERM', 'SIGINT']);
     expect(p.listenerCount('SIGTERM')).toBe(1);
@@ -166,11 +137,6 @@ describe('sleepUnlessShutdown', () => {
   });
 
   it('wakes early when the signal arrives mid-sleep', async () => {
-    /*
-      The case that matters operationally. A daemon on a one-hour tick that sleeps through SIGTERM
-      takes up to an hour to stop; supervisors do not wait that long, so the graceful path never
-      runs and every shutdown becomes a kill.
-    */
     const p = fakeProcess();
     const shutdown = installShutdown(p, ['SIGTERM']);
     const started = Date.now();
@@ -204,12 +170,6 @@ describe('withDeadline', () => {
   });
 
   it('does not cancel the work it stopped waiting for', async () => {
-    /*
-      The single most important property in this file. Nothing here can safely interrupt a
-      transaction that may already be in flight — the deadline bounds how long SHUTDOWN waits, not
-      what the tick is allowed to finish. Cancelling mid-harvest is how you end up not knowing
-      whether you paid.
-    */
     const finished = vi.fn();
     const slow = new Promise<void>((resolve) =>
       setTimeout(() => {
@@ -226,8 +186,6 @@ describe('withDeadline', () => {
   });
 
   it('clears its timer so a fast tick does not hold the event loop open', async () => {
-    // A leaked 30-second timer per tick keeps `--once` alive long after its work is done, and a
-    // supervisor that waits for the process to exit sees a hang.
     const before = process.getActiveResourcesInfo?.().filter((r) => r === 'Timeout').length ?? 0;
     await withDeadline(Promise.resolve(1), 30_000);
     const after = process.getActiveResourcesInfo?.().filter((r) => r === 'Timeout').length ?? 0;

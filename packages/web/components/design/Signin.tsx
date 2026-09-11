@@ -1,12 +1,6 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * There is no password field and never will be. There is no account record to check one against: an
- * address comes from a Google identity through zkLogin or from a wallet, and in both cases the proof
- * is a signature this site cannot produce.
- */
-
 import { PageHead } from '@/components/design/PageHead';
 import { Fragment } from 'react';
 import { Icon } from '@/components/design/icons';
@@ -20,12 +14,6 @@ export function DesignSignin({ nextPath = '/' }: { nextPath?: string }) {
     connectWallet,
   } = useSigner();
 
-  /*
-    Real wallets, in two groups the design already distinguishes: usable ones are "detected" and
-    connect; the rest say what is wrong with them and do nothing. An empty list is a truthful
-    outcome — this browser has no Sui wallet — and renders as an empty list rather than as three
-    invitations to install something we cannot see.
-  */
   const wallets = [
     ...usable.map((w) => ({
       name: w.name,
@@ -36,7 +24,6 @@ export function DesignSignin({ nextPath = '/' }: { nextPath?: string }) {
     ...unusableWallets.map((w) => ({
       name: w.name,
       icon: <Icon name="wallet" size={16} />,
-      // What it lacks, in plain language — 'missing signing messages' rather than a silent absence.
       state: w.missing.length === 0 ? 'unusable' : `missing ${w.missing.join(', ')}`,
       onClick: () => {},
     })),

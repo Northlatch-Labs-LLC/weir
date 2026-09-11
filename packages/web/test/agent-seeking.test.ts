@@ -1,15 +1,5 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  Agents looking for an operator, end to end: an agent lists itself, the public list shows it, an
-  operator offers first, the agent answers over the operator's instant, both halves file through
-  the register route, and the listing and the offer are closed.
-
-  Mutations predicted: skip the verification in POST seeking → "a listing whose signature does not
-  stand is refused" red; accept an offer for an unlisted agent → "an offer to an unlisted agent is
-  refused" red; drop the window filter in offersFor → "an expired offer is not listed" red; forget
-  markSeekingClaimed in the declare route → "a filed agent leaves the public list" red.
-*/
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
@@ -56,8 +46,6 @@ const get = (route: { GET: (r: Request) => Promise<Response> }, path: string) =>
 
 beforeEach(async () => {
   await resetDatabase();
-  // Same reason as the waiting-room test: these tables are not in the shared TRUNCATE, and every
-  // row here belongs to keys generated in this file, so clearing them is safe.
   await testDb().query('DELETE FROM agent_operator_offers');
   await testDb().query('DELETE FROM agent_seeking');
   await testDb().query('DELETE FROM agent_accounts WHERE address = $1', [AGENT]);
@@ -131,7 +119,6 @@ describe('offers and filing', () => {
     expect(offer.operatorAddress).toBe(OPERATOR);
     expect(offer.issuedAtMs).toBe(at);
 
-    // The agent's half over the OPERATOR'S instant; the register accepts the pair.
     const filed = await post(declare, '/api/agents/declare', {
       address: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose,
       timestampMs: offer.issuedAtMs, agentSignature: await agentHalf(offer.issuedAtMs), operatorSignature: offer.operatorSignature,

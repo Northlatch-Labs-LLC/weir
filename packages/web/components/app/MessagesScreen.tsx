@@ -1,22 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * Messages, in the application frame.
- *
- * # The conversation itself is not re-drawn here
- *
- * `Messages` is mounted unchanged. It holds the key derivation, the four-state key lookup and the
- * send path — and the thing that path is careful about is that a message is never silently sent in
- * plaintext when the sender was shown the word "encrypted". Re-typing that markup onto new class
- * names would put every one of those decisions back in play for a change that is about chrome. So
- * the frame moved and the component did not.
- *
- * # What the frame supplies and what it does not
- *
- * The rail's account is the proved session read on the server. The signer inside `Messages` is the
- * wallet in this browser, and they are separate facts: the frame naming an address does not sign
- * anything, and `Messages` still asks for a signature per action.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -33,13 +16,6 @@ export function MessagesScreen({
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
-  /**
-   * The discovery column, read on the server and handed down.
-   *
-   * A server component passed as a prop into a client one: this screen cannot read the store
-   * itself, and the rail is the same rail every other wrapped route gets. Optional, so a test or a
-   * caller without it renders the page's own cards and nothing else.
-   */
   discovery?: ReactNode;
 }) {
   const viewer =
@@ -47,16 +23,6 @@ export function MessagesScreen({
       ? ({ signedIn: false } as const)
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerHandle } as const);
 
-
-  /*
-    The page's own cards, and then the people.
-
-    These four screens pass an `aside`, and an `aside` REPLACES the discovery column rather than
-    joining it — so `/vault`, `/studio`, `/alerts` and `/messages` were the only wrapped routes with
-    no faces on them at all, and 337 to 715 pixels of empty ground under one explanatory card. The
-    discovery rail is read on the server and handed down as `discovery`, so it renders beneath the
-    page's own cards instead of replacing them.
-  */
   const aside: ReactNode = (
     <>
       <section className="w-card">

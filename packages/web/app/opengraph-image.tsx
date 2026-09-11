@@ -1,35 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { ImageResponse } from 'next/og';
 
-/*
-  The Node runtime, which is the default, so nothing is declared here.
-
-  This said `export const runtime = 'edge'`, and `next dev` warns that the Edge Runtime is
-  deprecated on every boot. Per `node_modules/next/dist/docs/01-app/03-api-reference/07-edge.md`,
-  Edge is now for Proxy and nothing else; `next/og` draws this card on Node perfectly well, and on
-  Node it is not missing an API it might one day want.
-*/
 export const alt = 'Weir is in closed alpha — creators are onboarding by invitation.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-/**
- * The social preview, drawn rather than screenshotted.
- *
- * # What it claims
- *
- * Only what the live site itself says; nothing here may assert anything the pages do not. The card
- * uses the site's own palette — deep teal water, mint headline accent, gold for the invitation — so
- * a shared link looks like the page it opens.
- *
- * # Built from divs, deliberately
- *
- * This renders through Satori, which supports flexbox and very little else and has no
- * access to the stylesheet — so none of the tokens in `globals.css` are reachable and the colours
- * are literals here. Any div holding more than one child carries `display: flex` explicitly:
- * without it Satori returns HTTP 200 with a zero-byte body and reports no error anywhere, which is
- * the kind of failure that ships.
- */
 export default function OpengraphImage() {
   return new ImageResponse(
     (

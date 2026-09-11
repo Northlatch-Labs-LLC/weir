@@ -1,11 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import 'server-only';
-/**
- * The published legal documents, read from disk.
- *
- * Read at request time. They are small, and a legal page that served a stale copy from a build
- * months ago would be the wrong text at exactly the moment it mattered.
- */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -39,12 +33,6 @@ export function readLegalDocument(slug: LegalSlug): string {
   return readFileSync(join(process.cwd(), 'content', 'legal', LEGAL_DOCUMENTS[slug].file), 'utf8');
 }
 
-/**
- * The effective date the document itself declares.
- *
- * Parsed from the document rather than kept beside it: two places to state a date is one place for
- * them to disagree, and the one a reader trusts is the one printed on the page.
- */
 export function effectiveDate(source: string): string | null {
   const match = /\*\*Effective date:\*\*\s*(.+)/.exec(source);
   return match === null ? null : (match[1] ?? '').trim();

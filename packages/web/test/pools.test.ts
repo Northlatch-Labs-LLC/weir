@@ -2,14 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import { beats, type PoolSummary } from '../lib/pools';
 
-/**
- * Which of a creator's vaults the site shows as "their pool".
- *
- * The reads in `readPools` run eight at a time, so the order two vaults arrive in is whatever the
- * fullnode answered first. The choice must not depend on it: `/explore` and `/treasury` each
- * build their own index, and with a bare `>` they disagreed about the same creator whenever two
- * vaults held the same principal — one page had seen the 0% vault first, the other the 19% one.
- */
 function vault(id: string, principal: bigint, rebateBps = 0n): PoolSummary {
   return {
     vaultId: id,
@@ -23,7 +15,6 @@ function vault(id: string, principal: bigint, rebateBps = 0n): PoolSummary {
   };
 }
 
-/** Fold a list the way the worker does, and return the survivor. */
 function survivor(arrivals: PoolSummary[]): PoolSummary {
   let held: PoolSummary | undefined;
   for (const v of arrivals) if (beats(v, held)) held = v;

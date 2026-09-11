@@ -1,25 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A spending call in flight is never evicted, so a concurrent retry can never buy twice.
- *
- * # The defect this pins
- *
- * `once` evicts BEFORE it looks the key up, and both eviction rules deleted by age and by insertion
- * order without asking whether the call had finished. An in-flight entry is the ONLY record that a
- * spending call is already running — so evicting one deletes the guard itself. The concurrent retry
- * that arrives next finds nothing, runs the work a second time, and produces the double-buy this
- * class exists to prevent.
- *
- * The class docblock already names the concurrent retry as "the dangerous retry" and explains that
- * the map holds a promise precisely so a second caller JOINS the first. Eviction undid that, under
- * load, which is exactly when concurrent retries happen.
- *
- * # Which rule is reachable
- *
- * `RESULT_TTL_MS` is twenty-four hours and no call is in flight that long. `MAX_ENTRIES` is 512,
- * and the oldest entry under concurrent load is very plausibly still running. The capacity rule is
- * the one that could take money.
- */
 
 import assert from 'node:assert/strict';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -41,7 +20,6 @@ function check(what: string, fn: () => void): void {
 
 const result = (text: string): CallToolResult => ({ content: [{ type: 'text', text }] });
 
-/** A call that never finishes until it is released. Stands in for a transaction being signed. */
 function pending(): { work: () => Promise<CallToolResult>; release: () => void; runs: number } {
   let release = (): void => {};
   const gate = new Promise<void>((resolve) => {
@@ -61,8 +39,6 @@ function pending(): { work: () => Promise<CallToolResult>; release: () => void; 
 
 async function main(): Promise<void> {
   {
-    // The finding, reproduced. One in-flight purchase, then enough traffic to trigger the capacity
-    // rule, then the retry that used to buy a second time.
     const ledger = new CallLedger();
     const buy = pending();
 
@@ -88,8 +64,6 @@ async function main(): Promise<void> {
     }
 
     check('the in-flight entry is still held after the capacity rule has run', () => {
-      // The state the assertion above depends on. Asserted separately so a failure says WHICH of
-      // the two broke: the entry was dropped, or it was kept and not joined.
       assert.ok(ledger.size > 0, 'the ledger is empty');
     });
 
@@ -98,7 +72,6 @@ async function main(): Promise<void> {
   }
 
   {
-    // The age rule, driven by a fake clock rather than by waiting twenty-four hours.
     let now = 1_000;
     const ledger = new CallLedger(() => now);
     const buy = pending();
@@ -117,8 +90,6 @@ async function main(): Promise<void> {
   }
 
   {
-    // The converse. A ledger that never evicted anything would pass every assertion above while
-    // growing without bound, which is the failure the eviction rules exist to prevent.
     let now = 1_000;
     const ledger = new CallLedger(() => now);
     await ledger.once('old', async () => result('old'));

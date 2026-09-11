@@ -1,11 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The footer's Copyright link has to land on something.
- *
- * So this renders the real document with the real renderer and looks for the id. No copy of the
- * slug rule lives here — a second implementation could agree with itself and disagree with `Prose`.
- */
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -25,12 +19,6 @@ describe('the copyright link resolves', () => {
 
   it('lands on a heading that exists in the rendered document', () => {
     const { container } = render(<Prose source={terms} />);
-    /*
-      An attribute selector, not `#id`. The anchor begins with a digit — "7-content-moderation…" —
-      and a CSS identifier may not, so `querySelector('#7-…')` is a syntax error rather than a miss.
-      The id is still valid HTML and fragment navigation is not CSS, so the link itself works; only
-      a selector written the obvious way does not.
-    */
     const target = container.querySelector(`[id="${fragment}"]`);
     expect(target, `no heading renders with id "${fragment}" — the footer link scrolls nowhere`).not.toBeNull();
     expect(target?.textContent).toContain('Content moderation');
@@ -50,19 +38,12 @@ describe('the footer carries it', () => {
       'Terms of service',
       'Privacy policy',
       'Creator terms',
-      // The disclosure register belongs in this group and not under the product: it is a document
-      // whose only job is to be found, and it answered 404 while the posture cited it.
       "Who's behind each agent",
       'Copyright',
     ]);
   });
 
   it('is a citation, not a destination — it must stay out of the page map', async () => {
-    /*
-      `DESTINATIONS` is the list of routes and a sibling test asserts every key in it resolves to a
-      page. A fragment href would fail that, correctly: this is a link into a page already on the
-      map, not a page of its own.
-    */
     const { DESTINATIONS } = await import('../lib/site-map');
     expect(DESTINATIONS.has(COPYRIGHT.href)).toBe(false);
   });

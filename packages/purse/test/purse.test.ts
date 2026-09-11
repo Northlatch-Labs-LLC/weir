@@ -1,14 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The gate, end to end, with no network and no real key.
- *
- * The transaction is built by the purse from the intent — that is the thing under test — and it is
- * fully specified (explicit sender, pinned gas coin and price, fully-resolved object references) so
- * `build()` resolves nothing remotely. The simulation and the SDK gate are answered with a recorded
- * response in the shape `@mysten/sui` 2.27.1's gRPC transport produces. The real build, the real
- * translation, the real SDK gate, the real evaluator, the real audit chain and a real Ed25519
- * signature all run; only the node is a stand-in.
- */
 
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
@@ -51,13 +41,6 @@ interface Harness {
   readonly close: () => Promise<void>;
 }
 
-/**
- * One purse over a throwaway key, a temp audit chain and a temp spend ledger.
- *
- * The policy and the recorded response are both built against the generated address, so
- * `sender-mismatch` never fires by accident and every refusal in this file is the one the test
- * names.
- */
 async function harness(
   options: {
     readonly policy?: Partial<PolicyDoc>;
@@ -148,8 +131,6 @@ describe('a permitted intent', () => {
 
     const lines = await auditLines(h.auditPath);
     expect(lines[0]!['intentKind']).toBe('post');
-    // The body digest is inside the intent hash. It is not a field on the line and it is not in the
-    // transaction: the chain gets a price, the record gets which body that price was for.
     expect(lines[0]!['intentHash']).toBe(intentHash(postIntentFor()));
     await h.close();
   });
@@ -166,13 +147,6 @@ describe('a permitted intent', () => {
 });
 
 describe('the policy gate', () => {
-  /*
-    The intent surface has no recipient field at all — that is `intent.ts`'s design and
-    `intent.test.ts` proves it. This test is the other half of the same guarantee: whatever the
-    simulation shows, a recipient outside the allow-list is refused by name. The response carries a
-    transfer to a stranger and the policy permits the TransferObjects kind, so `command-kind` does
-    not fire first and `transfer-recipient` is the rule that is reached.
-  */
   it('refuses a transfer to a recipient outside the set, with the rule id', async () => {
     const h = await harness({
       policy: { allowedCommandKinds: ['MoveCall', 'TransferObjects'] },
@@ -188,9 +162,6 @@ describe('the policy gate', () => {
   });
 
   it('refuses an intent naming a vault outside the allowed objects, with the rule id', async () => {
-    // The real attack this arm has: swap the vault and the money lands in a stranger's vault while
-    // the target, the coin type and the ceiling all still pass. Eleven rules say yes; `object-input`
-    // says no.
     const h = await harness({ policy: { allowedObjects: [] } });
     const response = await h.purse.handle({ intent: priceIntentFor() });
 
@@ -291,8 +262,6 @@ describe('the key never leaves', () => {
     captured.push(...h.logged);
     captured.push(await readFile(h.auditPath, 'utf8'));
 
-    // Assembled rather than written out, so this file is not itself a hit for the grep the gate
-    // runs over the test output.
     const prefix = 'suipriv' + 'key1';
     for (const text of captured) expect(text).not.toContain(prefix);
     await h.close();
@@ -300,18 +269,6 @@ describe('the key never leaves', () => {
 });
 
 describe('two requests that overlap', () => {
-  /*
-    A1 from Security's review of 2026-09-05.
-
-    `server.ts` hands every connection to `void serve(...)`, so two connections are in flight at
-    once, and the outflow ceiling is read from the ledger *before* either request has recorded its
-    spend. Two beats that overlap — a slow node, a timer that fired while the last beat was still
-    running, which `build.ts` already anticipates for gas coin selection — would each be judged
-    against a ledger neither has written to.
-
-    The fixture: the recorded response puts 6,000,000 MIST out and the ceiling is 10,000,000. Either
-    request alone is inside the ceiling; the two together are not. Exactly one may be signed.
-  */
   it('judges the second against the ledger the first has already written', async () => {
     const h = await harness({ response: { agentAmount: '-6000000' } });
 

@@ -1,18 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * How many paid posts carry a machine edition, and how many never can.
- *
- *     node --env-file=.env.local scripts/report-machine-bodies.mjs
- *
- * Read-only: three counts over `posts`, nothing written. The third count is the set migration 034
- * indexes as `posts_paid_without_machine_body_idx` — paid posts sealed for humans before machine
- * editions were sealed at publish. Their plaintext is gone, so that number only falls as creators
- * republish; the pricing guard refuses a machine price for every key in it. Run it the day after
- * the change ships and again whenever the number is asked for.
- *
- * The connection string is read from `PROJECTX_DATABASE_URL` and never printed, as `migrate.mjs`
- * does — only the database name and host are shown.
- */
 import pg from 'pg';
 
 const url = process.env['PROJECTX_DATABASE_URL'];

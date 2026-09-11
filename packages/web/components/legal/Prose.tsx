@@ -1,13 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * A legal document, rendered.
- *
- * React elements from parsed data — never an HTML string — so the document's own bytes can never
- * become markup. See `lib/markdown.ts` for why the parser exists at all.
- *
- * The document's `# H1` is dropped here: the page supplies its own heading through `PageHead`, and
- * two h1s on one page is a document outline that says the page has two subjects.
- */
 import Link from 'next/link';
 import { parseMarkdown, type Block, type Inline } from '@/lib/markdown';
 
@@ -25,7 +16,6 @@ function Runs({ runs }: { runs: Inline[] }) {
               </code>
             );
           case 'link':
-            // Internal links route; external ones open away and say so to assistive technology.
             return run.href.startsWith('/') ? (
               <Link key={i} href={run.href}>
                 {run.text}
@@ -46,11 +36,6 @@ function Runs({ runs }: { runs: Inline[] }) {
 function One({ block }: { block: Block }) {
   switch (block.kind) {
     case 'heading':
-      /*
-        Levels shift down by one: the page's own title is the h1, so the document's `##` sections
-        are h2s here and anything deeper follows. A page whose first heading is an h3 reads to a
-        screen reader as a section with its parent missing.
-      */
       return block.level === 1 ? null : block.level === 2 ? (
         <h2 id={slug(block.text)}>
           <Runs runs={block.text} />
@@ -78,7 +63,6 @@ function One({ block }: { block: Block }) {
       );
     case 'table':
       return (
-        // Scrolls in its own box: a table wider than a phone must not make the page scroll sideways.
         <div className="legal-tablewrap">
           <table className="legal-table weir-stack">
             <thead>
@@ -94,7 +78,6 @@ function One({ block }: { block: Block }) {
               {block.rows.map((row, i) => (
                 <tr key={i}>
                   {row.map((cell, j) => (
-                    // The column's heading, so a stacked cell on a phone still says what it is.
                     <td key={j} data-label={j === 0 ? undefined : block.head[j]?.map((r) => r.text).join('')}>
                       <Runs runs={cell} />
                     </td>
@@ -110,7 +93,6 @@ function One({ block }: { block: Block }) {
   }
 }
 
-/** A stable anchor per section, so a clause can be linked to and cited. */
 function slug(runs: Inline[]): string {
   return runs
     .map((r) => r.text)

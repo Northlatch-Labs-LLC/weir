@@ -1,34 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * The publish plan: what an adopted Heron writes when it has something to say, and what phase two
- * does with it.
- *
- * # The file
- *
- * `runs/<beat-id>/intent.json` may hold, instead of a purse intent, a plan:
- *
- *   { "kind": "publish-plan", "title", "preview", "text", "access": "public" | "paid", "priceMist"? }
- *
- * The model chooses words and, for a paid post, a price. It names no address, no object, no key
- * and no origin: those come from the host's own configuration and from the chain, here.
- *
- * # The steps, in order, each a value
- *
- * 1. Read the creator setup for the purse's address from the API. The account and the vault must
- *    exist (birth-vault.ts made them); the handle is the account's.
- * 2. If the vault carries no profile name yet, ask the purse for a `name-vault` statement and send
- *    it to the API once. A profile is what the post route publishes under.
- * 3. For a paid post: the content key is the content's own sha256; resolve the vault and the cap
- *    from the chain into the references the purse's `post` intent takes, ask the purse to price
- *    the key, submit the signed transaction, and wait for it. The route refuses a paid post whose
- *    key has no price on the vault, so the price goes first.
- * 4. Ask the purse for a `publish` statement over the handle, the access, the title, the content
- *    digest and (paid) the key and price, and send the post to the API with it. The response is a
- *    post id.
- *
- * Every step's outcome lands in the beat's state file, whatever it was; a refusal from the purse
- * is the beat's outcome, never something to retry.
- */
 
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -36,17 +6,10 @@ import type { Outcome } from './outcome.js';
 import type { PurseResponse } from './protocol.js';
 import { MAX_POST_TITLE_LENGTH } from './statement.js';
 
-/** The web's own limits (packages/web/lib/content.ts), mirrored; test/publish.test.ts pins them. */
 export const MAX_POST_PREVIEW_LENGTH = 1000;
 export const MAX_POST_BODY_LENGTH = 100_000;
 export const SUI_COIN_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
 
-/**
- * The price band a plan may name, in MIST: 0.01 to 0.1 SUI. Bounded HERE, before anything reaches
- * the chain, because a paid post is priced on chain first and the purse's own statement ceiling
- * would fire only afterwards (Security's B2, 2026-09-05). The workspace tells the model the same
- * band; test/publish.test.ts pins both edges.
- */
 export const MIN_PRICE_MIST = 10_000_000n;
 export const MAX_PRICE_MIST = 100_000_000n;
 
@@ -69,7 +32,6 @@ export const publishPlan = z.strictObject({
 
 export type PublishPlan = z.infer<typeof publishPlan>;
 
-/** The same digest the route and the agent library compute (`publishContentSha256`). */
 export function contentDigest(preview: string, text: string): string {
   return createHash('sha256').update(`${preview.length}:${preview}${text.length}:${text}`).digest('hex');
 }
@@ -81,15 +43,11 @@ export function parsePublishPlan(value: unknown): { ok: true; plan: PublishPlan 
   return { ok: false, reason: `the publish plan does not satisfy its schema — ${problems.join('; ')}. The values are not quoted.` };
 }
 
-/** True when the file is a plan rather than a purse intent, decided on the discriminator alone. */
 export function looksLikePlan(value: unknown): boolean {
   return typeof value === 'object' && value !== null && (value as { kind?: unknown }).kind === 'publish-plan';
 }
 
-// --- the ports ----------------------------------------------------------------------------------
-
 export interface HttpPort {
-  /** One JSON request; the body is parsed when the response is JSON, else null. */
   readonly request: (input: { method: 'GET' | 'POST'; url: string; body?: unknown; headers?: Record<string, string> }) => Promise<{ status: number; json: unknown }>;
 }
 
@@ -112,7 +70,6 @@ export interface PublishArgs {
   readonly origin: string;
   readonly beatId: string;
   readonly ports: PublishPorts;
-  /** The profile name and bio used when the vault is named for the first time. */
   readonly profile: { name: string; bio: string };
 }
 
@@ -133,7 +90,6 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
   const refusal = (ruleId: string, error: string): PublishOutcome => ({ outcome: 'refused', ruleId, error, ...(priceDigest === undefined ? {} : { priceDigest }) });
   const failure = (error: string): PublishOutcome => ({ outcome: 'error', error, ...(priceDigest === undefined ? {} : { priceDigest }) });
 
-  // 1. the setup
   const setupResponse = await ports.http.request({ method: 'GET', url: `${origin}/api/creator?owner=${address}` });
   if (setupResponse.status !== 200) return failure(`GET /api/creator answered ${String(setupResponse.status)}`);
   const setup = setupResponse.json as Setup;
@@ -141,12 +97,8 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
     return failure(`the creator setup for ${address} is not ready (stage ${String(setup.stage)}); the account or the vault is missing`);
   }
   const vault = setup.vaults.find((v) => v.coinType === SUI_COIN_TYPE) ?? setup.vaults[0]!;
-  // The handle a post is published under is the one the vault is FILED under (the profile route
-  // may suffix a slug), not the registry's; the registry's is only the name asked for when the
-  // vault is named below (Security's finding 3, 2026-09-05).
   let handle = vault.handle ?? setup.handle;
 
-  // 2. the name, once
   let named = false;
   if (vault.handle === null) {
     const nameIntent = {
@@ -172,7 +124,6 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
     named = true;
   }
 
-  // 3. the price, for a paid post
   const digest = contentDigest(plan.preview, plan.text);
   const contentKey = plan.access === 'paid' ? digest : '';
   if (plan.access === 'paid') {
@@ -194,7 +145,6 @@ export async function runPublishPlan(args: PublishArgs): Promise<PublishOutcome>
     priceDigest = await ports.submit({ txBytesB64: answer.txBytesB64, signature: answer.signature });
   }
 
-  // 4. the publish
   const publishIntent = {
     kind: 'statement',
     action: { kind: 'publish', handle, title: plan.title, access: plan.access, contentSha256: digest, contentKey, price: plan.access === 'paid' ? plan.priceMist! : '' },

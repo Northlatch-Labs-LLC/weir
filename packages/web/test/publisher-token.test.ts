@@ -1,21 +1,11 @@
 // @vitest-environment node
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The token that authorises spending the publisher's wallet.
- *
- * # What is actually at stake
- *
- * The failures worth pinning are therefore the ones that widen what a token permits: a ceiling
- * where an exact value was intended, a missing replay id, an absent secret quietly treated as
- * blank, an owner field passed through unchecked.
- */
 
 import { describe, expect, it } from 'vitest';
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from 'jose';
 import { grantUpload, LIFETIME_SECONDS, TIER_EPOCHS } from '@/lib/publisher-token';
 import { MAX_EPOCHS } from '@/lib/walrus';
 
-/** Synthetic. Long enough to pass the minimum-length rule, and not a secret in use anywhere. */
 const SECRET = 'x'.repeat(48);
 const ENV = { PROJECTX_WALRUS_PUBLISHER_JWT_SECRET: SECRET };
 const OWNER = `0x${'a1'.repeat(32)}`;
@@ -51,10 +41,6 @@ describe('a grant authorises exactly one upload', () => {
 
 describe('the claims are exact, never ceilings', () => {
   it('states the size rather than a maximum', async () => {
-    /*
-      The distinction that matters. `max_size` would let a token minted for a 1 KB avatar be spent
-      on an 8 MB blob — the publisher would be within its rules and the cost would be ours.
-    */
     const result = await grant({ size: 4096 });
     if (!result.ok) throw new Error(result.failure.detail);
 
@@ -73,8 +59,6 @@ describe('the claims are exact, never ceilings', () => {
   });
 
   it('never sends both forms, which Walrus rejects outright', async () => {
-    // Documented constraint: `epochs` with `max_epochs`, or `size` with `max_size`, is a rejected
-    // token. A token refused at the publisher looks identical to an outage from the creator's side.
     const result = await grant();
     if (!result.ok) throw new Error(result.failure.detail);
 
@@ -102,8 +86,6 @@ describe('the claims are exact, never ceilings', () => {
 
 describe('replay and lifetime', () => {
   it('carries a unique jti every time', async () => {
-    // The publisher suppresses replays by remembering `jti`. A repeated one would either be
-    // refused as a replay or — worse, if we generated it predictably — be forgeable.
     const ids = new Set<string>();
     for (let i = 0; i < 25; i += 1) {
       const result = await grant();
@@ -114,16 +96,6 @@ describe('replay and lifetime', () => {
   });
 
   it('sets exp - iat to exactly LIFETIME_SECONDS, which the publisher requires', async () => {
-    /*
-      Not "within a reasonable window" — exactly. The publisher compares `exp - iat` against its
-      own `--jwt-expiring-sec` for equality and rejects any other value:
-
-          if (self.exp - self.iat.unwrap_or_default()) != auth_config.expiring_sec { … }
-
-      A publisher started with 120 therefore refuses every token minted here, and says
-      `the expiration in the query does not match the token` — a message that names the query,
-      while the query has nothing to do with it. That cost three wrong guesses when it happened.
-    */
     const result = await grant();
     if (!result.ok) throw new Error(result.failure.detail);
 
@@ -140,11 +112,6 @@ describe('replay and lifetime', () => {
 
 describe('it fails closed', () => {
   it('mints nothing when no secret is configured', async () => {
-    /*
-      An unset secret must not become an empty one. A publisher started without
-      `--jwt-decode-secret` accepts anything, so a deployment where both sides silently agreed on
-      "" would be exactly the open publisher the documentation warns against.
-    */
     const result = await grant({ env: {} });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure.kind).toBe('unconfigured');
@@ -157,8 +124,6 @@ describe('it fails closed', () => {
   });
 
   it('refuses an owner that is not a Sui address', async () => {
-    // This field decides who owns the blob we paid for. A malformed one is not a thing to discover
-    // at the publisher, after the WAL is spent.
     for (const owner of ['', 'not-an-address', '0x123', OWNER.slice(0, -1), `${OWNER}ff`]) {
       expect((await grant({ owner })).ok).toBe(false);
     }

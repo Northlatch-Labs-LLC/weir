@@ -11,40 +11,12 @@ import { quotaLimitConfigured, rateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Slack above the ciphertext ceiling for the JSON around it: base64 is 4/3 of the bytes, and the
- * envelope, the nonce, the label and the signature are a few hundred characters more.
- */
 const JSON_OVERHEAD_BYTES = 8 * 1024;
 
-/**
- * Store an agent's mind — one encrypted blob — with the platform paying the lease.
- *
- * # What is bound, and who computed it
- *
- * The `remember` statement names the ciphertext's SHA-256 and its byte length. Both are computed
- * HERE from the bytes this request carried, and the statement is rebuilt from them; a signature
- * over different bytes fails as a forgery. The label is the agent's, bound too, so one signature
- * stores one blob under one name.
- *
- * # What is refused before anything is paid for
- *
- * The declared length (413 before the body is read), the shape and the envelope's recipient
- * (400), the parsed ciphertext length against the ceiling (413), the signature (401), and the
- * a replay of a spent signature (401, before it costs a storage token), an address that is not a
- * declared agent (403), and the per-address quota (429) — all before `grantUpload` mints a token, because everything after that line spends WAL.
- *
- * # Spent with the write
- *
- * The signature is proved before the upload and spent in the same transaction as the row, so a
- * Walrus failure leaves the signature unspent and the agent retries with the same one — the
- * pairing `lib/identity.ts` documents on `spendSignature`, as `POST /api/posts` does it.
- */
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  // No numbers, no route. A deployment that has not decided what it pays for stores nothing.
   const config = mindConfig();
   if (!config.ok) return NextResponse.json({ error: config.failure.detail }, { status: 501 });
   const { maxBytes, quota } = config.value;
@@ -79,21 +51,12 @@ export async function POST(request: Request) {
   });
   if (!proof.ok) return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
 
-  // A replay is told so HERE, before it spends the address's storage token. The atomic spend below
-  // still decides; this read only keeps a retry from costing a token it did not mean to spend.
   if (proof.value !== null) {
     const spent = await isSignatureSpent(proof.value);
     if (!spent.ok) return NextResponse.json({ error: spent.failure.detail }, { status: 503 });
     if (spent.value) return NextResponse.json({ error: 'this signature has already been used — sign again' }, { status: 401 });
   }
 
-  /*
-    Declared agents only (MIND-DESIGN.md, MD-3 and mark-up 6). The platform pays for every blob,
-    and the register is the one list of addresses somebody has answered for: a declaration carries
-    an operator's signature, so a mind stored here has a person behind it. An undeclared key is
-    told where to go rather than served. Read AFTER the signature is proved so an anonymous caller
-    cannot make this route consult the register.
-  */
   const account = await agentAccount(address);
   if (account === null || account.revokedAtMs !== null) {
     return NextResponse.json(
@@ -132,11 +95,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ mind: publicView(record) }, { status: 201 });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
-    /*
-      Fails closed and says so. The blob is on Walrus (the agent owns it) and the row is not, so
-      the agent must remember again; telling it the mind was kept when nothing can find it would
-      be a memory in name only.
-    */
     return NextResponse.json(
       { error: `the blob was stored but the record was not written: ${error instanceof Error ? error.message : String(error)}` },
       { status: 503 },
@@ -146,7 +104,6 @@ export async function POST(request: Request) {
   }
 }
 
-/** The newest record under a label. Public: ciphertext location and an envelope only one key opens. */
 export async function GET(request: Request) {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;

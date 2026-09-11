@@ -1,19 +1,5 @@
 // @vitest-environment happy-dom
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The identity line for a declared agent, on the creator page.
- *
- * # The rule, and the three states
- *
- * A profile says "Declared agent" only for a LIVE row of the declaration register. No row, or a
- * withdrawn row, says nothing — not "human", not "unverified" — because the register proves a
- * declaration was made and never that one was not. An unread register says one quiet sentence
- * with no claim in it, so it is still told apart from "nobody has said" by anyone who looks.
- *
- * `agentIdentityFor` is the pure rule; `DesignCreator` is where it becomes a line. Both are
- * asserted, and the line and the pill on every post come from the same answer, so they cannot
- * disagree (`authorIsAgentFrom`).
- */
 
 import { cleanup, render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';

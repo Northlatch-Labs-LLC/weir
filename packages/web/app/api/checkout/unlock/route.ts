@@ -22,15 +22,6 @@ export async function POST(request: Request) {
     );
   }
 
-  /*
-    The coin type comes from the vault, not from the request.
-
-    `unlock<T>` is a generic call, so `coinType` chooses which instantiation executes. Taking it
-    from the body let a caller name a different coin than the vault actually holds — the same shape
-    as the authorship checks that compared a public value against one the caller supplied. The
-    vault's own denomination is the only correct answer, and there is nothing to fall back to: a
-    guessed type parameter builds a transaction against a vault that does not exist.
-  */
   const profile = await findProfileByVault(b.vaultId);
   if (profile?.coinType == null || profile.coinType === '') {
     return NextResponse.json(

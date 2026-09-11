@@ -1,29 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The chrome for pages you read before you have an account.
- *
- * # Two shells, and why
- *
- * Every route wore the application frame. That is right for the product — the feed, a creator's
- * page, the vault, the studio — and wrong for everything somebody reads while deciding whether to
- * be here at all. `/security`, the agent pages, the legal pages, sign in and join were rendered
- * inside a navigation rail listing Vault, Studio, Messages and Alerts: eight rooms a visitor cannot
- * enter, answering "where am I" before anything has said what this place is.
- *
- * Worse, it was a dead end. The rail's mark links to `/feed`, so a visitor who clicked "How the
- * money works" on the front page had no route back to the front page, and the header they arrived
- * through — Creators, AI Agent Citizens, Sign in, Create account — was gone.
- *
- * So these pages wear the front door's header and footer instead. The mark goes home, the nav is
- * the nav they arrived through, and the way in is on screen the whole time.
- *
- * # The menu
- *
- * Under 834px the plain links are replaced by a button that opens them. Hiding them and leaving
- * two buttons is what the landing page did, and it left a phone visitor with no route to anything
- * the site says about itself.
- */
 
 import { useState } from 'react';
 import NextLink from 'next/link';
@@ -32,24 +8,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, WeirMark } from '@projectx-social/ui';
 
-/*
-  The public destinations.
-
-  "How the money works" was in here and is not any more. No consumer platform puts a link about
-  security, custody or transparency in its primary navigation — Patreon, Buy Me a Coffee, X and
-  TikTok all put trust material in the footer, if anywhere — because a nav item answering "can I
-  trust you with money" asks the visitor a question they had not asked yet. `/security` is in the
-  footer, which is where somebody who wants it goes looking.
-
-  What is left is what a visitor came for: the people, the agents, and a way to make an account.
-*/
 const PUBLIC_NAV: readonly { href: string; label: string }[] = [
-  /*
-    "Creators" pointed at `/creators`, which is not a list of creators — it is "Open a page", the
-    three-step setup for becoming one. A stranger who clicks a nav item called Creators expecting to
-    see who is here landed on a form asking them to sign in and open a vault. `/explore` is the
-    directory: every account with a page, people and declared agents together.
-  */
   { href: '/explore', label: 'Creators' },
   { href: '/explore/agents', label: 'Agents' },
   { href: '/agents/build', label: 'Run an agent' },
@@ -171,14 +130,6 @@ export function PublicFooter() {
   );
 }
 
-/**
- * The whole shell: header, the document, footer.
- *
- * `children` is rendered inside `.w-doc`, which carries the type scale these pages need — one h1,
- * section h2s beneath it, and nothing inside a section larger than the section's own heading. The
- * app column's 20px title bar left every one of these pages with a heading smaller than its own
- * subheadings, which is the inversion that made them unreadable.
- */
 export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="w-app w-land">

@@ -1,12 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The translation, tested against shapes measured on mainnet.
- *
- * `test/helpers.ts`'s `mainnetSuccessResponse` reproduces, field for field, what `@mysten/sui`
- * 2.27.1's gRPC transport returned from a live mainnet simulation on 2026-08-31. The three
- * FINDING tests below each assert a thing a reasonable implementation would have got wrong, and
- * each one corresponds to a comment in `src/evidence.ts`.
- */
 
 import { describe, expect, it } from 'vitest';
 import { evaluate } from '@projectx-social/policy';
@@ -15,15 +7,6 @@ import { AGENT, SUI_TYPE, UNLOCK, effectsFor, mainnetSuccessResponse, policyFor 
 
 const RESPONSE = mainnetSuccessResponse(AGENT);
 
-/**
- * A deep copy of a response with one field removed.
- *
- * A bare `delete` needs the property to be declared optional, and widening the fixture's type to
- * make every field optional would weaken every other assertion in this file. Removing the key
- * through an index signature keeps the fixture honestly typed and still lets a test ask "what
- * happens when the node does not send this?" — which is the question that separates absence from
- * emptiness.
- */
 function withoutField<T>(value: T, path: readonly string[]): T {
   const clone = structuredClone(value);
   let node = clone as Record<string, unknown>;
@@ -53,24 +36,11 @@ describe('a successful mainnet simulation', () => {
     const reading = readSimulation(RESPONSE, AGENT);
     if (!reading.ok) throw new Error('unreachable');
     expect(reading.value.effects.balanceChanges[0]!.amount).toBe('-1088000');
-    // Never a number. Above 2^53 a number has already lost the value, and `String(number)` would
-    // launder that loss into something the parser accepts.
     expect(typeof reading.value.effects.balanceChanges[0]!.amount).toBe('string');
   });
 });
 
 describe('FINDING 1 — a failing simulation is under FailedTransaction, not Transaction', () => {
-  /*
-    @mysten/sui 2.27.1, src/grpc/core.ts:1597-1605:
-
-      return status.success
-        ? { $kind: 'Transaction',       Transaction: result }
-        : { $kind: 'FailedTransaction', FailedTransaction: result };
-
-    `packages/sdk/src/client.ts`'s simulate() reads only `Transaction?.status` and the JSON-RPC
-    fallback, so it returns fail('malformed', …) here and the decoded abort never reaches the
-    caller. This reader looks in the right place.
-  */
   const failed = {
     $kind: 'FailedTransaction',
     FailedTransaction: {
@@ -110,9 +80,6 @@ describe('FINDING 1 — a failing simulation is under FailedTransaction, not Tra
   });
 
   it('reads the structured error object rather than stringifying it to [object Object]', () => {
-    // The node's `error` is an object with a `message`, not a string. A naive
-    // `String(status.error)` yields "[object Object]", which decodes to module "unknown" and
-    // code -1 — an abort report with no abort in it.
     const reading = readSimulation(failed, AGENT);
     if (!reading.ok) throw new Error('unreachable');
     expect(reading.value.status).toContain('abort code: 12');
@@ -132,8 +99,6 @@ describe('FINDING 2 — TransferObjects.address is an argument reference, not an
   it('resolves an Input reference through the base64 Pure input to a real address', () => {
     const reading = readSimulation(RESPONSE, AGENT);
     if (!reading.ok) throw new Error('unreachable');
-    // The live response carried `{"$kind":"Input","Input":1}` and input 1 was base64 of the 32
-    // raw address bytes. Reading `.address` directly would have produced an object.
     expect(reading.value.effects.transfers).toEqual([{ index: 2, recipient: AGENT }]);
   });
 
@@ -143,7 +108,6 @@ describe('FINDING 2 — TransferObjects.address is an argument reference, not an
       $kind: 'TransferObjects',
       TransferObjects: {
         objects: [{ $kind: 'NestedResult', NestedResult: [0, 0] }],
-        // A destination produced by an earlier command cannot be known before execution.
         address: { $kind: 'NestedResult', NestedResult: [0, 1] },
       },
     } as (typeof runtimeRecipient)['Transaction']['transaction']['commands'][number];
@@ -152,8 +116,6 @@ describe('FINDING 2 — TransferObjects.address is an argument reference, not an
     if (!reading.ok) throw new Error('unreachable');
     expect(reading.value.effects.transfers[0]!.recipient).toBe(UNRESOLVED_RECIPIENT);
 
-    // And the policy refuses it. A destination we cannot name before signing is one we cannot
-    // approve.
     const decision = evaluate(reading.value.effects, policyFor(AGENT), {
       nowMs: Date.now(),
       spend: [],
@@ -221,8 +183,6 @@ describe('shapes this reader refuses', () => {
   });
 
   it('refuses a null payload rather than throwing a TypeError inside its own try', () => {
-    // Optional chaining guards `undefined`, not `null`. A throw here would be reported as a
-    // transport fault — a permanent condition wearing a transient's name.
     const reading = readSimulation({ $kind: 'Transaction', Transaction: null }, AGENT);
     expect(reading.ok).toBe(false);
     if (reading.ok) throw new Error('unreachable');
@@ -295,25 +255,6 @@ describe('effectsFor, the hand-written fixture', () => {
   });
 });
 
-/**
- * FINDING 4 — the object inputs, which is the evidence the twelfth rule stands on.
- *
- * `object-input` refuses a Move call whose object arguments are not allow-listed. It is the rule
- * that stops an injected instruction paying **an attacker's `CreatorVault`** through an otherwise
- * perfectly legal `creator::unlock`: permitted target, permitted coin type, `Unlock` transferred
- * home, whole spend inside the ceiling — every other rule passes, and the vault argument is what
- * decides whose earnings the money lands in. Anyone can open a vault for 29 SUI, so that
- * destination is attacker-supplied and repeatable.
- *
- * A rule is only as good as the evidence it reads, and this extraction had none of its own tests.
- * These are it. Shapes verified against `@mysten/sui` 2.27.1 `src/transactions/data/internal.ts`:
- * `ObjectArgSchema` (:270) is `ImmOrOwnedObject | SharedObject | Receiving`, and the outer
- * `CallArgSchema` (:309) has **five** variants — `UnresolvedObject` and `FundsWithdrawal` are
- * there too, and both must surface as `unclassified` rather than be dropped.
- *
- * The direction of every ambiguity is the same: **unreadable is refused, never skipped.** A
- * dropped input is an unbounded destination that reads as a clean pass.
- */
 describe('object inputs are extracted, and never quietly dropped', () => {
   const SHARED = (id: string) => ({
     $kind: 'Object',

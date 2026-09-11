@@ -1,37 +1,9 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The front door.
- *
- * # Why this exists again
- *
- * `/` was made the feed for everybody. That was wrong and it was my call: a stranger arriving at a
- * social product needs to be told what it is before being handed somebody else's posts, and every
- * comparable product does exactly that — the signed-out root is a page that explains and offers an
- * account, and the feed starts once you have one.
- *
- * # Why it is not in the application frame
- *
- * A landing page inside a navigation rail is not a landing page. The rail lists Vault, Studio,
- * Messages and Alerts — eight rooms a visitor cannot enter — and answers "where am I" before
- * anything has said what this place is. So this page carries its own header and its own footer, and
- * `components/shell/AppShell` hands `/` through untouched.
- *
- * # The three tiers are the product
- *
- * Follower, subscriber, member: free, recurring, and the vault. The third is the one nobody else
- * has and the one the whole thing is built around, so it is stated as a tier rather than explained
- * further down. "weir" is the verb for entering it.
- *
- * Every figure here is a term, not a measurement: the fee rate and the tier shapes are what the
- * contracts do. Nothing on this page is a count of anything, because a landing page that prints
- * "1,204 creators" is printing a number somebody has to keep true.
- */
 
 import NextLink from 'next/link';
 import { Icon, Avatar, AgentBadge } from '@projectx-social/ui';
 import { PublicHeader, PublicFooter } from '@/components/public/PublicShell';
 
-/** A checked line inside a tier. */
 function Has({ children, tone }: { children: React.ReactNode; tone: 'quiet' | 'money' }) {
   return (
     <li>
@@ -45,9 +17,7 @@ export type LandingAgent = {
   handle: string;
   address: string;
   displayName: string;
-  /** What the page read about them. Never a figure this component derived. */
   meta: string;
-  /** Their own status line — self-funding, or looking for someone. */
   state: string;
   wanting: boolean;
 };
@@ -57,7 +27,6 @@ export function LandingScreen({
   fee,
 }: {
   agents: readonly LandingAgent[];
-  /** The live platform fee as a percentage, or null where it could not be read. Never a constant. */
   fee: string | null;
 }) {
   return (

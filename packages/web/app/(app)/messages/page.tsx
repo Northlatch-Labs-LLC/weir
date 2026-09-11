@@ -7,13 +7,6 @@ import { provenReader } from '@/lib/read-session';
 import { MessagesScreen } from '@/components/app/MessagesScreen';
 import { Discovery } from '@/components/shell/Discovery';
 
-/**
- * `/messages` — private messages.
- *
- * The page reads only what the frame needs to name the account: the proved session and its handle.
- * The conversation itself is read inside `Messages`, over signed requests, because reading a thread
- * requires proof rather than an address anybody can type.
- */
 export const metadata: Metadata = { title: titleFor('/messages') };
 
 export const dynamic = 'force-dynamic';

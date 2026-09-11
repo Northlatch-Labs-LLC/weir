@@ -13,7 +13,6 @@ interface Payment {
   creatorNet: string;
   payer: string;
   digest: string;
-  /** The vault coin's decimals. `null` when unread — never defaulted to six. */
   decimals: number | null;
   symbol: string;
 }
@@ -25,13 +24,6 @@ type Activity =
 function short(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
-/*
-  A payment at the scale of the coin it was actually made in.
-
-  This divided by 1e6 for every payment, so a creator paid in a nine-decimal coin read their own
-  earnings a thousand times too high. `decimals` is `null` when the coin's metadata could not be
-  read, and an unknown scale is shown as such rather than as a confident wrong number.
-*/
 function money(minor: string, decimals: number | null, symbol: string): string {
   if (decimals === null) return 'scale unknown';
   return `${formatUnits(BigInt(minor), decimals)}${symbol === '' ? '' : ` ${symbol}`}`;
@@ -47,7 +39,6 @@ export function Notifications() {
   const [truncated, setTruncated] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
 
   async function load() {
     if (signer === null) return;
@@ -72,7 +63,6 @@ export function Notifications() {
         error?: string;
       };
       if (b.payments === undefined) {
-        // A failure, not an empty inbox. Those look identical and only one means nothing happened.
         setError(b.error ?? 'could not read alerts');
       } else {
         setPayments(b.payments);
@@ -188,8 +178,6 @@ export function Notifications() {
                       <>
                         <strong>{short(a.from)}</strong> messaged you
                         {a.encrypted ? (
-                          // No comma after the badge — it carries a right margin, and a comma
-                          // pushed off the word it follows reads as a typo.
                           <> — <span className="enc-tag">encrypted</span> open the thread to read it</>
                         ) : (
                           <>: {a.preview.slice(0, 60)}</>

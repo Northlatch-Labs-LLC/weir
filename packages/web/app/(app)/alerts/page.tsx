@@ -9,21 +9,6 @@ import { formatUnits } from '@/lib/units';
 import { AlertsScreen, type AlertView } from '@/components/app/AlertsScreen';
 import { Discovery } from '@/components/shell/Discovery';
 
-/**
- * `/alerts` — what happened while you were away.
- *
- * # Every read this route makes lives here
- *
- * The session, the handle and the notification feed. `AlertsScreen` is handed rows that are already
- * words, so nothing about scale, ordering or entitlement can be decided by a component that is only
- * supposed to draw.
- *
- * # The three outcomes are kept apart
- *
- * No session is the locked direction and renders as a prompt to sign in. A feed that could not be
- * read renders as a refusal. A feed that was read and is empty renders as empty. Only the third of
- * those means nothing has happened to you.
- */
 export const metadata: Metadata = { title: titleFor('/alerts') };
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +17,6 @@ function shortAddress(address: string): string {
   return address.length <= 12 ? address : `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-/** Compact relative time, for events the store actually timestamped. */
 function ago(nowMs: number, atMs: number): string {
   const seconds = Math.max(0, Math.round((nowMs - atMs) / 1000));
   if (seconds < 60) return 'now';
@@ -43,7 +27,6 @@ function ago(nowMs: number, atMs: number): string {
   return `${Math.round(hours / 24)}d`;
 }
 
-/** Each payment kind gets the icon that names what it was, and all of them are money. */
 function paymentIcon(what: string): AlertView['icon'] {
   if (what === 'unlock') return 'lock';
   if (what === 'tip') return 'support';
@@ -103,11 +86,6 @@ export default async function NotificationsPage({
   const alerts: AlertView[] = [];
 
   for (const [index, payment] of feed.payments.entries()) {
-    /*
-      An amount appears only when its coin's decimals were read. Without them the figure is
-      meaningless — a nine-decimal coin printed at six decimals is a thousand times wrong — so the
-      row says what happened and omits the number rather than inventing a scale.
-    */
     const amount =
       payment.decimals === null
         ? null
@@ -151,7 +129,6 @@ export default async function NotificationsPage({
         id: `message-${event.from}-${index}`,
         tone: 'plain',
         icon: 'messages',
-        // An encrypted thread has no preview, and saying so beats showing ciphertext.
         text: `Message from ${shortAddress(event.from)}`,
         detail: event.encrypted ? 'encrypted' : event.preview,
         when: ago(now, event.at),

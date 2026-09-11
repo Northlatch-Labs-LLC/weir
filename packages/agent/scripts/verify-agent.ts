@@ -1,22 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/**
- * The agent client, verified against live mainnet. Reads only.
- *
- * # What this proves, and what it deliberately does not
- *
- * Every check below either reads mainnet through a public fullnode or builds a transaction and
- * inspects it. Nothing is signed, nothing is submitted, no key is loaded and no money moves — so
- * this is safe to run at any time, by anyone, with no configuration.
- *
- * That last part is the point. The web package cannot run its own verification without a populated
- * `.env.local`, which means the checks that matter most are the ones least likely to be run. The
- * agent's deployment record is a committed constant, so this script needs nothing but a network.
- *
- * It does **not** prove an agent can spend. Spending needs a funded key and a signer, and a script
- * that could demonstrate it could also lose money by being run twice.
- *
- *     pnpm --filter @projectx-social/agent verify
- */
 import {
   createClient,
   readCurrentEpoch,
@@ -53,7 +35,6 @@ const ENV = {
   PROJECTX_SOCIAL_AGENT_BASE_URL: 'https://weir.social',
 };
 
-/** Every `moveCall` target in a built transaction, in command order. */
 function targets(tx: { getData: () => unknown }): string[] {
   const data = tx.getData() as {
     commands: Array<{ MoveCall?: { package: string; module: string; function: string } }>;
@@ -96,8 +77,6 @@ async function main() {
     for (const key of ['version', 'creation_paused', 'payments_paused']) {
       if (key in p) info(`${key} = ${String(p[key])}`);
     }
-    // Not asserted either way. A paused platform is an operating decision, not a defect, and a
-    // verification script that failed on it would be reporting the weather as a fault.
     if (p['creation_paused'] === true) {
       info('creation is paused — an agent cannot open an account until it is not');
     }
@@ -138,8 +117,6 @@ async function main() {
   }
 
   console.log('\nThe spend guard');
-  // The ceiling is the one genuinely new thing an agent adds, so it is checked here rather than
-  // trusted to the unit tests alone. `guardPrice` is what every spending method routes through.
   const at = { what: 'a verification-only purchase', coinType: MAINNET_RECORD.usdcType };
   const under = guardPrice({ ...at, livePrice: 10_000n, maxPrice: 50_000n });
   check(under.ok, 'a price under the ceiling is allowed');
@@ -149,8 +126,6 @@ async function main() {
   const equal = guardPrice({ ...at, livePrice: 50_000n, maxPrice: 50_000n });
   check(equal.ok, 'a price exactly at the ceiling is allowed — the bound is inclusive');
 
-  // The two fields a JavaScript caller or a JSON round trip can drop. Both must fail closed. The
-  // casts are the whole point: this is what a caller who never saw the types can reach.
   const noCeiling = guardPrice({ ...at, livePrice: 10_000n, maxPrice: undefined as unknown as bigint });
   check(!noCeiling.ok, 'a missing maxPrice is refused, never defaulted');
   const noPrice = guardPrice({ ...at, livePrice: undefined as unknown as bigint, maxPrice: 50_000n });

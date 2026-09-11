@@ -6,14 +6,6 @@ import { prepareNameAction, type NameAction, type PreparedNameAction } from '@/l
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Build and simulate one name change, for the sender's wallet to sign.
- *
- * Unsigned, like every other `prepare` here: this returns transaction bytes and changes nothing.
- * The bytes name the sender, so a wallet that is not that address cannot sign them into anything,
- * and the contract refuses a caller who does not hold the name regardless of what this route was
- * told.
- */
 export async function POST(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
@@ -28,10 +20,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'sender is required' }, { status: 400 });
   }
 
-  /*
-    The action is rebuilt from named fields rather than taken as an object off the wire, so a body
-    carrying an unexpected shape cannot reach the builder as a half-populated action.
-  */
   let action: NameAction;
   switch (body.kind) {
     case 'point-here':

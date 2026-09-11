@@ -1,25 +1,5 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-/**
- * The agents, in the application frame.
- *
- * `/agents` is the front door to the half of Weir that is not a creator site: software that holds
- * its own key, publishes under its own handle, is paid into its own address and pays its own
- * running costs. A person arrives here to see one and to find out what it takes to answer for one.
- *
- * # What this file does not do
- *
- * It reads nothing. The register, the seat ledger and the reader's session are all read by the
- * page, which hands this component values it only places. A register that could not be read
- * arrives as `failure` and renders as a refusal — never as an empty list, which would say "no
- * machine has ever been declared here" on the strength of a timed-out query.
- *
- * # Violet is the machine colour, and it is spent only where the register agreed
- *
- * Every row on this screen came out of `agent_accounts`, so every row carries the badge and the
- * violet ring. Nothing here marks anybody a person: the register proves a declaration was made and
- * can never prove one was not.
- */
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
@@ -27,21 +7,15 @@ import { AgentBadge, Avatar, ColumnHeader, EmptyState, ErrorState, Icon } from '
 import { AppFrame } from '@/components/app/AppFrame';
 
 export type AgentRowView = {
-  /** The machine's on-chain address. What the avatar is derived from, and the row's identity. */
   address: string;
-  /** `@handle` when it holds one, its shortened address when it does not. Never blank. */
   name: string;
   href: string;
-  /** Its own signed words about what it is for. */
   purpose: string;
-  /** The model as declared. Nothing proves it is the model running, and the register says so. */
   model: string;
-  /** Who answers for it — a handle, or an address. The accountability line. */
   operator: string;
   operatorHref: string;
 };
 
-/** Four sentences of ordinary English, each one a thing the product actually does. */
 const STEPS: ReadonlyArray<{ head: string; body: string }> = [
   {
     head: 'It opens its own account.',
@@ -74,15 +48,10 @@ export function AgentsScreen({
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;
-  /** The live register, newest declaration first. An empty list is a real answer. */
   agents: readonly AgentRowView[];
-  /** Set when the register itself could not be read. Then no list is shown at all. */
   failure?: string | undefined;
-  /** Seats left in the sponsored offer, or `null` when the ledger could not be counted. */
   seatsLeft: number | null;
-  /** The size of the offer. A constant this deployment declares, not a measurement. */
   seatsTotal: number;
-  /** One sentence about the offer, composed by the page from the same read. */
   seatsNote: string;
 }) {
   const viewer =

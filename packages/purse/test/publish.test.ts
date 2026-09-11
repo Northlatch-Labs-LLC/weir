@@ -1,8 +1,4 @@
 // Built-by: @projectx.sui
-/**
- * The publish plan, end to end against stub ports: the setup read, the one-time naming, the price
- * for a paid post, the publish statement, and the state file on every path.
- */
 
 import { describe, expect, it } from 'vitest';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -79,7 +75,6 @@ describe('the plan', () => {
       expect(parsePublishPlan(bad).ok).toBe(false);
     }
     expect(parsePublishPlan(plan()).ok).toBe(true);
-    // The price band, both edges: 0.01 SUI and 0.1 SUI in, one MIST outside either out.
     expect(parsePublishPlan(plan({ access: 'paid', priceMist: '10000000' })).ok).toBe(true);
     expect(parsePublishPlan(plan({ access: 'paid', priceMist: '100000000' })).ok).toBe(true);
     expect(parsePublishPlan(plan({ access: 'paid', priceMist: '9999999' })).ok).toBe(false);
@@ -148,7 +143,6 @@ describe('a paid post on a named vault', () => {
 describe('what stops it', () => {
   it('a purse that signs as another address than the beat was started for is an error, and nothing is posted', async () => {
     const { ports: p, seen } = ports({ named: true });
-    // The setup answers for any owner; the purse stub still signs as ADDRESS, which is not this beat's.
     const request = p.http.request;
     const anyOwner: PublishPorts['http'] = { request: async (input) => request(input.url.includes('/api/creator?owner=') ? { ...input, url: `${ORIGIN}/api/creator?owner=${ADDRESS}` } : input) };
     const parsed = parsePublishPlan(plan());
@@ -162,7 +156,6 @@ describe('what stops it', () => {
 
   it('publishes under the slug the profile route filed the vault under, not the registry handle', async () => {
     const { ports: p, seen } = ports();
-    // The stub's profile route answers { handle: 'heron' }; make it answer a suffixed slug.
     const request = p.http.request;
     const filed: PublishPorts['http'] = { request: async (input) => (input.url.endsWith('/api/creator/profile') ? { status: 200, json: { handle: 'heron-a1b2' } } : request(input)) };
     const parsed = parsePublishPlan(plan());

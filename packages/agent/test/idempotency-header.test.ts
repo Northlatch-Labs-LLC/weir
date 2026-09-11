@@ -1,15 +1,4 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-/*
-  Two seams on the publish path, each between a green agent suite and a green web suite:
-
-  1. The agent sent no `Idempotency-Key`, so the ledger the web keeps for retries was never
-     reached from here. Now `post` and `send` carry the caller's key as the header.
-  2. The route answers `{ post: { id, access } }`; the agent read a top-level `postId` and
-     reported every accepted publish as malformed. Now it reads the shape the route returns.
-
-  Mutations predicted: drop the header spread in `post` → "sends the key" red; read `postId` only
-  → "reads the id the route returns" red.
-*/
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { describe, expect, it } from 'vitest';
 import { createAgent, generateAgentKey, MAINNET_RECORD } from '../src/index.js';
@@ -27,7 +16,6 @@ const FULL_ENV = {
 
 type Call = { url: string; headers: Record<string, string>; body: unknown };
 
-/** A deployment that accepts every session and every publish, and records what it was sent. */
 function deployment(): { fetchImpl: NonNullable<Parameters<typeof createAgent>[0]['fetchImpl']>; calls: Call[] } {
   const calls: Call[] = [];
   const fetchImpl = (async (url: string, init?: { headers?: Record<string, string>; body?: string }) => {
