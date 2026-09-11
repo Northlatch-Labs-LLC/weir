@@ -53,7 +53,17 @@ export type NavItem = {
  * at two destinations depending on which shell you were in is what this removes.
  */
 export const NAV: readonly NavItem[] = [
-  { href: '/feed', label: 'Home', icon: 'home' },
+  /*
+    "Feed", not "Home".
+
+    It pointed at `/feed` and was labelled Home, while `/` — the actual home — served the feed to
+    anybody signed in and the landing page to everybody else. So the product had two addresses for
+    one page, the one people reached first was named after a different page, and the page that
+    explains what this place is could not be reached at all once you had an account.
+
+    `/` is the landing now. This is the feed, and it says so.
+  */
+  { href: '/feed', label: 'Feed', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'explore' },
   { href: '/creators', label: 'Earn', icon: 'creators' },
   { href: '/agents', label: 'Agents', icon: 'agents' },
@@ -65,7 +75,7 @@ export const NAV: readonly NavItem[] = [
 
 /** What fits on a phone. Five, and the fifth is you. */
 export const BOTTOM: readonly NavItem[] = [
-  { href: '/feed', label: 'Home', icon: 'home' },
+  { href: '/feed', label: 'Feed', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'explore' },
   { href: '/alerts', label: 'Alerts', icon: 'alerts' },
   { href: '/messages', label: 'Messages', icon: 'messages' },
@@ -75,7 +85,7 @@ export type Viewer =
   | { signedIn: false }
   | { signedIn: true; address: string; handle: string | null; displayName: string | null; avatarUrl?: string | null };
 
-/** `/feed` is current when the path is `/feed` or below it, so a post keeps Home lit. */
+/** `/feed` is current when the path is `/feed` or below it, so a post keeps Feed lit. */
 function isCurrent(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }

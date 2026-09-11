@@ -11,35 +11,27 @@ import { readProtocol } from '@/lib/chain';
 export const dynamic = 'force-dynamic';
 
 /**
- * The front door.
+ * The front door, and only that.
  *
- * Two pages at one address, and the test is whether the visitor has an account: a proved session,
- * or a wallet naming itself with `?reader=`, gets the feed; anybody else gets the page that says
- * what this is and offers them an account.
+ * # Why the fork is gone
  *
- * That fork was removed for a few hours and it was a mistake. Sending a stranger straight to
- * somebody else's posts, inside a navigation rail listing eight rooms they cannot enter, gives them
- * no way to work out what the place is or how to join it. Every comparable product answers this the
- * same way and for the same reason.
+ * This address used to be two pages: a proved reader — or anyone at all carrying `?reader=0x…` in
+ * the URL — got the feed, and everybody else got the landing. Three things were wrong with it.
  *
- * A failed session read lands on the landing page, which leaks nothing.
+ * The feed already has an address. `/feed` exists, is titled Feed, and is what the rail links to,
+ * so the same page lived at two URLs and the one people reached first was labelled Home.
+ *
+ * `?reader=` is a claim, not a credential. Anyone can type one and links carry them, so a copied
+ * URL opened the signed-in application as somebody else's address. Nothing paid was released —
+ * entitlement has always required a proved session — but the shell, the rail and the feed all
+ * presented themselves as that person's.
+ *
+ * And a signed-in reader could not reach this page at all. It is the only place the product
+ * explains itself, and the people most often asked to explain it are the ones already using it.
+ *
+ * So `/` is the landing, for everybody, always. The feed is at `/feed`.
  */
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string; view?: string }>;
-}) {
-  const { reader, view } = await searchParams;
-  const viewer = fold(
-    await provenReader(),
-    (value) => value,
-    () => null,
-  );
-
-  if (viewer !== null || reader !== undefined) {
-    return <FeedView reader={reader} requested={view} />;
-  }
-
+export default async function Home() {
   /*
     The agents named on the landing page are read, never illustrative. If the store cannot be
     reached the band renders with no names rather than with invented ones — an agent that does not

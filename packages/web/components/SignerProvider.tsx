@@ -245,11 +245,13 @@ export function SignerProvider({
       /* Carried over so a reader who was connected before this change still is. */
       storageKey: 'projectx.wallet',
       /*
-        The kit offers to inject Mysten's hosted Slush wallet alongside the reader's extensions.
-        It is off because adding a wallet provider to this product is a decision, not a default —
-        turning it on is deleting this line.
+        Slush's hosted wallet is offered alongside whatever extensions the reader has.
+
+        It is the kit's default and it stays on. This product's whole first screen is addressed to
+        somebody who has never held an address, and the alternative for them is "install a browser
+        extension first" — which is the step most people stop at. A wallet that needs nothing
+        installed is the difference between reading that page and leaving it.
       */
-      slushWalletConfig: null,
     }),
   );
 
