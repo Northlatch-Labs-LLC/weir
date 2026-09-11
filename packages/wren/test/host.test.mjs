@@ -257,6 +257,16 @@ function runWatchdog(stateFile, extraEnv = {}) {
   });
 }
 
+// The staleness ceiling these tests exercise, passed to the watchdog explicitly.
+//
+// Set here rather than inherited, so a test measures the BEHAVIOUR — a state file past the ceiling
+// fires, one inside it does not — instead of pinning whatever default the shipped script carries.
+// The default belongs to the deployment: it must exceed one beat interval plus the timer's jitter,
+// and changing it there must never turn these tests red.
+const CEILING_SECONDS = 5400;
+const CEILING_ENV = { WREN_WATCHDOG_MAX_AGE_SECONDS: String(CEILING_SECONDS) };
+const secondsAgo = (seconds) => new Date(Date.now() - seconds * 1000);
+
 test('the watchdog passes on a fresh state file', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'watchdog-fresh-'));
   try {
@@ -269,34 +279,34 @@ test('the watchdog passes on a fresh state file', () => {
   }
 });
 
-test('the watchdog fires (non-zero exit) on a state file older than 90 minutes', () => {
+test('the watchdog fires (non-zero exit) on a state file past the ceiling', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'watchdog-stale-'));
   try {
     const stateFile = path.join(dir, 'latest.json');
     writeFileSync(stateFile, '{"exit":0}', 'utf8');
-    const ninetyOneMinutesAgo = new Date(Date.now() - 91 * 60 * 1000);
-    utimesSync(stateFile, ninetyOneMinutesAgo, ninetyOneMinutesAgo);
-    const result = runWatchdog(stateFile);
-    assert.notEqual(result.status, 0, 'a 91-minute-old state file must fire the watchdog');
-    assert.match(result.stderr, /past the 5400s ceiling/);
+    const pastCeiling = secondsAgo(CEILING_SECONDS + 60);
+    utimesSync(stateFile, pastCeiling, pastCeiling);
+    const result = runWatchdog(stateFile, CEILING_ENV);
+    assert.notEqual(result.status, 0, 'a state file past the ceiling must fire the watchdog');
+    assert.match(result.stderr, new RegExp(`past the ${CEILING_SECONDS}s ceiling`));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('the watchdog fires on a state file just under 90 minutes old passing, and just over failing (boundary)', () => {
+test('the watchdog passes a state file just inside the ceiling and fires just past it (boundary)', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'watchdog-boundary-'));
   try {
     const stateFile = path.join(dir, 'latest.json');
     writeFileSync(stateFile, '{"exit":0}', 'utf8');
 
-    const justUnder = new Date(Date.now() - 89 * 60 * 1000);
+    const justUnder = secondsAgo(CEILING_SECONDS - 60);
     utimesSync(stateFile, justUnder, justUnder);
-    assert.equal(runWatchdog(stateFile).status, 0, '89 minutes old must still pass');
+    assert.equal(runWatchdog(stateFile, CEILING_ENV).status, 0, 'a minute inside the ceiling must still pass');
 
-    const justOver = new Date(Date.now() - 91 * 60 * 1000);
+    const justOver = secondsAgo(CEILING_SECONDS + 60);
     utimesSync(stateFile, justOver, justOver);
-    assert.notEqual(runWatchdog(stateFile).status, 0, '91 minutes old must fail');
+    assert.notEqual(runWatchdog(stateFile, CEILING_ENV).status, 0, 'a minute past the ceiling must fail');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -454,9 +464,9 @@ function deadManFixture() {
     state,
     watchdog,
     stateFile,
-    stale: (minutes = 91) => {
+    stale: (seconds = CEILING_SECONDS + 60) => {
       writeFileSync(stateFile, '{"exit":0}', 'utf8');
-      const then = new Date(Date.now() - minutes * 60 * 1000);
+      const then = secondsAgo(seconds);
       utimesSync(stateFile, then, then);
     },
     run: (extraEnv = {}) =>
@@ -466,6 +476,7 @@ function deadManFixture() {
           ...process.env,
           WREN_STATE_FILE: stateFile,
           WREN_WATCHDOG_DIR: watchdog,
+          ...CEILING_ENV,
           ...extraEnv,
         },
       }),
@@ -489,7 +500,7 @@ test('N-1: a forged marker in the CONTAINER-WRITABLE state directory no longer s
       'a host that has stopped beating must ask for a notice, whatever the container wrote',
     );
     assert.doesNotMatch(result.stderr, /notice already sent/, 'the forged marker must not be read at all');
-    assert.match(result.stderr, /past the 5400s ceiling/);
+    assert.match(result.stderr, new RegExp(`past the ${CEILING_SECONDS}s ceiling`));
     // And the real record went to the root-only directory, not to the one the container holds.
     assert.ok(existsSync(path.join(f.watchdog, 'degraded')), 'the marker belongs in the root-only directory');
     assert.ok(existsSync(path.join(f.watchdog, 'alerts.jsonl')), 'so does the record');
