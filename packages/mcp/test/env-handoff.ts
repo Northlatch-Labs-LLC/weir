@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_ENVIRONMENT, agentEnvironment } from '../src/transport.js';
@@ -42,14 +42,67 @@ const MISSING_COIN = 'PROJECTX_SOCIAL_AGENT_COIN_TYPE is not set';
 const MISSING_BASE = 'PROJECTX_SOCIAL_AGENT_BASE_URL is not set';
 const STOPS_ON_KEY = "Cannot read properties of null (reading 'address')";
 
-function start(vars: Record<string, string>): { stderr: string; status: number | null } {
-  const result = spawnSync('pnpm', ['exec', 'tsx', 'src/index.ts', '--http'], {
-    cwd: here,
-    env: { PATH: process.env['PATH'] ?? '', HOME: process.env['HOME'] ?? '', WEIR_MCP_HTTP_PORT: '8497', ...vars },
-    encoding: 'utf8',
-    timeout: 30_000,
+/** The marker the server prints once it is actually serving. */
+const READY = 'listening on';
+/** tsx from the workspace root — one process, not `pnpm exec tsx`, which is three. */
+const TSX = join(here, '..', '..', 'node_modules', '.bin', 'tsx');
+
+/*
+  Start the server, take what it says, and stop it.
+
+  # Why this is not `spawnSync(..., { timeout })` any more
+
+  It was, and it hung. The old form ran the server through `pnpm exec tsx` — three processes deep —
+  and a `spawnSync` timeout signals only the process it launched. `pnpm` died on the timer; the node
+  server underneath kept the stderr pipe open, and `spawnSync` waits on the PIPE, not on the child
+  it killed. So the eight-variable start, which is SUPPOSED to keep running because a server that
+  starts does not exit, hung this file far past its own 30-second limit — measured at sixteen
+  minutes on 2026-09-11 with no output at all — and left an orphan holding port 8497 that made the
+  NEXT run fail with EADDRINUSE, which then read as a different bug entirely.
+
+  So: `tsx` directly, `detached` so the child leads its own process group, and the whole group is
+  killed by negative pid. And it resolves on what the server SAYS — it exited with a refusal, or it
+  printed `listening on` — rather than on a clock. A refusal now takes as long as the refusal takes.
+
+  The 15-second cap is the last resort for a server that neither refuses nor serves. It is not the
+  normal path and a run that hits it is a finding, not a wait.
+*/
+function start(vars: Record<string, string>): Promise<{ stderr: string; status: number | null }> {
+  return new Promise((resolve) => {
+    const child = spawn(TSX, ['src/index.ts', '--http'], {
+      cwd: here,
+      env: { PATH: process.env['PATH'] ?? '', HOME: process.env['HOME'] ?? '', WEIR_MCP_HTTP_PORT: '8497', ...vars },
+      detached: true,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+
+    let stderr = '';
+    let settled = false;
+
+    const finish = (status: number | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(cap);
+      // Negative pid: the group, not just the leader. `detached` is what makes that legal.
+      try {
+        if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        // Already gone — the refusal path exits on its own, and that is the common case.
+      }
+      resolve({ stderr, status });
+    };
+
+    const cap = setTimeout(() => finish(null), 15_000);
+
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+      // A server that is serving will never exit, so readiness is the end of the story.
+      if (stderr.includes(READY)) finish(null);
+    });
+    child.on('error', () => finish(null));
+    child.on('exit', (code) => finish(code));
   });
-  return { stderr: result.stderr, status: result.status };
 }
 
 console.log('=== the list matches its sources ===');
@@ -75,7 +128,7 @@ check('the README documents every name in the projection', () => {
 });
 
 console.log('=== the agent sees what the operator exported ===');
-const six = start(SIX);
+const six = await start(SIX);
 check('with the six chain variables set, the refusal is no longer "missing required environment variables"', () => {
   assert.ok(!six.stderr.includes(MISSING_SIX), six.stderr);
 });
@@ -83,13 +136,13 @@ check('…it is the coin type, the seventh, which the placeholder used to hide',
   assert.ok(six.stderr.includes(MISSING_COIN), six.stderr);
   assert.equal(six.status, 78);
 });
-const seven = start({ ...SIX, ...COIN });
+const seven = await start({ ...SIX, ...COIN });
 check('with the coin type set too, the refusal is the base URL, the eighth', () => {
   assert.ok(!seven.stderr.includes(MISSING_COIN), seven.stderr);
   assert.ok(seven.stderr.includes(MISSING_BASE), seven.stderr);
   assert.equal(seven.status, 78);
 });
-const eight = start({ ...SIX, ...COIN, ...BASE });
+const eight = await start({ ...SIX, ...COIN, ...BASE });
 check('with all eight set, none of the three configuration refusals appears', () => {
   for (const sentence of [MISSING_SIX, MISSING_COIN, MISSING_BASE]) assert.ok(!eight.stderr.includes(sentence), eight.stderr);
 });
