@@ -4,8 +4,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
 import { operatorConflict, recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
-import { markOfferFiled, markSeekingClaimed, offersFor } from '@/lib/agent-seeking';
-import { normaliseAddress } from '@/lib/db';
+import { markOfferFiled, markSeekingClaimed, unfiledOfferFor } from '@/lib/agent-seeking';
 import { OPERATOR_OFFER_WINDOW_MS } from '@projectx-social/sdk';
 import { operatorFootprint } from '@/lib/operator-footprint';
 
@@ -33,12 +32,25 @@ export async function POST(request: Request) {
   // an unfiled offer from this operator to this agent at this instant — meaning a human signed
   // first and the agent is answering it late, which is the whole point of adoption. Anyone else is
   // declaring with their operator at the screen, and that is a transaction: ten minutes.
-  const offers = await offersFor(declaration.address).catch(() => []);
-  const answeringAnOffer = offers.some(
-    (offer) =>
-      normaliseAddress(offer.operatorAddress) === normaliseAddress(declaration.operatorAddress) &&
-      offer.issuedAtMs === declaration.timestampMs,
-  );
+  //
+  // A read that fails is not an answer. Narrowing to ten minutes on a transport error tells an
+  // agent its signature expired, which is both untrue and an instruction it cannot obey: the
+  // statement is signed over the offer's fixed instant and Ed25519 gives the same bytes every
+  // time. Refuse and say to try again.
+  let answeringAnOffer: boolean;
+  try {
+    answeringAnOffer =
+      (await unfiledOfferFor(
+        declaration.address,
+        declaration.operatorAddress,
+        declaration.timestampMs,
+      )) !== null;
+  } catch {
+    return NextResponse.json(
+      { error: 'the register is not reachable just now — try again' },
+      { status: 503 },
+    );
+  }
   const windowMs = answeringAnOffer ? OPERATOR_OFFER_WINDOW_MS : undefined;
 
   const byAgent = await verifyAction({

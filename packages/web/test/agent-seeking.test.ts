@@ -170,6 +170,47 @@ describe('offers and filing', () => {
       timestampMs: halfADay, agentSignature: await agentHalf(halfADay), operatorSignature: await operatorHalf(halfADay),
     });
     expect(filed.status, 'no offer row, so this is a direct declaration and twelve hours is stale').toBe(401);
+    // 401 alone would also pass if the statement were malformed or the digest already spent.
+    // Assert the reason, so this test cannot keep passing for a cause it was not written for.
+    expect(((await filed.json()) as { error: string }).error).toMatch(/has expired/);
+  });
+
+  it('a genuine offer still files when the agent is buried under newer ones', async () => {
+    // offersFor is ORDER BY issued_at_ms DESC LIMIT SEEKING_PAGE -- a page size for a display
+    // list. Anyone may offer to a listed agent, so if that query decided authorisation, filling
+    // the page with newer throwaway offers would push the real one off the end and permanently
+    // deny adoption for that agent. The lookup is keyed on the whole pair, so depth is irrelevant.
+    await listed();
+    const at = Date.now();
+    const operatorSignature = await operatorHalf(at);
+    await post(offers, '/api/agents/seeking/offers', {
+      agentAddress: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose,
+      timestampMs: at, operatorSignature,
+    });
+
+    // Sixty decoys, every one newer than the genuine offer. Inserted directly: the point is the
+    // shape of the row set the gate sees, and signing sixty throwaway keys proves nothing extra.
+    for (let i = 0; i < 60; i += 1) {
+      await testDb().query(
+        `INSERT INTO agent_operator_offers
+           (agent_address, operator_address, model, purpose, issued_at_ms, operator_signature, created_at_ms, filed_at_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)`,
+        [AGENT, Ed25519Keypair.generate().toSuiAddress(), LISTING.model, LISTING.purpose, at + i + 1, 'decoy', Date.now()],
+      );
+    }
+
+    const agentSignature = await agentHalf(at);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(at + 12 * 60 * 60 * 1000));
+      const filed = await post(declare, '/api/agents/declare', {
+        address: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose,
+        timestampMs: at, agentSignature, operatorSignature,
+      });
+      expect(filed.status, 'sixty newer offers must not bury the one this pair names').toBe(201);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('an offer whose signature does not stand is refused, and an expired offer is not listed', async () => {

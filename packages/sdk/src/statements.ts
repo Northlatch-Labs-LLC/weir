@@ -13,11 +13,11 @@ export const SIGNATURE_WINDOW_MS = 10 * 60 * 1000;
   agent listed itself, the offer arrived while it slept, and the pair could not be filed.
 
   The long window is NOT a property of what is signed. `declare-agent` is signed in both flows: by
-  an agent whose operator is standing at the screen, and by an agent answering a day-old offer.
-  Hang the window on the statement kind and asking for a day becomes as easy as choosing a kind,
-  while every preconfigured declaration silently receives one it never needed.
+  an agent whose operator is standing at the screen, and by an agent answering a day-old offer. A
+  window carried by the statement kind would therefore reach both, and a signer choosing a kind
+  would be choosing their own expiry.
 
-  So it is a property of what the register already knows. `/api/agents/declare` looks for a recorded
+  It is a property of what the register already knows. `/api/agents/declare` looks for a recorded
   offer from that operator to that agent at that instant, and passes this window only when it finds
   one. The wider window is granted by a row a human caused. It cannot be requested by the signer.
 

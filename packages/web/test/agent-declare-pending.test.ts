@@ -5,12 +5,12 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
 
-// The window this statement kind actually carries, read from the rule rather than written here:
-// a declaration is a ceremony between two parties who are not awake together, and its window is
-// deliberately longer than a transaction's. Hardcoding the number made these tests fail when the
-// rule changed and the behaviour was correct.
-const DECLARE_WINDOW = SIGNATURE_WINDOW_MS;
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
+
+// The direct path: the operator is at the screen while the agent waits, so both halves are fresh
+// and this is a transaction. The longer window belongs to an offer the register holds, and is
+// granted by that row rather than by the statement -- see /api/agents/declare.
+const DECLARE_WINDOW = SIGNATURE_WINDOW_MS;
 
 useTestDatabase();
 
@@ -111,6 +111,26 @@ describe('the waiting room', () => {
     expect(after.requests).toEqual([]);
     const { rows } = await testDb().query<{ filed_at_ms: string | null }>('SELECT filed_at_ms FROM agent_declaration_requests WHERE address = $1', [AGENT]);
     expect(rows[0]?.filed_at_ms).not.toBeNull();
+  });
+
+  it('the direct path keeps ten minutes: an operator who files eleven minutes later is refused', async () => {
+    // The only guard on /api/agents/declare against the long window leaking back onto this path.
+    // The adoption flow gets twenty-four hours because the register holds an offer row; here
+    // there is none, and both parties are present, so the transaction window stands.
+    const issued = Date.now();
+    const half = { address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) };
+    expect((await postPending(half)).status).toBe(201);
+    const operatorSignature = await operatorHalf(issued);
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(issued + DECLARE_WINDOW + 60_000));
+      const filed = await postDeclare({ ...half, operatorSignature });
+      expect(filed.status, 'eleven minutes is stale on the direct path').toBe(401);
+      expect(((await filed.json()) as { error: string }).error).toMatch(/has expired/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a half that does not verify is refused and never listed', async () => {

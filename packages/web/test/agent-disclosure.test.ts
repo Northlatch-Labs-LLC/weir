@@ -50,6 +50,18 @@ vi.mock('@/lib/identity', async () => {
     verifyAction: (...args: [Parameters<typeof verifyAction>[0]]) => verifyAction(...args),
   };
 });
+// This file is about what two signatures mean, not about adoption. It runs without a database, so
+// the register is declared to hold no offer for these pairs: every case here is the direct path,
+// where both parties are present and the transaction window applies. Left unmocked the lookup
+// would throw on the missing database and the route would answer 503 to every case, which is the
+// correct answer to a broken register and a useless one to ask a signature question of.
+vi.mock('@/lib/agent-seeking', async (importActual) => ({
+  ...(await importActual<typeof import('../lib/agent-seeking')>()),
+  unfiledOfferFor: async () => null,
+  markOfferFiled: async () => false,
+  markSeekingClaimed: async () => false,
+}));
+
 vi.mock('@/lib/agents', async () => {
   const real = await vi.importActual<typeof import('../lib/agents')>('../lib/agents');
   return {

@@ -9,9 +9,8 @@ export const SEEKING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /*
   How long a human's offer waits for the agent to answer.
 
-  It is the same window `/api/agents/declare` grants to a pair answering that offer. If the two
-  disagreed, an offer could be visible and unfileable — the state that left an agent unclaimed for
-  six days.
+  It is the same window `/api/agents/declare` grants to a pair answering that offer. They must not
+  drift: an offer visible for longer than its signature is valid is an offer nobody can file.
 */
 export const operatorOfferTtlMs = (): number => OPERATOR_OFFER_WINDOW_MS;
 export const MAX_WORDS = 600;
@@ -267,6 +266,40 @@ export async function offersFor(agentAddress: string, nowMs: number = Date.now()
     [normaliseAddress(agentAddress), nowMs - operatorOfferTtlMs(), SEEKING_PAGE],
   );
   return rows.map(toOffer);
+}
+
+/*
+  The one offer this pair names, looked up by its whole key.
+
+  `offersFor` cannot answer this. It is `ORDER BY issued_at_ms DESC LIMIT SEEKING_PAGE`
+  — a page size chosen for a display list, and anyone may add rows to a listed agent's
+  set. A gate that reads a truncated page is decided by row count rather than by the
+  pair it is asked about. The agent cannot compensate: it signs over the offer's own
+  fixed instant, so "sign again" names no action it can take.
+
+  Returns null both when no such offer exists and when it has been filed or has expired.
+  Every one of those means the same thing here: no wider window is granted.
+*/
+export async function unfiledOfferFor(
+  agentAddress: string,
+  operatorAddress: string,
+  issuedAtMs: number,
+  nowMs: number = Date.now(),
+): Promise<OperatorOffer | null> {
+  const { rows } = await db().query<OfferRow>(
+    `SELECT * FROM agent_operator_offers
+      WHERE agent_address = $1 AND operator_address = $2 AND issued_at_ms = $3
+        AND filed_at_ms IS NULL AND issued_at_ms > $4
+      LIMIT 1`,
+    [
+      normaliseAddress(agentAddress),
+      normaliseAddress(operatorAddress),
+      issuedAtMs,
+      nowMs - operatorOfferTtlMs(),
+    ],
+  );
+  const row = rows[0];
+  return row === undefined ? null : toOffer(row);
 }
 
 export async function markOfferFiled(agentAddress: string, operatorAddress: string, issuedAtMs: number): Promise<boolean> {
