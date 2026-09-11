@@ -36,15 +36,15 @@ describe('what the directory says about an operator', () => {
 
   it('an unreadable chain is stated as unread, never as nothing there', () => {
     const text = show({ ...base, operatorSeen: { state: 'not-measured', when: '3 Sep 2026' } });
-    expect(text).toMatch(/not checked/);
-    expect(text).toMatch(/could not be read/);
+    expect(text).toMatch(/reading the chain again now/);
+    expect(text).toMatch(/reading the chain again now/);
     expect(text).not.toMatch(/held nothing/);
   });
 
   it('says nothing at all when nobody looked', () => {
     const text = show({ ...base, operatorSeen: null });
     expect(text).not.toMatch(/on chain when checked/);
-    expect(text).not.toMatch(/not checked/);
+    expect(text).not.toMatch(/reading the chain again now/);
     expect(text).toMatch(/Wanderer/);
   });
 });

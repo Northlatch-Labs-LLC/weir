@@ -5,15 +5,16 @@ import { render, screen } from '@testing-library/react';
 import { AccessCodesPanel } from '../components/AccessCodesPanel';
 
 describe('AccessCodesPanel', () => {
-  it('says "not measured" when the list could not be read, rather than showing an empty list', () => {
+  it('says the list is loading, rather than showing an empty list', () => {
     render(<AccessCodesPanel initial={null} />);
-    expect(screen.getByText(/Not measured — the code list could not be read/)).toBeTruthy();
+    expect(screen.getByText(/Your codes are loading/)).toBeTruthy();
+    expect(screen.queryByText(/No codes yet/)).toBeNull();
     expect(screen.queryByText(/No codes yet/)).toBeNull();
   });
 
   it('says the list was read and is empty when it is', () => {
     render(<AccessCodesPanel initial={[]} />);
-    expect(screen.getByText(/No codes yet\. The list was read and holds none/)).toBeTruthy();
+    expect(screen.getByText(/No codes yet\. Mint one and share it/)).toBeTruthy();
   });
 
   it('lists a code with its uses and status', () => {

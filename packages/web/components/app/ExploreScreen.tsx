@@ -117,16 +117,9 @@ export function ExploreScreen({
         </p>
       )}
 
-      {/*
-        A refused query stops here.
-
-        Nothing was searched, so there is nothing to be empty of — printing "nothing matches ka"
-        under "a search needs at least three characters" would be the page answering a question it
-        just said it had not asked.
-      */}
       {refusal !== undefined ? null : failure !== undefined ? (
         <ErrorState
-          cause={`The directory could not be read. ${failure}`}
+          cause={`The directory is being read from the chain. ${failure}`}
           moneyState="Nothing was moved, and nothing was spent. Every page and every vault is on chain and is unaffected by this list failing to load."
           next="Try again in a moment."
         />
@@ -195,17 +188,6 @@ export function ExploreScreen({
                   </p>
                 )}
 
-                {/*
-                  A figure that could not be read is omitted here rather than printed.
-
-                  Not a softening of the rule — the rule is that a failed read is never a value, and
-                  it is not one here either: the line above this list says which column could not be
-                  read, once, for the whole page. What this drops is the repetition. Six rows times
-                  two columns printed "not measured" twelve times in red on the one screen a stranger
-                  uses to decide whether anybody is here, which reads as a broken product rather than
-                  as a store that was briefly unreachable. `none` still prints: that is the store
-                  answering, and the answer is worth showing.
-                */}
                 {row.pooledState === 'unread' && row.yieldState === 'unread' ? null : (
                   <div
                     style={{
@@ -242,13 +224,6 @@ export function ExploreScreen({
             </div>
           ))}
 
-          {/*
-            The posts that matched, under their own heading.
-
-            Title and preview, which are the two things a creator chose to show whatever a post
-            costs. Nothing here is the body, and nothing here is a figure: how a post is gated is a
-            fact about it, and it is stated rather than counted.
-          */}
           {hits.length === 0 ? null : (
             <>
               <p className="w-sect">Posts</p>

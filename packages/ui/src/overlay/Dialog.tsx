@@ -39,13 +39,6 @@ export function Dialog({
         >
           <div className="w-dialog__head">
             <RadixDialog.Title className="w-dialog__title">{title}</RadixDialog.Title>
-            {/*
-              One close control, here rather than in each dialog.
-
-              Every hand-written dialog drew its own, and each one had to remember to disable
-              itself mid-signature. `busy` is held in one place now, so a dialog cannot be closed
-              out from under a signature by a control somebody forgot to guard.
-            */}
             <RadixDialog.Close
               className="w-dialog__x"
               type="button"

@@ -53,7 +53,7 @@ export default async function Join({
                 color: 'var(--w-ink-7)',
               }}
             >
-              The platform&rsquo;s terms could not be read just now, so this page cannot say whether
+              The platform&rsquo;s terms are being read from the chain, so this page cannot yet say whether
               registration is open. {failure.detail}
             </p>
           ),

@@ -71,7 +71,7 @@ describe('the register count is a reading', () => {
 
   it('reports a failed read as a failed read, and never as zero', () => {
     const text = renderedText({ standing: null, why: 'detail-abc123' });
-    expect(text).toContain('could not be read');
+    expect(text).toContain('being read from the chain');
     expect(text).toContain('detail-abc123');
     expect(text).not.toContain('0 declarations');
     expect(text).not.toContain('declarations stand');

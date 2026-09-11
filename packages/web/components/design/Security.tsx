@@ -195,14 +195,6 @@ export function DesignSecurity({
               <p style={{ margin: '1.25rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty', maxWidth: '72ch' }}>Network: Sui mainnet. Module source is published with the package: an explorer will show you the bytecode and, where verification is available, the Move source that produced it. If a figure on this site disagrees with one of these objects, the object is right.</p>
             </section>
 
-            {/*
-              What this runs on, at the size it deserves.
-
-              These five were a column in the footer of every page — five logos beside the legal
-              links, which is where a partner's mark goes to be ignored. This is the page that
-              exists to answer "what is this built on", so they live here, each with the one line
-              saying what it actually does for a reader.
-            */}
             <section data-reveal aria-labelledby="built-title" style={{ marginTop: '4rem' }}>
               <h2 id="built-title" style={{ fontFamily: 'var(--weir-serif)', fontWeight: 500, fontSize: '1.625rem', margin: 0 }}>
                 What it runs on
@@ -229,14 +221,6 @@ export function DesignSecurity({
             </section>
 
             <div data-reveal style={{ marginTop: '3rem', border: '1px solid rgba(var(--alert-rgb,242,162,155),0.3)', borderLeft: '3px solid var(--alert,#f2a29b)', borderRadius: '10px', padding: '1.5rem', maxWidth: '72ch' }}>
-              {/*
-                This was headed "What we do not claim" in alert red, and read as a confession: a
-                chain does not make software correct, code can be wrong, a validator can misbehave.
-                All true, none of it actionable, and no company writes it about itself.
-
-                One of those four facts is something the reader must actually do something about —
-                back up the key — so that is what the box says, as instruction rather than apology.
-              */}
               <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--alert,#f2a29b)' }}>Back up your key</p>
               <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>Your key is the account. Keep a copy somewhere safe and offline. If it is lost there is no reset, here or anywhere else, because nobody else ever had it.</p>
             </div>

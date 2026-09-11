@@ -94,13 +94,6 @@ export function DesignCreator({
               <div className="weir-identity__text">
                 <h1 style={{ margin: '0', fontFamily: 'var(--weir-serif)', fontWeight: '500', lineHeight: '1.15', letterSpacing: '-0.008em', fontSize: 'clamp(1.75rem,1.2rem + 1.8vw,2.25rem)', maxWidth: '36ch', textWrap: 'balance' }}>{profile.displayName}</h1>
                 <p style={{ margin: '0.25rem 0 0', fontFamily: 'var(--weir-mono)', fontWeight: '500', fontSize: '0.9375rem', color: 'var(--crest,#8be3c6)' }}>{profile.meta}</p>
-                {/*
-                  The declaration register's answer, in the register's three states. `declared`
-                  carries the same pill every post by this account carries, and the record a
-                  reader can verify without trusting this page. `unread` is one quiet sentence with
-                  no claim in it. `none` — and an absent prop — is nothing at all: no "human", no
-                  "unverified", because the register proves declarations, never their absence.
-                */}
                 {profile.agent?.state === 'declared' && (
                   <div data-agent-identity="declared" style={{ margin: '0.625rem 0 0', maxWidth: '58ch' }}>
                     <p style={{ margin: '0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.9375rem', color: 'var(--ink-2,#b9cdc9)' }}>
@@ -140,11 +133,6 @@ export function DesignCreator({
 
             <div style={{ height: '1px', background: 'linear-gradient(to right,var(--crest,#8be3c6) 0 24px,var(--line,#1c3d47) 24px)', marginBlock: '2.5rem' }}></div>
 
-            {/*
-              Two jobs, two tabs. Posts are what a visitor came for and open first; membership is
-              one tap away rather than a screen of price cards above the first post. The pool stays
-              in the aside on both, because it costs nothing and every creator page offers it.
-            */}
             <PageTabs
               label="Creator page"
               items={[
@@ -167,7 +155,6 @@ export function DesignCreator({
                         <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '1.5rem', fontWeight: '500', color: 'var(--ink,#dce9e6)' }}>{t.price}</p>
                         <p style={{ margin: '0.25rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>{t.cadence}</p>
                         <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', maxWidth: '62ch' }}>{t.net}</p>
-                        {/* The control that buys THIS tier, beside the price it buys. */}
                         <div style={{ marginTop: '1rem' }}>{t.action}</div>
                       </li>
                     </Fragment>))}
@@ -175,9 +162,6 @@ export function DesignCreator({
                   <div style={{ marginTop: '1.5rem', border: '1px solid var(--line,#1c3d47)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1rem 1.5rem', maxWidth: '62ch' }}>
                     <p style={{ margin: '0', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>Tip</p>
                     <p style={{ margin: '0.25rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem' }}>Send any amount, once. It settles on chain; the platform fee comes off and the rest lands in their vault. It buys no access. Any perks listed below are the creator's own promise.</p>
-                    {/*
-                      The control the copy above describes.
-                    */}
                     <div className="weir-tip" style={{ marginTop: '1rem' }}>{tipSlot}</div>
                   {perks !== undefined && perks.length > 0 && (
                       <div style={{ marginTop: '1.25rem' }}>
@@ -190,7 +174,6 @@ export function DesignCreator({
                             <li key={i} style={{ display: 'grid', gap: '0.2rem', padding: '0.75rem 0.875rem', borderRadius: '8px', border: `1px solid ${perk.met === true ? 'rgba(var(--crest-rgb,139,227,198),0.45)' : 'var(--line,#1c3d47)'}`, background: perk.met === true ? 'rgba(var(--crest-rgb,139,227,198),0.06)' : 'transparent' }}>
                               <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
                                 <span style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--ink,#dce9e6)' }}>{perk.title}</span>
-                                {/* The state is named in words, never by colour alone. */}
                                 <span style={{ flex: '0 0 auto', fontFamily: 'var(--weir-mono)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: perk.met === true ? 'var(--crest,#8be3c6)' : 'var(--dim,#a3bcb8)' }}>{perk.met === true ? 'Yours' : `From ${perk.threshold}`}</span>
                               </span>
                               {perk.detail !== '' && (
@@ -205,12 +188,6 @@ export function DesignCreator({
                         {perksPartial && (
                           <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', lineHeight: '1.5', color: 'var(--sand,#d9c9a3)' }}>We read the most recent payments only, so your total may be higher than the figure above. If a perk you have earned is not marked, tell the creator: the chain has the record.</p>
                         )}
-                        {/*
-                          The label this list must carry.
-                          Everything else on this page is enforced by a contract. A tip mints no
-                          object, so nothing can hold a creator to what is written here, and a reader
-                          who assumed otherwise would be assuming it because we let them.
-                        */}
                         <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', lineHeight: '1.5', color: 'var(--dim,#a3bcb8)' }}>The tip settles on chain and cannot be reversed. These are the creator&rsquo;s own promises, kept by them, not by the contract.</p>
                       </div>
                     )}
@@ -238,12 +215,6 @@ export function DesignCreator({
                     <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.06em', color: 'var(--dim,#a3bcb8)' }}>{viewingLabel}</p>
                   </div>
                   <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.25rem' }}>
-                    {/*
-                      Keyed by post id, never by array index. Grouping CHANGES the composition of
-                      this list — a post that was loose becomes the second member of a thread when
-                      its neighbour is published — and an index key would hand that post the state
-                      of whatever previously sat at that position, including an open comment thread.
-                    */}
                     {groupPosts(profilePosts ?? [], (p) => ({ title: p.post.title, createdAtMs: p.post.createdAtMs })).map((entry) => (
                       entry.kind === 'single' ? (
                         <PostCard key={entry.post.post.id} post={entry.post.post} price={entry.post.price} reader={entry.post.reader} entities={entry.post.entities} authorIsAgent={entry.post.authorIsAgent} />

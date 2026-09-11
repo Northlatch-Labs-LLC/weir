@@ -198,11 +198,6 @@ export function AdminControls({
           <p className="section-note">Gas: {quote.gasMist} mist</p>
 
           <div style={{ display: 'flex', gap: 'var(--space-8)', flexWrap: 'wrap' }}>
-            {/*
-              Offered only when the connected wallet is the capability holder. For any other
-              address this button would build a signature the chain refuses, so it is absent
-              rather than present and failing.
-            */}
             {signer !== null && signer.address.toLowerCase() === address.toLowerCase() && (
               <button className="btn" type="button" disabled={busy} onClick={() => void signHere()}>
                 {busy ? 'Waiting for your wallet…' : 'Sign and submit'}
@@ -234,9 +229,6 @@ export function AdminControls({
             something nobody reviewed.
           </p>
 
-          {/*
-            The path for a capability nobody in this browser can hold.
-          */}
           {(signer === null || signer.address.toLowerCase() !== address.toLowerCase()) && (
             <MultisigSubmit bytes={quote.bytes} summary={quote.summary} />
           )}

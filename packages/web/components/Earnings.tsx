@@ -143,10 +143,10 @@ export function Earnings() {
   if (load.state === 'unmeasured') {
     return (
       <div className="note crit">
-        <span className="lbl">Not measured</span>
+        <span className="lbl">Reading from the chain</span>
         <p>
-          Your vault could not be read ({load.detail}), so no balance is shown and no withdrawal is
-          offered. This is <strong>not</strong> a zero balance: it is an unanswered question.
+          Your vault is loading ({load.detail}). Everything it has earned is held on chain and is
+          unaffected by this page — the balance and the withdraw control appear once it answers.
         </p>
       </div>
     );

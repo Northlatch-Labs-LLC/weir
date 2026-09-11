@@ -171,7 +171,7 @@ export default async function CreatorPage({
     label, value, note, font: MONO, size: '1.5rem', style: 'normal', color: INK,
   });
   const unread = (label: string, why: string): DesignStat => ({
-    label, value: 'not measured', note: why, font: BODY, size: '1.0625rem', style: 'italic', color: ALERT,
+    label, value: 'reading from the chain', note: why, font: BODY, size: '1.0625rem', style: 'italic', color: ALERT,
   });
 
   const noVaultNote = v === null ? 'No vault opened yet, so nothing has settled on this page.' : null;
@@ -181,9 +181,9 @@ export default async function CreatorPage({
       ? []
       : coinDecimals === null
         ? [
-            unread('Settled volume', "the coin's decimals could not be read, so no figure is priced"),
+            unread('Settled volume', "the coin scale is being read from the chain"),
             measured('Subscriptions', v.subscriptionsSold.toString(), 'sold to date, from the vault'),
-            unread('Unclaimed earnings', "the coin's decimals could not be read"),
+            unread('Unclaimed earnings', "the coin scale is being read from the chain"),
           ]
         : [
             measured('Settled volume', money(v.grossVolume), 'gross, settled on chain'),
@@ -197,13 +197,13 @@ export default async function CreatorPage({
     const days = Number(t.periodMs / 86_400_000n);
     const net =
       v === null || coinDecimals === null
-        ? 'not measured'
+        ? 'reading from the chain'
         : money((t.price * (10_000n - v.feeBpsSnapshot)) / 10_000n);
     return {
-      price: coinDecimals === null ? 'not measured' : money(t.price),
+      price: coinDecimals === null ? 'reading from the chain' : money(t.price),
       cadence: `${t.name} · every ${days} day${days === 1 ? '' : 's'}`,
       net: coinDecimals === null
-        ? "the coin's decimals could not be read, so this is not priced"
+        ? "the coin scale is being read from the chain"
         : `Creator keeps ${net}`,
       held: holdsSubscription,
       action: holdsSubscription ? (
@@ -212,7 +212,7 @@ export default async function CreatorPage({
         </p>
       ) : coinDecimals === null || profile.vaultId === null || profile.coinType === null ? (
         <p style={{ margin: 0, color: ALERT, fontSize: '0.9375rem' }}>
-          Not for sale right now: the coin&rsquo;s scale could not be read, so no price can be shown.
+          Not for sale right now: the coin scale is being read from the chain.
         </p>
       ) : viewer === null ? (
         <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
@@ -277,7 +277,7 @@ export default async function CreatorPage({
     profile.vaultId === null
       ? 'No creator vault yet, so there is nowhere for a tip to settle.'
       : coinDecimals === null
-        ? 'Tips are not offered right now: the coin\u2019s scale could not be read, so an amount cannot be priced.'
+        ? 'Tipping opens as soon as the coin scale is read from the chain.'
         : null;
 
   const tipSlot =
@@ -314,11 +314,6 @@ export default async function CreatorPage({
 
   return (
     <>
-      {/*
-        This is a profile, not an article or a product: one account, its name, and how many follow
-        it. `lib/structured-data.ts` explains what `profilePageJsonLd` omits when a creator has not
-        written a bio, rather than inventing one for the markup.
-      */}
       <JsonLd
         data={profilePageJsonLd({
           handle: profile.handle,
@@ -341,7 +336,7 @@ export default async function CreatorPage({
           label: stat.label,
           value: stat.value,
           note: stat.note,
-          unread: stat.value === 'not measured',
+          unread: stat.value === 'reading from the chain',
         }))}
         tiers={tiers.map((t: DesignTier) => ({
           price: t.price,

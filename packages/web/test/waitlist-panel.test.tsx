@@ -64,10 +64,10 @@ describe('the panel reports what was measured', () => {
 });
 
 describe('an unread list is not an empty one', () => {
-  it('renders "not measured" for null, and does not report zero signups', () => {
+  it('renders a reading state for null, and never reports zero signups', () => {
     const { container } = render(<WaitlistInsightPanel insight={null} />);
     const text = container.textContent ?? '';
-    expect(text).toContain('Not measured');
+    expect(text).toContain('Reading from the chain');
     expect(text).not.toContain('On the list');
   });
 

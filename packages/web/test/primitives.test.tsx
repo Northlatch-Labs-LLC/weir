@@ -113,7 +113,7 @@ describe('layout primitives constrain spacing to the token scale', () => {
 describe('the three empty-ish states stay three', () => {
   it('Unmeasured says a read failed and shows the reason', () => {
     render(<Unmeasured detail="the node timed out" />);
-    expect(screen.getByText(/Not measured/i)).toBeTruthy();
+    expect(screen.getByText(/Reading from the chain/i)).toBeTruthy();
     expect(screen.getByText(/timed out/)).toBeTruthy();
   });
 

@@ -614,10 +614,6 @@ describe('the entitlement reference the SDK builds, now that it resolves', () =>
   });
 
   it('never marks the Unlock or Subscription reference mutable, which @mysten/sui refuses outright', () => {
-    // `mutable` is a SHARED-object property. An Unlock and a Subscription are OWNED — soulbound to
-    // their holder — and @mysten/sui rejects the combination in transactions/TransactionData.ts, so
-    // setting it does not save a round trip, it fails the build. This asserted a comment saying so
-    // until 2026-09-11; the fact belongs here, where it is enforced.
     expect(readRepoFile('packages/sdk/src/seal.ts')).not.toContain('mutable');
   });
 });

@@ -30,10 +30,6 @@ export function VaultActions({ vaultId, known }: { vaultId: string; known: boole
       <div className="feed-head" style={{ marginTop: 'var(--space-24)' }}>
         <h2>Deposit</h2>
       </div>
-      {/*
-        Withheld for a vault this site did not open. The page above says why; repeating the
-        explanation next to a form that cannot work would be two notices for one situation.
-      */}
       {known ? (
         <DepositCheckout vaultId={vaultId} />
       ) : (

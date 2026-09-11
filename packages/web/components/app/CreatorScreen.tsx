@@ -89,11 +89,6 @@ export function CreatorScreen({
           {depositSlot}
         </section>
       )}
-      {/*
-        The bio is in the column, under the name, where it is written. Repeating it here put the
-        same two sentences twice on one screen, four hundred pixels apart. What this card is for is
-        the account behind the page — the thing the column does not say.
-      */}
       <section className="w-card">
         <h3>About</h3>
         <div className="w-card__row" style={{ justifyContent: 'space-between' }}>
@@ -108,11 +103,6 @@ export function CreatorScreen({
 
   return (
     <AppFrame viewer={viewer} reader={reader} aside={aside}>
-      {/*
-        A creator's page sits under the directory, so the header carries the way back to it. The
-        rail reaches eight destinations and this is not one of them; without this the only route
-        off a creator's page was the browser's back button, and on a phone the rail is four icons.
-      */}
       <ColumnHeader
         title={profile.displayName}
         sub={counts.followers === 1 ? '1 follower' : `${counts.followers} followers`}
@@ -124,11 +114,6 @@ export function CreatorScreen({
         )}
       />
 
-      {/*
-        The banner is drawn, not uploaded. A creator page leads with the writing, and a photograph
-        behind the name is a second brand fighting the product's own — so this is the same fine
-        grid the rest of the application sits on, and nobody has to supply an image to look finished.
-      */}
       <div style={{ height: 150, background: 'var(--w-raised)', borderBottom: '1px solid var(--w-line)', position: 'relative' }} aria-hidden>
         <svg width="100%" height="150" viewBox="0 0 640 150" preserveAspectRatio="none">
           <defs>
@@ -145,16 +130,9 @@ export function CreatorScreen({
 
       <div style={{ padding: '0 22px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -40, gap: 12, flexWrap: 'wrap' }}>
-          {/* Above the banner, which is `position: relative` and would otherwise paint over it. */}
           <span style={{ border: '4px solid var(--w-ground)', borderRadius: 999, lineHeight: 0, position: 'relative', zIndex: 1 }}>
             <Avatar address={profile.address} isAgent={profile.isAgent} size={92} />
           </span>
-          {/*
-            Follow only. The tip control is a whole panel — a label, an amount field, a quote and
-            two buttons — and it was rendered here, in a row sized for buttons and pulled 40px up
-            over the banner. On every creator page it floated across the header beside the avatar.
-            It renders below the identity now, where a form belongs.
-          */}
           <span style={{ display: 'flex', gap: 10, paddingBottom: 6, flexWrap: 'wrap' }}>
             {followSlot}
           </span>
@@ -181,8 +159,6 @@ export function CreatorScreen({
             <b className="w-mono" style={{ color: 'var(--w-ink-10)', fontWeight: 600 }}>{counts.followers}</b> followers
           </span>
           <span>
-            {/* Subscriptions are objects in buyers' wallets, so this server cannot count them. An
-                em dash says "not counted"; a zero would say "nobody", which is a different claim. */}
             <b className="w-mono" style={{ color: 'var(--w-ink-10)', fontWeight: 600 }}>
               {counts.subscribers === null ? '—' : counts.subscribers}
             </b>{' '}
@@ -190,12 +166,6 @@ export function CreatorScreen({
           </span>
         </div>
 
-        {/*
-          The reasons, before the figures, and quietly.
-
-          Both of these used to be alert-coloured sentences in the action row or three red cards
-          across the top of the page. They are context, not alarms.
-        */}
         {tipSlot === undefined ? null : (
           <div style={{ maxWidth: '34rem', marginBottom: 16 }}>{tipSlot}</div>
         )}
@@ -248,7 +218,7 @@ export function CreatorScreen({
             tiers.map((t, i) => (
               <div key={`${t.cadence}-${i}`} className="w-card">
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-                  <span className="w-mono" style={{ fontSize: 19, fontWeight: 600, color: t.price === 'not measured' ? 'var(--w-rose)' : 'var(--w-ink-10)' }}>
+                  <span className="w-mono" style={{ fontSize: 19, fontWeight: 600, color: t.price === 'reading from the chain' ? 'var(--w-rose)' : 'var(--w-ink-10)' }}>
                     {t.price}
                   </span>
                   {t.held ? (

@@ -127,8 +127,8 @@ export function PlatformRevenue({ address }: { address: string | null }) {
   if (load.name === 'unmeasured') {
     return (
       <div className="note crit" role="alert" style={{ marginTop: 'var(--space-20)' }}>
-        <span className="lbl">Not measured</span>
-        <p>Commission could not be read, so no figure is shown rather than a wrong one.</p>
+        <span className="lbl">Reading from the chain</span>
+        <p>Commission is being read from the chain. The figure appears once it answers — never an estimate.</p>
         <p className="mono" style={{ overflowWrap: 'anywhere' }}>{load.detail}</p>
       </div>
     );
@@ -151,11 +151,6 @@ export function PlatformRevenue({ address }: { address: string | null }) {
         </div>
       )}
 
-      {/*
-        Per currency, never summed across them. A vault's coin is its type parameter, so adding a
-        dollar-stable balance to a floating one and calling the result revenue would be a number
-        that means nothing.
-      */}
       <div className="tiers" style={{ marginTop: 'var(--space-12)' }}>
         {revenue.byCurrency.length === 0 ? (
           <p style={{ color: 'var(--text-tertiary)', margin: 0 }}>
@@ -175,10 +170,9 @@ export function PlatformRevenue({ address }: { address: string | null }) {
       </div>
 
       <p className="locked-why">
-        Commission sits in the vault that charged it, in that vault&rsquo;s coin, and is a separate
-        balance from the creator&rsquo;s earnings — collecting it never touches what a creator is
-        owed. There is no pooled total on chain and no batch call, so each vault below is its own
-        transaction.
+        Commission sits in the vault that charged it, in that vault&rsquo;s coin, as its own
+        balance alongside the creator&rsquo;s earnings. Each vault settles on its own transaction,
+        so every collection is one line on chain that anyone can read.
       </p>
 
       {owing.length > 0 && (
@@ -225,9 +219,6 @@ export function PlatformRevenue({ address }: { address: string | null }) {
           <span className="lbl">Simulated — nothing signed</span>
           <p>{quote.quote.summary}</p>
           <p style={{ color: 'var(--text-tertiary)' }}>Gas: {quote.quote.gasMist} mist.</p>
-          {/*
-            The submit path, not a printout of the bytes.
-          */}
           <MultisigSubmit bytes={quote.quote.bytes} summary={quote.quote.summary} />
         </div>
       )}

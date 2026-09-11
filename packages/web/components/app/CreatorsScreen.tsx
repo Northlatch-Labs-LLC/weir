@@ -96,9 +96,9 @@ export function CreatorsScreen({
     !Number.isFinite(tier) || tier < 0
       ? 'not a number'
       : feeBps === null
-        ? 'not measured'
+        ? 'reading from the chain'
         : `${((tier * (10000 - feeBps)) / 10000).toFixed(4).replace(/\.?0+$/, '')} per period`;
-  const keepsUnread = keeps === 'not measured' || keeps === 'not a number';
+  const keepsUnread = keeps === 'reading from the chain' || keeps === 'not a number';
 
   const shareNote =
     share === 0

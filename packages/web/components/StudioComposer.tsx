@@ -388,10 +388,10 @@ export function StudioComposer() {
   if (targetState === 'failed') {
     return (
       <div className="note crit">
-        <span className="lbl">Not measured</span>
+        <span className="lbl">Reading from the chain</span>
         <p>
-          Your vaults could not be read, so there is nothing to publish to. This is not the same as
-          having none, and the composer stays hidden rather than guessing a target.
+          Your vaults are loading. The composer opens as soon as one answers, so a post is never
+          aimed at a vault this page has not confirmed.
         </p>
       </div>
     );
@@ -465,12 +465,6 @@ export function StudioComposer() {
           />
           {image !== null && (
             <p className="enc-status" style={{ marginTop: 6 }}>
-              {/*
-                Said before publishing, not after. A paid post's image is encrypted before it leaves
-                this server; a public one is not, and anybody can then read it from any Walrus
-                aggregator without us. That is a deliberate property and the creator should know
-                which of the two they are about to choose.
-              */}
               {access === 'paid' ? (
                 <>
                   <span className="enc-tag">encrypted</span> stored encrypted. Unreadable
@@ -555,20 +549,12 @@ export function StudioComposer() {
             <div>
               <label className="k" htmlFor="k">CONTENT KEY · the name of what a reader buys, on chain</label>
               <input id="k" className="field" value={contentKey} onChange={(e) => setContentKey(e.target.value)} />
-              {/*
-                Said before publishing, not after — an `Unlock` cannot be withdrawn.
-
-                A key is a product, not a post: everyone holding one reads every post published
-                under it. Selling a series that way is the point, so this describes rather than
-                warns. What it prevents is the same thing happening by typo, which is
-                indistinguishable from the deliberate version once the post is out.
-              */}
               {keyPrice.name === 'checking' && (
                 <p className="unmeasured" style={{ marginTop: 6 }}>Reading the vault…</p>
               )}
               {keyPrice.name === 'unreadable' && (
                 <p className="unmeasured" style={{ marginTop: 6 }}>
-                  This key&rsquo;s price could not be read, so whether anyone already holds it is
+                  This key&rsquo;s price is being read from the chain, so whether anyone already holds it is
                   unknown. Not the same as it being free.
                 </p>
               )}
@@ -600,15 +586,6 @@ export function StudioComposer() {
           </div>
         )}
 
-        {/*
-          The machine edition. A second price on the same post, sold under a second content key.
-
-          Shown as its own block rather than a second column beside the human price, because it is
-          optional and independent: a creator can publish with no machine edition at all, price it
-          later, price it higher or lower, and unprice it with `unprice_content` without touching
-          what people pay. The key is displayed and not editable — it is derived, and a hand-typed
-          one would sell an Unlock for an identity nothing was sealed to.
-        */}
         {access === 'paid' && reservedKey === null && derivedMachineKey !== null && (
           <div className="note">
             <span className="lbl">Machine edition (optional)</span>
@@ -624,7 +601,7 @@ export function StudioComposer() {
             )}
             {machineKeyPrice.name === 'unreadable' && (
               <p className="unmeasured">
-                This edition&rsquo;s price could not be read, so whether it is already on sale is
+                This edition&rsquo;s price is being read from the chain, so whether it is already on sale is
                 unknown. Not the same as it being unpriced.
               </p>
             )}
@@ -729,11 +706,6 @@ export function StudioComposer() {
           </button>
         </div>
 
-        {/*
-          Named next to the control it disables, so the answer is where the question is asked.
-          Pricing is left out: it has its own note and its own button directly above, and repeating
-          it here would read as a second, different requirement.
-        */}
         {blockers.length > 0 && (
           <p className="section-note" style={{ margin: 0 }}>
             Waiting on{' '}

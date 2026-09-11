@@ -42,7 +42,7 @@ describe('Notifications', () => {
   it('does not render a failed read as an empty inbox', async () => {
     mockJson({ error: 'the chain could not be read' });
     await loadInbox();
-    await waitFor(() => expect(screen.getByText(/Not measured/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Reading from the chain/i)).toBeTruthy());
   });
 
   it('says a list is recent rather than complete when the ceiling was hit', async () => {
@@ -114,9 +114,16 @@ describe('AccountRecovery', () => {
     expect(exportRecovery).not.toHaveBeenCalled();
   });
 
-  it('states plainly that losing access is the risk, not theft', () => {
+  it('tells the holder what these five values give them, not what we are unable to do', () => {
+    /*
+      This pinned the sentence "This site cannot spend from your address… the risk here is losing
+      access, not theft" — a denial of a theft nobody had raised, on the screen where somebody is
+      being handed their own recovery values. The fact that matters to them is the capability:
+      with these, the account is theirs independently of us.
+    */
     render(<AccountRecovery />);
-    expect(screen.getByText(/cannot spend from your address/i)).toBeTruthy();
+    expect(screen.getByText(/yours independently of\s+us/i)).toBeTruthy();
+    expect(screen.queryByText(/not theft/i)).toBeNull();
   });
 
   it('reveals all five values together when asked', async () => {

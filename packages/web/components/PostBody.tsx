@@ -25,7 +25,6 @@ export function PostBody({ body, preview }: { body: string; preview: string }) {
         </span>
         {open ? 'Show less' : 'Read more'}
       </button>
-      {/* Not rendered while closed: a hidden body still costs layout and still lands in find-in-page. */}
       {open && (
         <div id={id} className="post-body">
           {body}

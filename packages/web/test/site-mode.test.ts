@@ -86,8 +86,6 @@ describe('the API', () => {
 
 describe('reading the mode', () => {
   it('fails open: an unreadable mode serves the site rather than shutting it', () => {
-    // A read that fails is not a decision to gate. Returning the gated value on an error would take
-    // the whole site down on one bad query, which is the larger failure of the two.
     expect(MODE).toMatch(/catch\s*{[\s\S]{0,200}return OPEN/);
   });
 

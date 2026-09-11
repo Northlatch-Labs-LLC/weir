@@ -158,8 +158,9 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
       <div className="panel">
         <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 'var(--space-10)' }}>Open a support vault</h2>
         <p style={{ color: 'var(--text-secondary)' }}>
-          Members deposit SUI, it is delegated to a validator, and you receive the yield. Their
-          principal is never touched and they can withdraw in full at any time.
+          Members deposit SUI, it is delegated to a validator, and the yield comes to you. They
+          keep their principal and can withdraw all of it whenever they like — support that costs
+          them nothing but the yield.
         </p>
 
         <label className="k" htmlFor="validator" style={{ display: 'block', marginTop: 'var(--space-16)' }}>
@@ -196,10 +197,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
 
   return (
     <>
-      {/*
-        Which vault, when there is more than one. Withheld for a single vault, where a picker with
-        one option is a control that asks a question with no alternative answer.
-      */}
       {caps !== 'unknown' && caps.length > 1 && (
         <div className="panel" style={{ marginBottom: 'var(--space-20)' }}>
           <label className="k" htmlFor="sv">
@@ -249,13 +246,6 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
           </span>
         </div>
 
-        {/*
-          The creator should learn this before a supporter does.
-
-          A vault under the minimum stake earns nothing at all and says so nowhere else: the daemon
-          declines correctly, no error is raised, and the numbers above render a healthy-looking
-          zero. The creator is the one person who can fix it.
-        */}
         {(() => {
           const health = ladderHealth(BigInt(vault?.totalPrincipalMist ?? '0'));
           if (health.kind === 'full') return null;

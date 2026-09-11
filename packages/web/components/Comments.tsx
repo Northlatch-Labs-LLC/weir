@@ -82,17 +82,6 @@ export function Comments({
 
   return (
     <section className="comments">
-      {/*
-        Closed, this section is ONE control, not a heading and a button saying the same number.
-
-        It carried both: an "N COMMENTS" heading above a "Read N comments" button, 80px on a card
-        whose whole body was 329px — the tallest thing on the card, spent twice on one fact. The
-        control states the count itself, so the heading is redundant until the thread is open and
-        the count is no longer the only thing on screen.
-
-        It is always rendered, even at zero, because the post's Comment action links to this
-        section by anchor. A section that disappeared at zero would make that a link to nowhere.
-      */}
       {open ? (
         <h4 className="k" style={{ marginBottom: 10 }}>
           {`${count} COMMENT${count === 1 ? '' : 'S'}`}
@@ -119,14 +108,6 @@ export function Comments({
         </div>
       ))}
 
-      {/*
-        The prompt appears inside an OPEN thread, not under every post.
-
-        It used to render on all of them: a creator page holding ten posts printed "Sign in to
-        comment" ten times, to a reader who had not asked to comment on any of them. It answers a
-        question nobody had asked yet, and repeating it ten times made it furniture. Opening a
-        thread is the moment the question exists.
-      */}
       {!open ? null : signer === null ? (
         <SignInPrompt action="comment" />
       ) : (

@@ -37,9 +37,6 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      {/*
-        A vault is a public object, so this route is guest-reachable and renders in the guest frame.
-      */}
       <PageHead
         kicker="Support vault"
         title="Vault"
@@ -57,13 +54,6 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                     <span className="byline-name">
                       {v.handle !== null ? `@${v.handle}` : (creatorName ?? `Vault ${shortId(v.vaultId)}`)}
                     </span>
-                    {/*
-                      What this object is, beside who it belongs to.
-
-                      The page showed a handle, an id and whether it was accepting deposits, and
-                      never said which kind of thing they described — so a vault read as another
-                      creator page that happened to have a status pill. The marker names it.
-                    */}
                     <div
                       className="byline-meta"
                       style={{
@@ -110,11 +100,6 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                 </div>
 
                 <p className="locked-why">
-                  {/*
-                    Solvency is the invariant the contract asserts on every path that moves money.
-                    Shown as a measured fact rather than a promise, because the whole deposit-stays-yours claim
-                    reduces to this one comparison.
-                  */}
                   {v.solvent
                     ? `Backing covers principal: ${sui(v.liquidMist)} SUI liquid plus ${sui(v.stakedMist)} SUI delegated across ${v.tranches} tranche${v.tranches === 1 ? '' : 's'}.`
                     : 'Backing does NOT cover principal. Do not deposit here.'}{' '}
@@ -123,14 +108,6 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                     : `${v.harvests} harvest${v.harvests === 1n ? '' : 's'} so far.`}
                 </p>
 
-                {/*
-                  Whether this balance can actually earn.
-
-                  Both states below are silent everywhere else: Sui refuses to stake under one SUI,
-                  so a smaller vault sits liquid for ever while nothing errors and the daemon
-                  correctly declines to act. This page showed a solvent vault with a healthy backing
-                  line and never mentioned that none of it was working.
-                */}
                 {(() => {
                   const health = ladderHealth(v.totalPrincipalMist);
                   if (health.kind === 'full') return null;
@@ -161,10 +138,6 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                 })()}
               </div>
 
-              {/*
-                One prompt for the page. Position and deposit are the same activity with the same
-                requirement, and asking to connect once per component asked twice for one thing.
-              */}
               <div style={{ marginTop: 'var(--space-24)' }}>
                 {fold(
                   known,
@@ -175,7 +148,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                     <div data-reveal className="note crit">
                       <span className="lbl">This did not load</span>
                       <p>
-                        The vault list could not be read, so this page cannot confirm the object was
+                        The vault list is being read from the chain, so this page has not yet confirmed the object was
                         created here. No deposit form is offered on an unverified vault.
                       </p>
                     </div>
@@ -188,20 +161,11 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
           (failure) => (
             <div data-reveal className="note crit" style={{ marginTop: 'var(--space-24)' }}>
               <span className="lbl">This did not load</span>
-              <p>This vault could not be read. {failure.detail}</p>
+              <p>This vault is being read from the chain. {failure.detail}</p>
             </div>
           ),
         )}
 
-        {/*
-          The clauses, rendered from `lib/vault-disclosure.ts`.
-
-          What stood here said the mechanics correctly — delegated to a validator, no lock-up,
-          lending the money's earning power rather than the money — and said nothing about how much
-          that earning power is worth or what could go wrong. Both facts were already written down
-          in the terms, at 1.3, 9.1 and 9.3, where nobody reads them at the moment they deposit.
-          Every sentence of the old note survives inside the `principal` and `magnitude` clauses.
-        */}
         <VaultDisclosure />
           </>
   );

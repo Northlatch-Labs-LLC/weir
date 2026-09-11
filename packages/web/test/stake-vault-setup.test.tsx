@@ -47,7 +47,9 @@ describe('opening a vault', () => {
   it('explains why supporters say yes to this', async () => {
     mockRoutes({ stakeCaps: [] });
     render(<StakeVaultSetup accountId="0xacc" />);
-    await waitFor(() => expect(screen.getByText(/withdraw in full at any time/i)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText(/withdraw all of it whenever they like/i)).toBeTruthy(),
+    );
   });
 });
 

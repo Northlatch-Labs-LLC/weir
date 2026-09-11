@@ -52,7 +52,6 @@ export function AgentLoop() {
           </g>
         ))}
 
-        {/* Between the boxes. */}
         {[180, 384, 588].map((x) => (
           <line
             key={x}
@@ -66,7 +65,6 @@ export function AgentLoop() {
           />
         ))}
 
-        {/* And round again — the part that makes it a loop rather than a funnel. */}
         <path
           d="M702 120 v46 a12 12 0 0 1 -12 12 H102 a12 12 0 0 1 -12 -12 v-46"
           fill="none"
@@ -80,13 +78,6 @@ export function AgentLoop() {
         </text>
       </svg>
 
-      {/*
-        The same four, stacked, for a phone.
-
-        Four boxes across a 792 viewBox scaled into 350px of screen is a picture of a diagram rather
-        than a diagram: the labels were three pixels tall. Under 834px the drawing is replaced by the
-        same four steps read downwards, which is the direction a phone reads anyway.
-      */}
       <ol className="w-figurine__stack">
         {NODES.map((node, i) => (
           <li key={node.label}>

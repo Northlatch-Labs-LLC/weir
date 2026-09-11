@@ -31,19 +31,9 @@ export function SignIn({
               type="button"
               onClick={() => chooseAccount(account)}
             >
-              {/*
-                The wallet's own name for the address when it gave one, and nothing at all when it
-                did not. An invented "Account 2" is a label nobody chose, sitting next to the one
-                thing on this screen that has to be checked character by character.
-              */}
               {account.label !== undefined && (
                 <span className="signin-account__label">{account.label}</span>
               )}
-              {/*
-                In full. A picker is the one place truncation cannot be tolerated: two addresses
-                abbreviated to the same six characters are the same button, and choosing between
-                them is choosing blind.
-              */}
               <span className="mono signin-account__addr">{account.address}</span>
             </button>
           ))}
@@ -85,26 +75,10 @@ export function SignIn({
   return (
     <div className={compact ? 'signin signin--compact' : 'signin'}>
 
-      {/*
-        A deployment that does not offer Google says nothing about Google.
-      */}
-
-      {/*
-        The wallet paths. Google is in the header and not repeated here — the same button in two
-        places on one screen reads as two different offers.
-      */}
       {(session?.available === true || wallets.length > 0) && (
         <div className="signin-wallets">
           {!compact && <span className="signin-or">choose how you sign in</span>}
 
-          {/*
-            Google first. Somebody who has never held a private key should reach what they came for
-            without learning what one is — that ordering is the product decision this whole feature
-            exists to make, and it is why this button is the prominent one here.
-
-            The header offers the wallet path instead, so the two are never the same button twice on
-            one screen.
-          */}
           {session?.available === true && (
             <button
               className="btn btn-google"
@@ -116,22 +90,6 @@ export function SignIn({
             </button>
           )}
 
-          {/*
-            Disabled until the session has answered, and that is a correctness gate rather than a
-            nicety. `bindAccount` THROWS "still reading this deployment's network" when `session`
-            is null, because the chain to bind to comes from the server's configuration and there
-            is nothing safe to guess. So between first paint and that answer this button was live
-            and every click on it failed — the wallet connected, the binding did not happen, and
-            the reader was left signed out with an error naming an internal state.
-
-            The Google button above has always been gated this way (`session?.available === true`).
-            This one was not, and the asymmetry is the whole bug.
-
-            Found as an "intermittent" test: wallet-accounts.test.tsx failed once in CI and passed
-            on a re-run of the identical tree. It is not intermittent. Delaying the session fetch
-            by 25ms in that suite fails 14 of its cases every time — CI was simply slow enough,
-            once, to land inside a window that is always there.
-          */}
           {wallets.map((wallet) => (
             <button
               key={wallet.name}
@@ -146,28 +104,12 @@ export function SignIn({
         </div>
       )}
 
-      {/*
-        One line, below the choice rather than attached to either option.
-
-        This was a four-sentence explanation of zkLogin custody. It was accurate and nobody
-        deciding whether to join reads it — the mechanism belongs on a page somebody opens on
-        purpose. What survives is the only part that changes their decision: we cannot spend your
-        money. The rest is at /join.
-      */}
       {!compact && session?.available === true && (
         <p className="signin-note">
-          Either way, the address is <strong>yours</strong> — the keys are held by you, not here.
+          Either way the address is <strong>yours</strong>, and the keys stay on your device.
         </p>
       )}
 
-      {/*
-        A wallet we found and cannot offer.
-
-        Previously these were filtered out and forgotten, so somebody with Phantom or Slush already
-        installed saw an empty space and reasonably concluded we had not implemented their wallet.
-        Naming it, and naming what it is missing, is the difference between a dead end and a fact
-        they can act on — usually by updating the extension.
-      */}
       {!compact &&
         unusableWallets.map((wallet) => (
           <p className="unmeasured" key={wallet.name}>
@@ -176,15 +118,6 @@ export function SignIn({
           </p>
         ))}
 
-      {/*
-        No wallet found, and none rejected either.
-      */}
-      {/*
-        The compact form has to answer this too, and used to get its answer from the "nothing at
-        all is available" line that sat below. That line named Google and has gone, so without a
-        branch here a compact prompt with no wallet and no Google renders an empty box — the exact
-        silent nothing this component was fixed once before for producing.
-      */}
       {wallets.length === 0 && unusableWallets.length === 0 && (
         compact ? (
           <p className="signin-note" style={{ margin: 0 }}>
@@ -192,11 +125,6 @@ export function SignIn({
           </p>
         ) : (
           <div className="signin-wallets">
-            {/*
-              "or" only when there is something to be an alternative to. With Google off a wallet is
-              not one of two ways in, it is the way in, and a heading implying a missing sibling
-              sends people looking for it.
-            */}
             <span className="signin-or">
               {session?.available === true ? 'or use a wallet' : 'use a wallet'}
             </span>
@@ -204,36 +132,7 @@ export function SignIn({
               No Sui wallet in this browser. On a phone, open weir.social inside your wallet app&rsquo;s
               own browser — Slush and Phantom both have one. On a computer, install one and reload.
             </p>
-            {/*
-              Controls, because a sentence is not one — but the right controls in the right order.
-
-              With Google unavailable and no wallet extension present this rendered a paragraph and
-              nothing else, so `/join` had no button and no field anywhere on it. The first fix put
-              "Get Slush" and "Get Phantom" here, and that was wrong in its own way: this component
-              is mounted on eight signed-out pages, so every one of them suddenly led with "install
-              a browser extension" as its primary action.
-
-              Signing in comes first, because `/signin` offers whatever this deployment has — it is
-              the page that knows — and installing an extension is what somebody does only when
-              there is no other way. The installs stay, quiet, beneath it.
-
-              Not shown on `/signin` itself, where it would be a link to the page you are reading.
-            */}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
-              {/*
-                The design system's buttons, not the legacy ones. `.btn ghost` renders mint-dim text
-                over `.btn`'s own mint background — 1.2:1, measured — because `ghost` never resets
-                the fill in this cascade. `.w-btn` is the current system and is checked at both
-                widths.
-              */}
-              {/*
-                Not on the two pages whose own chrome already offers it.
-
-                `/signin` is this page, and on `/join` the public header carries a "Sign in" button
-                sixteen pixels from the top — so the panel rendered a second one, same words, same
-                destination, four hundred pixels below the first. On every other page there is no
-                other way in from here, and it leads.
-              */}
               {pathname === '/signin' || pathname === '/join' ? null : (
                 <a className="w-btn w-btn--primary w-btn--sm" href="/signin">
                   Sign in
@@ -276,15 +175,12 @@ function WalletAccountReport({
   return (
     <div className="signin-report">
       <span className="k">
-        {/* The count first, because it is the fact that settles which half is at fault. */}
         {wallet} reports {accounts.length} {accounts.length === 1 ? 'address' : 'addresses'} to this
         site
       </span>
       <ul className="signin-report__list">
         {accounts.map((account) => (
           <li key={account.address} className="signin-report__row">
-            {/* In full. A truncated address cannot be compared against the one the extension is
-                showing, and that comparison is the only reason this list exists. */}
             <span className="mono signin-report__addr">{account.address}</span>
             {account.label !== undefined && (
               <span className="signin-report__label">{account.label}</span>

@@ -40,7 +40,6 @@ export default async function AdminPage() {
 
   return (
     <>
-      {/* Chrome from `AppFrame`; `PageHead` restores the `h1` the retired title bar used to supply. */}
       <PageHead
         kicker="Platform"
         title="Admin"

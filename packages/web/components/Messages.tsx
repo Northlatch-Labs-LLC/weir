@@ -146,7 +146,7 @@ export function Messages() {
 
       const published = await fetchKey(signer.address);
       if (published.state === 'failed') {
-        setError(`The key registry could not be read (${published.detail}). Nothing was published.`);
+        setError(`The key registry is being read from the chain (${published.detail}). Nothing was published.`);
         return;
       }
 
@@ -350,11 +350,6 @@ export function Messages() {
     return (
       <div className="panel">
         <p style={{ marginTop: 0 }}>
-          {/*
-            This ended "...so nobody can read a conversation by typing an address" — raising an
-            attack in order to deny it, on the sign-in screen. Encrypted is the fact; the threat
-            model is not the customer's reading.
-          */}
           Your messages are encrypted, and only you and the person you are talking to can open them.
         </p>
         <SignIn />
@@ -407,9 +402,6 @@ export function Messages() {
           >
             <span className="mono">
               {short(t.other)}
-              {/* Named in words, not colour: "supporter" is the fact, and it has to survive being
-                  read aloud. The amount stays off the row — a figure beside every name turns an
-                  inbox into a leaderboard. */}
               {t.supporterUnits !== undefined && <span className="thread-supporter">supporter</span>}
             </span>
             <span className="thread-preview">
@@ -496,7 +488,7 @@ export function Messages() {
           <p className="enc-status" style={{ marginBottom: 8 }}>
             {theirKey.state === 'failed' ? (
               <span className="unmeasured">
-                Not measured: {short(recipient)}&rsquo;s key could not be read ({theirKey.detail}).
+                Reading from the chain: {short(recipient)}&rsquo;s key is being read from the chain ({theirKey.detail}).
                 Nothing is sent until it can be.
               </span>
             ) : willEncrypt ? (

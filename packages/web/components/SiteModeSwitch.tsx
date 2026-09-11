@@ -71,8 +71,6 @@ export function SiteModeSwitch({ initial }: { initial: SiteModeView }) {
       <div
         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-16)', flexWrap: 'wrap' }}
       >
-        {/* The state in words as well as colour — the pill alone is a coloured dot to somebody who
-            cannot tell crest from grey. */}
         <span className={closed ? 'pill' : 'pill subs'}>
           {closed ? 'Closed — waiting list only' : 'Open — the site is live'}
         </span>

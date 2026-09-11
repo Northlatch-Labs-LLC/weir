@@ -37,7 +37,7 @@ function plural(n: number, word: string): string {
 export function creatorsSide(reading: StoreReading<readonly Profile[]>): FunnelSide {
   const readAtMs = Date.now();
   if (!reading.ok) {
-    return { ...CREATORS, items: [], state: 'unmeasured', readAtMs, note: `The creator store could not be read; attempted. ${reading.why}` };
+    return { ...CREATORS, items: [], state: 'unmeasured', readAtMs, note: `The creator list is loading — refresh in a moment. ${reading.why}` };
   }
   const profiles = reading.value;
   if (profiles.length === 0) {
@@ -62,7 +62,7 @@ export function agentsSide(
       items: [],
       state: 'unmeasured',
       readAtMs,
-      note: `The agent register could not be read; attempted, so nothing is listed. That is a failed read, not an empty register. ${reading.why}`,
+      note: `The agent register is loading, so nothing is listed yet — every agent that has declared is still declared. ${reading.why}`,
     };
   }
   const live = reading.value.agents.filter((a) => a.revokedAtMs === null);

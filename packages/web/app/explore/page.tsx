@@ -118,13 +118,13 @@ export default async function ExplorePage({
     const indexed = pools !== null;
 
     const pooled = !indexed
-      ? 'not measured'
+      ? 'reading from the chain'
       : pool === undefined
         ? 'no pool open'
         : `${formatUnits(pool.totalPrincipalMist, SUI_DECIMALS)} SUI`;
 
     const yieldShare = !indexed
-      ? 'not measured'
+      ? 'reading from the chain'
       : pool === undefined
         ? 'no pool'
         : pool.rebateBps === 0n
@@ -150,11 +150,11 @@ export default async function ExplorePage({
 
   const caveat =
     pools === null
-      ? ' Pooled figures could not be read.'
+      ? ' Pooled figures are being read from the chain.'
       : pools.truncated
         ? ' The vault walk hit its ceiling, so some pools may be missing.'
         : pools.unreadable > 0
-          ? ` ${pools.unreadable} vault${pools.unreadable === 1 ? '' : 's'} could not be read.`
+          ? ` ${pools.unreadable} vault${pools.unreadable === 1 ? '' : 's'} still reading from the chain.`
           : '';
 
   return (

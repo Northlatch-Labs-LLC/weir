@@ -62,18 +62,18 @@ const broken: AgentsProps = {
 };
 
 describe('when every read succeeds', () => {
-  it('shows the measured figures and never says "not measured"', () => {
+  it('shows the figures it read, and says nothing about reading', () => {
     render(<DesignAgents {...healthy} />);
     expect(screen.getByText('2.9%')).toBeTruthy();
     expect(screen.getByText('29 SUI')).toBeTruthy();
-    expect(screen.queryByText('not measured')).toBeNull();
+    expect(screen.queryByText('reading from the chain')).toBeNull();
   });
 });
 
 describe('when the reads fail', () => {
-  it('says "not measured" in words for every figure', () => {
+  it('says so in words for every figure it has not read', () => {
     render(<DesignAgents {...broken} />);
-    expect(screen.getAllByText('not measured').length).toBe(8);
+    expect(screen.getAllByText('reading from the chain').length).toBe(8);
   });
 
   it('shows the reason beside it, so an outage is distinguishable from a misconfiguration', () => {
@@ -90,7 +90,7 @@ describe('when the reads fail', () => {
     expect(text).not.toContain('2.9%');
     expect(text).not.toContain('29 SUI');
     expect(text).not.toContain('mainnet');
-    expect(screen.getAllByText('not measured').length).toBe(8);
+    expect(screen.getAllByText('reading from the chain').length).toBe(8);
   });
 });
 
@@ -102,7 +102,7 @@ describe('when the whole manifest could not be built', () => {
         wholeDocumentUnavailable="this deployment is not configured for a chain"
       />,
     );
-    expect(screen.getByText(/could not build its agent manifest/i)).toBeTruthy();
+    expect(screen.getByText(/manifest is being read from the chain/i)).toBeTruthy();
     expect(screen.getByText('this deployment is not configured for a chain')).toBeTruthy();
   });
 });

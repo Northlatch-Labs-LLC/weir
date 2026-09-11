@@ -44,8 +44,6 @@ export function PostThreadGroup({ label, sharedTerms, fromMs, toMs, children }: 
       </div>
 
       <div className="weir-thread-posts" id={bodyId}>
-        {/* Rendered as-is: these arrive already keyed by post id from the caller. Re-wrapping them
-            in indexed Fragments here would replace those stable keys with positional ones. */}
         {shown}
       </div>
 

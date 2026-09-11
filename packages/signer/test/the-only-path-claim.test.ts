@@ -45,13 +45,6 @@ describe('the register of direct signing paths', () => {
   });
 
   it('does not carry an entry the walk cannot see, except the one the walk is known to miss', () => {
-    /*
-      The walk greps for `signAndExecuteTransaction(` and nothing else. The harvest daemon signs
-      through `gate.signTransaction(tx)` and submits separately, so this guard has never detected
-      it — it was in the register because somebody wrote it down, not because anything checked.
-      Pinned rather than fixed: widening the pattern changes what this guard covers, and that is a
-      decision about money paths, not a consequence of tidying a comment.
-    */
     const undetected = declared.filter((path) => !bypasses.includes(path));
     expect(undetected).toEqual(['packages/daemon/src/adapters/signer.ts']);
   });

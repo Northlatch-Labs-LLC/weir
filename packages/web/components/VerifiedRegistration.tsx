@@ -195,10 +195,6 @@ export function VerifiedRegistration() {
         </button>
       ) : (
         <>
-          {/*
-            Every line is measured: SuiNS's price, our fee read from the registrar, and gas from
-            simulating the exact bytes about to be signed.
-          */}
           <div className="panel" style={{ marginTop: 'var(--space-16)' }}>
             <span className="k">CHECKED AGAINST THE CHAIN. NOTHING SIGNED YET</span>
             <dl className="quote-lines">

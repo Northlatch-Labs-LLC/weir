@@ -31,7 +31,6 @@ export default async function NamesPage() {
 
   return (
     <>
-      {/* Chrome from `AppFrame`; `PageHead` restores the `h1` the retired title bar used to supply. */}
       <PageHead
         kicker="Names"
         title="Names"

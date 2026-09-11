@@ -132,15 +132,6 @@ function readSource(): string {
   return readFileSync(new URL('../lib/rate-limit.ts', import.meta.url), 'utf8');
 }
 
-/**
- * The four layers, as prose.
- *
- * Two of them are not code — Layer 1 is Cloudflare configuration, Layer 4 is on chain — so nothing
- * in this repository can assert either is in place. Naming them is the only control there is, and
- * this is what fails when a layer loses its section. It read the doc comment at the top of
- * `lib/rate-limit.ts` until 2026-09-11; a runbook that lives in a comment is one a comment sweep
- * deletes.
- */
 function readLayers(): string {
   return readFileSync(new URL('../docs/rate-limit-layers.md', import.meta.url), 'utf8');
 }

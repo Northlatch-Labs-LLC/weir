@@ -99,7 +99,7 @@ export function VaultScreen({
         />
       ) : failure !== undefined ? (
         <ErrorState
-          cause={`The index of vaults could not be read. ${failure}`}
+          cause={`The index of vaults is being read from the chain. ${failure}`}
           moneyState="Nothing was moved, and nothing was spent. Your positions are objects on chain and are unaffected by this page failing to read them."
           next="Try again in a moment."
         />
@@ -138,7 +138,7 @@ export function VaultScreen({
 
           {unreadable > 0 ? (
             <p style={{ margin: '0 22px 12px', fontFamily: 'var(--w-sans)', fontSize: 13, color: 'var(--w-ink-7)' }}>
-              {unreadable} {unreadable === 1 ? 'vault' : 'vaults'} could not be read just now and{' '}
+              {unreadable} {unreadable === 1 ? 'vault' : 'vaults'} are being read from the chain and{' '}
               {unreadable === 1 ? 'is' : 'are'} left out. Anything you hold in{' '}
               {unreadable === 1 ? 'it' : 'them'} is untouched.
             </p>

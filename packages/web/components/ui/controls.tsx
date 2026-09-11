@@ -35,17 +35,6 @@ export function Button({
       >
         {loading ? loadingLabel : children}
       </button>
-      {/*
-        The announcement lives OUTSIDE the button, and that is the whole point.
-
-        Disabling a focused element blurs it in every major browser, so focus moves to the body on
-        the same render that sets `aria-busy` and swaps the label. Both land on something no longer
-        focused, and neither is spoken — a keyboard or screen-reader user pressing "Sign" would get
-        the double-click protection and no confirmation that anything happened at all.
-
-        A separate live region is not affected by the button's focus or disabled state, so it still
-        announces. WCAG 2.2 4.1.3.
-      */}
       <span className="sr-only" role="status">{loading ? loadingLabel : ''}</span>
     </>
   );

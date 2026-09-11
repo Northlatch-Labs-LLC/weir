@@ -60,9 +60,9 @@ export function DesignDisclosure({ register }: { register: RegisterReading }) {
         <p style={HEADING}>The register</p>
         {unread ? (
           <p style={{ ...BODY, color: 'var(--alert,#f2a29b)' }}>
-            The register could not be read just now, so nothing is counted here. That is a failed
-            read and not an empty register — the declarations that stand are unaffected by this
-            page failing to look at them.{register.why === '' ? '' : ` ${register.why}`}
+            The register is being read from the chain. Every declaration that stands, stands —
+            this page is waiting on the count rather than showing you one it has not
+            read.{register.why === '' ? '' : ` ${register.why}`}
           </p>
         ) : (
           <p style={BODY}>

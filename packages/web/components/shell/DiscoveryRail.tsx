@@ -37,10 +37,6 @@ export function DiscoveryRail({
 }) {
   return (
     <>
-      {/* The search box moved into `AppShell`'s aside, so it is first on every route with one
-          rather than first only where this rail is the whole column. */}
-      {/* "Everyone here" points at `/explore`, the directory — not `/creators`, which is the setup
-          form for opening your own page. */}
       {people === null || people.length === 0 ? null : (
         <RailCard
           title="Become a member"

@@ -73,7 +73,7 @@ describe('StudioComposer', () => {
     mockCreator({ error: 'grpc unavailable' }, false);
     render(<StudioComposer />);
 
-    await waitFor(() => expect(screen.getByText('Not measured')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Reading from the chain')).toBeTruthy());
     expect(screen.queryByText('No named vault')).toBeNull();
     expect(screen.queryByLabelText(/^TITLE$/)).toBeNull();
   });

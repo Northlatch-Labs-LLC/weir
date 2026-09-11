@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     const platform = await readPlatform(createClient(cfgV.value), cfgV.value);
     if (!platform.ok) {
       return NextResponse.json(
-        { error: 'the platform fee could not be read, so no vault was sponsored', kind: platform.failure.kind },
+        { error: 'the platform fee is still being read from the chain, so no vault was sponsored', kind: platform.failure.kind },
         { status: 503 },
       );
     }

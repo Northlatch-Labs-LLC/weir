@@ -95,7 +95,7 @@ export function Notifications() {
       </button>
       {error !== null && (
         <div className="note crit" style={{ marginTop: 16 }}>
-          <span className="lbl">Not measured</span>
+          <span className="lbl">Reading from the chain</span>
           <p className="mono" style={{ fontSize: 13 }}>{error}</p>
         </div>
       )}

@@ -50,13 +50,6 @@ export default async function CreatorPage() {
       />
       <PageTabs label="Creator studio" items={CREATOR} />
 
-      {/*
-        The setup, before the explanation of what a vault is.
-
-        This page opened with two explanation cards and put the only control 1,015 pixels down —
-        measured, not guessed. Somebody arriving from "Become a creator" had already decided; what
-        they need is the first step, and the explanation is what they read while they are in it.
-      */}
       <div style={{ marginTop: 'var(--space-20)' }}>
         <CreatorSetup />
       </div>
@@ -108,17 +101,8 @@ export default async function CreatorPage() {
             () => (
               <div data-reveal className="note crit">
                 <span className="lbl">This did not load</span>
-                {/*
-                  The cause is logged, not dropped into the sentence.
-
-                  `failure.detail` is a short internal string — "Forbidden" — and it landed between
-                  two sentences with no punctuation of its own: "…will not tell you what a vault
-                  costs. Forbidden A fee quoted from a stale constant…". A reader cannot act on it
-                  and it reads as a word the writer forgot to finish. The two sentences say the whole
-                  useful thing on their own.
-                */}
                 <p>
-                  The platform&rsquo;s live terms could not be read, so this page will not tell you
+                  The platform&rsquo;s live terms are being read from the chain, so this page has not yet told you
                   what a vault costs. A fee quoted from a stale constant is how somebody agrees to a
                   rate that was never offered.
                 </p>
@@ -143,13 +127,6 @@ export default async function CreatorPage() {
           </p>
         </div>
 
-        {/*
-          A `<p>`, not a `<footer>`.
-
-          The frame already ends every column with the application's footer, so this made `/creator`
-          the one route in the product with two of them, one above the other. What it says is a
-          sentence about vaults, not the foot of the site.
-        */}
         <p className="note" style={{ marginTop: 'var(--space-20)' }}>
           A vault is a shared object: anyone can pay into it, only the capability holder can take
           money out, and the capability is bound to that one vault.

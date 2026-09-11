@@ -67,10 +67,6 @@ export function PostActions({
         <span className="post-action__label">Creator</span>
       </Link>
 
-      {/*
-        Support carries to the creator's page because that is where the vault, the denomination and
-        the tiers are. A tip needs an amount and a coin type; a circle can ask for neither.
-      */}
       <Link
         className="post-action post-action--accent"
         href={creatorHref}
@@ -82,11 +78,6 @@ export function PostActions({
         <span className="post-action__label">Support</span>
       </Link>
 
-      {/*
-        An in-page anchor rather than a route: the thread is already rendered below this card for
-        anybody entitled to it, so this is a jump and not a fetch. Absent on a locked post, where
-        there is no thread to jump to.
-      */}
       {showComments && (
         <a className="post-action" href={`#comments-${postId}`} aria-label="Go to the comments">
           <span className="post-action__disc">
@@ -100,8 +91,6 @@ export function PostActions({
         <span className="post-action__disc">
           <Glyph d={copied ? ICONS.copied : ICONS.share} />
         </span>
-        {/* The label carries the result, so the outcome is announced where the action was taken
-            rather than in a toast somewhere else on the screen. */}
         <span className="post-action__label" aria-live="polite">
           {shareFailed ? 'Copy failed' : copied ? 'Copied' : 'Share'}
         </span>

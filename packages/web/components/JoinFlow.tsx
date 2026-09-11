@@ -253,13 +253,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
             {digest}
           </a>
         </p>
-        {/*
-          Their own page first.
-
-          This is where a new account belongs after signing up, and until the profile row was
-          written there was nothing at this address to send them to. The feed is still offered,
-          because somebody who registered in order to read rather than to publish wants that.
-        */}
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           <a className="btn" href={`/c/${handle.trim()}?reader=${signer.address}`}>
             Go to your page
@@ -272,10 +265,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           </a>
         </div>
 
-        {/*
-          Stated separately from an error, because the registration succeeded. Telling somebody who
-          has just paid gas that it failed, when the chain says otherwise, is the worse mistake.
-        */}
         {pageWarning !== null && (
           <div className="note warn" style={{ marginTop: 14 }}>
             <span className="lbl">Your page is not ready yet</span>
@@ -308,14 +297,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           <strong>@{accountState.handle}</strong>. One account per address is enforced by the
           contract, so there is nothing to do here.
         </p>
-        {/*
-          `/feed`, not `/?reader=`.
-
-          `/` renders the landing for anybody the server cannot identify, so the old link only
-          reached a feed by naming the address in the query string — which tells the server who to
-          ask about and not who is asking. The feed route needs no such hint, and `SessionBridge`
-          puts the address back on the URL once the session is proved.
-        */}
         <a className="btn" href="/feed">
           Go to the feed
         </a>
@@ -384,15 +365,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
       <label className="k" htmlFor="display-name" style={{ display: 'block', marginTop: 14 }}>
         AND WHAT SHOULD YOUR PAGE CALL YOU?
       </label>
-      {/*
-        The name and the picture together, because they are the same question asked twice and this
-        is the only moment somebody is looking at what their account will look like.
-
-        The picture is drawn from the address rather than uploaded: every account has one from the
-        moment it exists, nobody has a blank circle, and two accounts cannot wear the same face. A
-        picture of their own is a separate piece of work — it needs somewhere to put the file and a
-        field in the signed statement that sets it — and it is not pretended at here.
-      */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
         <span style={{ lineHeight: 0, flexShrink: 0 }}>
           <Avatar address={signer.address} size={64} />
@@ -450,12 +422,6 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
               Back
             </button>
           </div>
-          {/*
-            Said where the account is actually created, not on a page somebody had to find.
-
-            Placed beside the signing button rather than under the handle field, because this is the
-            step that creates the account — the earlier one only checks whether a name is free.
-          */}
           <p className="legal-consent">
             Registering accepts our <a href="/legal/terms">Terms of Service</a> and our{' '}
             <a href="/legal/privacy">Privacy Policy</a>. If you go on to publish or take payment,

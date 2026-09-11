@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const vault = await readCreatorVault(client, b.vaultId);
   if (!vault.ok) {
     return NextResponse.json(
-      { error: `the vault could not be read: ${vault.failure.detail}` },
+      { error: `the vault is still being read from the chain: ${vault.failure.detail}` },
       { status: 424 },
     );
   }
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
   const onChainCoin = await coinTypeOf(client, b.vaultId);
   if (onChainCoin === null) {
-    return NextResponse.json({ error: 'the vault\'s coin type could not be read from chain' }, { status: 424 });
+    return NextResponse.json({ error: 'the vault coin type is still being read from the chain' }, { status: 424 });
   }
   if (normaliseCoinType(onChainCoin) !== normaliseCoinType(b.coinType)) {
     return NextResponse.json(

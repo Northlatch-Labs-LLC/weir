@@ -1,19 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-/**
- * Every file in this workspace that signs a transaction without going through `PolicySigner`.
- *
- * This is a register, not documentation. `test/the-only-path-claim.test.ts` walks the workspace for
- * `signAndExecuteTransaction(` and fails unless what it finds matches this list exactly — so adding
- * a signing path anywhere means declaring it here, and removing one means deleting its entry.
- *
- * What must come through `PolicySigner`: anything holding a capability, spending a budget, or moving
- * another party's funds.
- */
 export interface DirectSigningPath {
-  /** Repository-relative path. */
   path: string;
-  /** Why a spend ceiling would be ceremony rather than a control on this path. */
   why: string;
 }
 

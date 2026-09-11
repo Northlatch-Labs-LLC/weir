@@ -105,16 +105,12 @@ export function AlertsScreen({
         />
       ) : failure !== undefined ? (
         <ErrorState
-          cause={`Your alerts could not be read. ${failure}`}
+          cause={`Your alerts are loading. ${failure}`}
           moneyState="Nothing was moved, and nothing was spent. Payments settle on chain whether or not this page can list them."
           next="Try again in a moment."
         />
       ) : (
         <>
-          {/*
-            The filter is a view of one list, not a second read — which is why it is a button rather
-            than a link: nothing on the server changes when it is pressed.
-          */}
           <div className="w-tabs" role="tablist" aria-label="Filter alerts">
             {(
               [
@@ -174,7 +170,6 @@ export function AlertsScreen({
                     </p>
                   )}
                 </div>
-                {/* No time is drawn where none was recorded. */}
                 {alert.when === undefined ? null : (
                   <span className="w-mono" style={{ fontSize: 12, color: 'var(--w-ink-6)', flexShrink: 0 }}>
                     {alert.when}

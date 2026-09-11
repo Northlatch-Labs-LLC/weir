@@ -438,7 +438,7 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
       );
     }
     if (!response.ok || typeof body.salt !== 'string') {
-      throw new Error(body.error ?? `recovery details could not be read (${response.status})`);
+      throw new Error(body.error ?? `your recovery details are still loading (${response.status})`);
     }
     return body as RecoveryDetails;
   }, [zkSession]);

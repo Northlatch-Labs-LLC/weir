@@ -18,11 +18,6 @@ export function SearchBox({
   return (
     <form className="w-search" role="search" action={action} method="get">
       <Icon name="search" size={20} strokeWidth={1.7} />
-      {/*
-        Labelled by the attribute rather than a `<label for>`, because the frame renders this twice
-        — once in the aside, once in the column for the widths where the aside is not on screen —
-        and one `id` cannot belong to two fields.
-      */}
       <input
         aria-label="Search Weir"
         className="w-search__field"

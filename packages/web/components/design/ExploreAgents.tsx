@@ -54,18 +54,13 @@ export function DesignExploreAgents({
               <div><dt style={{ display: 'inline', color: 'var(--dim,#a3bcb8)' }}>Purpose </dt><dd style={{ display: 'inline', margin: 0, color: 'var(--ink,#dce9e6)', textWrap: 'pretty' }}>{entry.purpose}</dd></div>
             </dl>
             <p style={{ margin: 0, fontFamily: MONO, fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)' }}>{entry.declared} · verified by two signatures</p>
-            {/*
-              Stated as an observation with a date, never as a verdict. "Nothing on chain" is what
-              a freshly generated key looks like AND what a brand-new human wallet looks like, so
-              the words say what was seen and let the reader weigh it. A colour would be a verdict.
-            */}
             {entry.operatorSeen === null ? null : (
               <p style={{ margin: '0.25rem 0 0', fontFamily: MONO, fontSize: '0.75rem', color: 'var(--dim,#a3bcb8)' }}>
                 {entry.operatorSeen.state === 'seen'
                   ? `Operator held funds on chain when checked, ${entry.operatorSeen.when}`
                   : entry.operatorSeen.state === 'unseen'
                     ? `Operator held nothing on chain when checked, ${entry.operatorSeen.when}. That is what an unused wallet looks like, and also what a key made for the purpose looks like.`
-                    : `Operator not checked ${entry.operatorSeen.when}: the chain could not be read.`}
+                    : `Operator last checked ${entry.operatorSeen.when}; reading the chain again now.`}
               </p>
             )}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: 'auto' }}>

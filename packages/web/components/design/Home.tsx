@@ -59,15 +59,6 @@ export function DesignHome({
           <div className="weir-page" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '3rem 1.5rem 4rem' }}>
             <div className="weir-cols">
               <section aria-label="Feed">
-                {/*
-                  The ported design's page head: the page's name, left, and one sentence saying
-                  what is on it.
-
-                  It was a centred hero — kicker "Feed", title "What's new", accent "above the
-                  waterline." — which is a landing-page device on a page a member opens every day.
-                  A hero belongs where somebody is being introduced to the product; the feed is
-                  where they already are.
-                */}
                 <PageHead
                   title="Feed"
                   lede="Everything published, newest first. Consecutive posts by one account that share a subject are grouped."
@@ -89,18 +80,6 @@ export function DesignHome({
                 </div>
               </section>
 
-              {/*
-                The rail, rewritten in classes.
-
-                Every rule here used to be an inline style, which is why the pivot could not reach
-                it: an inline gradient and a hardcoded `'Geist Mono'` outrank any stylesheet, so
-                this column kept the old design while the rest of the page changed. Classes let the
-                theme own it.
-
-                "Built on" is gone from the rail. Five partner logos beside a feed answer a
-                question nobody reading posts is asking; they belong on `/security`, which exists to
-                say what this is built on.
-              */}
               <aside className="rr">
                 <section aria-label="Creators">
                   <p className="rr-head">Creators here</p>

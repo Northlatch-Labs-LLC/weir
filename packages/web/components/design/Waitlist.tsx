@@ -218,38 +218,13 @@ export function DesignWaitlist({
   return (
     <>
           <div className="weir-page" style={{ maxWidth: '72rem', marginInline: 'auto', padding: '4rem 1.5rem 4rem' }}>
-            {/*
-              Left to right, not center-stacked (the brand ruling). The badge, heading, lede and
-              counter form one left-aligned column instead of a centred block with no media query;
-              the form and the rest of the page continue to sit below it, as they already did.
-              Every word of copy is unchanged — only `textAlign` and the `auto` margins that centred
-              the block move.
-            */}
             <div style={{ textAlign: 'left', maxWidth: '52rem' }}>
               <p style={{ margin: '0 0 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.625rem', padding: '0.35rem 0.85rem 0.35rem 0.65rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderRadius: '99px', background: 'rgba(var(--pd,11,37,48),0.7)', boxShadow: '0 0 22px -10px rgba(var(--crest-rgb,139,227,198),0.7)', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                 <span aria-hidden="true" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--crest,#8be3c6)', boxShadow: '0 0 10px rgba(var(--crest-rgb,139,227,198),0.9)', animation: 'pulseRing 2.6s ease-out infinite' }}></span>
                 {gated ? 'Closed alpha · by invitation' : 'Open'}
               </p>
-              {/*
-                The hero heading states the door plainly. The tagline ("Your favorite notification")
-                is deliberately NOT here: by the brand ruling of 2026-09-04 it lives in the footer as
-                something a reader finds, not something the page announces. Honest first, then a
-                little mystery — never the other way round.
-              */}
               <h1 style={{ margin: '0', textAlign: 'left', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', lineHeight: '1.05', letterSpacing: '-0.038em', fontSize: 'clamp(2.25rem,1.2rem + 3.4vw,3.75rem)', maxWidth: '26ch', textWrap: 'balance' }}>No payouts to request. <span className="weir-owned loud">{gated ? 'Weir is in closed alpha.' : 'Weir is open.'}</span></h1>
               <p style={{ margin: '1.125rem 0 0', maxWidth: '58ch', textAlign: 'left', fontSize: '1.0625rem', lineHeight: '1.65', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>{gated ? 'Creators are onboarding now, by invitation. Leave your email and we will send one message when the doors open. Tell us the handle you want and we will note it.' : 'Creator pages are open. Claim a handle now, or leave your email and we will tell you when something new ships.'}</p>
-              {/*
-                The counter.
-
-                Rendered only when the count was actually taken. `total === null` means the read
-                failed or the deployment has no list, and both must render nothing rather than "0
-                people" — a zero is a real answer an empty list is entitled to give, and an
-                unreachable database borrowing that answer would be the page stating a measurement it
-                never made. This is the same rule the footer's package digest follows.
-
-                Singular at one, because "1 people have joined" is the tell of a number nobody looked
-                at.
-              */}
               {total !== null && total > 0 && (
                 <p style={{ margin: '1rem 0 0', textAlign: 'left', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>
                   <span style={{ color: CREST }}>{total.toLocaleString()}</span>
@@ -276,19 +251,6 @@ export function DesignWaitlist({
                 </form>
               )}
             </>)}
-            {/*
-              The one reader this page was turning away by accident.
-
-              While the door is closed, everything above tells a visitor to wait. That is right for
-              a person and wrong for a program: nothing an agent does passes through this gate —
-              `proxy.ts` exempts `/api/`, `/llms.txt`, the signed manifest, the registration script
-              and `/agents`, and it always did — so an operator who read this page concluded their
-              machine had to wait for a date that never applied to it. The sentence is here rather
-              than only on `/agents` because this is the page they are redirected to.
-
-              The date is printed only when this deployment holds one; a missing launch target
-              renders the sentence without a clause rather than inventing "soon".
-            */}
             {gated && (
               <div style={{ maxWidth: '52rem', margin: '1rem auto 0', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.3)', borderLeft: `3px solid ${CREST}`, borderRadius: '10px', padding: '1rem 1.25rem', textAlign: 'left' }}>
                 <p style={{ margin: '0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
@@ -309,17 +271,6 @@ export function DesignWaitlist({
                 <h2 id="wl-form-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: '1.5rem', letterSpacing: '-0.03em' }}>Join the list</h2>
                 <p style={{ margin: '0.5rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>{gated ? 'Your email, and optionally the handle you would like. One message when the doors open.' : 'Your email, and optionally the handle you would like. One message when something new ships.'}</p>
 
-                {/*
-                    A grid track's automatic minimum is `min-content`, and a text input contributes
-                    its own intrinsic width — about twenty characters — to that. With the
-                    `weir.social/c/` prefix beside it the row's min-content came to 352px, so on a
-                    360px phone the whole column was sized to 352px inside a 218px card: the email
-                    field, the handle row and the button all rendered past the edge and were clipped
-                    by the body, which is why the prefix read "weir.so" and stopped.
-
-                    `minmax(0, 1fr)` lets the track shrink to its container, which is what
-                    `globals.css` says about the shell's own centre column for the same reason.
-                  */}
                 <div style={{ marginTop: '1.75rem', display: 'grid', gap: '1.25rem', gridTemplateColumns: 'minmax(0, 1fr)' }}>
                   <div>
                     <label htmlFor="wlmail" style={{ display: 'block', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>Email</label>
@@ -358,24 +309,6 @@ export function DesignWaitlist({
                     <div style={{ border: `1px solid ${LINE}`, borderLeft: `3px solid ${CREST}`, borderRadius: '10px', padding: '1.25rem 1.5rem', background: 'rgba(var(--pe,4,22,29),0.6)', display: 'grid', gap: '1rem' }}>
                       <div>
                         <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: CREST }}>Your place</p>
-                        {/*
-                          Stated as arrival order, never as a queue. `db/016_waitlist_growth.sql`
-                          spells out why: this product is live, nobody is being served in turn, and
-                          "you are 47th in line" would describe a process that does not exist. A
-                          plain count claims arrival, not a position being served.
-
-                          No ordinal suffix, and no noun left for one to strand on.
-
-                          This read "You are number 47 th address to join". The suffix was a bare
-                          literal, so it never agreed with the number in front of it — and no fixed
-                          suffix could: 1 wants "st", 47 wants "th", 21 wants "st" again. The
-                          cardinal form removes the agreement problem rather than solving it, and
-                          is correct at 1, 47, 100 and 1,000,000 alike.
-
-                          `position` is typed `number`, so the guard is not for `null` — it is for
-                          a number that is not finite. `NaN.toLocaleString()` is "NaN", which would
-                          print "You are number NaN on the list." to somebody who just joined.
-                        */}
                         <p style={{ margin: '0.625rem 0 0', color: 'var(--ink,#dce9e6)', fontSize: '0.9375rem', textWrap: 'pretty' }}>
                           {Number.isFinite(standing.position) ? (
                             <>
@@ -387,14 +320,6 @@ export function DesignWaitlist({
                             'You are on the list.'
                           )}
                         </p>
-                        {/*
-                          Branches, because the gate can contradict it.
-
-                          "Weir is already live and open to read" was unconditional, so a reader the
-                          proxy had just turned away was told the door was open — by the very page
-                          that had turned them away. Every other sentence here already reads
-                          `gated`; this one now does too.
-                        */}
                         <p style={{ margin: '0.4rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
                           {gated
                             ? 'Arrival order, not a queue. Nothing is served in turn; the doors have not opened yet.'
@@ -414,12 +339,6 @@ export function DesignWaitlist({
                           />
                           <button type="button" onClick={onCopyRef} style={{ flex: '0 0 auto', minHeight: '2.75rem', padding: '0.7rem 1.1rem', borderRadius: '8px', border: `1px solid ${CREST}`, background: 'rgba(var(--crest-rgb,139,227,198),0.08)', color: 'var(--ink,#dce9e6)', font: '600 0.9375rem \'Geist\',sans-serif', cursor: 'pointer' }}>{copied ? 'Copied' : 'Copy'}</button>
                         </div>
-                        {/*
-                          What the link does and — load-bearing — what it does not. `creator.move`
-                          has a real referral that splits a settlement and pays an address; this is
-                          not it, and a page that let the two blur would be claiming a contract that
-                          does not exist for this. See the header of `db/016_waitlist_growth.sql`.
-                        */}
                         <p style={{ margin: '0.5rem 0 0', fontSize: '0.9375rem', color: 'var(--dim,#a3bcb8)', textWrap: 'pretty' }}>
                           {standing.referred === 0
                             ? 'Nobody has joined through your link yet.'
@@ -434,11 +353,6 @@ export function DesignWaitlist({
               </section>
 
               <div style={{ display: 'grid', gap: '1.5rem', alignContent: 'start' }}>
-                {/*
-                  Above "what being early gets you", because it answers the question that section
-                  raises. Rendered only when a date exists — there is no placeholder state, and an
-                  unset target is not a missing feature but the honest default.
-                */}
                 {launchTarget !== null && (
                   <Countdown atMs={launchTarget.atMs} label={launchTarget.label} gated={gated} />
                 )}
@@ -460,7 +374,6 @@ export function DesignWaitlist({
 
                 <section aria-label="How the list works" style={{ border: '1px solid rgba(var(--sand-rgb,217,201,163),0.3)', borderLeft: '3px solid var(--sand,#d9c9a3)', borderRadius: '10px', padding: '1.5rem' }}>
                   <p style={{ margin: '0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>How the list works</p>
-                  {/* One paragraph, one claim per sentence, and nothing it says is contradicted elsewhere on the page. */}
                   <p style={{ margin: '0.625rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', textWrap: 'pretty' }}>No points, no tiers, no queue-jumping. Your place is the order you joined, and inviting friends does not change it. Your email is used to tell you when {gated ? 'the doors open' : 'something new ships'} and for nothing else. One click unsubscribes.</p>
                 </section>
 
@@ -471,23 +384,12 @@ export function DesignWaitlist({
               </div>
             </div>
 
-            {/*
-              See what is here before committing to anything — and after the form, not before it.
-
-              This sat above the form and pushed the email field 2,218 pixels down a page whose title
-              is "Join the list": two full-height browse sections stood between the heading and the
-              only control on it. The funnel's job is to catch somebody the gate would otherwise turn
-              away, which is a job it does after they have declined to leave an address, not instead
-              of asking.
-            */}
             {funnel !== null && (
               <div style={{ marginTop: '2.5rem' }}>
                 <ExploreFunnel sides={funnel} />
               </div>
             )}
           </div>
-      {/* The honeypot. Off-screen rather than hidden, because a bot that skips hidden fields is the
-          one this catches — and tab-skipped so no human and no screen reader reaches it. */}
       <label htmlFor={trapId} aria-hidden style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
         Company
         <input id={trapId} name="company" type="text" tabIndex={-1} autoComplete="off" value={trap} onChange={(e) => setTrap(e.target.value)} />

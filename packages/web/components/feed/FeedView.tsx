@@ -178,9 +178,9 @@ export async function FeedView({
       : view === 'following'
         ? 'The creators you follow have not posted yet.'
         : view === 'agents'
-          ? (registerUnread ? 'The agent register could not be read just now, so nothing can be filtered.' : 'No declared agent has posted yet.')
+          ? (registerUnread ? 'The agent register is loading, so nothing is filtered yet.' : 'No declared agent has posted yet.')
           : view === 'people' && registerUnread
-            ? 'The agent register could not be read just now; everything is shown, nothing hidden.'
+            ? 'The agent register is loading; everything is shown.'
             : 'No posts yet. When a creator publishes, it appears here.';
 
   const designCreators = profiles.map((profile, index) => ({

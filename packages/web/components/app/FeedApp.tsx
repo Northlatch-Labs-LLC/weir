@@ -70,15 +70,7 @@ export function FeedApp({
 
   const aside: ReactNode = (
     <>
-      {/* The frame renders the search box at the top of every aside — see `AppShell`. */}
 
-      {/*
-        Becoming a member of somebody is the product's whole argument, so it is the first thing in
-        the rail rather than a control you find on a profile. The button goes to their page: what
-        happens when you weir somebody is a signed transaction, and the rail is not going to be the
-        second implementation of one.
-      */}
-      {/* `more` is `/explore`, the directory — not `/creators`, which is the setup form. */}
       <RailCard
         title="Become a member"
         note="Keep SUI in someone's vault. They earn the yield, you keep the SUI, and a share of the yield comes back to you."
@@ -125,14 +117,6 @@ export function FeedApp({
         </RailCard>
       )}
 
-      {/*
-        The people the card above did not already name.
-
-        Both cards sliced from the top of the same list, so the first three accounts on Weir appeared
-        twice in one rail, one card under the other — the same avatar, name and follower count, six
-        rows apart. This one starts where that one stopped, and disappears when there is nobody left
-        to introduce.
-      */}
       {creators.length <= 3 ? null : (
       <RailCard title="Who is here" note={creatorCount} Link={RailLink} more="/explore">
         {creators.slice(3, 8).map((c) => (
@@ -161,14 +145,6 @@ export function FeedApp({
         pathname={current?.href}
       />
 
-      {/*
-        Where you write, at the top of what you read.
-
-        A link to the studio wearing the shape of a composer, not a composer: pricing a post,
-        sealing its body and signing the publish are one implementation and the feed is not going to
-        be a second one. Members only — offering a stranger a box to write in and then asking them
-        to sign in is a worse welcome than not offering it.
-      */}
       {viewer.signedIn ? (
         <NextLink href={reader === undefined ? '/studio' : `/studio?reader=${reader}`} className="w-prompt">
           <Avatar address={viewer.address} size={44} />
@@ -189,15 +165,6 @@ export function FeedApp({
       >
         {sessionNote}
       </p>
-
-      {/*
-        There was a second composer here.
-
-        Two of them rendered one under the other for anybody signed in: `.w-prompt` above, and a
-        hand-rolled copy of the same link below — same avatar, same "Publish" pill, same destination
-        — with the session line wedged between them. The design component stays; the copy is gone,
-        along with the inline styles it carried.
-      */}
 
       {posts.length === 0 ? (
         <EmptyState fact={emptyMessage} />

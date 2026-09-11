@@ -32,7 +32,7 @@ describe('a price is never printed at an assumed scale', () => {
     expect(code).toMatch(/decimals/);
   });
 
-  it('says so when the scale could not be read, rather than choosing one', () => {
+  it('says so when the scale has not been read, rather than choosing one', () => {
     expect(code).toContain('scale unknown');
   });
 });
@@ -40,7 +40,7 @@ describe('a price is never printed at an assumed scale', () => {
 describe('Send is gated on knowing', () => {
   const canSend = code.slice(code.indexOf('const canSend ='), code.indexOf('const rendered'));
 
-  it('refuses to send when the key could not be read', () => {
+  it('refuses to send when the key has not been read', () => {
     expect(canSend).toMatch(/theirKey\.state !== 'failed'/);
   });
 
@@ -59,8 +59,8 @@ describe('Send is gated on knowing', () => {
 });
 
 describe('what the sender is told before pressing Send', () => {
-  it('says "not measured" for an unreadable key, not "not encrypted"', () => {
-    expect(source).toMatch(/Not measured: .*key could not be read/);
+  it('says the key is still being read, never "not encrypted"', () => {
+    expect(source).toMatch(/Reading from the chain: .*key is being read from the chain/);
     expect(source).toContain('Nothing is sent until it can be');
   });
 

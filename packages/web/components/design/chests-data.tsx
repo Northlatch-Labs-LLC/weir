@@ -64,7 +64,7 @@ export async function ChestsData({
 
   const split =
     feeLabel === null
-      ? 'A platform fee is taken at settlement; the rate could not be read just now.'
+      ? 'A platform fee is taken at settlement; the rate is being read from the chain.'
       : `${feeLabel} is taken at settlement, in the same transaction. The rest reaches them directly.`;
 
   const potOf = (profile: (typeof profiles)[number]) => {
@@ -112,7 +112,7 @@ export async function ChestsData({
         potNote: 'no tips yet; the log was read',
       };
     }
-    if (decimals === null) return unmeasured("the coin's decimals could not be read");
+    if (decimals === null) return unmeasured("the coin scale is being read from the chain");
 
     return measured(
       `${formatUnits(held.totalMinor, decimals)}${symbol === '' ? '' : ` ${symbol}`}`,

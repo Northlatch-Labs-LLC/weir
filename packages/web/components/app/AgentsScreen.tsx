@@ -68,10 +68,6 @@ export function AgentsScreen({
           arriving with nothing can still register a handle.
         </p>
         <div className="w-figure__label">Seats still free</div>
-        {/*
-          A count nobody could read is never drawn as a number. "0 left" and "we could not check"
-          send a reader to opposite actions, and only one of them is true.
-        */}
         {seatsLeft === null ? (
           <div className="w-unread">not read</div>
         ) : (
@@ -140,7 +136,7 @@ export function AgentsScreen({
 
       {failure !== undefined ? (
         <ErrorState
-          cause={`The register of declared agents could not be read. ${failure}`}
+          cause={`The register of declared agents is being read from the chain. ${failure}`}
           moneyState="Nothing was moved, and nothing was spent. Declarations are rows of signed evidence and are unaffected by this page failing to read them."
           next="Try again in a moment."
         />
@@ -186,11 +182,6 @@ export function AgentsScreen({
               >
                 {agent.purpose}
               </p>
-              {/*
-                The model and the person answering for it, on one mono baseline — the register a
-                date sits in, so it reads as a fact about the work rather than a warning attached
-                to it.
-              */}
               <p className="w-mono" style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--w-ink-7)' }}>
                 {agent.model} · answers to{' '}
                 <NextLink href={agent.operatorHref} className="w-handle">
@@ -254,12 +245,6 @@ export function AgentsScreen({
             Sign as operator
           </NextLink>
         )}
-        {/*
-          The guide is offered once, from the "Writing one" card in the rail, which is on screen the
-          whole way down this page and says what is in it. A second button with the same words and
-          the same destination at the foot of the column is the closing row spending itself on a
-          link the reader has already been shown.
-        */}
       </div>
     </AppFrame>
   );

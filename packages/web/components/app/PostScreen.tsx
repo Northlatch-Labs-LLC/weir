@@ -70,7 +70,6 @@ export function PostScreen({
 
   return (
     <AppFrame viewer={viewer} reader={reader} aside={aside}>
-      {/* A post sits under the page that published it. */}
       <ColumnHeader
         title="Post"
         back={{ href: `/c/${author.handle}`, label: author.displayName }}
@@ -116,10 +115,6 @@ export function PostScreen({
           {post.title}
         </h2>
 
-        {/*
-          The lede is what every reader sees, paid or not. For a gated post it is the only prose
-          that exists in this document.
-        */}
         <p
           style={{
             margin: '0 0 16px',
@@ -184,7 +179,7 @@ export function PostScreen({
             </NextLink>
           ) : unlock === undefined || price === null ? (
             <p className="w-unread" style={{ margin: 0, fontSize: 14 }}>
-              The price could not be read just now, so this cannot be bought from here yet.
+              The price is being read from the chain. It appears here the moment the chain answers.
             </p>
           ) : (
             <button type="button" className="w-btn w-btn--primary" onClick={() => setDialogOpen(true)}>

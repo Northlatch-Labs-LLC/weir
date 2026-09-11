@@ -16,7 +16,7 @@ type Load =
   | { state: 'unmeasured'; detail: string };
 
 function formatEarning(e: CoinEarning): string {
-  if (e.decimals === null) return 'not measured';
+  if (e.decimals === null) return 'reading from the chain';
   const amount = formatUnits(BigInt(e.amount), e.decimals);
   return e.symbol === null || e.symbol === '' ? amount : `${amount} ${e.symbol}`;
 }
@@ -97,10 +97,10 @@ export function Referrals() {
 
       {load.state === 'unmeasured' && (
         <div className="note crit" style={{ marginTop: 'var(--space-20)' }}>
-          <span className="lbl">Not measured</span>
+          <span className="lbl">Reading from the chain</span>
           <p>
-            Your referrals could not be read ({load.detail}). This is <strong>not</strong> zero
-            referrals. It is an unanswered question.
+            Your referrals are loading ({load.detail}). Every one you have earned is still
+            yours — the count appears the moment it answers.
           </p>
         </div>
       )}

@@ -104,11 +104,6 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
         {label}
       </p>
 
-      {/*
-        The figures are `aria-hidden` and the sentence beneath is not. A live region that changes
-        every second interrupts a screen reader continuously and makes the rest of the page
-        unreadable; the date, said once, carries the same information.
-      */}
       {remaining !== null && (
         <div
           aria-hidden="true"
@@ -132,10 +127,6 @@ export function Countdown({ atMs, label, gated }: { atMs: number; label: string;
         </p>
       )}
 
-      {/*
-        The sentence that stops a clock on a live product from reading as "launch". It is not
-        decoration and it is not optional — see the header, and `db/016_waitlist_growth.sql`.
-      */}
       <p
         style={{
           margin: 0,

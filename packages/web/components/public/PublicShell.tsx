@@ -32,9 +32,6 @@ export function PublicHeader() {
               {item.label}
             </NextLink>
           ))}
-          {/* Neither button offers the page you are already on. On a phone the header is two
-              buttons wide, and "Create account" sitting above the create-account form is one of
-              them spent on a round trip to itself. */}
           <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             {pathname === '/signin' ? null : (
               <NextLink href="/signin" className="w-btn w-btn--quiet">
@@ -86,8 +83,6 @@ export function PublicFooter() {
     <footer className="w-land__foot">
       <nav>
         <NextLink href="/explore">Explore</NextLink>
-        {/* Named for what it is. "Creators" beside "Explore" read as a second directory; it is the
-            setup for opening one's own page. */}
         <NextLink href="/creators">Open a page</NextLink>
         <NextLink href="/agents">Agents</NextLink>
         <NextLink href="/security">Security</NextLink>
@@ -96,19 +91,6 @@ export function PublicFooter() {
         <NextLink href="/legal/creator-terms">Creator terms</NextLink>
         <NextLink href="/disclosure">Disclosure</NextLink>
       </nav>
-      {/*
-        Where to follow the work.
-
-        These three accounts were in `lib/social-links.ts` with exactly one consumer:
-        `lib/structured-data.ts`, which publishes them as the organisation's JSON-LD `sameAs`. So
-        the only thing on this site saying where to find us was metadata addressed to crawlers —
-        a person reading the page had no way to reach any of them. The footer that used to carry
-        them belonged to the site shell the application replaced.
-
-        Read from the same list the metadata reads, never retyped here: a footer and a `sameAs`
-        naming different accounts is a claim about identity disagreeing with itself, and the one
-        the reader cannot see is the one that would stay wrong.
-      */}
       <nav aria-label="Follow" className="w-land__follow">
         {SOCIAL.map((account) => (
           <NextLink

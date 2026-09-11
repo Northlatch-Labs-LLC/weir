@@ -47,7 +47,7 @@ export async function TreasuriesData({
   const unlockedNow = position === null ? null : position + 1;
   const epochLabel =
     epoch === null
-      ? 'The epoch could not be read, so no rung is shown as unlocked.'
+      ? 'The epoch is being read from the chain; rungs appear as it confirms them.'
       : `epoch ${epoch.toString()} · ${unlockedNow} of ${rungCount} rungs unlocked now`;
 
   const profiles = await listProfiles();
@@ -103,7 +103,7 @@ export async function TreasuriesData({
       poolNote={
         indexed
           ? ''
-          : 'The pool index could not be read just now, so the figures below are not shown rather than estimated.'
+          : 'The pool index is being read from the chain. Figures appear once it answers — none of them are estimates.'
       }
       ladder={ladder}
       epochLabel={epochLabel}

@@ -135,9 +135,9 @@ describe('a failed read never becomes a value', () => {
     }
   });
 
-  it('the component renders an unmeasured value as words, not as a blank', () => {
+  it('the component renders a value it has not read as words, not as a blank', () => {
     const view = read('components/design/Agents.tsx');
-    expect(view).toContain('not measured');
+    expect(view).toContain('reading from the chain');
     expect(view).toContain('fact.unavailable');
   });
 });

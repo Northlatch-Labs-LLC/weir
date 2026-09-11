@@ -98,8 +98,6 @@ export function StudioScreen({
         subscription. A paid post is priced on chain and bought once, permanently.
       </p>
 
-      {/* `w-fill` so the composer takes the room between the header and the footer rather than
-          leaving a 992px void under it when the aside is taller than this column. */}
       <div className="w-fill" style={{ padding: '18px 22px 40px' }}>
         <StudioComposer />
       </div>

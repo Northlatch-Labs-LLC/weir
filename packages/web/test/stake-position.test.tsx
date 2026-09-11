@@ -35,17 +35,17 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('a failed read is never a zero balance', () => {
-  it('says the vault could not be read, and does not show a figure', async () => {
+  it('says the vault is still loading, and does not show a figure', async () => {
     mockRoutes({ stake: { ok: false, body: { error: 'the node timed out' } } });
     render(<StakePosition vaultId="0xv" />);
-    await waitFor(() => expect(screen.getByText(/Not measured/i)).toBeTruthy());
-    expect(screen.getByText(/not.*a zero balance/i)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/Reading from the chain/i)).toBeTruthy());
+    expect(screen.getByText(/deposit is held on chain/i)).toBeTruthy();
   });
 
   it('offers no withdraw button when it could not read the position', async () => {
     mockRoutes({ stake: { ok: false, body: { error: 'unreachable' } } });
     render(<StakePosition vaultId="0xv" />);
-    await waitFor(() => expect(screen.getByText(/Not measured/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Reading from the chain/i)).toBeTruthy());
     expect(screen.queryByText('Withdraw')).toBeNull();
   });
 });

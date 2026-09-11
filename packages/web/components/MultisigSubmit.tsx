@@ -41,16 +41,6 @@ export function MultisigSubmit({ bytes, summary }: { bytes: string; summary: str
       <p className="section-note" style={{ margin: '0 0 var(--space-8)' }}>{summary}</p>
 
       <div style={{ display: 'flex', gap: 'var(--space-8)', marginBottom: 'var(--space-12)' }}>
-        {/*
-          `.field` rather than `.comment-input`, which draws its edge in `--border-default` — 12%
-          white over the sunken surface, about 1.3:1 against the panel, under the 3:1 WCAG 2.2
-          asks of a control boundary. Bytes nobody can see the edges of are bytes somebody
-          half-selects and signs.
-
-          `.comment-input` also outranked `.mono` on font-family, so this transaction payload has
-          been rendering in the body font despite asking for mono since it was written. `.field`
-          pairs with `.mono` on specificity, so it comes out monospaced now.
-        */}
         <textarea
           className="field mono"
           readOnly
@@ -113,7 +103,6 @@ sui keytool multi-sig-combine-partial-sig \\
           Executed. <span className="mono">{digest}</span>
         </p>
       )}
-      {/* Verbatim. An abort code means something specific and rewording it loses that. */}
       {error !== null && <p className="unmeasured" style={{ marginBottom: 0 }}>{error}</p>}
     </div>
   );

@@ -72,7 +72,6 @@ export function ChromeRouter({
 
   return (
     <AppFrame viewer={viewer} aside={discovery}>
-      {/* A gutter for pages written before the column existed. See `.w-legacy`. */}
       <div className="w-legacy">{children}</div>
     </AppFrame>
   );

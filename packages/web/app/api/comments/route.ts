@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   if (!canRead(post, entitlements) && !(await ownsPost(reader, post))) {
     if (entitlements.truncated || !readerReading.ok) {
       return NextResponse.json(
-        { error: 'your entitlements could not be read in full — try again', truncated: true },
+        { error: 'still reading what you hold — try again in a moment', truncated: true },
         { status: 503 },
       );
     }
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
   if (!canRead(post, entitlements) && !(await ownsPost(author, post))) {
     if (entitlements.truncated) {
       return NextResponse.json(
-        { error: 'your entitlements could not be read in full — try again', truncated: true },
+        { error: 'still reading what you hold — try again in a moment', truncated: true },
         { status: 503 },
       );
     }

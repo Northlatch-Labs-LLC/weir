@@ -25,7 +25,6 @@ export function LegalNav({ current, effective }: { current: LegalSlug; effective
           ),
         )}
       </nav>
-      {/* Absent renders nothing rather than a date nobody wrote. */}
       {effective !== null && (
         <p className="legal-nav__date mono">In effect from {effective}</p>
       )}

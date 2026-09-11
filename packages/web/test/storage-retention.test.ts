@@ -17,17 +17,6 @@ describe('the lease the code buys', () => {
   });
 
   it('is chosen from the post\u2019s access kind, never from whether the asset is encrypted', () => {
-    /*
-      This asserted the string `gated !== null ? 'durable' : 'ephemeral'` was present in the upload
-      route. That expression had already been replaced; what the assertion actually matched was a
-      comment saying so — so the test passed by finding a note about the defect it was written to
-      prevent, and would have gone on passing with the route rewritten around it.
-
-      Deriving the lease from `gated` asks whether the asset is encrypted. That agrees with the
-      access kind today by coincidence, not construction, and it is how the route and
-      `tierForAccess` came to disagree about subscribers while both looked correct. So the mapping
-      is asserted where it lives, and the route is asserted to call it rather than re-derive.
-    */
     expect(tierForAccess('public')).toBe('ephemeral');
     expect(tierForAccess('subscribers')).toBe('durable');
     expect(tierForAccess('paid')).toBe('durable');

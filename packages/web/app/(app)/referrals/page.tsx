@@ -12,10 +12,6 @@ export const dynamic = 'force-dynamic';
 export default function ReferralsPage() {
   return (
     <>
-      {/*
-        No `.wrap`: that clamps to 780px, which is right for a column of prose under a full-width
-        header and wrong inside the dashboard's own measure. Each block below carries its own.
-      */}
       <PageHead
         kicker="Your account"
         title="Referrals"

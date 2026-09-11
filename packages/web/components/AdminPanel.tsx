@@ -105,7 +105,7 @@ export function AdminPanel() {
   if (state.name === 'unmeasured') {
     return (
       <div className="note crit" role="alert">
-        <span className="lbl">Not measured</span>
+        <span className="lbl">Reading from the chain</span>
         <p>
           {state.detail} Nothing is shown either way — a failed read is not an answer about who you
           are, and treating it as one would lock you out at the worst moment.
@@ -130,8 +130,8 @@ export function AdminPanel() {
 
       {platform === null ? (
         <div className="note crit" role="alert">
-          <span className="lbl">Not measured</span>
-          <p>The platform object could not be read, so none of its terms are shown.</p>
+          <span className="lbl">Reading from the chain</span>
+          <p>The platform object is being read from the chain; its terms appear once it answers.</p>
         </div>
       ) : (
         <>
@@ -194,11 +194,6 @@ export function AdminPanel() {
             </div>
           </div>
 
-          {/*
-            Revenue renders for any signed-in viewer, not only the capability holder, because every
-            figure in it is already public — shared vault objects and on-chain events. The collect
-            button inside it is what needs the capability, and the chain enforces that.
-          */}
           <PlatformRevenue address={state.isAdmin ? signer.address : null} />
 
           {state.isAdmin && (

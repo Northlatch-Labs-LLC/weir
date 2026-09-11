@@ -72,14 +72,6 @@ export function PostCard({
   if (locked) {
     bodyRegion = (
       <div className="w-locked">
-        {/*
-          What is behind the panel, stated once, in a line.
-
-          The panel used to be an icon over a button in a tall centred column and said nothing at
-          all — the reader had to infer from a padlock what kind of gate this was. It says which
-          gate, and how many pictures are behind it when there are any, in the space the padlock
-          alone used to take.
-        */}
         <span className="w-locked__what">
           <Icon name="lock" size={20} strokeWidth={1.6} />
           <span>
@@ -164,12 +156,6 @@ export function PostCard({
               </Link>
             </h2>
           )}
-          {/*
-            Clamped, with a control only when the clamp is hiding something. A post here is
-            long-form, and printed in full one of them fills the screen — three posts where there
-            should be ten. Expanding shows the body the feed was handed and no more: a gated post
-            arrives with its free lede and `visiblePost` already decided that on the server.
-          */}
           {post.body === '' ? null : (
             <ExpandableText className="w-post__text">{post.body}</ExpandableText>
           )}

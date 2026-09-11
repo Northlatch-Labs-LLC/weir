@@ -50,14 +50,6 @@ export function WalletConnect({
 
   return (
     <>
-      {/*
-        The trigger, and the state it used to hide.
-
-        This rendered only while `signer === null`, so the instant a wallet shared an address the
-        control disappeared — including when the signature that actually signs you in had been
-        declined. There was then nothing on any screen to press. A connected-but-unconfirmed reader
-        now keeps a control, and it says what is left to do.
-      */}
       {(signer === null || unconfirmed) && (
         <button
           type="button"
@@ -78,18 +70,6 @@ export function WalletConnect({
         </button>
       )}
 
-      {/*
-        One window, on the shared `Dialog`.
-
-        This used to be a hand-drawn portal: its own scrim, its own Escape listener, its own focus
-        call, and `aria-modal="true"` declared over a page that `Tab` walked straight out of — a
-        screen reader told the rest of the page was inert while it was fully reachable, which is
-        worse than claiming nothing. The portal itself was load-bearing and still is: `.appbar`
-        carries `backdrop-filter`, and a filtered ancestor becomes the containing block for
-        `position: fixed`, so rendered in place this window's `inset: 0` resolved against a 60px
-        header and opened inside the bar. `Dialog` portals to the body, traps focus, locks the
-        background scroll and gives focus back — none of which this file has to remember any more.
-      */}
       {open && mounted && (
         <Dialog
           open
@@ -147,11 +127,6 @@ export function WalletConnect({
                       type="button"
                       onClick={() => void connectWallet(wallet)}
                     >
-                      {/*
-                        The wallet's own icon, which it supplies as a data URI. A plain `img`
-                        rather than `next/image`: the source is a string handed over by an
-                        extension at runtime, not an asset in this build.
-                      */}
                       {wallet.icon !== undefined && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -168,7 +143,6 @@ export function WalletConnect({
                 </div>
               )}
 
-              {/* Found and not offered, with the reason. Never silently dropped. */}
               {unusableWallets.map((wallet) => (
                 <p className="wc-note" key={wallet.name}>
                   {wallet.name} is out of date — it cannot {wallet.missing.join(' or ')}. Update
@@ -176,11 +150,6 @@ export function WalletConnect({
                 </p>
               ))}
 
-              {/*
-                Verbatim, and never replaced with wording of our own. "User rejected the request"
-                is a different instruction to the reader than "connection failed", and only the
-                wallet knows which of the two happened.
-              */}
               {error !== null && <p className="wc-error">{error}</p>}
 
               <p className="wc-foot">
@@ -206,18 +175,9 @@ export function WalletConnect({
                   type="button"
                   onClick={() => chooseAccount(account)}
                 >
-                  {/*
-                    The wallet's own label when it gave one, and nothing when it did not. An
-                    invented "Account 2" is a name nobody chose, sitting beside the one thing on
-                    this screen that has to be checked character by character.
-                  */}
                   {account.label !== undefined && (
                     <span className="wc-account__label">{account.label}</span>
                   )}
-                  {/*
-                    In full. Two addresses abbreviated to the same six characters are the same
-                    button, and choosing between them is choosing blind.
-                  */}
                   <span className="mono wc-account__addr">{account.address}</span>
                 </button>
               ))}

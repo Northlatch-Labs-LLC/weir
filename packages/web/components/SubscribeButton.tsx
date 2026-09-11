@@ -173,11 +173,6 @@ export function SubscribeButton({
         {amount(quote.platformReceives, decimals)}. Gas is about{' '}
         {amount(quote.gasMist, 9)} SUI.
       </p>
-      {/*
-        Said plainly before signing rather than after. A subscription is a purchase, not a deposit —
-        the money does not come back, and the entity markers on this page draw exactly that
-        distinction.
-      */}
       <p className="locked-why">
         This is a payment. It is final and does not renew. The subscription ends when its
         period ends.

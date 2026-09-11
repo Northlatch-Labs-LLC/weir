@@ -93,7 +93,7 @@ describe('a query too short to run', () => {
 
   it('does not render the failure state either', () => {
     screenFor({ query: 'ka', refusal: 'Keep going — a search needs at least 3 characters.', failure: 'The store did not answer.' });
-    expect(screen.queryByText(/could not be read/)).toBeNull();
+    expect(screen.queryByText(/being read from the chain/)).toBeNull();
   });
 });
 
@@ -108,6 +108,6 @@ describe('the directory, unchanged', () => {
 
   it('reports a store that did not answer as a failure, not as an empty directory', () => {
     screenFor({ rows: [], failure: 'The store did not answer.' });
-    expect(screen.getByText(/The directory could not be read/)).toBeTruthy();
+    expect(screen.getByText(/The directory is being read from the chain/)).toBeTruthy();
   });
 });

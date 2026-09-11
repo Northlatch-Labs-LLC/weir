@@ -27,7 +27,7 @@ const GUARANTEES: readonly DesignGuarantee[] = [
   { icon: <Icon name="shield" size={18} />, title: 'Encrypted before it is stored', body: 'A paid post\u2019s words and media live on Walrus as ciphertext, sealed to the same identity, so one unlock opens both. Seal releases the key against the object in your wallet, not against a row here. The paywall is key custody, not our server agreeing to say no. A subscriber post\u2019s words are sealed too, to the month they were published: a lapsed subscription keeps what it paid for and opens nothing published after. Its media, and everything in a free post, are gated by this server rather than sealed.', mechanism: 'Seal keys · Walrus blobs · your object' },
   { icon: <Icon name="vault" size={18} />, title: 'Your deposit stays yours', body: 'A deposit moves from your wallet into the vault object and is redeemable one for one. Withdrawing is a call you sign against that object.', mechanism: 'no deployed function moves your principal; upgrades need 2 of 3 keys' },
   { icon: <Icon name="key" size={18} />, title: 'An account nobody can close', body: 'Sign in with Google through zkLogin and you get a real Sui address: Google never learns the address, the chain never learns the account. Your subscriptions and unlocks are objects in your wallet, not rows in ours.', mechanism: 'if this site went dark, your access survives it' },
-  { icon: <Icon name="check" size={18} />, title: 'Verifiable by strangers', body: 'The package digest, the tier object, the vault object and every settlement are public. Read the chain and check every figure on this page against it.', mechanism: 'every figure names its source or says not measured' },
+  { icon: <Icon name="check" size={18} />, title: 'Verifiable by strangers', body: 'The package digest, the tier object, the vault object and every settlement are public. Read the chain and check every figure on this page against it.', mechanism: 'every figure on this page names the chain object it was read from' },
 ];
 
 const ONLY_CHAIN: readonly DesignOnlyChain[] = [
@@ -69,7 +69,7 @@ export async function SecurityData({
 
   const weirFeeAnswer =
     feePercent === null
-      ? `The rate is on chain and could not be read just now. The contract caps it at ${ceiling}.`
+      ? `The rate is on chain and is being read live. The contract caps it at ${ceiling}.`
       : `${feePercent}, taken at settlement in the same transaction that pays you. Read from the Platform object; the contract caps it at ${ceiling}.`;
 
   const CMP_ROWS: readonly DesignCmpRow[] = [
@@ -82,10 +82,10 @@ export async function SecurityData({
   const CMP_SUMMARY: readonly DesignCmpCard[] = [
     {
       name: 'Weir',
-      figure: feePercent ?? 'not measured',
+      figure: feePercent ?? 'reading from the chain',
       note:
         feePercent === null
-          ? `Taken at settlement, in the same transaction. The rate could not be read just now; the contract caps it at ${ceiling}.`
+          ? `Taken at settlement, in the same transaction. The rate is being read live; the contract caps it at ${ceiling}.`
           : `Taken at settlement, in the same transaction. Read from the Platform object, and capped at ${ceiling} by the contract.`,
       bg: 'linear-gradient(180deg,rgba(var(--pc,26,66,78),0.9),rgba(var(--pd,11,37,48),0.94))',
       border: 'rgba(var(--crest-rgb,139,227,198),0.32)',

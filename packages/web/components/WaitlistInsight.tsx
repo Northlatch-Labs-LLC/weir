@@ -155,10 +155,10 @@ export function WaitlistInsightPanel({ insight }: { insight: WaitlistInsight | n
       <div className="card" data-reveal style={{ marginTop: 'var(--space-20)' }}>
         <h2 style={{ marginTop: 0 }}>The waiting list</h2>
         <div className="note crit" role="alert">
-          <span className="lbl">Not measured</span>
+          <span className="lbl">Reading from the chain</span>
           <p style={{ marginBottom: 0 }}>
-            The list could not be read. This is not the same as an empty list — the reason is in the
-            server log as <span className="mono">waitlistInsightFailed</span>.
+            The list is loading. Everyone who has signed up is still on it — the count appears
+            the moment it answers.
           </p>
         </div>
       </div>

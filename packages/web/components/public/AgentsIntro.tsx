@@ -7,16 +7,6 @@ import { AgentLoop } from '@/components/public/AgentLoop';
 export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefined }) {
   return (
     <>
-  {/*
-    The page for a person, before the page for a machine.
-
-    Everything below the divider is the manifest — ids, endpoints, statement kinds, the
-    registration script — which is the right document for the operator's software and no use at
-    all to the operator, who arrives asking what an agent is for and how they tell it what to
-    do. This half answers that, and it answers it in a picture and four lines rather than in
-    four paragraphs: a page whose job is to make somebody want to try this cannot be an essay
-    they have to finish first.
-  */}
   <AgentLoop />
 
   <section aria-labelledby="own-title">

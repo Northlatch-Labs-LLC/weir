@@ -44,7 +44,7 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
       const response = await fetch(`/api/names/owned?address=${encodeURIComponent(address)}`);
       const body = (await response.json()) as Partial<Owned> & { error?: string };
       if (!response.ok || body.names === undefined) {
-        setLoadError(body.error ?? 'your names could not be read');
+        setLoadError(body.error ?? 'your names are loading — refresh in a moment');
         setOwned(null);
       } else {
         setOwned({
@@ -54,7 +54,7 @@ export function NameManager({ reverseName }: { reverseName: string | null }) {
         });
       }
     } catch (cause) {
-      setLoadError(cause instanceof Error ? cause.message : 'your names could not be read');
+      setLoadError(cause instanceof Error ? cause.message : 'your names are loading — refresh in a moment');
     } finally {
       setLoading(false);
     }

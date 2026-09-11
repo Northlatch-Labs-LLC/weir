@@ -106,18 +106,6 @@ export function TipButton({
 
   return (
     <div className="panel">
-      {/*
-        Label above, field below, both at the panel's left edge.
-
-        `.comment-input` is `flex: 1; min-width: 0` — it is written for a flex row, which is how
-        `Comments` and `DepositCheckout` both mount it. Here it had no flex parent and the label was
-        an inline element, so the two laid out side by side on one line: the field collapsed to its
-        intrinsic width and slid over the end of its own label, which read as a box overlapping the
-        words "· USDC".
-
-        Invisible until the control was on a page somebody looked at, which it had not been — the
-        tip route existed and nothing rendered it.
-      */}
       <label className="k" htmlFor="tip" style={{ display: 'block', marginBottom: 6 }}>
         SEND A TIP · {symbol}
       </label>

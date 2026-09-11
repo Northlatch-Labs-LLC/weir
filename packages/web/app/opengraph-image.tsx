@@ -75,7 +75,6 @@ export default function OpengraphImage() {
           </div>
         </div>
 
-        {/* The waterline — the site's own motif, one calm line above the depth. */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', height: 2, background: 'rgba(139,227,196,0.6)', borderRadius: 2 }} />
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 18 }}>

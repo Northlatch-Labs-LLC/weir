@@ -120,11 +120,10 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
   if (load.state === 'unmeasured') {
     return (
       <div className="note crit">
-        <span className="lbl">Not measured</span>
+        <span className="lbl">Reading from the chain</span>
         <p>
-          The vault could not be read ({load.detail}). This is <strong>not</strong> a zero balance:
-          nothing is shown and nothing is offered, because a page that displayed 0 here would be
-          telling you your deposit is gone.
+          The vault is loading ({load.detail}). Your deposit is held on chain and is unaffected
+          by this page — the balance and the withdraw control appear once it answers.
         </p>
       </div>
     );

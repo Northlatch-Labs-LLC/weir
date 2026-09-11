@@ -51,16 +51,15 @@ export function AccountRecovery() {
       <span className="k">RECOVERY · READ THIS ONCE</span>
 
       <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-12) 0 var(--space-16)' }}>
-        You signed in with Google, so your address is derived from a secret this site holds. That
-        means <strong style={{ color: 'var(--text-primary)' }}>if this site disappeared, you could
-        not reach your funds</strong>, not because anyone took them, but because nobody would be
-        able to work out which address was yours.
+        You signed in with Google, so your address is derived from a secret Weir holds. Take the
+        five values below and{' '}
+        <strong style={{ color: 'var(--text-primary)' }}>your account is yours independently of
+        us</strong> — a Google sign-in and any zkLogin proving service in the world rebuild this
+        exact address and sign from it.
       </p>
 
       <p className="locked-why">
-        This site cannot spend from your address. Moving money needs a live Google sign-in
-        <em> and</em> a key held on your device, and the secret behind your address produces
-        neither. The risk here is losing access, not theft.
+        Every signature needs a live Google sign-in <em>and</em> a key on your device. You hold both.
       </p>
 
       <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-16) 0' }}>
@@ -122,8 +121,8 @@ export function AccountRecovery() {
             </button>
           </div>
           <p className="locked-why" style={{ marginBottom: 0 }}>
-            Anyone holding these can work out which Sui address belongs to your Google account. They
-            still cannot spend from it. Treat them as private, not as a password.
+            These five link your Google account to this Sui address. Keep them private, the way you
+            keep a recovery phrase private.
           </p>
         </>
       )}

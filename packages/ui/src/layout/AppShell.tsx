@@ -116,14 +116,6 @@ export function LeftRail({
 
       {viewer.signedIn ? (
         <>
-          {/*
-            A link, not a button with a handler nobody passes.
-
-            This was `<button onClick={onPublish}>`, and `onPublish` is optional — the application's
-            frame never passed one, so the most prominent control in the rail did nothing at all
-            when pressed. Publishing lives at `/studio`, which is where the composer at the top of
-            the feed already goes; `onPublish` is still honoured when a host supplies one.
-          */}
           {onPublish === undefined ? (
             <Link href="/studio" className="w-btn w-btn--primary w-rail__publish">
               Publish
@@ -133,24 +125,6 @@ export function LeftRail({
               Publish
             </button>
           )}
-          {/*
-            Mounted while connected as well, and deliberately: the host's control is the only place
-            the address picker exists, and a wallet can hand back several addresses minutes after
-            the window was dismissed. It draws nothing here — it is the window that has to stay
-            reachable, not the trigger.
-          */}
-          {/*
-            The account menu, when the host has one — otherwise a link to your own page.
-
-            The rail replaced a menu with a link, and the menu was the only place "use a different
-            address", "sign out" and the address itself lived. Nothing else mounted it, so a signed-in
-            reader had no way to see which address they were signed in as, no way to change it and no
-            way to sign out: the wallet was picked up and could not be put down. `account` is that
-            menu; the link below is the fallback for a host that has none.
-
-            `connect` is not rendered beside it, because the menu carries the same control and a
-            second "Connect wallet" next to a connected account is nonsense.
-          */}
           {account ?? (
             <>
               {connect}
@@ -191,8 +165,6 @@ export function ColumnFooter({ Link }: { Link: LinkComponent }) {
     <footer className="w-foot">
       <div className="w-foot__links">
         <Link href="/explore">Explore</Link>
-        {/* "Open a page" rather than "Creators", matching the front door's footer. Beside Explore,
-            "Creators" read as a second directory; it is the setup for opening your own page. */}
         <Link href="/creators">Open a page</Link>
         <Link href="/agents">Agents</Link>
         <Link href="/security">Security</Link>
@@ -318,28 +290,12 @@ export function AppShell({
       <div className="w-app__inner">
         <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} connect={connect} account={account} />
         <main id="w-main" className="w-column">
-          {/*
-            Search, for the widths where the aside is not on screen.
-
-            Below 1280px `.w-aside` is `display: none`, and the frame's only search field went with
-            it — so on a tablet and on every phone the application had no search at all. It sits at
-            the head of the column and scrolls away under the sticky header, which is where a
-            narrow layout puts it.
-          */}
           <div className="w-column__search">
             <SearchBox query={searchQuery ?? ''} hidden={searchHidden} />
           </div>
           {children}
           <ColumnFooter Link={Link} />
         </main>
-        {/*
-          Search sits at the top of the aside, in the frame rather than in the discovery rail.
-
-          It was the rail's first child, which was right while the rail was the whole aside. Once a
-          page's own cards render above it — `/vault`, `/studio`, `/alerts`, `/messages` — the search
-          box appeared halfway down the column, below an explanatory card, which is not where anybody
-          looks for it. In the frame it is first on every route that has an aside at all.
-        */}
         {aside === undefined ? null : (
           <aside className="w-aside" aria-label="Discover">
             <div className="w-aside__sticky">

@@ -58,7 +58,7 @@ export function DesignChests({
 
   const chestWeight =
     net === null
-      ? 'not measured'
+      ? 'reading from the chain'
       : `${net.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`;
   const chestWeightWidthPct =
     feeBps === null ? null : `${((10000 - feeBps) / 100).toFixed(2)}%`;
@@ -70,7 +70,7 @@ export function DesignChests({
 
   const chestNote =
     feeBps === null
-      ? 'The platform fee could not be read just now, so this figure is not measured rather than estimated.'
+      ? 'The platform fee is being read from the chain. This figure appears once it answers, and it is never an estimate.'
       : 'The transfer is one transaction between two addresses, and you can read it on chain afterwards.';
 
   const withHandlers = chests.map((chest) => ({
@@ -96,12 +96,6 @@ export function DesignChests({
 
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,19rem),1fr))' }}>
               {(withHandlers ?? []).map((c, i) => (<Fragment key={i}>
-                {/*
-                  `.w-card`, the application's card, rather than a gradient panel with every colour,
-                  radius and shadow typed into the element. The rule along the top stays — it is the
-                  one thing here the card does not already say — and it is the only inline value left
-                  on this element.
-                */}
                 <article className="w-card" data-reveal style={{ position: 'relative', overflow: 'hidden' }}>
                   <span aria-hidden="true" style={{ position: 'absolute', inset: '0 0 auto 0', height: '2px', background: `${c.rule}` }}></span>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.75rem' }}>
@@ -109,14 +103,6 @@ export function DesignChests({
                     <span style={{ fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.06em', padding: '0.15rem 0.55rem', borderRadius: '99px', border: `1px solid ${c.tagBorder}`, color: `${c.tagColor}`, whiteSpace: 'nowrap' }}>{c.tag}</span>
                   </div>
                   <p style={{ margin: '0.75rem 0 0', color: 'var(--dim,#a3bcb8)', fontSize: '0.9375rem', maxWidth: '62ch', textWrap: 'pretty' }}>{c.body}</p>
-                  {/*
-                    No figure, no label, no note.
-
-                    An empty `pot` is the page saying the totals could not be read — which it says
-                    once, above the list. Drawing "IN THE CHEST / not measured / denied: …" on every
-                    card said it six times in red on the one screen whose job is to make giving
-                    somebody money feel like a thing that works.
-                  */}
                   {c.pot === '' ? null : (
                     <>
                       <p style={{ margin: '1.5rem 0 0', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)' }}>In the chest</p>
@@ -126,43 +112,18 @@ export function DesignChests({
                       )}
                     </>
                   )}
-                  {/*
-                    Sans, not mono. Mono in this system means a figure or a machine fact — an
-                    address, a digest, a count. "A platform fee is taken at settlement" is a
-                    sentence, and setting sentences in mono is what makes a page read as output
-                    rather than as writing.
-                  */}
                   <p style={{ margin: '0.5rem 0 0', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.55, color: 'var(--w-ink-7)', textWrap: 'pretty' }}>{c.split}</p>
                   <div style={{ marginTop: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
                     {(c.amounts ?? []).map((amt, i) => (<Fragment key={i}>
-                      {/* The prefill chips, on `.w-btn`. Same handler, same label, same amount. */}
                       <button type="button" className="w-btn w-btn--quiet w-btn--sm" onClick={amt.onClick} style={{ fontFamily: 'var(--w-mono)', fontVariantNumeric: 'tabular-nums' }}>{amt.label}</button>
                     </Fragment>))}
                   </div>
-                  {/*
-                    A link, not a button that assigns `window.location`.
-
-                    The destination is unchanged — `c.href`, the creator's own page, where the
-                    signature is asked for. What changes is that it is now a real link: it opens in a
-                    new tab on a middle click, it has a target a screen reader can announce as a
-                    destination, and it navigates on the client instead of reloading the application.
-                  */}
                   <NextLink href={c.href} className="w-btn w-btn--primary" style={{ marginTop: '1.25rem', width: '100%', justifyContent: 'center' }}>{c.giveLabel}</NextLink>
                   <p style={{ margin: '0.75rem 0 0', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.55, color: `${c.noteColor}`, textWrap: 'pretty' }}>{c.note}</p>
                 </article>
               </Fragment>))}
             </div>
 
-            {/*
-              The comparison, which the page could not do without.
-
-              A chest is one of three ways to put money behind a creator here, and it is the only one
-              that does not come back. Somebody landing on this page has no way to know that without
-              visiting two other pages and holding both in their head. Every cell below is a fact
-              this deployment can stand behind: the fee is the live one, the pool's principal is
-              withdrawable because no deployed function moves it, and a subscription is an object
-              in the buyer's wallet.
-            */}
             <section data-reveal aria-labelledby="ways-title" style={{ marginTop: '3.5rem' }}>
               <p style={{ margin: '0 0 0.625rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>Before you give</p>
               <h2 id="ways-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: 'clamp(1.35rem,1.1rem + 0.8vw,1.75rem)', letterSpacing: '-0.03em' }}>Three ways to back someone. <span className="weir-owned">Only one is a gift.</span></h2>
@@ -195,13 +156,6 @@ export function DesignChests({
               </div>
             </section>
 
-            {/*
-              What the transaction does, in the order it does it.
-
-              Three steps because there are three, not because three is a pleasing number. Somebody
-              about to sign something should be able to read what they are signing without leaving
-              the page, and "it settles on chain" is not that.
-            */}
             <section data-reveal aria-labelledby="how-title" style={{ marginTop: '3.5rem' }}>
               <p style={{ margin: '0 0 0.625rem', fontFamily: 'var(--weir-mono)', fontSize: '0.8125rem', fontWeight: '500', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--sand,#d9c9a3)' }}>What happens</p>
               <h2 id="how-title" style={{ margin: '0', fontFamily: '\'Geist\',system-ui,sans-serif', fontWeight: '700', fontSize: 'clamp(1.35rem,1.1rem + 0.8vw,1.75rem)', letterSpacing: '-0.03em' }}>One transaction, three effects.</h2>

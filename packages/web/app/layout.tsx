@@ -65,19 +65,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <head>
-        {/*
-          Whether script is running, as a fact the stylesheet can read.
-
-          Every entrance in `weir.css` — the scroll reveals and the hero sequence — starts from
-          `opacity: 0` and is finished by JavaScript. Without this, a reader whose script failed or
-          was blocked, and any crawler that declines to run it, gets a column of blank space where
-          the content is: present in the HTML, invisible on screen. The hidden states are scoped to
-          `[data-js]`, so no script means no attribute means nothing is ever hidden.
-
-          It is inline and in `<head>` because it has to win the race with first paint. Set from an
-          external file, or from a component effect, the page would paint visible and then hide
-          itself — a flash of content that is worse than either steady state.
-        */}
         <script
           dangerouslySetInnerHTML={{
             __html:
@@ -86,73 +73,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               'if(t==="day")document.documentElement.setAttribute("data-theme","day")}catch(e){}',
           }}
         />
-        {/*
-          The two facts about the site that are true on every page: who runs it, and what it is.
-          `lib/structured-data.ts` explains what each field is sourced from and what was left out
-          rather than guessed.
-        */}
         <JsonLd data={organizationJsonLd()} />
         <JsonLd data={websiteJsonLd()} />
       </head>
       <body>
-        {/*
-          The atmospheric background is gone.
 
-          A ruled field and three coloured aurora blobs were painted under every page — the editorial
-          website's weather, still showing through the application that replaced it. It was also the
-          widest thing in the document: the blobs are positioned past the right edge, so every page
-          scrolled sideways by about 450px whatever was on it.
-
-          The application's ground is flat. `--w-ground` is the colour and `.w-app` paints it.
-        */}
-
-        {/*
-          The skip link moved into the frame.
-
-          It has to point at the element the content is actually in, and that is now `#w-main` in
-          `packages/ui`'s shell on every route. Left here it named `#main`, which no route renders
-          any more — a skip link to nothing is worse than none, because it is the first thing a
-          keyboard reader reaches and it silently does nothing.
-        */}
-
-        {/*
-          One signer for the whole application. It wraps everything rather than sitting inside a
-          page, because who is signed in has to survive navigation — and because the alternative
-          is every component discovering a wallet for itself, which is the shape this replaced.
-
-          It stays at the root rather than moving down with the shell: the landing page is outside
-          the application frame and still offers to connect a wallet, so the provider has to be
-          above both.
-        */}
-        {/*
-          The network is read here and handed down, rather than assumed in the wallet layer.
-
-          A wallet is asked to sign for `sui:<network>`. This deployment's network is configuration,
-          and a default in the browser would be a signature requested against a chain nobody chose.
-        */}
         <SignerProvider
           network={fold(siteConfig(), (config) => config.network as string, () => null)}
           rpcUrl={fold(siteConfig(), (config) => config.grpcUrl, () => null)}
         >
-          {/*
-            The session handshake, above every route.
-
-            It used to run inside `Shell`, the three-column navigation frame — so it ran on the
-            twelve routes in `app/(app)/` and nowhere else. The design port moved the feed, explore,
-            creator profiles, chests, treasuries, the vault and security out of that group, and the
-            handshake went with the frame: on all of those, connecting a wallet wrote no `?reader=`,
-            asked for no signature and proved nothing. The server saw a guest and locked content the
-            reader had actually paid for.
-
-            Here it belongs to the document rather than to a navigation bar, so no route can lose it
-            by choosing a different frame.
-
-            Mounted bare, with no Suspense boundary. It was wrapped in one, and a boundary here does
-            not resolve — the subtree stays in React's hidden staging div and its effects never run,
-            which would have left this mounted, green, and doing nothing at all. It reads the query
-            string from `window` inside its effects instead, so it needs no boundary and forces no
-            route out of prerendering.
-          */}
           <SessionBridge />
           <AppShell>{children}</AppShell>
                   </SignerProvider>

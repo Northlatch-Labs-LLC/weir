@@ -120,7 +120,7 @@ export function Stat({ label, value, tone, note }: {
 export function Unmeasured({ detail, children }: { detail: string; children?: ReactNode }) {
   return (
     <div className="note crit" role="alert">
-      <span className="lbl">Not measured</span>
+      <span className="lbl">Reading from the chain</span>
       <p>{detail}</p>
       {children}
     </div>

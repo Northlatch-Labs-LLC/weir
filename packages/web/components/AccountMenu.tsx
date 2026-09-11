@@ -143,17 +143,11 @@ export function AccountMenu() {
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       >
-        {/* Derived from the address, so it is stable per account with no image to store or lose. */}
         <span className="avatar avatar--sm" aria-hidden>
           {signer.address.slice(2, 4)}
         </span>
         <span className="account-trigger__id">
           <span className="account-trigger__kind">{signer.label}</span>
-          {/*
-            The name, when there is one. A `.sui` name is how somebody recognises their own address
-            at a glance; a truncated hex string is how they fail to, and it is what every other Sui
-            application replaces here.
-          */}
           <span className="mono account-trigger__addr">
             {typeof suiName === 'string'
               ? suiName
@@ -180,16 +174,6 @@ export function AccountMenu() {
           onKeyDown={onMenuKeyDown}
         >
           <div className="account-pop__head">
-            {/*
-              What this said before, and why it was wrong.
-
-              It read "Signed in with Slush" the moment an extension shared an address, which is not
-              what signing in is here — the server answers as nobody until a signature proves the
-              address. So this menu could say "signed in" beside a page rendering the reader as a
-              guest, on the same screen, and both were reporting honestly about different things.
-              One of them had to stop guessing, and it is this one: the label now names the state
-              the SERVER is in, because that is the one that decides what opens.
-            */}
             <span className="k">
               {proof === 'proved'
                 ? `Signed in with ${signer.label}`
@@ -200,17 +184,7 @@ export function AccountMenu() {
             {typeof suiName === 'string' && (
               <span className="account-pop__name">{suiName}</span>
             )}
-            {/*
-              The address in full, always, even when a name is shown above it. The name is a label
-              somebody chose; the address is the thing that holds the money and the only one that
-              can be checked against an explorer.
-            */}
             <span className="mono account-pop__addr">{signer.address}</span>
-            {/*
-              The way out of the state, in the place somebody looks when they think they are signed
-              in and the site disagrees. Without this the only recovery was a page reload, which
-              does not re-ask.
-            */}
             {(proof === 'unproved' || proof === 'declined') && (
               <button
                 type="button"
@@ -222,14 +196,6 @@ export function AccountMenu() {
             )}
           </div>
 
-          {/*
-            Your own page, first.
-
-            Rendered only once the chain has answered with a handle. While the lookup is in flight,
-            or when this address genuinely holds no account, there is nothing here rather than a
-            link to `/c/undefined` — which is what a naive version produces and what somebody would
-            reasonably report as the site losing their profile.
-          */}
           {typeof handle === 'string' &&
             (() => {
               const index = nextIndex();
@@ -248,11 +214,6 @@ export function AccountMenu() {
               );
             })()}
 
-          {/*
-            Yours first, then the creator tools if this address owns a vault. The order matters: the
-            entries everybody has stay in the same place whether or not somebody is a creator, so
-            opening a first vault adds to the menu rather than rearranging it.
-          */}
           {[...MINE, ...(stage === 'ready' ? CREATOR_ITEMS : [])].map((item) => {
             const index = nextIndex();
             return (
@@ -272,14 +233,6 @@ export function AccountMenu() {
             );
           })}
 
-          {/*
-            Recovery is set apart because it is the only entry that reveals a secret. Sitting in the
-            same group as "Purchases" it gets opened by somebody merely scanning the list, and the
-            salt ends up on screen during a screen-share for no reason anybody chose.
-
-            Wallet users never see it: they have no salt and never depended on this deployment, so
-            offering them recovery would imply a risk they do not carry.
-          */}
           {signer.kind === 'zklogin' &&
             (() => {
               const index = nextIndex();
@@ -298,16 +251,6 @@ export function AccountMenu() {
               );
             })()}
 
-          {/*
-            Switching address, which had no entry anywhere once connected.
-
-            `WalletConnect` owns the picker and was mounted only in the signed-out branch below, so
-            a connected reader had nothing that could render a choice — the button that used to do
-            this on the join page disappeared when connecting stopped rendering `SignIn`. Both ways
-            out are offered because they answer different questions: reopening lists the addresses
-            the wallet already authorised, while reauthorising is the only route out of "my other
-            address is not in that list", since only the extension can authorise one.
-          */}
           {(() => {
             const index = nextIndex();
             return (
@@ -370,12 +313,6 @@ export function AccountMenu() {
         </div>
       )}
 
-      {/*
-        Mounted while connected, and it renders nothing here until there is a choice to make: its
-        trigger button belongs to the signed-out state and the window is portalled to the body.
-        Without this the two items above set a pending choice that nothing on the page could draw,
-        which is precisely the state that made switching address impossible.
-      */}
       <WalletConnect />
     </div>
   );

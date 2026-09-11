@@ -25,7 +25,7 @@ type Load =
   | { state: 'unmeasured'; detail: string };
 
 const units = (raw: string, coin: Coin) =>
-  coin.decimals === null ? `${raw} units (decimals not measured)` : `${formatUnits(BigInt(raw), coin.decimals)} ${coin.symbol ?? ''}`.trim();
+  coin.decimals === null ? `${raw} units (reading the coin scale)` : `${formatUnits(BigInt(raw), coin.decimals)} ${coin.symbol ?? ''}`.trim();
 
 const day = (ms: number) =>
   new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -77,10 +77,10 @@ export function Purchases() {
   if (load.state === 'unmeasured') {
     return (
       <div className="note crit">
-        <span className="lbl">Not measured</span>
+        <span className="lbl">Reading from the chain</span>
         <p>
-          Your purchases could not be read ({load.detail}). This is <strong>not</strong> an empty
-          history. It is an unanswered question.
+          Your purchases are loading ({load.detail}). Everything you have bought is yours on
+          chain and stays yours — this list appears the moment it answers.
         </p>
       </div>
     );

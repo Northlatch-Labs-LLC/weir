@@ -121,9 +121,9 @@ export function CreatorSetup() {
   if (load.state === 'unmeasured') {
     return (
       <div className="note crit">
-        <span className="lbl">Not measured</span>
+        <span className="lbl">Reading from the chain</span>
         <p>
-          Your setup could not be read ({load.detail}). Nothing is offered, because telling you that
+          Your setup is loading ({load.detail}). Nothing is offered, because telling you that
           you have no vault when the chain was simply unreachable would send you to pay for a second one.
         </p>
       </div>
@@ -153,8 +153,6 @@ export function CreatorSetup() {
     const free = BigInt(setup.creationFeeMist) === 0n;
     return (
       <div className="panel">
-        {/* "Creator vault" — the support vault is a different object with a different purpose, and
-            both were called "vault" on screens a creator reads in the same session. */}
         <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 'var(--space-10)' }}>
           Open your creator vault
         </h2>
@@ -198,12 +196,6 @@ export function CreatorSetup() {
                     />
                     <span>
                       <strong>{symbol}</strong>
-                      {/*
-                        `overflowWrap: anywhere` because a coin type is one unbroken token — 66 hex
-                        characters with no space to break at — and the default `normal` will not
-                        break inside a word. Without it this span was 689px wide in a 514px viewport
-                        and the whole page scrolled sideways. Every test still passed.
-                      */}
                       <span
                         className="mono"
                         style={{ display: 'block', color: 'var(--text-tertiary)', overflowWrap: 'anywhere' }}
@@ -260,18 +252,6 @@ export function CreatorSetup() {
             </span>
           </div>
 
-          {/*
-            Closing a page, which is the only kind of retirement the contract has.
-
-            There is no destroy, close or delete in `creator.move` and there should not be: a
-            `CreatorVault` is shared and the subscriptions and unlocks already sold point at it, so
-            deleting it would orphan what people paid for. Closing refuses new money and takes
-            nothing from anyone — earnings stay withdrawable, entitlements keep working, posts stay
-            readable.
-
-            Until now the application could open a vault and had no way to close one, so a creator
-            who stopped publishing left a page still taking subscriptions.
-          */}
           <div className="note" style={{ marginBottom: 'var(--space-16)' }}>
             <span className="lbl">{vault.accepting ? 'Retiring this page' : 'This page is closed'}</span>
             <p style={{ color: 'var(--text-secondary)' }}>
@@ -413,12 +393,6 @@ export function CreatorSetup() {
         </div>
       ))}
 
-      {/*
-        The support vault is a separate object from the paid vault and neither requires the other —
-        a creator can take deposits without selling anything, or sell without taking deposits. It
-        appears once they have an account, because `stake_vault::open` needs one exactly as
-        `open_vault` does.
-      */}
       <div className="feed-head">
         <h2>Support without spending</h2>
       </div>

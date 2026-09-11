@@ -25,8 +25,6 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* The scroll entrance the older pages run. Without it a `data-reveal` section stays at
-          opacity 0 — invisible, not merely unanimated. It stays until those sections are gone. */}
       <Reveals />
       <ChromeRouter
         viewer={

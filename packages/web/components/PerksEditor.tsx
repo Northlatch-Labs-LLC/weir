@@ -79,7 +79,7 @@ export function PerksEditor({
         );
         setSupportersFirst(body.supportersFirst === true);
       } catch {
-        if (!cancelled) setError('Your saved perks could not be read just now.');
+        if (!cancelled) setError('Your saved perks are loading — refresh in a moment.');
       } finally {
         if (!cancelled) setLoaded(true);
       }

@@ -113,7 +113,6 @@ export function TreasuryScreen({
         and why the capture is {capturePct} rather than 100%.
       </p>
 
-      {/* --- the pools --- */}
       <p className="w-sect">The pools that fill it</p>
 
       {poolNote === '' ? null : (
@@ -140,16 +139,6 @@ export function TreasuryScreen({
                 <span className="w-handle">@{pool.handle}</span>
               </div>
 
-              {/*
-                A figure that could not be read is omitted here rather than printed as a dash.
-
-                Not a softening of the rule — `poolNote` above states, once, which column could not
-                be read. What this drops is the repetition: six creators times two figures printed
-                the same rose dash twelve times down the page a stranger uses to decide whether
-                money moves here, which reads as a broken product rather than as an index that was
-                briefly unreachable. `none` still prints: that is the store answering, and the
-                answer is worth showing.
-              */}
               {pool.pooledState === 'unread' && pool.yieldState === 'unread' ? null : (
                 <div className="w-figs">
                   {pool.pooledState === 'unread' ? null : (
@@ -166,14 +155,6 @@ export function TreasuryScreen({
               )}
             </div>
 
-            {/*
-              This vault's rungs, and only where it has funded one.
-
-              Drawn unconditionally, six creators with no pool got six identical rows of seven grey
-              bars — a chart of nothing, repeated, beside the figures that already said "no pool
-              open". Decorative where it does appear: the same information is in the figures, and a
-              row of seven positions is not something a screen reader should read out.
-            */}
             {pool.funded.some(Boolean) ? (
               <div className="w-bars" aria-hidden="true">
                 {pool.funded.map((funded, index) => (
@@ -189,18 +170,10 @@ export function TreasuryScreen({
         ))
       )}
 
-      {/*
-        The legend, and it had gone stale within the same pass.
-
-        It read "a dash is a figure that could not be read" — which was true of the version above
-        that printed a dash per cell, and false the moment unread figures were omitted instead. A
-        legend describing notation the page no longer uses is worse than none.
-      */}
       <p className="w-colnote">
         <span>“No pool open” means the creator has no vault. It is not a zero.</span>
       </p>
 
-      {/* --- the ladder --- */}
       <section className="w-block" aria-labelledby="ladder-title">
         <h2 id="ladder-title">{rungCount} rungs, so nobody waits</h2>
         <p className="w-block__sub">
@@ -238,11 +211,6 @@ export function TreasuryScreen({
           ))}
         </div>
 
-        {/*
-          Which rungs are open, or that nobody knows. `unread` is passed by the caller rather than
-          sniffed from the sentence — a screen that reads a state out of prose is one rewording away
-          from drawing an unplaced rung in the colour of an open one.
-        */}
         <p
           className={epochUnread ? 'w-colnote w-colnote--bad' : 'w-colnote'}
           style={{ padding: '14px 0 0', borderBottom: 0 }}
@@ -251,7 +219,6 @@ export function TreasuryScreen({
         </p>
       </section>
 
-      {/* --- the simulator --- */}
       <section className="w-block" aria-labelledby="sim-title">
         <h2 id="sim-title">What a deposit does, and what it costs</h2>
 
@@ -289,11 +256,6 @@ export function TreasuryScreen({
           </div>
         </div>
 
-        {/*
-          No yield figure, and that is the design rather than an omission. Returns vary by validator
-          and by epoch. A number invented here would be exactly what the rest of this page argues
-          against.
-        */}
         <div className="w-defs">
           {valid ? (
             <>
@@ -323,7 +285,6 @@ export function TreasuryScreen({
         </p>
       </section>
 
-      {/* --- where a harvested unit goes --- */}
       <section className="w-block" aria-labelledby="share-title">
         <h2 id="share-title">Some of the yield can come back to you</h2>
         <p className="w-block__sub">

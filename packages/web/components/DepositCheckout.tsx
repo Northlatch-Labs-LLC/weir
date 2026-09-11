@@ -176,15 +176,6 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
                 </tr>
               </tbody>
             </table>
-            {/*
-              The one-line form of the vault's clauses, at the last moment before a signature.
-
-              The full five clauses are on the page above, and repeating them here would be a panel
-              nobody reads twice. What must survive the scroll to this button is the magnitude and
-              the fact that the contract is unaudited — the two things a table of gas and totals
-              says nothing about. Rendered from `lib/vault-disclosure.ts` so it cannot drift from
-              the long form.
-            */}
             <p className="locked-why" data-clause="short" style={{ marginBottom: 0 }}>
               {VAULT_DISCLOSURE_SHORT}
             </p>

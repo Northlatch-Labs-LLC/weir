@@ -66,10 +66,6 @@ export function LandingScreen({
               </p>
             </div>
 
-            {/*
-              The mechanic as four steps rather than a paragraph claiming it. The figure is an
-              example of the arithmetic, labelled as one; it is not a measurement of anything.
-            */}
             <div className="w-steps">
               <div className="w-steps__head">
                 <span>What happens to 25 SUI</span>

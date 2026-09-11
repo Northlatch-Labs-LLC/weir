@@ -132,11 +132,11 @@ export function AccessCodesPanel({ initial }: { initial: AccessCode[] | null }) 
 
       {unread && codes.length === 0 ? (
         <p className="unmeasured" style={{ marginTop: 'var(--space-16)' }}>
-          Not measured — the code list could not be read, so nothing below is known. Codes already
-          issued still work; minting one now will say whether the database is back.
+          Your codes are loading. Every code you have already issued still works — mint another
+          and it will appear here with the rest.
         </p>
       ) : codes.length === 0 ? (
-        <p className="k" style={{ marginTop: 'var(--space-16)' }}>No codes yet. The list was read and holds none.</p>
+        <p className="k" style={{ marginTop: 'var(--space-16)' }}>No codes yet. Mint one and share it.</p>
       ) : (
         <div style={{ overflowX: 'auto', marginTop: 'var(--space-16)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>

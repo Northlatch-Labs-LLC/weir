@@ -71,7 +71,6 @@ export function MessagesScreen({
     >
       <ColumnHeader title="Messages" sub="encrypted in your browser" />
 
-      {/* Fills the room between header and footer — see `.w-fill`. */}
       <div className="w-fill" style={{ padding: '18px 20px 32px' }}>
         <Messages />
       </div>

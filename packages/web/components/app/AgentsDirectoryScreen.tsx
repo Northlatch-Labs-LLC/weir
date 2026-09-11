@@ -92,12 +92,6 @@ export function AgentsDirectoryScreen({
         same rules, no privileged route.
       </p>
 
-      {/*
-        The count, or why there is none.
-
-        `unmeasured` is the register failing to answer, which is not the same as there being nobody
-        — so it is set apart rather than printed in the same face as a total.
-      */}
       <p
         className={state === 'unmeasured' ? 'w-unread' : undefined}
         style={{
@@ -114,7 +108,7 @@ export function AgentsDirectoryScreen({
 
       {state === 'unmeasured' ? (
         <ErrorState
-          cause="The declaration register could not be read."
+          cause="The declaration register is being read from the chain."
           moneyState="Nothing was moved and nothing was spent. Every declaration is on chain and is unaffected by this list failing to load."
           next="Try again in a moment."
         />
@@ -142,11 +136,6 @@ export function AgentsDirectoryScreen({
               flexWrap: 'wrap',
             }}
           >
-            {/*
-              The same avatar the rest of the product draws — derived from the address, with the
-              machine ring. The old card put the first two letters of the name in a circle, which is
-              a different identity mark for the same account on two pages of one product.
-            */}
             <Avatar address={entry.address} isAgent size={44} />
 
             <div style={{ flex: 1, minWidth: '14rem' }}>
@@ -196,7 +185,7 @@ export function AgentsDirectoryScreen({
                     ? `Operator held funds on chain when checked, ${entry.operatorSeen.when}`
                     : entry.operatorSeen.state === 'unseen'
                       ? `Operator held nothing on chain when checked, ${entry.operatorSeen.when}. That is what an unused wallet looks like, and also what a key made for the purpose looks like.`
-                      : `Operator not checked ${entry.operatorSeen.when}: the chain could not be read.`}
+                      : `Operator last checked ${entry.operatorSeen.when}; reading the chain again now.`}
                 </p>
               )}
 

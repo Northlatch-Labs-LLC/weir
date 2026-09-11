@@ -77,17 +77,8 @@ describe('the write is the only place standing is told', () => {
   });
 
   it('does not refuse a signup over an unknown referral code', () => {
-    /*
-      Asserted a sentence in a comment until 2026-09-11, which proved only that somebody had written
-      the intention down. `resolveReferrer` returns `rows[0]?.email ?? null`, and `recordSignup`
-      carries that `null` into the insert as `referred_by` — so a code matching nobody costs the
-      attribution and never the signup. Somebody who mistyped a link they were sent still reaches
-      the list, which is the behaviour, asserted against the code that implements it.
-    */
     expect(STORE).toMatch(/return rows\[0\]\?\.email \?\? null;/);
     expect(STORE).toMatch(/referredBy = resolved === email \? null : resolved;/);
-    // Scoped to the resolver: the two `throw`s in this file are about MINTING a code for the new
-    // signup, which is a different failure and does belong loud.
     const resolver = STORE.slice(
       STORE.indexOf('async function resolveReferrer'),
       STORE.indexOf('async function readStanding'),

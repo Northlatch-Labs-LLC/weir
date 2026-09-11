@@ -74,7 +74,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
         const r = await fetchImpl(`/api/agents/declare/pending?operator=${encodeURIComponent(address)}`);
         const body = (await r.json()) as { requests?: PendingRequest[]; truncated?: boolean; error?: string };
         if (cancelled) return;
-        if (!r.ok || body.requests === undefined) setLoaded({ state: 'failed', why: body.error ?? `the list could not be read (${r.status})` });
+        if (!r.ok || body.requests === undefined) setLoaded({ state: 'failed', why: body.error ?? `the list is loading — refresh in a moment (${r.status})` });
         else setLoaded({ state: 'ready', requests: body.requests, truncated: body.truncated === true });
       } catch (cause) {
         if (!cancelled) setLoaded({ state: 'failed', why: cause instanceof Error ? cause.message : String(cause) });
@@ -98,7 +98,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
         const r = await fetchImpl('/api/agents/seeking');
         const body = (await r.json()) as { listings?: SeekingListing[]; error?: string };
         if (cancelled) return;
-        if (!r.ok || body.listings === undefined) setSeeking({ state: 'failed', why: body.error ?? `the list could not be read (${r.status})` });
+        if (!r.ok || body.listings === undefined) setSeeking({ state: 'failed', why: body.error ?? `the list is loading — refresh in a moment (${r.status})` });
         else setSeeking({ state: 'ready', listings: body.listings });
       } catch (cause) {
         if (!cancelled) setSeeking({ state: 'failed', why: cause instanceof Error ? cause.message : String(cause) });
@@ -223,14 +223,6 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
                   ) : (
                     <>
                       {done !== undefined && !done.ok ? <p style={{ ...VALUE, marginTop: '0.75rem' }} data-offer-refused="true">Not posted: {done.why}</p> : null}
-                      {/*
-                        A link when there is nobody signed in, a button when there is.
-
-                        This was one disabled button reading "Connect a wallet above to answer for
-                        this agent" — a dead control pointing at something that is not always above
-                        it, on the page where an operator has already decided to take an agent on.
-                        A visitor who is not signed in gets the thing that signs them in.
-                      */}
                       {signer === null ? (
                         <a
                           href="/signin"

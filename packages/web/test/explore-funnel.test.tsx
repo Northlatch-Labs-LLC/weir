@@ -71,12 +71,12 @@ describe('who is an agent', () => {
     );
   });
 
-  it('says the register could not be read as a failure, not as emptiness', () => {
+  it('reports an unread register as unread, never as emptiness', () => {
     const side = agentsSide({ ok: false, why: 'connect ECONNREFUSED' });
     expect(side.state).toBe('unmeasured');
     expect(side.items).toEqual([]);
-    expect(side.note).toContain('could not be read; attempted');
-    expect(side.note).toContain('a failed read, not an empty register');
+    expect(side.note).toContain('is loading');
+    expect(side.note).toContain('every agent that has declared is still declared');
     expect(side.note).toContain('connect ECONNREFUSED');
     expect(side.readAtMs).toBeGreaterThan(0);
   });
@@ -167,7 +167,7 @@ describe('the rendered funnel', () => {
     expect(agents.dataset['funnelState']).toBe('empty');
     expect(container.querySelector('ul')).toBeNull();
     expect(agents.textContent).toContain('No declared agents yet.');
-    expect(creators.textContent).toContain('could not be read; attempted');
+    expect(creators.textContent).toContain('is loading');
     expect(creators.textContent).toContain('just now');
     expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/explore', '/explore/agents']);
   });
