@@ -1388,6 +1388,10 @@
     flex-wrap: wrap;
   }
   .w-land__foot nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  /* The follow row sits with the mark rather than with the page links: these are accounts, not
+     places on this site, and mixing them into the same row makes Terms and X read as peers. */
+  .w-land__foot .w-land__follow { gap: 8px 16px; }
+  .w-land__foot .w-land__follow a { color: var(--w-ink-6); }
   .w-land__foot a { font-family: var(--w-sans); font-size: 13px; color: var(--w-ink-7); text-decoration: none; }
   .w-land__foot a:hover { color: var(--w-ink-10); text-decoration: underline; }
   .w-land__mark {

@@ -13,11 +13,14 @@
  * about its markup are gone with it, and this pins what survived: the list itself, which
  * `lib/structured-data.ts` publishes as the organisation's `sameAs`.
  *
- * That is also the finding worth writing down. `SOCIAL` now has exactly one consumer, and it is
- * JSON-LD. Nothing in the live application renders these links where a person can see them, so the
- * only thing on this site that says where to follow the work is metadata addressed to crawlers.
+ * For a while after that delete, `SOCIAL` had exactly one consumer and it was JSON-LD — so the only
+ * thing on this site saying where to follow the work was metadata addressed to crawlers, and a
+ * person reading the page could not reach any of the accounts. The public footer carries them
+ * again, and the last case below is what stops that happening a second time.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SOCIAL } from '../lib/social-links';
 
@@ -41,5 +44,35 @@ describe('the accounts we claim', () => {
     for (const link of SOCIAL) {
       expect(link.href.startsWith('https://')).toBe(true);
     }
+  });
+});
+
+describe('a person can actually reach them', () => {
+  /*
+    Read as source rather than rendered.
+
+    `PublicShell` is a client component wired to `usePathname`, and standing a router up to assert
+    three anchors tests the router. What has to hold is narrower and this is the whole of it: the
+    footer maps the shared list instead of carrying its own copy. A hand-typed footer is how a
+    `sameAs` and a visible link end up naming different accounts, and the one nobody can see is the
+    one that stays wrong.
+  */
+  const footer = readFileSync(join(process.cwd(), 'components/public/PublicShell.tsx'), 'utf8');
+
+  it('renders the accounts in the public footer', () => {
+    expect(footer).toMatch(/SOCIAL\.map\(/);
+    expect(footer).toMatch(/aria-label="Follow"/);
+  });
+
+  it('reads them from the list the metadata reads, rather than repeating the URLs', () => {
+    for (const link of SOCIAL) {
+      expect(footer, `${link.href} is typed into the footer instead of read from SOCIAL`).not.toContain(
+        link.href,
+      );
+    }
+  });
+
+  it('opens them safely, because every one of them leaves this site', () => {
+    expect(footer).toMatch(/rel="noreferrer"/);
   });
 });

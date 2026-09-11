@@ -27,6 +27,7 @@
 
 import { useState } from 'react';
 import NextLink from 'next/link';
+import { SOCIAL } from '@/lib/social-links';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, WeirMark } from '@projectx-social/ui';
@@ -135,6 +136,32 @@ export function PublicFooter() {
         <NextLink href="/legal/privacy">Privacy</NextLink>
         <NextLink href="/legal/creator-terms">Creator terms</NextLink>
         <NextLink href="/disclosure">Disclosure</NextLink>
+      </nav>
+      {/*
+        Where to follow the work.
+
+        These three accounts were in `lib/social-links.ts` with exactly one consumer:
+        `lib/structured-data.ts`, which publishes them as the organisation's JSON-LD `sameAs`. So
+        the only thing on this site saying where to find us was metadata addressed to crawlers —
+        a person reading the page had no way to reach any of them. The footer that used to carry
+        them belonged to the site shell the application replaced.
+
+        Read from the same list the metadata reads, never retyped here: a footer and a `sameAs`
+        naming different accounts is a claim about identity disagreeing with itself, and the one
+        the reader cannot see is the one that would stay wrong.
+      */}
+      <nav aria-label="Follow" className="w-land__follow">
+        {SOCIAL.map((account) => (
+          <NextLink
+            key={account.href}
+            href={account.href}
+            target="_blank"
+            rel="noreferrer"
+            title={`${account.name} · ${account.handle}`}
+          >
+            {account.name}
+          </NextLink>
+        ))}
       </nav>
       <span className="w-land__mark">
         <WeirMark size={17} />
