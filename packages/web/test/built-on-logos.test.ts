@@ -4,7 +4,7 @@
  *
  * # Why this file exists
  *
- * Two places render a "Built on" list — the feed's home rail and the shell's right rail — and both
+ * The feed's home rail renders a "Built on" list, and
  * used to show a letter in a box where a partner's mark belongs. The owner supplied the marks. A
  * path typed into a list is a claim that a file exists; a broken image on the front page is what
  * that claim looks like when it stops being true, and nothing in a render test notices a 404.
@@ -22,7 +22,6 @@ import { describe, expect, it } from 'vitest';
 const ROOT = join(import.meta.dirname, '..');
 const LISTS = {
   feed: join(ROOT, 'components', 'feed', 'FeedView.tsx'),
-  rail: join(ROOT, 'components', 'shell', 'RightRail.tsx'),
   /*
     The canonical list, and the page that renders it at full size.
 
@@ -50,7 +49,7 @@ function partnersIn(path: string): Array<{ name: string; logo: string }> {
 }
 
 describe('the partner marks', () => {
-  for (const [where, path] of [['feed', LISTS.feed], ['rail', LISTS.rail], ['canonical', LISTS.canonical]] as const) {
+  for (const [where, path] of [['feed', LISTS.feed], ['canonical', LISTS.canonical]] as const) {
     it(`in the ${where} list are files that are actually served`, () => {
       const partners = partnersIn(path);
       // A list with no logos would pass every existence check below by having nothing to check.
@@ -62,20 +61,22 @@ describe('the partner marks', () => {
     });
   }
 
-  it('name the same partners in all three places', () => {
-    // The feed used to list three and the rail four. One site, one answer to "built on what".
-    // The footer also lists USDC, with a letter and no logo; the logo-bearing set is the same four.
+  it('name the same partners in both places', () => {
+    /*
+      The feed used to list three and the shell's right rail four. One site, one answer to "built
+      on what". That rail is deleted — it was part of the chrome the application replaced — so the
+      list it carried is no longer one of the places to agree with, and the third arm of this
+      comparison went with it.
+    */
     const feed = partnersIn(LISTS.feed).map((p) => p.name).sort();
-    const rail = partnersIn(LISTS.rail).map((p) => p.name).sort();
     const canonical = partnersIn(LISTS.canonical).map((p) => p.name).sort();
-    expect(feed).toEqual(rail);
     expect(canonical).toEqual(feed);
     expect(feed).toEqual(['Seal', 'Sui', 'Walrus', 'zkLogin']);
   });
 
-  it('use the same file for the same partner in all three places', () => {
+  it('use the same file for the same partner in both places', () => {
     const feed = new Map(partnersIn(LISTS.feed).map((p) => [p.name, p.logo]));
-    for (const path of [LISTS.rail, LISTS.canonical]) {
+    for (const path of [LISTS.canonical]) {
       for (const { name, logo } of partnersIn(path)) {
         expect(feed.get(name), `${name} points at a different file in ${path}`).toBe(logo);
       }
@@ -108,7 +109,6 @@ describe('the image is decorative', () => {
     an alt attribute, which is a different fact from an image whose alt went unchecked.
   */
   for (const [where, path] of [
-    ['right rail', LISTS.rail],
     ['security page', LISTS.security],
   ] as const) {
     it(`carries an empty alt in the ${where}, so the name is read once`, () => {

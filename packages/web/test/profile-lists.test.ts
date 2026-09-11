@@ -91,13 +91,15 @@ describe('the callers that discarded most of what they asked for', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/[^\n]*/g, '');
 
-  it('the sidebar asks for a bounded list and a count, not the table', () => {
-    // In the shell, so this ran on every page of the site.
-    const code = read('components/shell/RightRail.tsx');
-    expect(code).toMatch(/listProfiles\(\{ limit: SHOWN \}\)/);
-    expect(code).toMatch(/countProfiles\(\)/);
-    expect(code).not.toMatch(/\.slice\(0, SHOWN\)/);
-  });
+  /*
+    The sidebar's case is gone with the sidebar.
+
+    It read `components/shell/RightRail.tsx` and asserted that it asked the database for a bounded
+    list rather than the whole table — worth pinning while it sat in the shell and ran on every
+    page. That component was part of the site chrome the application replaced, it had been mounted
+    by nothing for some time, and it is deleted. A test that reads a deleted file's source is not a
+    test of anything.
+  */
 
   it('the entity markers ask for the handles on the page', () => {
     const code = read('components/EntityType.tsx');

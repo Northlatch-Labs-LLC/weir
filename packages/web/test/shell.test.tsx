@@ -24,10 +24,8 @@ let session: { ok: true; value: string | null } | { ok: false; failure: unknown 
 vi.mock('@/lib/read-session', () => ({ provenReader: async () => session }));
 vi.mock('@/lib/accounts', () => ({ accountHandle: async () => ({ ok: true, value: 'nova' }) }));
 vi.mock('@/lib/site-mode', () => ({ readSiteMode: async () => ({ waitlistMode: false }) }));
-vi.mock('@/components/design/AppNav', () => ({ AppNav: () => <nav data-testid="rail" /> }));
 vi.mock('@/components/design/Reveals', () => ({ Reveals: () => null }));
 vi.mock('@/components/shell/SiteFooter', () => ({ SiteFooter: () => <footer /> }));
-vi.mock('@/components/shell/RightRail', () => ({ RightRail: () => <div data-testid="discover" /> }));
 /*
   The wallet control needs the signer provider, which needs a wallet registry. What is under test
   here is that the frame gives it a place on every route, not what it does when clicked — that is
@@ -45,9 +43,6 @@ vi.mock('@/components/shell/Discovery', () => ({
   Discovery: () => <div data-testid="discovery" />,
 }));
 
-const { SiteHeader } = await import('../components/shell/SiteHeader');
-const { Breadcrumbs } = await import('../components/shell/Breadcrumbs');
-const { MobileBar } = await import('../components/shell/MobileBar');
 const { PageTabs } = await import('../components/shell/PageTabs');
 const { AppShell, carriesItsOwnFrame, isPublicPage } = await import('../components/shell/AppShell');
 const { DESTINATIONS } = await import('../lib/site-map');
@@ -56,139 +51,6 @@ afterEach(() => {
   cleanup();
   pathname = '/explore';
   session = { ok: true, value: null };
-});
-
-describe('the header', () => {
-  /*
-    The bar a member sees and the bar a guest sees are different lists.
-
-    A guest has no account, so `Money` and `You` are labels for rooms they cannot enter; their bar
-    offers what there is to read instead. This case therefore renders a member — the reader for
-    whom `Explore` is in the bar at all — and the guest's own bar is asserted below.
-  */
-  it('marks the section you are in, by attribute rather than colour alone', () => {
-    pathname = '/c/nova';
-    const { container } = render(<SiteHeader signedIn={true} myHandle="nova" />);
-    const current = container.querySelectorAll('.sh-nav [aria-current="page"]');
-    expect(current).toHaveLength(1);
-    expect(current[0]?.textContent).toBe('Explore');
-  });
-
-  it('offers a guest what there is to read, not an account they do not have', () => {
-    pathname = '/';
-    const { container } = render(<SiteHeader signedIn={false} myHandle={null} />);
-    const labels = [...container.querySelectorAll('.sh-nav > a, .sh-nav button')].map((el) =>
-      el.textContent?.trim(),
-    );
-    expect(labels).toContain('Read the agents');
-    expect(labels).not.toContain('Money');
-    expect(labels).not.toContain('You');
-  });
-
-  it('lights nothing on a page outside the five sections', () => {
-    pathname = '/purchases';
-    const { container } = render(<SiteHeader signedIn={true} myHandle="nova" />);
-    expect(container.querySelectorAll('.sh-nav [aria-current="page"]')).toHaveLength(0);
-  });
-
-  it('mounts the account control, the only place to sign in, out or switch address', () => {
-    const { getByTestId } = render(<SiteHeader signedIn={false} myHandle={null} />);
-    expect(getByTestId('account-menu')).toBeTruthy();
-  });
-
-  it('shows the bell to a member and not to a guest', () => {
-    const guest = render(<SiteHeader signedIn={false} myHandle={null} />);
-    expect(guest.container.querySelector('.sh-bell')).toBeNull();
-    cleanup();
-    const member = render(<SiteHeader signedIn={true} myHandle="nova" />);
-    expect(member.container.querySelector('.sh-bell')).not.toBeNull();
-  });
-
-  it('drops the destinations when the site is gated, and says why', () => {
-    /*
-      No call to action here either: with the door shut the waiting list is the only page a visitor
-      can reach, so a header button pointing at it would be a second copy of the page they are
-      already on. The badge is what explains the missing nav.
-    */
-    const { container } = render(<SiteHeader signedIn={false} myHandle={null} gated />);
-    expect(container.querySelector('.sh-nav')).toBeNull();
-    expect(container.querySelector('a[href="/waitlist"]')).toBeNull();
-    expect(container.querySelector('.sh-badge')?.textContent).toBe('closed alpha');
-  });
-
-  it('is laid out by class, never inline — so a media query can reach it', () => {
-    const source = readFileSync(resolve(process.cwd(), 'components/shell/SiteHeader.tsx'), 'utf8');
-    expect(source).not.toMatch(/style=\{\{/);
-  });
-});
-
-describe('the trail', () => {
-  it('renders nothing on the home page', () => {
-    pathname = '/';
-    const { container } = render(<Breadcrumbs />);
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('links every ancestor and names the current page with aria-current', () => {
-    pathname = '/c/nova';
-    const { container } = render(<Breadcrumbs />);
-    const links = [...container.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]);
-    expect(links).toEqual([
-      ['Home', '/'],
-      ['Explore', '/explore'],
-    ]);
-    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe('@nova');
-  });
-
-  it('is a breadcrumb landmark', () => {
-    pathname = '/purchases';
-    const { container } = render(<Breadcrumbs />);
-    expect(container.querySelector('nav[aria-label="Breadcrumb"] ol')).not.toBeNull();
-  });
-});
-
-describe('the bottom bar', () => {
-  it('gives a guest the front of the product and a way in', () => {
-    /*
-      The fourth slot is `/join`, not `/signin`.
-
-      This test's own name asked for "a way in" and the assertion accepted a sign-in link, which is
-      a door a stranger has no key to. `JOIN` existed in `lib/site-map.ts` and was referenced by no
-      navigation list at all, so on a phone — where this bar is the only nav that survives scrolling
-      — there was no route to an account anywhere on screen.
-    */
-    const { container } = render(<MobileBar signedIn={false} myHandle={null} />);
-    expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([
-      '/feed',
-      '/explore',
-      '/creators',
-      '/join',
-    ]);
-    // Rendered from the JOIN constant, so the bar cannot drift from the header and the menu.
-    expect(container.querySelector('a[href="/join"]')?.textContent).toBe('Join');
-  });
-
-  it("gives a member their alerts and their own page, or purchases when they have no handle", () => {
-    const withHandle = render(<MobileBar signedIn={true} myHandle="nova" />);
-    expect(withHandle.container.querySelector('a[href="/c/nova"]')?.textContent).toBe('Me');
-    cleanup();
-    const without = render(<MobileBar signedIn={true} myHandle={null} />);
-    expect(without.container.querySelector('a[href="/purchases"]')?.textContent).toBe('Me');
-  });
-
-  it('marks the current destination', () => {
-    pathname = '/explore';
-    const { container } = render(<MobileBar signedIn={false} myHandle={null} />);
-    expect(container.querySelector('[aria-current="page"]')?.getAttribute('href')).toBe('/explore');
-  });
-
-  it('offers only the two open doors while the site is gated', () => {
-    const { container } = render(<MobileBar signedIn={false} myHandle={null} gated />);
-    expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([
-      '/waitlist',
-      '/signin',
-    ]);
-  });
 });
 
 describe('page tabs', () => {
@@ -443,6 +305,12 @@ describe('routes that build their own frame', () => {
 describe('the old chrome', () => {
   it('is imported by no page, layout or shell', () => {
     const { readdirSync, statSync } = require('node:fs') as typeof import('node:fs');
+    /*
+      They are deleted now, not merely unmounted, so this walks for their NAMES rather than their
+      imports: an import of a file that does not exist fails the build, but a new component called
+      `SiteHeader` reintroducing the second header is exactly the thing this was written to catch,
+      and it would compile.
+    */
     const retired = ['SiteHeader', 'SiteFooter', 'MobileBar', 'Breadcrumbs', 'RightRail', 'AppNav'];
     const offenders: string[] = [];
 

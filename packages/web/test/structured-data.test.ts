@@ -10,7 +10,7 @@
  * was added, what was deliberately left out.
  */
 import { describe, expect, it } from 'vitest';
-import { SOCIAL } from '../components/shell/SiteFooter';
+import { SOCIAL } from '../lib/social-links';
 import { TITLE, TAGLINE, DESCRIPTION } from '../lib/site-meta';
 import { organizationJsonLd, websiteJsonLd, profilePageJsonLd } from '../lib/structured-data';
 
@@ -49,7 +49,7 @@ describe('Organization', () => {
   });
 
   it('points sameAs at the same three channels the footer links, and no others', () => {
-    expect(org['sameAs']).toEqual(SOCIAL.map((s) => s.href));
+    expect(org['sameAs']).toEqual(SOCIAL.map((link) => link.href));
   });
 
   it('uses a logo file that actually exists and is square', async () => {
