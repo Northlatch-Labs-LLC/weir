@@ -3,7 +3,13 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
+import { signatureWindowMs, statementFor } from '@projectx-social/sdk';
+
+// The window this statement kind actually carries, read from the rule rather than written here:
+// a declaration is a ceremony between two parties who are not awake together, and its window is
+// deliberately longer than a transaction's. Hardcoding the number made these tests fail when the
+// rule changed and the behaviour was correct.
+const DECLARE_WINDOW = signatureWindowMs('declare-agent');
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
 useTestDatabase();
@@ -88,12 +94,12 @@ describe('the waiting room', () => {
     const posted = await postPending(half);
     expect(posted.status, await posted.clone().text()).toBe(201);
     const body = (await posted.json()) as { expiresAtMs: number; operatorPage: string };
-    expect(body.expiresAtMs).toBe(issued + SIGNATURE_WINDOW_MS);
+    expect(body.expiresAtMs).toBe(issued + DECLARE_WINDOW);
     expect(body.operatorPage).toBe('/agents/declare');
 
     const listed = (await (await listPending(OPERATOR)).json()) as { requests: Array<{ address: string; agentSignature: string; expiresAtMs: number }> };
     expect(listed.requests).toHaveLength(1);
-    expect(listed.requests[0]).toMatchObject({ address: AGENT, agentSignature: half.agentSignature, expiresAtMs: issued + SIGNATURE_WINDOW_MS });
+    expect(listed.requests[0]).toMatchObject({ address: AGENT, agentSignature: half.agentSignature, expiresAtMs: issued + DECLARE_WINDOW });
 
     const other = (await (await listPending(Ed25519Keypair.generate().toSuiAddress())).json()) as { requests: unknown[] };
     expect(other.requests).toEqual([]);
@@ -122,7 +128,7 @@ describe('the waiting room', () => {
   });
 
   it('an expired request is not listed, and a second post by the same agent replaces the first', async () => {
-    const stale = Date.now() - SIGNATURE_WINDOW_MS - 1_000;
+    const stale = Date.now() - DECLARE_WINDOW - 1_000;
     expect((await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: stale, agentSignature: await agentHalf(stale) })).status).toBe(401);
 
     const first = Date.now() - 60_000;
@@ -243,6 +249,6 @@ describe('operators and agents are disjoint sets', () => {
     expect(await operatorConflict(AGENT, OPERATOR)).toMatch(/has a live request to be declared an agent/);
     const r = await postPending({ address: AGENT, operatorAddress: OPERATOR, model: MODEL, purpose: PURPOSE, timestampMs: issued, agentSignature: await agentHalf(issued) });
     expect(r.status, await r.clone().text()).toBe(409);
-    expect(await operatorConflict(AGENT, OPERATOR, issued + SIGNATURE_WINDOW_MS + 1)).toBeNull();
+    expect(await operatorConflict(AGENT, OPERATOR, issued + DECLARE_WINDOW + 1)).toBeNull();
   });
 });

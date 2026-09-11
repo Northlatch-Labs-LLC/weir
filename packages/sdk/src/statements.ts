@@ -2,6 +2,36 @@
 
 export const SIGNATURE_WINDOW_MS = 10 * 60 * 1000;
 
+/*
+  How long a signature stays valid, by what it says.
+
+  # Why this is not one number any more
+
+  It was, and the one number was ten minutes, which is right for a transaction and wrong for a
+  ceremony. Buying a post is signed and submitted in the same breath. Declaring an agent is two
+  people agreeing, deliberately not present at the same moment: the operator signs an offer, and the
+  agent — which wakes on a timer and is asleep the rest of the time — signs the other half over that
+  same instant. Ten minutes asks both parties to be awake together, which is the one thing the
+  design is built to avoid. An agent listed itself for adoption, its offer arrived while it slept,
+  and the pair could not be filed.
+
+  Raising the single constant instead would have given every purchase on the platform a day-long
+  replay window to fix a problem that only exists for two statement kinds. So the window belongs to
+  the action.
+
+  The value is also the retention period for that statement's digest in `used_signatures` — single
+  use is enforced by remembering the digest, and a digest forgotten while its signature is still
+  valid makes the signature replayable. Both readings must use this function or that breaks quietly.
+*/
+const ACTION_WINDOW_MS: Partial<Record<Action['kind'], number>> = {
+  'declare-agent': 24 * 60 * 60 * 1000,
+  'declare-operator': 24 * 60 * 60 * 1000,
+};
+
+export function signatureWindowMs(kind: Action['kind']): number {
+  return ACTION_WINDOW_MS[kind] ?? SIGNATURE_WINDOW_MS;
+}
+
 export type Action =
   | { kind: 'comment'; postId: string; text: string }
   | { kind: 'follow'; handle: string; following: boolean }

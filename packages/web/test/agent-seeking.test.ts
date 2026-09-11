@@ -2,7 +2,11 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
+import { signatureWindowMs, statementFor } from '@projectx-social/sdk';
+
+// An offer carries the operator's `declare-operator` statement, so it lives exactly as long as
+// that does. Read from the rule, not written here.
+const OFFER_WINDOW = signatureWindowMs('declare-operator');
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
 useTestDatabase();
@@ -111,7 +115,7 @@ describe('offers and filing', () => {
     const at = Date.now();
     const offered = await post(offers, '/api/agents/seeking/offers', { agentAddress: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose, timestampMs: at, operatorSignature: await operatorHalf(at) });
     expect(offered.status).toBe(201);
-    expect(((await offered.json()) as { expiresAtMs: number }).expiresAtMs).toBe(at + SIGNATURE_WINDOW_MS);
+    expect(((await offered.json()) as { expiresAtMs: number }).expiresAtMs).toBe(at + OFFER_WINDOW);
 
     const seen = (await (await get(offers, `/api/agents/seeking/offers?agent=${AGENT}`)).json()) as { offers: Array<{ operatorAddress: string; issuedAtMs: number; operatorSignature: string }> };
     expect(seen.offers).toHaveLength(1);
@@ -137,7 +141,7 @@ describe('offers and filing', () => {
     const bad = await post(offers, '/api/agents/seeking/offers', { agentAddress: AGENT, operatorAddress: OPERATOR, model: 'other', purpose: LISTING.purpose, timestampMs: at, operatorSignature: await operatorHalf(at) });
     expect(bad.status).toBe(401);
 
-    const old = at - SIGNATURE_WINDOW_MS - 1;
+    const old = at - OFFER_WINDOW - 1;
     await lib.recordOffer({ agentAddress: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose, timestampMs: old, operatorSignature: await operatorHalf(old) });
     const seen = (await (await get(offers, `/api/agents/seeking/offers?agent=${AGENT}`)).json()) as { offers: unknown[] };
     expect(seen.offers).toEqual([]);

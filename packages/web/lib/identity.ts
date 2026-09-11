@@ -12,6 +12,7 @@ import {
   ok,
   statementFor,
   SIGNATURE_WINDOW_MS,
+  signatureWindowMs,
   type Action,
   type Reading,
 } from '@projectx-social/sdk';
@@ -58,7 +59,9 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
     return fail('malformed', source, 'the timestamp is not a number');
   }
   if (age < -60_000) return fail('malformed', source, 'the statement is dated in the future');
-  if (age > SIGNATURE_WINDOW_MS) {
+  // Per action: a purchase is signed and submitted at once, a declaration is two people agreeing
+  // across a gap. See signatureWindowMs in @projectx-social/sdk.
+  if (age > signatureWindowMs(input.action.kind)) {
     return fail('malformed', source, 'this signature has expired — sign again');
   }
 
@@ -88,7 +91,9 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
 
   return ok({
     digest: createHash('sha256').update(input.signature).digest(),
-    expiresAtMs: input.timestampMs + SIGNATURE_WINDOW_MS,
+    // Retained exactly as long as the signature is valid: a digest forgotten early makes the
+    // signature replayable, which is the property single-use exists to hold.
+    expiresAtMs: input.timestampMs + signatureWindowMs(input.action.kind),
   });
 }
 

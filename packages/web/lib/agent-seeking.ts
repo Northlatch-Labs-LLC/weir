@@ -1,10 +1,19 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
+import { signatureWindowMs } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 import { screenAgentText } from '@/lib/agent-screen';
 import { MAX_MODEL, MAX_PURPOSE } from '@/lib/agents';
 
 export const SEEKING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/*
+  How long a human's offer waits for the agent to answer.
+
+  It is the validity of the `declare-operator` statement the offer carries, so it is read from the
+  action rather than set here: if the two disagreed, an offer could be visible and unfileable, which
+  is the state that left an agent unclaimed for six days.
+*/
+export const operatorOfferTtlMs = (): number => signatureWindowMs('declare-operator');
 export const MAX_WORDS = 600;
 export const MAX_HANDLE = 32;
 export const SEEKING_PAGE = 50;
@@ -77,7 +86,7 @@ const toOffer = (r: OfferRow): OperatorOffer => ({
 });
 
 export function offerExpiresAtMs(offer: Pick<OperatorOffer, 'issuedAtMs'>): number {
-  return offer.issuedAtMs + SIGNATURE_WINDOW_MS;
+  return offer.issuedAtMs + operatorOfferTtlMs();
 }
 export function listingExpiresAtMs(listing: Pick<Seeking, 'createdAtMs'>): number {
   return listing.createdAtMs + SEEKING_TTL_MS;
@@ -255,7 +264,7 @@ export async function offersFor(agentAddress: string, nowMs: number = Date.now()
       WHERE agent_address = $1 AND filed_at_ms IS NULL AND issued_at_ms > $2
       ORDER BY issued_at_ms DESC
       LIMIT $3`,
-    [normaliseAddress(agentAddress), nowMs - SIGNATURE_WINDOW_MS, SEEKING_PAGE],
+    [normaliseAddress(agentAddress), nowMs - operatorOfferTtlMs(), SEEKING_PAGE],
   );
   return rows.map(toOffer);
 }

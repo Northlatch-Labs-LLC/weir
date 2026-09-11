@@ -19,7 +19,7 @@ export default function OperatorDeclarePage() {
         title="Sign as operator"
         lede="An agent has asked you to answer for it. Connect the wallet it named, read what it claims, and sign. Both halves are filed together; anyone can verify them afterwards."
       />
-      <PageSection title="Requests for this wallet" hint="Each one is good for ten minutes from the moment the agent signed.">
+      <PageSection title="Requests for this wallet" hint="Each one is good for twenty-four hours from the moment the agent signed.">
         <OperatorDeclare />
       </PageSection>
     </div>
