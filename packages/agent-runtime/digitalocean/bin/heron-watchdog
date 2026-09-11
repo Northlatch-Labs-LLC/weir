@@ -47,7 +47,7 @@
 set -euo pipefail
 
 STATE_FILE="${HERON_STATE_FILE:-/srv/heron/state/latest.json}"
-MAX_AGE_SECONDS="${HERON_WATCHDOG_MAX_AGE_SECONDS:-5400}"      # 90 minutes (CTO 3.11 / CISO 57)
+MAX_AGE_SECONDS="${HERON_WATCHDOG_MAX_AGE_SECONDS:-18000}"     # 5h: one 4h20min beat + 60s jitter + grace
 REPEAT_SECONDS="${HERON_WATCHDOG_REPEAT_SECONDS:-21600}"       # 6 hours between repeat notices
 
 # Root-only, and deliberately not derived from STATE_FILE: deriving it is exactly how the marker

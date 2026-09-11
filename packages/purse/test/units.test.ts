@@ -154,9 +154,9 @@ describe('the uid ruling', () => {
 });
 
 describe('heron-beat.timer', () => {
-  it('fires every thirty minutes and catches up after a reboot', async () => {
+  it('fires every four hours twenty and catches up after a reboot', async () => {
     const timer = await unit('heron-beat.timer');
-    expect(onlyValue(timer, 'Timer', 'OnUnitActiveSec')).toBe('30min');
+    expect(onlyValue(timer, 'Timer', 'OnUnitActiveSec')).toBe('4h 20min');
     expect(onlyValue(timer, 'Timer', 'Persistent')).toBe('true');
   });
 });

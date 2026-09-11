@@ -25,6 +25,15 @@ const LIB_DIR = path.join(DO_DIR, 'lib');
 const DEPLOY_SCRIPT = path.join(DO_DIR, 'deploy-droplet.sh');
 const CLOUD_INIT = path.join(DO_DIR, 'cloud-init.yaml');
 const WATCHDOG = path.join(DO_DIR, 'bin', 'heron-watchdog');
+
+// The staleness ceiling these tests exercise, handed to the watchdog explicitly.
+//
+// Set here rather than inherited, so a test measures the BEHAVIOUR — a state file past the ceiling
+// fires, one inside it does not — instead of pinning whatever default the shipped script carries.
+// The default belongs to the deployment: it must exceed one beat interval plus the timer's jitter,
+// and changing it there must never turn these tests red.
+const CEILING_SECONDS = 5400;
+const CEILING_ENV = { HERON_WATCHDOG_MAX_AGE_SECONDS: String(CEILING_SECONDS) };
 const RETENTION = path.join(DO_DIR, 'bin', 'heron-retention');
 const POST_BOOT = path.join(LIB_DIR, 'post-boot-assert.sh');
 const FIREWALL_MATCH = path.join(LIB_DIR, 'firewall_match.py');
@@ -878,15 +887,15 @@ function watchdogFixture() {
       const now = new Date();
       utimesSync(stateFile, now, now);
     },
-    stale: (minutes = 91) => {
+    stale: (seconds = CEILING_SECONDS + 60) => {
       writeFileSync(stateFile, '{"exit":0}', 'utf8');
-      const then = new Date(Date.now() - minutes * 60 * 1000);
+      const then = new Date(Date.now() - seconds * 1000);
       utimesSync(stateFile, then, then);
     },
     run: (extraEnv = {}) =>
       spawnSync(WATCHDOG, [], {
         encoding: 'utf8',
-        env: { ...process.env, HERON_STATE_FILE: stateFile, HERON_WATCHDOG_DIR: watchdogDir, ...extraEnv },
+        env: { ...process.env, HERON_STATE_FILE: stateFile, HERON_WATCHDOG_DIR: watchdogDir, ...CEILING_ENV, ...extraEnv },
       }),
     alertLines: () =>
       existsSync(path.join(watchdogDir, 'alerts.jsonl'))
@@ -908,7 +917,7 @@ test('A4: the first stale check writes the degraded marker, records it, and asks
     const lines = f.alertLines();
     assert.equal(lines.length, 1);
     assert.equal(lines[0].event, 'stale');
-    assert.match(lines[0].detail, /past the 5400s ceiling/);
+    assert.match(lines[0].detail, new RegExp(`past the ${CEILING_SECONDS}s ceiling`));
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }

@@ -225,7 +225,7 @@ test('the watchdog passes on a fresh state file', () => {
   }
 });
 
-test('the watchdog fires (non-zero exit) on a state file older than 90 minutes', () => {
+test('the watchdog fires (non-zero exit) on a state file past the ceiling', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'watchdog-stale-'));
   try {
     const stateFile = path.join(dir, 'latest.json');
@@ -240,7 +240,7 @@ test('the watchdog fires (non-zero exit) on a state file older than 90 minutes',
   }
 });
 
-test('the watchdog fires on a state file just under 90 minutes old passing, and just over failing (boundary)', () => {
+test('the watchdog passes a state file just inside the ceiling and fires just past it (boundary)', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'watchdog-boundary-'));
   try {
     const stateFile = path.join(dir, 'latest.json');

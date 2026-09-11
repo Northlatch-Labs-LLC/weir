@@ -299,19 +299,3 @@ the only surviving trace. The harness now lives in `test/` as Vitest and runs wi
    reads `sim.Transaction.status` — capital T, no `effects` — measured live on mainnet, and refuses
    an unrecognised shape. The bytes are built once and round-tripped through `Transaction.from()`
    before being handed to it, so what is simulated is provably what is signed.
-
-## Not done
-
-- **There is still no JSON feed endpoint on weir.** `packages/web/app/api/posts/route.ts` exports
-  `POST` only. `.feed()` and `.quote(postId)` are no longer exported rather than exported and
-  broken; see *Surface* above. `.quote({ vaultId, contentKey })` works today and always did.
-- **The gas figure on `Executed` is gone.** It was `simulatedGasMist`, fed by a gas reader that
-  only existed because this package was parsing the raw simulation envelope itself — the duplicate
-  reader that has been deleted. `Executed.simulation` now carries the SDK's `SimulationOutcome`
-  instead. What is lost is an estimate; the ceiling that actually bounds spend is
-  `manifest.gasBudgetMist`.
-- **No `tsconfig.build.json` and no `dist`.** `exports` points at TypeScript source; in-repo
-  consumers run `tsx` or `vitest`. Add a build before publishing outside the workspace.
-- **Nothing was executed on chain.** Every transaction path was proven up to and including
-  simulation, and refused before signing. No agent key here has ever been funded, so no `unlock`,
-  `subscribe` or `tip` has landed on mainnet.
