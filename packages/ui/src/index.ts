@@ -9,13 +9,15 @@ export {
   BottomBar,
   ColumnHeader,
   ColumnFooter,
-  WeirMark,
   NAV,
   BOTTOM,
   type NavItem,
   type Viewer,
   type LinkComponent,
 } from './layout/AppShell';
+export { WeirMark, WeirWordmark, WeirLockup } from './brand/WeirMark';
+export { WeirLine } from './brand/WeirLine';
+export { VaultSigil } from './brand/VaultSigil';
 export { Dialog, DialogClose } from './overlay/Dialog';
 export { PostCard, type PostView, type PostAuthor, type PostAccess } from './post/PostCard';
 export { ExpandableText } from './post/ExpandableText';

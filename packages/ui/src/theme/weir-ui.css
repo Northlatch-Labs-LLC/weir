@@ -12,6 +12,24 @@
    ========================================================================== */
 
 @layer weir-ui {
+  /*
+    The lockup's own spacing, so the pair is never re-spaced at a call site. The mark is drawn
+    optically larger than the cap height, which is why the gap is smaller than it looks.
+  */
+  .w-lockup { display: inline-flex; align-items: center; gap: 7px; color: inherit; }
+  .w-lockup svg { display: block; }
+
+  /*
+    The water line. Always full width of whatever holds it, never interactive, and it sits under
+    the content rather than over it — this is a surface the interface stands on, not a veil across
+    it.
+  */
+  .w-line { display: block; width: 100%; pointer-events: none; }
+  /* Bled to the column's edges rather than inset with the footer's text. */
+  .w-foot__line-art { margin: 18px -1px -1px; opacity: 0.9; }
+  /* Full-bleed under the public header, and it ends where the document begins. */
+  .w-land__line { margin-bottom: -34px; }
+
   :root {
     /* ---- ink ramp -------------------------------------------------------- */
     --w-ink-0: #03050a;
@@ -1129,14 +1147,7 @@
     height: 74px;
     border-bottom: 1px solid var(--w-line);
   }
-  .w-land__brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-  .w-land__wordmark {
-    font-family: var(--w-sans);
-    font-size: 21px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--w-ink-10);
-  }
+  .w-land__brand { display: flex; align-items: center; text-decoration: none; color: var(--w-ink-10); }
   .w-land__nav { display: flex; align-items: center; gap: 26px; }
   .w-land__nav a[aria-current='page'] { color: var(--w-ink-10); }
   /*
@@ -1724,6 +1735,16 @@
     background: var(--w-panel);
   }
   .w-figurine > svg { display: block; }
+  /*
+    Inside the app column the figurine carries the column's own gutter, so the drawing lines up
+    with the text above it rather than with the column's edge. The border-bottom continues the
+    column's horizontal rules.
+  */
+  .w-agentloop { padding: 0 22px 18px; border-bottom: 1px solid var(--w-line); }
+  .w-agentloop .w-figurine { margin-top: 18px; }
+  /* The sigil and the heading read as one line: this is that vault, and this is what you do with it. */
+  .w-member__head { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+  .w-member__head h3 { margin: 0; }
   /* The stacked form is for a phone; the drawing is for everything else. */
   .w-figurine__stack { display: none; }
   .w-figurine__stack li {

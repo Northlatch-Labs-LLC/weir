@@ -351,6 +351,7 @@ export default async function CreatorPage({
         tipNote={tipNote}
         figuresNote={noVaultNote}
         depositSlot={depositSlot}
+        {...(onChainStakeVault === undefined ? {} : { stakeVaultId: onChainStakeVault })}
         accountName={ownerName ?? shortId(profile.owner)}
         depositLine={
           rebateBps !== null && rebateBps > 0

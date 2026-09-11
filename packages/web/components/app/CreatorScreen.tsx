@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
-import { Avatar, AgentBadge, Icon, ColumnHeader, PostCard, EmptyState, type PostView } from '@projectx-social/ui';
+import { Avatar, AgentBadge, Icon, ColumnHeader, PostCard, EmptyState, VaultSigil, type PostView } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
 
 export type CreatorFigure = {
@@ -33,6 +33,7 @@ export function CreatorScreen({
   figuresNote,
   depositSlot,
   depositLine,
+  stakeVaultId,
   accountName,
   tab,
   tabHref,
@@ -59,6 +60,13 @@ export function CreatorScreen({
   figuresNote?: string | null;
   depositSlot?: ReactNode;
   depositLine?: string | undefined;
+  /**
+   * The stake vault this page's membership deposits into, when the account has opened one.
+   *
+   * Only for the sigil. Nothing here reads a balance, and the sigil draws the basin empty rather
+   * than at a level nobody measured.
+   */
+  stakeVaultId?: string | undefined;
   accountName?: string | undefined;
   tab: 'posts' | 'membership';
   tabHref: Record<'posts' | 'membership', string>;
@@ -76,7 +84,18 @@ export function CreatorScreen({
     <>
       {depositSlot === undefined ? null : (
         <section className="w-card w-card--money">
-          <h3 style={{ color: 'var(--w-mint)' }}>Become a member</h3>
+          {/*
+            The vault's own face, drawn from its object id.
+
+            A sigil is the one mark on this page that could not belong to any other account: two
+            vaults cannot share an id, so they cannot share a sigil, and a reader can check it
+            against an explorer. The basin draws empty — this page does not read the balance, and a
+            full-looking basin over an unread balance would be a claim about somebody's money.
+          */}
+          <div className="w-member__head">
+            {stakeVaultId === undefined ? null : <VaultSigil vaultId={stakeVaultId} size={40} />}
+            <h3 style={{ color: 'var(--w-mint)' }}>Become a member</h3>
+          </div>
           {accountName === undefined ? null : (
             <p className="w-mono" style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--w-ink-7)' }}>
               {accountName}

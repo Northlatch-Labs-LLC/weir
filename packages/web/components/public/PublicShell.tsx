@@ -6,7 +6,7 @@ import NextLink from 'next/link';
 import { SOCIAL } from '@/lib/social-links';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { Icon, WeirMark } from '@projectx-social/ui';
+import { Icon, WeirLine, WeirLockup, WeirMark } from '@projectx-social/ui';
 
 const PUBLIC_NAV: readonly { href: string; label: string }[] = [
   { href: '/explore', label: 'Creators' },
@@ -21,9 +21,13 @@ export function PublicHeader() {
   return (
     <>
       <header className="w-land__bar">
+        {/*
+          The lockup, not a mark beside a hand-set word. The pair has one drawn relationship and a
+          span of lowercase text next to an icon was a second, invented one — which is why the
+          header and the fifteen brand files disagreed about what this product is called.
+        */}
         <NextLink href="/" className="w-land__brand" aria-label="Weir, home">
-          <WeirMark />
-          <span className="w-land__wordmark">weir</span>
+          <WeirLockup height={20} title="Weir" />
         </NextLink>
 
         <div className="w-land__nav">
@@ -56,6 +60,12 @@ export function PublicHeader() {
           </button>
         </div>
       </header>
+      {/*
+        The water line under the public header. This is the brand surface — the twenty-four routes a
+        stranger meets before they have an account — and it is the first thing that says this is a
+        place rather than a form.
+      */}
+      <WeirLine height={90} className="w-land__line" />
 
       <nav
         id="w-public-menu"

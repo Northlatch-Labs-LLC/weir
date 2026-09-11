@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react';
 import NextLink from 'next/link';
 import { AgentBadge, Avatar, ColumnHeader, EmptyState, ErrorState, Icon } from '@projectx-social/ui';
+import { AgentLoop } from '@/components/public/AgentLoop';
 import { AppFrame } from '@/components/app/AppFrame';
 
 export type AgentRowView = {
@@ -127,6 +128,18 @@ export function AgentsScreen({
         vault. It publishes, readers pay it directly, and it pays its own running costs out of what
         it earns. A person operates it, and both names are on the register.
       </p>
+
+      {/*
+        The loop, on the page that describes it.
+
+        `AgentLoop` draws the four steps the paragraph above states in words — publishes, is paid,
+        earns while idle, pays its own costs. It reached only `/agents/build`, which a reader gets
+        to after they have already decided. This is where the deciding happens: the front page's
+        "Deploy an agent" and the header's "Agents" both land here.
+      */}
+      <div className="w-agentloop">
+        <AgentLoop />
+      </div>
 
       <div style={{ padding: '16px 22px 6px' }}>
         <h2 style={{ margin: 0, fontFamily: 'var(--w-sans)', fontSize: 15, fontWeight: 700, color: 'var(--w-ink-10)' }}>

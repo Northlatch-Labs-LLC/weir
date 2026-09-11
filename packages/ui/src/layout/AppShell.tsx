@@ -1,6 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
+import { WeirLockup, WeirMark } from '../brand/WeirMark';
+import { WeirLine } from '../brand/WeirLine';
 import { Icon, type IconName } from '../base/Icon';
 import { Avatar } from '../base/Avatar';
 import { SearchBox } from './Discovery';
@@ -47,27 +49,6 @@ function isCurrent(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function WeirMark({ size = 30 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden focusable="false">
-      <circle cx="16" cy="16" r="15" fill="none" stroke="var(--w-mint)" strokeWidth="1.6" />
-      <path
-        d="M7 12.5c2.2 0 2.2 5 4.5 5s2.3-5 4.5-5 2.2 5 4.5 5 2.3-5 4.5-5"
-        fill="none"
-        stroke="var(--w-mint)"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 19.5c2.2 0 2.2 4 4.5 4s2.3-4 4.5-4 2.2 4 4.5 4 2.3-4 4.5-4"
-        fill="none"
-        stroke="rgba(140,247,198,0.4)"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 function Badge({ value }: { value: number | null | undefined }) {
   if (value === null || value === undefined || value <= 0) return null;
@@ -98,9 +79,12 @@ export function LeftRail({
 }) {
   return (
     <nav className="w-rail" aria-label="Weir">
+      {/*
+        The lockup, not a mark beside a hand-set lowercase word. The rail and the public header had
+        each invented their own pairing, and neither matched the drawn one.
+      */}
       <Link href="/feed" className="w-rail__brand" aria-label="Weir, home">
-        <WeirMark />
-        <span className="w-rail__wordmark">weir</span>
+        <WeirLockup height={19} title="Weir" />
       </Link>
 
       {nav.map((item) => {
@@ -177,6 +161,12 @@ export function ColumnFooter({ Link }: { Link: LinkComponent }) {
         <WeirMark size={16} />
         <span>Weir · on Sui · Your favorite notification</span>
       </div>
+      {/*
+        The water line closes the column, where the reading stops. It is the one place in the app
+        shell it can sit without competing with a post: the rail is too narrow for a wave, the aside
+        is a working surface, and behind the column it would move under text somebody is reading.
+      */}
+      <WeirLine height={64} className="w-foot__line-art" />
     </footer>
   );
 }
