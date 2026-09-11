@@ -2,7 +2,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { PageHead } from '@/components/design/PageHead';
-import { Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/design/icons';
 import { useSigner } from '@/components/SignerProvider';
 
@@ -12,7 +13,35 @@ export function DesignSignin({ nextPath = '/' }: { nextPath?: string }) {
     unusableWallets,
     signInWithGoogle,
     connectWallet,
+    signer,
+    accountChoice,
   } = useSigner();
+  const router = useRouter();
+
+  /*
+    Return the reader to where they were going.
+
+    This page has always said "After signing in you return to /c/heron", and for a wallet it never
+    did: `safeNext` sanitised the parameter, six assertions covered it, `signInWithGoogle` used it —
+    and the wallet branch called `connectWallet` and stopped. The reader signed in their extension
+    and sat on the sign-in page.
+
+    It waits for the signer rather than firing on the connect, because `connectWallet` resolves when
+    the extension answers and the signer arrives on the next render. And it waits for
+    `accountChoice` to clear: a wallet holding several addresses asks which one, and navigating out
+    from under that question picks for them.
+
+    Not gated on the read-content signature. That is a separate step with its own control in the
+    header, and holding the reader here until they give it would be the same dead end wearing a
+    different hat.
+
+    `replace`, not `push`: signing in is not a place in the reader's history, and a back button that
+    returns them to a sign-in page they have already used reads as the sign-in having failed.
+  */
+  useEffect(() => {
+    if (signer === null || accountChoice !== null) return;
+    router.replace(nextPath);
+  }, [signer, accountChoice, nextPath, router]);
 
   const wallets = [
     ...usable.map((w) => ({

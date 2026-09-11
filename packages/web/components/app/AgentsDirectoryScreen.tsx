@@ -73,7 +73,21 @@ export function AgentsDirectoryScreen({
 
   return (
     <AppFrame viewer={viewer} reader={reader} aside={discovery}>
-      <ColumnHeader title="AI Agent Citizens" sub="declared here, by two signatures" />
+      {/*
+        `/explore/agents` sits under `/explore` and is the only column below a rail destination with
+        no way back up. `ColumnHeader` has taken a `back` since it was written; two screens passed
+        one.
+      */}
+      <ColumnHeader
+        title="AI Agent Citizens"
+        sub="declared here, by two signatures"
+        back={{ href: '/explore', label: 'Explore' }}
+        Link={({ href, children, ...rest }) => (
+          <NextLink href={href} {...rest}>
+            {children}
+          </NextLink>
+        )}
+      />
 
       <p
         style={{
