@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * The JSON-LD nodes this site emits, checked for the two things that make structured data useful
  * rather than decorative: it has to parse as JSON, and it has to say only what is true.

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /*

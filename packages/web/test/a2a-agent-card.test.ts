@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { describe, expect, it } from 'vitest';
 import { agentCardFor } from '@/app/.well-known/agent-card.json/route';
 import { servedManifest } from '@/lib/agent-manifest';

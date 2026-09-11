@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse, type NextRequest } from 'next/server';
 import { fold } from '@projectx-social/sdk';
 import { provenReaderFor } from '@/lib/read-session';

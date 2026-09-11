@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * Everybody here has a face from the moment their account exists.
  *

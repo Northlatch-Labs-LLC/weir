@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * A coin's decimals are read from that coin, never written into a call site.
  *

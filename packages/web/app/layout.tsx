@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata, Viewport } from 'next';
 import { geist, geistMono, inter, jetbrainsMono, sourceSerif } from './fonts';
 import { fold } from '@projectx-social/sdk';

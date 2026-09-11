@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * The calls to action on `/agents` promise only what the deployment does.
  *

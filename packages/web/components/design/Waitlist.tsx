@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 /**
  * The **`gated` notice** — "the app itself is still behind the door… I have a code" — renders only

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * `SignerProvider` — who is signed in, and how they sign.
  *

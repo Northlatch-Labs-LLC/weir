@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * The gate is checked elsewhere; this is about what is rendered once somebody is through it. The
  * test that matters is the last one: an email address must not reach the DOM by any path, including

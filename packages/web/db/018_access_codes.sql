@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- 018: access codes — a way through the front door while it is closed.
 --
 -- # What this is

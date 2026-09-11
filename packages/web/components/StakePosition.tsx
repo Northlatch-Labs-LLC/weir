@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 /**
  * A supporter's position in a vault: what they put in, what it has earned, and getting it back.

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * A migration may declare that it must run outside a transaction, and the runner must believe it.
  *

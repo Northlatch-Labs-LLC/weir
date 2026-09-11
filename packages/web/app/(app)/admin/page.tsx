@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { AdminPanel } from '@/components/AdminPanel';
 import { WaitlistInsightPanel } from '@/components/WaitlistInsight';
 import { SiteModeSwitch } from '@/components/SiteModeSwitch';

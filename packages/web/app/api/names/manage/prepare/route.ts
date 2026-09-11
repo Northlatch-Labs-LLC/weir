@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
 import { fold } from '@projectx-social/sdk';
 import { simulateLimit } from '@/lib/rate-limit';

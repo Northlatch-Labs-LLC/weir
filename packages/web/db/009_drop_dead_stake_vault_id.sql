@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- Drop a column that has never held a value.
 --
 -- # Why it is going rather than being fixed

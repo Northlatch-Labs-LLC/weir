@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
 import { ADMIN, CREATOR, MEMBER } from '@/lib/site-map';
 import { AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';

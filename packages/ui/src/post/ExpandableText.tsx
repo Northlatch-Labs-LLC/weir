@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * A body that stops at a few lines, and says so.
  *

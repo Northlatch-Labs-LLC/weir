@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- 017: what a creator promises the people who tip them.
 --
 -- # This one is a promise, and the schema should not pretend otherwise

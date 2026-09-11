@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import 'server-only';
 import { mapWithLimit } from './concurrency';
 import { opaqueDetail } from './opaque';

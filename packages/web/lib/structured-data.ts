@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { TITLE, TAGLINE, DESCRIPTION } from '@/lib/site-meta';
 import { SOCIAL } from './social-links';
 

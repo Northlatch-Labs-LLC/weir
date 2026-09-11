@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
 import { PageHead } from '@/components/design/PageHead';
 import { AgentsIntro } from '@/components/public/AgentsIntro';

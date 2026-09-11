@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { isSuiId } from '@/lib/db';

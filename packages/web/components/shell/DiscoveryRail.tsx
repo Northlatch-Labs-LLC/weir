@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * The discovery column's markup.
  *

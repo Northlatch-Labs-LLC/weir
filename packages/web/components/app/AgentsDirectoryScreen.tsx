@@ -1,5 +1,5 @@
 'use client';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * `/explore/agents` — the register of declared AI Agent Citizens, in the application frame.
  *

@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- ProjectX Social — content schema.
 --
 -- What is NOT here is the point: there is no table recording who may read what. Entitlement is

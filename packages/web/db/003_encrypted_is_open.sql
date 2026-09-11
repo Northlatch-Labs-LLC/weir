@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- Encrypted messages cannot be paid messages.
 --
 -- A paid message works because the server withholds `body` until the buyer holds an Unlock object

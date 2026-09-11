@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { VisiblePost } from '@/lib/content';
 
 import { UnlockButton } from '@/components/UnlockButton';

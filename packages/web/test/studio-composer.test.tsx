@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * The page carried `target` and `targetState` and nothing ever assigned to either: there was no
  * fetch. So `target` was `null` for every visitor, `canPublish` was false for every visitor, and

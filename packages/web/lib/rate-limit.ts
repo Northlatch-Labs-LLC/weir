@@ -1,5 +1,5 @@
 import { opaqueDetail } from './opaque';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * A ceiling on how often one caller may hit an endpoint.
  *

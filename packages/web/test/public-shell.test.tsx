@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * A page you read before you have an account has a way back to the page you came from.
  *

@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
 import { quotaLimit, simulateLimit } from '@/lib/rate-limit';
 import { isPurchase, moveTargets } from '@/lib/tx-shape';

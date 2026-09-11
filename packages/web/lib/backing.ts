@@ -1,5 +1,5 @@
 import 'server-only';
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 /**
  * Everything one address has pooled behind other people.

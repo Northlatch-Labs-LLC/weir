@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { fold } from '@projectx-social/sdk';
 import { provenReader } from '@/lib/read-session';
 import { FeedView } from '@/components/feed/FeedView';

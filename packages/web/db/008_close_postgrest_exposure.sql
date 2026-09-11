@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- Row Level Security on every table, with no policies.
 --
 -- This deployment reaches Postgres over a connection string as the owning role and performs every

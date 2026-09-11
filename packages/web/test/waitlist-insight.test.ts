@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * Two kinds of check here. The first is over the pure shaping functions, which is where the
  * "a quiet day is a zero, not a gap" rule either holds or silently draws a launch curve out of

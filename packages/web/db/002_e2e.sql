@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- End-to-end encryption for direct messages.
 --
 -- A Sui address is a hash of a public key, so you cannot encrypt to an address. Each participant

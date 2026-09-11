@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * There is no icon font and no sprite sheet. At this size the whole set is smaller than one request
  * would be, and inlining means an icon can inherit `currentColor` from whatever it sits inside —

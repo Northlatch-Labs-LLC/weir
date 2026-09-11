@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * A write signature may be spent exactly once.
  *

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * Blob encryption — the thing that makes a public storage network safe to put paid media on.
  *

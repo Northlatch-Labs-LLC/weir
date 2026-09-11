@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 /**
  * The relative-time wording ladder: `just now` under a minute, a rounded floored minute count
  * under an hour, and a UTC clock time from an hour on — pinned exactly, since every figure and

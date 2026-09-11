@@ -1,4 +1,4 @@
-// Built-by: @projectx.sui · Co-authored-by: Claude
+// Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 // Pure, no I/O and no secrets, so it runs in the client component that renders the list.
 
 /**

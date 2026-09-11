@@ -1,4 +1,4 @@
--- Built-by: @projectx.sui · Co-authored-by: Claude
+-- Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 -- 012: this deployment only broadcasts transactions it built.
 --
 -- `checkout/submit` took `{bytes, signature}` and executed them against the configured fullnode.
