@@ -1,3 +1,28 @@
 # Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 packages:
   - "packages/*"
+
+# The publishable packages cross-reference each other by real version number rather than
+# `workspace:*`, because npm cannot resolve that protocol from a registry. Without this, pnpm takes
+# those numbers literally and installs the PUBLISHED tarball of a package sitting in this
+# repository — so `packages/mcp` would build and test against whatever was last released instead of
+# the source beside it, and a change to `packages/agent/src` would not reach it. Verified: without
+# this line, packages/mcp/node_modules/@projectx-social/agent points into .pnpm rather than at
+# ../../agent.
+#
+# It lived in `.npmrc` until pnpm 12. pnpm 10 moved workspace configuration into this file and
+# ignores the .npmrc entry silently, which is the worst way for a setting like this to stop working.
+linkWorkspacePackages: true
+# Build scripts run only for packages named here. pnpm 10 stopped running dependency lifecycle
+# scripts by default, which is the right default — a postinstall is arbitrary code from a package
+# you may never have read. esbuild's fetches its own platform binary and genuinely needs one.
+allowBuilds:
+  esbuild: true
+# A package published in the last 24 hours is refused, because that is the window in which a
+# compromised publish is usually caught. The four below are ours: they are published from this
+# repository, so the quarantine would be refusing our own release.
+minimumReleaseAgeExclude:
+  - '@projectx-social/agent@1.0.2'
+  - '@projectx-social/policy@1.0.2'
+  - '@projectx-social/sdk@1.0.2'
+  - '@projectx-social/signer@1.0.2'
