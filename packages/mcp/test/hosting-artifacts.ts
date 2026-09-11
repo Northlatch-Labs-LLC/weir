@@ -150,8 +150,17 @@ check('the web manifest lists exactly the tools the keyless build registers', ()
     console.log("  skip  the web's source is not in this tree — the manifest tool list is NOT verified here");
     return;
   }
-  const at = src.indexOf('KEYLESS hosted build');
-  assert.ok(at > 0, 'the manifest no longer marks its hosted tool list');
+  /*
+    Anchored on the manifest's own DECLARATION, not on a sentence in its note.
+
+    `mode: 'read-only'` is the claim this check exists to police — a hosted build that says it only
+    reads must list exactly the read set — and it cannot be reworded without changing what the
+    manifest promises. The previous anchor was the phrase 'KEYLESS hosted build', which was rewritten
+    to 'the hosted server is the keyless build' on 2026-09-10; the tool list was still correct and
+    this check failed anyway, which is a test reporting on prose rather than on fact.
+  */
+  const at = src.indexOf("mode: 'read-only'");
+  assert.ok(at > 0, 'the manifest no longer declares a read-only hosted MCP');
   const m = /tools: \[([^\]]*)\]/.exec(src.slice(at));
   assert.ok(m, 'no tools list after the KEYLESS marker');
   const listed = [...(m?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((x) => x[1] ?? '').sort();
