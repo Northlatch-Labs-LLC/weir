@@ -161,7 +161,7 @@ export {
   statementFor,
   isSingleUse,
   SIGNATURE_WINDOW_MS,
-  signatureWindowMs,
+  OPERATOR_OFFER_WINDOW_MS,
   STATEMENT_SHAPES,
   accessStatement,
   parseAccessStatement,

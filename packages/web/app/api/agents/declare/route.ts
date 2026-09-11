@@ -4,7 +4,9 @@ import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
 import { operatorConflict, recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
-import { markOfferFiled, markSeekingClaimed } from '@/lib/agent-seeking';
+import { markOfferFiled, markSeekingClaimed, offersFor } from '@/lib/agent-seeking';
+import { normaliseAddress } from '@/lib/db';
+import { OPERATOR_OFFER_WINDOW_MS } from '@projectx-social/sdk';
 import { operatorFootprint } from '@/lib/operator-footprint';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +29,20 @@ export async function POST(request: Request) {
   const conflict = await operatorConflict(declaration.address, declaration.operatorAddress);
   if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
 
+  // A day-long window is granted, never requested. It applies only where the register itself holds
+  // an unfiled offer from this operator to this agent at this instant — meaning a human signed
+  // first and the agent is answering it late, which is the whole point of adoption. Anyone else is
+  // declaring with their operator at the screen, and that is a transaction: ten minutes.
+  const offers = await offersFor(declaration.address).catch(() => []);
+  const answeringAnOffer = offers.some(
+    (offer) =>
+      normaliseAddress(offer.operatorAddress) === normaliseAddress(declaration.operatorAddress) &&
+      offer.issuedAtMs === declaration.timestampMs,
+  );
+  const windowMs = answeringAnOffer ? OPERATOR_OFFER_WINDOW_MS : undefined;
+
   const byAgent = await verifyAction({
+    windowMs,
     origin: new URL(request.url).origin,
     address: declaration.address,
     signature: declaration.agentSignature,
@@ -47,6 +62,7 @@ export async function POST(request: Request) {
   }
 
   const byOperator = await verifyAction({
+    windowMs,
     origin: new URL(request.url).origin,
     address: declaration.operatorAddress,
     signature: declaration.operatorSignature,

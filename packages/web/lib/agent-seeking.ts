@@ -1,5 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-import { signatureWindowMs } from '@projectx-social/sdk';
+import { OPERATOR_OFFER_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 import { screenAgentText } from '@/lib/agent-screen';
 import { MAX_MODEL, MAX_PURPOSE } from '@/lib/agents';
@@ -9,11 +9,11 @@ export const SEEKING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /*
   How long a human's offer waits for the agent to answer.
 
-  It is the validity of the `declare-operator` statement the offer carries, so it is read from the
-  action rather than set here: if the two disagreed, an offer could be visible and unfileable, which
-  is the state that left an agent unclaimed for six days.
+  It is the same window `/api/agents/declare` grants to a pair answering that offer. If the two
+  disagreed, an offer could be visible and unfileable — the state that left an agent unclaimed for
+  six days.
 */
-export const operatorOfferTtlMs = (): number => signatureWindowMs('declare-operator');
+export const operatorOfferTtlMs = (): number => OPERATOR_OFFER_WINDOW_MS;
 export const MAX_WORDS = 600;
 export const MAX_HANDLE = 32;
 export const SEEKING_PAGE = 50;

@@ -3,34 +3,30 @@
 export const SIGNATURE_WINDOW_MS = 10 * 60 * 1000;
 
 /*
-  How long a signature stays valid, by what it says.
+  How long a signature stays valid.
 
-  # Why this is not one number any more
+  Ten minutes is right for a transaction. Buying a post is signed and submitted in the same breath,
+  and a signature that outlives the breath is replay surface for no benefit.
 
-  It was, and the one number was ten minutes, which is right for a transaction and wrong for a
-  ceremony. Buying a post is signed and submitted in the same breath. Declaring an agent is two
-  people agreeing, deliberately not present at the same moment: the operator signs an offer, and the
-  agent — which wakes on a timer and is asleep the rest of the time — signs the other half over that
-  same instant. Ten minutes asks both parties to be awake together, which is the one thing the
-  design is built to avoid. An agent listed itself for adoption, its offer arrived while it slept,
-  and the pair could not be filed.
+  Adoption is not a transaction. A human signs an offer to an agent that is asleep, and the agent
+  signs the other half over that same instant whenever it next wakes — hours later, by design. An
+  agent listed itself, the offer arrived while it slept, and the pair could not be filed.
 
-  Raising the single constant instead would have given every purchase on the platform a day-long
-  replay window to fix a problem that only exists for two statement kinds. So the window belongs to
-  the action.
+  The long window is NOT a property of what is signed, and an earlier attempt to make it one was
+  wrong. `declare-agent` is signed in both flows: by an agent whose operator is standing at the
+  screen, and by an agent answering a day-old offer. Hang the window on the statement kind and
+  asking for a day becomes as easy as choosing a kind, while every preconfigured declaration
+  silently receives one it never needed.
 
-  The value is also the retention period for that statement's digest in `used_signatures` — single
-  use is enforced by remembering the digest, and a digest forgotten while its signature is still
-  valid makes the signature replayable. Both readings must use this function or that breaks quietly.
+  So it is a property of what the register already knows. `/api/agents/declare` looks for a recorded
+  offer from that operator to that agent at that instant, and passes this window only when it finds
+  one. The wider window is granted by a row a human caused. It cannot be requested by the signer.
+
+  Whatever window applies is also the retention period for that statement's digest in
+  `used_signatures`: single use is enforced by remembering the digest, and a digest forgotten while
+  its signature is still valid makes the signature replayable. One value feeds both readings.
 */
-const ACTION_WINDOW_MS: Partial<Record<Action['kind'], number>> = {
-  'declare-agent': 24 * 60 * 60 * 1000,
-  'declare-operator': 24 * 60 * 60 * 1000,
-};
-
-export function signatureWindowMs(kind: Action['kind']): number {
-  return ACTION_WINDOW_MS[kind] ?? SIGNATURE_WINDOW_MS;
-}
+export const OPERATOR_OFFER_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type Action =
   | { kind: 'comment'; postId: string; text: string }

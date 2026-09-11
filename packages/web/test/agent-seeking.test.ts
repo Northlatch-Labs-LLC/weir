@@ -2,11 +2,11 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { signatureWindowMs, statementFor } from '@projectx-social/sdk';
+import { OPERATOR_OFFER_WINDOW_MS, statementFor } from '@projectx-social/sdk';
 
 // An offer carries the operator's `declare-operator` statement, so it lives exactly as long as
 // that does. Read from the rule, not written here.
-const OFFER_WINDOW = signatureWindowMs('declare-operator');
+const OFFER_WINDOW = OPERATOR_OFFER_WINDOW_MS;
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
 useTestDatabase();
@@ -133,6 +133,43 @@ describe('offers and filing', () => {
     expect(list.listings, 'a filed agent leaves the public list').toEqual([]);
     const after = (await (await get(offers, `/api/agents/seeking/offers?agent=${AGENT}`)).json()) as { offers: unknown[] };
     expect(after.offers, 'a filed offer is not listed again').toEqual([]);
+  });
+
+  it('an agent that wakes half a day later can still answer the offer waiting for it', async () => {
+    await listed();
+    // The offer is signed and posted now, by a human who is present: that half is fresh. What ages
+    // is the row, while the agent it names is asleep. Move the clock rather than back-date the
+    // signature -- a back-dated offer is refused at creation, and correctly so.
+    const at = Date.now();
+    const offered = await post(offers, '/api/agents/seeking/offers', {
+      agentAddress: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose,
+      timestampMs: at, operatorSignature: await operatorHalf(at),
+    });
+    expect(offered.status).toBe(201);
+
+    const agentSignature = await agentHalf(at);
+    const operatorSignature = await operatorHalf(at);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(at + 12 * 60 * 60 * 1000));
+      const filed = await post(declare, '/api/agents/declare', {
+        address: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose,
+        timestampMs: at, agentSignature, operatorSignature,
+      });
+      expect(filed.status, 'the agent slept through the offer and could still answer it').toBe(201);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the same pair, with no offer on record, is refused — the long window is granted, never requested', async () => {
+    const halfADay = Date.now() - 12 * 60 * 60 * 1000;
+
+    const filed = await post(declare, '/api/agents/declare', {
+      address: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose,
+      timestampMs: halfADay, agentSignature: await agentHalf(halfADay), operatorSignature: await operatorHalf(halfADay),
+    });
+    expect(filed.status, 'no offer row, so this is a direct declaration and twelve hours is stale').toBe(401);
   });
 
   it('an offer whose signature does not stand is refused, and an expired offer is not listed', async () => {

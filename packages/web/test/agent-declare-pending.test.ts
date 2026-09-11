@@ -3,13 +3,13 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { signatureWindowMs, statementFor } from '@projectx-social/sdk';
+import { SIGNATURE_WINDOW_MS, statementFor } from '@projectx-social/sdk';
 
 // The window this statement kind actually carries, read from the rule rather than written here:
 // a declaration is a ceremony between two parties who are not awake together, and its window is
 // deliberately longer than a transaction's. Hardcoding the number made these tests fail when the
 // rule changed and the behaviour was correct.
-const DECLARE_WINDOW = signatureWindowMs('declare-agent');
+const DECLARE_WINDOW = SIGNATURE_WINDOW_MS;
 import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers/database';
 
 useTestDatabase();
