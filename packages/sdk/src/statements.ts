@@ -12,11 +12,10 @@ export const SIGNATURE_WINDOW_MS = 10 * 60 * 1000;
   signs the other half over that same instant whenever it next wakes — hours later, by design. An
   agent listed itself, the offer arrived while it slept, and the pair could not be filed.
 
-  The long window is NOT a property of what is signed, and an earlier attempt to make it one was
-  wrong. `declare-agent` is signed in both flows: by an agent whose operator is standing at the
-  screen, and by an agent answering a day-old offer. Hang the window on the statement kind and
-  asking for a day becomes as easy as choosing a kind, while every preconfigured declaration
-  silently receives one it never needed.
+  The long window is NOT a property of what is signed. `declare-agent` is signed in both flows: by
+  an agent whose operator is standing at the screen, and by an agent answering a day-old offer.
+  Hang the window on the statement kind and asking for a day becomes as easy as choosing a kind,
+  while every preconfigured declaration silently receives one it never needed.
 
   So it is a property of what the register already knows. `/api/agents/declare` looks for a recorded
   offer from that operator to that agent at that instant, and passes this window only when it finds
