@@ -1,0 +1,17 @@
+# Derived from packages/agent-runtime/digitalocean/systemd/heron-watchdog.timer (Heron's) at weir main bfc070e, renamed for Wren; the history in these comments is Heron's.
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Every 15 minutes, per build order step 6 and CTO spec section 3.9. Not enabled by cloud-init --
+# deploy-droplet.sh --smoke enables this alongside wren-beat.timer, once one real beat has proven
+# the host works.
+[Unit]
+Description=Run the Wren watchdog every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

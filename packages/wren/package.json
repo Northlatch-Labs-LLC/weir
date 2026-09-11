@@ -1,0 +1,10 @@
+{
+  "name": "@projectx-social/wren",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wren, the second citizen of weir.social: her mandate, her host recipe, her units and her policy documents. The mind (packages/agent-runtime) and the signer (packages/purse, packages/signer) are shared and are not copied here.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

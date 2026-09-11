@@ -1,0 +1,84 @@
+# Derived from packages/agent-runtime/digitalocean/systemd/heron-alert@.service (Heron's) at weir main bfc070e, renamed for Wren; the history in these comments is Heron's.
+# Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# A parameterized oneshot: `systemctl start wren-alert@<instance>.service` sends one email naming
+# <instance>. Triggered by wren-watchdog.service's OnFailure=wren-alert@watchdog.service, by
+# wren-alive.timer's Unit=wren-alert@alive.service, and (build order step 5, not this branch)
+# by wren-beat.service's own OnFailure=wren-alert@%n.service on a failed beat.
+#
+# The credential is loaded ONLY through systemd's own encrypted-credential mechanism -- never an
+# environment variable, never a file this unit names directly. LoadCredentialEncrypted decrypts
+# the sealed blob (placed by deploy-droplet.sh --seal mail-key, piped straight into
+# `systemd-creds encrypt --with-key=host` over the SSH session, never as a plaintext file on this
+# disk) into a per-unit tmpfs at $CREDENTIALS_DIRECTORY/mail-key, 0400, gone when the unit stops.
+# bin/wren-alert reads that path itself and only in its non-dry-run branch -- see that file.
+[Unit]
+Description=Send one Wren notice for instance %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wren-alert %i
+LoadCredentialEncrypted=mail-key:/etc/wren/creds/mail-key.cred
+
+# Root, and it stays root: PID 1 is what decrypts the host-sealed credential, and the unit needs
+# no privilege of its own beyond that. DynamicUser=yes was the reviewer's suggested shape; it is
+# not taken here because a dynamic user changes who owns $CREDENTIALS_DIRECTORY and that
+# interaction is not something this laptop can test. What IS taken is the rest of the purse unit's
+# hardening set, because the least-hardened unit on this host was the one holding a live API key
+# (Security's A5 on step 6).
+User=root
+Group=root
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+# Root with an empty bounding set: no capability survives, so the process cannot use the one
+# thing being root would otherwise buy an attacker who reached it through this path.
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+MemoryMax=96M
+TasksMax=16
+
+# One outbound HTTPS call to Resend, and the two local families that call needs before it can be
+# made. Security required this list on the second read, and the reason is here rather than in a
+# report:
+#
+#   AF_INET, AF_INET6  the call itself.
+#   AF_UNIX            nss-resolve talks to systemd-resolved over a varlink UNIX socket. If this
+#                      host ever resolves that way instead of through glibc's own UDP path,
+#                      AF_UNIX is what name resolution needs, and without it the alert fails --
+#                      silently, on the one hop that must never fail silently.
+#   AF_NETLINK         glibc's AI_ADDRCONFIG probe opens a netlink socket to ask the kernel which
+#                      address families this host actually has configured. getaddrinfo() takes
+#                      that path by default.
+#
+# Neither of the two local families opens a network path of its own: what bounds where this
+# process can reach is the cloud firewall (443 and 53 outbound, nothing else). Nothing on this
+# laptop can test which resolver path a Debian droplet takes -- no Debian host, no systemd -- so
+# this list is the one that cannot fail for a reason this laptop cannot see. cloud-init also pins
+# `hosts: files dns` in /etc/nsswitch.conf and the post-boot check asserts it, so WHICH path is
+# taken is a fact rather than an assumption.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+
+# MemoryDenyWriteExecute is deliberately NOT set. CPython does not JIT, so it would probably hold
+# -- and "probably" is exactly the word that has no business on the dead man's last hop. It goes
+# in when a real host has run wren-alert under it once, and not before.

@@ -1,0 +1,59 @@
+# Derived from packages/agent-runtime/digitalocean/logrotate/heron (Heron's) at weir main bfc070e, renamed for Wren; the history in these comments is Heron's.
+# Built-by: @projectx.sui - Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+#
+# Installed to /etc/logrotate.d/wren by deploy-droplet.sh's install_host_units.
+#
+# CTO spec 3.12 asked for logrotate on the journal and on state/beats.jsonl; nothing wrote it, and
+# the logrotate package was installed and given no config at all (Security's note N7 on step 6).
+#
+# What this file bounds, and what it does NOT. It bounds the two append-only JSONL sinks the host
+# writes forever: /srv/wren/state/beats.jsonl (one line per beat, 48 a day) and
+# /var/lib/wren/watchdog/alerts.jsonl (one line per notice decision). The alerts file moved out of
+# state/ because state/ is bind-mounted read-write into the model's container and the watchdog's
+# record must not be (Security's N-1 and N-2 on the second read); this file follows it rather than
+# rotating a path nothing writes. It does NOT touch /srv/wren/runs: those are a new timestamped file or
+# directory per beat, which is exactly the shape `rotate N` cannot bound -- that is wren-retention's
+# job, and v1's whole defect 8b was pointing logrotate at a per-beat glob and believing it.
+#
+# The journal is not bounded here either. logrotate does not rotate the systemd journal; journald
+# bounds itself, and cloud-init writes /etc/systemd/journald.conf.d/00-wren.conf to do it.
+#
+# ROTATED COPIES LEAVE THIS HOST, and that is deliberate rather than an oversight of the estate's
+# never-delete law: `rotate 12` on a weekly cycle drops a copy after roughly three months on a
+# 10 GB disk. The archive of record for state is the laptop's own pull (CTO spec 3.10 and 3.12,
+# which says this in the same words); a droplet is not an archive.
+
+# Two stanzas, because the two files sit in directories with different owners and logrotate
+# refuses a group-writable parent unless a `su` line names that group. The seventh real deploy
+# (2026-09-05) parsed this file on the host and logrotate skipped beats.jsonl: state/ is 2770
+# root:wren, and without `su root wren` that is "insecure permissions" and a non-zero exit.
+# /var/lib/wren/watchdog is 0700 root:root and needs no su line.
+
+/srv/wren/state/beats.jsonl {
+    su root wren
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # The writers hold these open across a whole beat; copytruncate keeps the open file descriptor
+    # valid instead of leaving a writer appending to an unlinked inode nobody can read.
+    copytruncate
+    # No `create` line, and its absence is the point: logrotate's own manual says create has no
+    # effect when copytruncate is used, because the original file stays in place and the rotated
+    # copy inherits its mode. The line that used to sit here (`create 0660 root wren`) was inert,
+    # and a directive that does nothing is a claim about a mode nobody has read off a host. Each
+    # file keeps the owner and mode it is written with: beats.jsonl in 2770 root:wren state/,
+    # alerts.jsonl in 0700 root:root /var/lib/wren/watchdog.
+}
+
+/var/lib/wren/watchdog/alerts.jsonl {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
