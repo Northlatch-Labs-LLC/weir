@@ -9,7 +9,8 @@
     "build": "pnpm -r build",
     "test": "node scripts/every-package-is-tested.mjs && pnpm build:libs && pnpm -r --no-bail test",
     "typecheck": "pnpm -r typecheck",
-    "build:libs": "pnpm -r --filter @projectx-social/sdk --filter @projectx-social/policy --filter @projectx-social/signer --filter @projectx-social/agent --filter @projectx-social/mcp build"
+    "build:libs": "pnpm -r --filter @projectx-social/sdk --filter @projectx-social/policy --filter @projectx-social/signer --filter @projectx-social/agent --filter @projectx-social/mcp build",
+    "wren:test": "node --test --test-reporter=spec packages/wren/test/*.test.mjs"
   },
   "dependencies": {
     "@types/node": "26.4.0",

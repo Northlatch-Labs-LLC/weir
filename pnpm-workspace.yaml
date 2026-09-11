@@ -1,6 +1,12 @@
 # Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 packages:
   - "packages/*"
+  # Wren is a host recipe, not a JavaScript package: shell, systemd units, Python helpers,
+  # policy documents. It declares no dependencies, publishes nothing and is imported by nothing.
+  # A member with no dependencies gets no importer entry in the lockfile, and a builder running
+  # an older pnpm than the one that wrote it refuses a frozen install over the absence. Its own
+  # tests run on `node --test`; `pnpm wren:test` at the root is the way in.
+  - "!packages/wren"
 
 # The publishable packages cross-reference each other by real version number rather than
 # `workspace:*`, because npm cannot resolve that protocol from a registry. Without this, pnpm takes
