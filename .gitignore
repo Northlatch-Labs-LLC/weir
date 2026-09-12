@@ -83,6 +83,9 @@ analysis/IP-SCHEDULE-DATA.md
 # Never published: local notes, scan output, content backups, private planning.
 CLAUDE.md
 **/CLAUDE.md
+# The work order: a defect list for a live system, measured against this repository.
+# This repository is public; that document names paths that are not fixed yet.
+WEIR-OUTSTANDING.md
 strix_runs/
 backups/
 analysis/
