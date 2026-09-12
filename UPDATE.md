@@ -7,6 +7,68 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (night) · The join journey, taken from Bluesky. This governs every step from here.
+
+**The owner's instruction.** The identity stays exactly as built: a Sui wallet or Google through zkLogin, a
+handle claimed on chain. What Weir copies from Bluesky is the journey a stranger takes: reach the site, read,
+hit a wall, create an account in numbered steps, be set up, land in the feed. It is how every social network
+works, and it is how Weir works from now on. Nothing below adds a password, an email or a server-held account.
+
+**What Bluesky does, read on 12 Sep 2026 from bsky.app and its open source (`src/screens/Signup`,
+`src/screens/Onboarding`, `src/screens/Login`).**
+
+1. Signed out, you land inside the app: the Discover feed, full chrome, readable. A bar stays fixed at the
+   bottom with two buttons, **Create account** (primary) and **Sign in**. Every wall on the site shows the
+   same two.
+2. **Create account** is a wizard, "Step 1 of 3", one question per screen, Back and Next, "Having trouble?
+   Contact support" under every step. Step 1 "Your account": where the account lives (a default, changeable),
+   email, password, birth date, one line of terms; errors appear inline ("Please enter your email."). Step 2
+   "Choose your username": one field with the suffix shown, checked live as you type, the rules listed under
+   it as requirement lines (letters, numbers, hyphens; no hyphen at either end; 3 to 18 characters); a taken
+   name says "is not available" and offers alternatives. Step 3 "Complete the challenge": the proof that a
+   person is asking. Then the account exists.
+3. **Onboarding**, one screen each, a title, one sentence, Continue, and Skip where the step is optional:
+   "Give your profile a face" (upload a photo or create an avatar, "Help people know you're not a bot");
+   "What are your interests?" (choose at least one, "You can change these anytime"); "Suggested for you"
+   (accounts to follow, **Follow all** or Continue or Skip); "Find people to follow" (starter packs, Skip);
+   a last screen of three short slides about the product and one button, **Let's go!**, which lands in the
+   home feed already following what was chosen.
+4. **Sign in** is one screen: where the account lives, username or email, password, "Forgot password?",
+   then straight to the feed.
+
+**Weir's journey, the rule.**
+
+1. **Signed out, inside the app.** A stranger reads `/`, `/explore` (declared agents and their paid posts,
+   as ruled earlier), every creator page and every free post, inside the same shell a member sees. A bar
+   fixed at the bottom on every signed-out page carries **Create account** (primary, to `/join`) and
+   **Sign in** (to `/signin`). Every wall (the feed, follow, comment, subscribe, tip, deposit, publish)
+   shows those two and nothing else; "Connect wallet" stops being a door label anywhere.
+2. **Create account is `/join`, "Step 1 of 3".** Step 1 "Your account": how you will sign, Google or a Sui
+   wallet, the two cards `/signin` already has; a reader who is already signed in starts at step 2. Step 2
+   "Choose your handle": one field checked live against the on-chain register as you type, the rules as
+   requirement lines read from the contract's limits, a taken handle says "is not available" and names the
+   owner; the display name is an optional second line that defaults to the handle, because the register
+   writes both in one signature. Step 3 "Claim it on chain" is Weir's challenge: the simulation, what it
+   costs in gas, the sign button, the real stages until the chain confirms. Then the account exists.
+3. **Onboarding at `/welcome`, straight after the claim**, each screen a title, one sentence, Continue, and
+   Skip where optional: "Give your profile a face" (upload a picture through Walrus, or keep the generated
+   mark; this is where step 5's profile image lands); "Suggested for you" (creators and declared agents from
+   the directory, the agent marker on the agents, **Follow all**, Continue, Skip); a last screen, "You're
+   in", three slides (your keys stay on your device; people and agents hold the same kind of account; what
+   you pay for is an object in your wallet) and **Let's go**, which lands in `/feed` on Following when
+   anyone was followed. No interests screen: Weir has no interest taxonomy and will not invent one; the
+   suggestions come from the directory ordered by followers.
+4. **Sign in is `/signin`**, one screen, Google or a wallet, then straight to where you were going or the
+   feed. Already built.
+5. **Bluesky's Back, Next, step counter and inline errors are kept as they are.** Every wall and every step
+   uses the same two buttons, the same counter, the same one-question-per-screen shape.
+
+**What this changes in the plan.** The join journey is built next, before money as decisions: it is the
+front door for everything after it. Step 5 (a face on every profile) supplies the avatar screen of the
+onboarding. The steps keep their numbers; this entry is the rule they are built against.
+
+---
+
 ## 2026-09-12 (night) · Step 3 done: identity from the session, never the URL
 
 **Step 3 is closed.** No link on the site carries `?reader=0x…` any more. Who is asking is answered once, on
