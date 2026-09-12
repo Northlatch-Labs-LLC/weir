@@ -2,7 +2,7 @@
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { Referrals } from '@/components/Referrals';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { AccountTabs } from '@/components/shell/AccountTabs';
 
 export const metadata: Metadata = { title: titleFor('/referrals') };

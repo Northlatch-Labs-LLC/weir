@@ -10,6 +10,20 @@ import { SealedMedia } from '@/components/SealedMedia';
 import { SealedBody } from '@/components/SealedBody';
 import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 
+/**
+ * One entry in a feed, as a card is given it: the post plus what the viewer's session adds.
+ *
+ * Every list that renders PostCard builds an array of these, so the shape lives beside the card
+ * that reads it.
+ */
+export interface FeedPost {
+  post: VisiblePost;
+  price?: string;
+  reader?: string;
+  entities?: Entity[];
+  authorIsAgent?: boolean;
+}
+
 function badgeClass(post: VisiblePost): string {
   switch (post.access.kind) {
     case 'paid':

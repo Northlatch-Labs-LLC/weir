@@ -2,7 +2,7 @@
 import type { Metadata } from 'next';
 import { fold } from '@projectx-social/sdk';
 import { titleFor } from '@/lib/site-map';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { MIN_STAKE_MIST, RUNGS, ladderHealth } from '@/lib/ladder';
 import { VaultActions } from '@/components/VaultActions';
 import { VaultDisclosure } from '@/components/VaultDisclosure';

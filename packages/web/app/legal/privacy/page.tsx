@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { Prose } from '@/components/legal/Prose';
 import { LEGAL_DOCUMENTS, effectiveDate, readLegalDocument } from '@/lib/legal';
 import { LegalNav } from '@/components/legal/LegalNav';

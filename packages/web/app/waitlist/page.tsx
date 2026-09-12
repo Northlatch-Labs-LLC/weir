@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { DesignWaitlist } from '@/components/design/Waitlist';
 import { readSiteMode } from '@/lib/site-mode';
 import { waitlistTotal } from '@/lib/waitlist-store';
-import { funnelSides } from '@/components/design/explore-funnel-data';
+import { funnelSides } from '@/lib/explore-funnel-data';
 
 export const metadata: Metadata = {
   title: 'Join the list',

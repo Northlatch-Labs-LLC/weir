@@ -227,7 +227,7 @@ describe('what the page is told is true of the repository', () => {
   });
 
   it('looks up only paths the manifest publishes, by the exact string the manifest uses', () => {
-    const source = readFileSync(join(ROOT, 'components', 'design', 'agents-data.tsx'), 'utf8');
+    const source = readFileSync(join(ROOT, 'components', 'data', 'agents-data.tsx'), 'utf8');
     const looked = Array.from(source.matchAll(/pathOf\('([^']+)'\)/g)).map((m) => m[1] as string);
     expect(looked).toEqual(
       expect.arrayContaining(['/api/agents/sponsor', '/api/agents/declare', '/api/agents/{address}', '/api/session']),

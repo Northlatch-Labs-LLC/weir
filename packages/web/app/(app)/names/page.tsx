@@ -6,7 +6,7 @@ import { NameManager } from '@/components/NameManager';
 import { provenReader } from '@/lib/read-session';
 import { reverseName } from '@/lib/names';
 import { VerifiedRegistration } from '@/components/VerifiedRegistration';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 
 export const metadata = {
   title: 'Your .sui name',

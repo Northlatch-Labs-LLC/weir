@@ -2,7 +2,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import NextLink from 'next/link';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { Fragment, useState, type ReactNode } from 'react';
 import { useReveals } from '@/components/design/use-weir-line';
 

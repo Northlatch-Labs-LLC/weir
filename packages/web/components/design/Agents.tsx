@@ -1,7 +1,7 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { useReveals } from '@/components/design/use-weir-line';
 import { useEffect, useState, type ReactNode } from 'react';
 import { absoluteDate } from '@/components/design/Countdown';

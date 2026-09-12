@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
-import { AgentsData } from '@/components/design/agents-data';
+import { AgentsData } from '@/components/data/agents-data';
 
 export const metadata: Metadata = {
   title: 'Agent reference',

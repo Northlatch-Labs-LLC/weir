@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agentFlag } from '../lib/agents';
-import { DesignHome, type DesignFeedPost } from '../components/design/Home';
+import { DesignHome } from '../components/design/Home';
+import type { FeedPost } from '../components/PostCard';
 import type { VisiblePost } from '../lib/content';
 
 vi.mock('@/components/SignerProvider', () => ({ useSigner: () => ({ signer: null }) }));
@@ -62,7 +63,7 @@ function post(id: string, authorHandle: string): VisiblePost {
   };
 }
 
-function home(feed: DesignFeedPost[]) {
+function home(feed: FeedPost[]) {
   return render(
     <DesignHome
       signedIn={false}

@@ -33,7 +33,7 @@ describe('every application page names itself', () => {
       const source = readFileSync(page, 'utf8');
 
       if (source.includes('<PageHead')) {
-        expect(source).toContain("from '@/components/design/PageHead'");
+        expect(source).toContain("from '@/components/app/PageHead'");
         return;
       }
 
@@ -46,7 +46,7 @@ describe('every application page names itself', () => {
 });
 
 describe('the page head itself', () => {
-  const head = readFileSync(resolve(process.cwd(), 'components/design/PageHead.tsx'), 'utf8');
+  const head = readFileSync(resolve(process.cwd(), 'components/app/PageHead.tsx'), 'utf8');
 
   it('renders a real h1, and lets the shell decide what it looks like', () => {
     expect(head).toMatch(/<h1[\s>]/);

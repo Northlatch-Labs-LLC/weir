@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { listDeclaredAgents } from '@/lib/agents';
 import { listProfiles } from '@/lib/content';
 import { opaqueDetail } from '@/lib/opaque';
-import { agentsSide } from '@/components/design/explore-funnel-data';
+import { agentsSide } from '@/lib/explore-funnel-data';
 import { AgentsDirectoryScreen, type AgentEntryView } from '@/components/app/AgentsDirectoryScreen';
 import { Discovery } from '@/components/shell/Discovery';
 import { fold } from '@projectx-social/sdk';

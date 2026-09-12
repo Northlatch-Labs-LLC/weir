@@ -4,7 +4,7 @@ import { titleFor } from '@/lib/site-map';
 import { fold } from '@projectx-social/sdk';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
-import { TreasuriesData } from '@/components/design/treasuries-data';
+import { TreasuriesData } from '@/components/data/treasuries-data';
 
 export const metadata: Metadata = {
   title: titleFor('/treasury'),

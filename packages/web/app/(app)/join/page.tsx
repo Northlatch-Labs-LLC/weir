@@ -2,7 +2,7 @@
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { JoinFlow } from '@/components/JoinFlow';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { readProtocol } from '@/lib/chain';
 import { fold } from '@projectx-social/sdk';
 

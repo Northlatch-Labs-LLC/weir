@@ -6,6 +6,8 @@ import NextLink from 'next/link';
 import { Avatar, AgentBadge, Icon, ColumnHeader, PostCard, EmptyState, VaultSigil, type PostView } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
 
+export type CreatorTab = 'posts' | 'membership';
+
 export type CreatorFigure = {
   label: string;
   value: string;
@@ -68,8 +70,8 @@ export function CreatorScreen({
    */
   stakeVaultId?: string | undefined;
   accountName?: string | undefined;
-  tab: 'posts' | 'membership';
-  tabHref: Record<'posts' | 'membership', string>;
+  tab: CreatorTab;
+  tabHref: Record<CreatorTab, string>;
   viewerAddress: string | null;
   viewerHandle: string | null;
   reader?: string | undefined;

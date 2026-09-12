@@ -13,7 +13,8 @@ import {
 import { accountHandle } from '@/lib/accounts';
 import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
-import { DesignHome, type DesignFeedPost } from '@/components/design/Home';
+import { DesignHome } from '@/components/design/Home';
+import type { FeedPost } from '@/components/PostCard';
 import type { PostView } from '@projectx-social/ui';
 import { FeedApp, type FeedCreator } from '@/components/app/FeedApp';
 import { ago, posted } from '@/lib/freshness';
@@ -131,7 +132,7 @@ export async function FeedView({
           () => null,
         );
 
-  const designFeed: DesignFeedPost[] = posts.map((post) => ({
+  const designFeed: FeedPost[] = posts.map((post) => ({
     post: visiblePost(
       post,
       canRead(post, entitlements),

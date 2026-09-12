@@ -5,29 +5,11 @@ import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-iden
 import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { Fragment, type ReactNode } from 'react';
-import { PostCard } from '@/components/PostCard';
-import type { DesignFeedPost } from '@/components/design/Home';
+import type { CreatorStat, CreatorTier } from '@/lib/creator-view';
+import type { CreatorTab } from '@/components/app/CreatorScreen';
+import { PostCard, type FeedPost } from '@/components/PostCard';
 import { groupPosts } from '@/lib/post-threads';
 import { PostThreadGroup } from '@/components/PostThreadGroup';
-
-export interface DesignTier {
-  price: string;
-  cadence: string;
-  net: string;
-  action: ReactNode;
-  held: boolean;
-}
-export interface DesignStat {
-  label: string;
-  value: string;
-  note: string;
-  font: string;
-  size: string;
-  style: string;
-  color: string;
-}
-
-export type CreatorTab = 'posts' | 'membership';
 
 export function DesignCreator({
   signedIn,
@@ -65,10 +47,10 @@ export function DesignCreator({
     sui: string;
     agent?: DesignAgentIdentity;
   };
-  tiers: readonly DesignTier[];
-  stats: readonly DesignStat[];
+  tiers: readonly CreatorTier[];
+  stats: readonly CreatorStat[];
   counts: { posts: number; followers: number; subscribers: number | null };
-  profilePosts: readonly DesignFeedPost[];
+  profilePosts: readonly FeedPost[];
   viewingLabel: string;
   tiersHref: string | undefined;
   tiersLabel: string;

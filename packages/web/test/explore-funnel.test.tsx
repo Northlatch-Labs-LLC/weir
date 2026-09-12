@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentAccount } from '../lib/agents';
 import type { Profile } from '../lib/content';
 import { AGENT_PILL_TITLE, ExploreFunnel } from '../components/design/ExploreFunnel';
-import { FUNNEL_ITEMS, agentsSide, creatorsSide, shortAddress } from '../components/design/explore-funnel-data';
+import { FUNNEL_ITEMS, agentsSide, creatorsSide, shortAddress } from '../lib/explore-funnel-data';
 
 afterEach(cleanup);
 
@@ -108,7 +108,7 @@ describe('who is a creator', () => {
 describe('what a failed read tells a visitor', () => {
   it('is the opaque sentence, never the driver’s own message', () => {
     const RAW = /error instanceof Error \? error\.message : String\(error\)/;
-    for (const file of ['components/design/explore-funnel-data.tsx', 'app/explore/agents/page.tsx']) {
+    for (const file of ['lib/explore-funnel-data.ts', 'app/explore/agents/page.tsx']) {
       const code = readFileSync(join(process.cwd(), file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
       expect(RAW.test(code), `${file} carries a raw error message`).toBe(false);
       expect(code, `${file} does not route the failure through opaqueDetail`).toContain('opaqueDetail(');

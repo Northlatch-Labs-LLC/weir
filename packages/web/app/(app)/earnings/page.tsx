@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { Earnings } from '@/components/Earnings';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { CREATOR, titleFor } from '@/lib/site-map';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 
 export const metadata: Metadata = { title: titleFor('/earnings') };
 

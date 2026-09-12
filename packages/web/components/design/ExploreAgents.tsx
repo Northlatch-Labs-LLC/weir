@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 import { Fragment } from 'react';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
 
 export interface DesignAgentEntry {

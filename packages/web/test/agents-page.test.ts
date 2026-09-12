@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { formatBps, formatMinorUnits } from '../components/design/agents-data';
+import { formatBps, formatMinorUnits } from '../components/data/agents-data';
 import { DESTINATIONS, FOOTER, titleFor } from '../lib/site-map';
 import { AGENT_MANIFEST_DNS_ANCHOR, AGENT_MANIFEST_PATH } from '../lib/agent-manifest';
 
@@ -107,7 +107,7 @@ describe('the page is wired so it can actually be reached', () => {
 
 describe('the page cannot drift from the manifest', () => {
   it('takes its path and DNS anchor from the manifest constants, not from a literal', () => {
-    const data = read('components/design/agents-data.tsx');
+    const data = read('components/data/agents-data.tsx');
     expect(data).toContain('AGENT_MANIFEST_PATH');
     expect(data).toContain('AGENT_MANIFEST_DNS_ANCHOR');
     expect(data).not.toContain("'/.well-known/weir-agent.json'");
@@ -115,7 +115,7 @@ describe('the page cannot drift from the manifest', () => {
   });
 
   it('reads one manifest rather than re-reading the chain', () => {
-    const data = codeOf('components/design/agents-data.tsx');
+    const data = codeOf('components/data/agents-data.tsx');
     expect(data.match(/await agentManifest\(/g)?.length).toBe(1);
     expect(data).not.toContain('readPlatform');
     expect(data).not.toContain('createClient');
@@ -129,7 +129,7 @@ describe('the page cannot drift from the manifest', () => {
 
 describe('a failed read never becomes a value', () => {
   it('the data layer contains no fallback that would turn a failure into a figure', () => {
-    const data = codeOf('components/design/agents-data.tsx');
+    const data = codeOf('components/data/agents-data.tsx');
     for (const forbidden of ['?? 0', '|| 0', "?? '—'", "|| '—'", "?? 'unknown'"]) {
       expect(data.includes(forbidden), `found ${forbidden}`).toBe(false);
     }

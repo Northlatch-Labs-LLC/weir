@@ -4,7 +4,7 @@ import { titleFor } from '@/lib/site-map';
 import { fold } from '@projectx-social/sdk';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
-import { ChestsData } from '@/components/design/chests-data';
+import { ChestsData } from '@/components/data/chests-data';
 
 export const metadata: Metadata = {
   title: titleFor('/chests'),

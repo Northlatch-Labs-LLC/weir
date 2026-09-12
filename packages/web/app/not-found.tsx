@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import Link from 'next/link';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { PRIMARY } from '@/lib/site-map';
 
 export default function NotFound() {

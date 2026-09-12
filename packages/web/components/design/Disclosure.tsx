@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 import Link from 'next/link';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { AGENT_DISCLOSURE, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
 
 const MONO = 'var(--weir-mono)';

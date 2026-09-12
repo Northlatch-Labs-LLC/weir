@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import type { ReactNode } from 'react';
-import { PageHead, PageSection } from '@/components/design/PageHead';
+import { PageHead, PageSection } from '@/components/app/PageHead';
 import type { AgentRecord, Fact } from '@/lib/agent-record';
 import { shortId } from '@/lib/chain';
 

@@ -9,7 +9,7 @@ import { isSiteAdmin } from '@/lib/site-admin';
 import { readWaitlistInsight } from '@/lib/waitlist-admin';
 import { provenReader } from '@/lib/read-session';
 import { fold } from '@projectx-social/sdk';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 
 export const dynamic = 'force-dynamic';
 

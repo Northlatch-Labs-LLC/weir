@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import type { Metadata } from 'next';
-import { PageHead, PageSection } from '@/components/design/PageHead';
+import { PageHead, PageSection } from '@/components/app/PageHead';
 import { OperatorDeclare } from '@/components/OperatorDeclare';
 import { titleFor } from '@/lib/site-map';
 

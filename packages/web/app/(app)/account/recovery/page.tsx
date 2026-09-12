@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { AccountRecovery } from '@/components/AccountRecovery';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 
 export const metadata = {
   title: 'Recovery details',

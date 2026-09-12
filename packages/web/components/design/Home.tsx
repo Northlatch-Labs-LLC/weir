@@ -2,19 +2,12 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { PageTabs, type Tab } from '@/components/shell/PageTabs';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { Fragment } from 'react';
-import { PostCard } from '@/components/PostCard';
+import { PostCard, type FeedPost } from '@/components/PostCard';
 import type { VisiblePost } from '@/lib/content';
 import type { Entity } from '@/components/EntityType';
 
-export interface DesignFeedPost {
-  post: VisiblePost;
-  price?: string;
-  reader?: string;
-  entities?: Entity[];
-  authorIsAgent?: boolean;
-}
 export interface DesignFeedCreator {
   displayName: string;
   initials: string;
@@ -43,7 +36,7 @@ export function DesignHome({
 }: {
   signedIn: boolean;
   myHandle: string | null;
-  feed: readonly DesignFeedPost[];
+  feed: readonly FeedPost[];
   feedTabs: readonly Tab[];
   feedEmptyMessage: string;
   creators: readonly DesignFeedCreator[];

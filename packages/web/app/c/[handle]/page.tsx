@@ -28,11 +28,11 @@ import { titleFor } from '@/lib/site-map';
 import { formatUnits } from '@/lib/units';
 import { EntityType, entitiesOf } from '@/components/EntityType';
 import { SubscribeButton } from '@/components/SubscribeButton';
-import type { CreatorTab, DesignStat, DesignTier } from '@/components/design/Creator';
-import { CreatorScreen } from '@/components/app/CreatorScreen';
+import type { CreatorStat, CreatorTier } from '@/lib/creator-view';
+import { CreatorScreen, type CreatorTab } from '@/components/app/CreatorScreen';
 import { posted } from '@/lib/freshness';
 import type { PostView } from '@projectx-social/ui';
-import type { DesignFeedPost } from '@/components/design/Home';
+import type { FeedPost } from '@/components/PostCard';
 import { TipButton } from '@/components/TipButton';
 import { DepositCheckout } from '@/components/DepositCheckout';
 import { JsonLd } from '@/components/seo/JsonLd';
@@ -167,16 +167,16 @@ export default async function CreatorPage({
   const MONO = 'var(--weir-mono)';
   const BODY = "'Geist',sans-serif";
 
-  const measured = (label: string, value: string, note: string): DesignStat => ({
+  const measured = (label: string, value: string, note: string): CreatorStat => ({
     label, value, note, font: MONO, size: '1.5rem', style: 'normal', color: INK,
   });
-  const unread = (label: string, why: string): DesignStat => ({
+  const unread = (label: string, why: string): CreatorStat => ({
     label, value: 'reading from the chain', note: why, font: BODY, size: '1.0625rem', style: 'italic', color: ALERT,
   });
 
   const noVaultNote = v === null ? 'No vault opened yet, so nothing has settled on this page.' : null;
 
-  const stats: DesignStat[] =
+  const stats: CreatorStat[] =
     v === null
       ? []
       : coinDecimals === null
@@ -193,7 +193,7 @@ export default async function CreatorPage({
 
   const holdsSubscription = profile.vaultId !== null && entitlements.subscribedVaults.has(profile.vaultId);
 
-  const tiers: DesignTier[] = activeTiers.map((t) => {
+  const tiers: CreatorTier[] = activeTiers.map((t) => {
     const days = Number(t.periodMs / 86_400_000n);
     const net =
       v === null || coinDecimals === null
@@ -233,7 +233,7 @@ export default async function CreatorPage({
   const agentIdentity = agentIdentityFor(await agentAccountOrUnread(profile.owner, 'creator'), profile.handle);
   const authorIsAgent = authorIsAgentFrom(agentIdentity);
 
-  const profilePosts: DesignFeedPost[] = posts.map((post) => ({
+  const profilePosts: FeedPost[] = posts.map((post) => ({
     post: visiblePost(
       post,
       canRead(post, entitlements),
@@ -332,13 +332,13 @@ export default async function CreatorPage({
           sui: ownerName ?? shortId(profile.owner),
         }}
         counts={{ posts: profilePosts.length, followers, subscribers: null }}
-        figures={stats.map((stat: DesignStat) => ({
+        figures={stats.map((stat: CreatorStat) => ({
           label: stat.label,
           value: stat.value,
           note: stat.note,
           unread: stat.value === 'reading from the chain',
         }))}
-        tiers={tiers.map((t: DesignTier) => ({
+        tiers={tiers.map((t: CreatorTier) => ({
           price: t.price,
           cadence: t.cadence,
           net: t.net,

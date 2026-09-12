@@ -1,7 +1,7 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { Fragment, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/design/icons';

@@ -6,7 +6,7 @@ import { readCreatorSetup } from '@/lib/creator-setup';
 import { provenReader } from '@/lib/read-session';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { CREATOR, titleFor } from '@/lib/site-map';
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { readProtocol } from '@/lib/chain';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { fold } from '@projectx-social/sdk';

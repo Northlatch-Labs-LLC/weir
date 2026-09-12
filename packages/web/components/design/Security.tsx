@@ -1,7 +1,7 @@
 'use client';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-import { PageHead } from '@/components/design/PageHead';
+import { PageHead } from '@/components/app/PageHead';
 import { Fragment, type ReactNode } from 'react';
 import { useReveals } from '@/components/design/use-weir-line';
 import { BUILT_ON } from '@/lib/built-on';
