@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
-import { fail, ok, type Reading } from '@projectx-social/sdk';
+import { fail, ok, type Reading } from '@projectx-social/sdk/reading';
 
 export const KEY_CLAIM_NAME = 'sub' as const;
 

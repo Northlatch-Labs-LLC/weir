@@ -2,7 +2,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 import { useEffect, useState } from 'react';
-import { SealClient } from '@mysten/seal';
 import { createClient, type ProjectXSocialConfig } from '@projectx-social/sdk';
 
 import { useSigner } from '@/components/SignerProvider';
@@ -94,6 +93,8 @@ export function SealedBody({
         const suiClient = createClient(config);
         const sessionKey = await sessionKeyFor({ signer, packageId: config.packageId, ttlMin: SESSION_TTL_MIN, suiClient });
         if (cancelled) return;
+
+        const { SealClient } = await import('@mysten/seal');
 
         const seal = new SealClient({
           suiClient,

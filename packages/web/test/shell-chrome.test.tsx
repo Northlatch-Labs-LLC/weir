@@ -25,6 +25,8 @@ const chooseAccount = vi.fn();
 const cancelAccountChoice = vi.fn();
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
+    ready: true,
+    wake: () => {},
     signer,
     signOut,
     signInWithGoogle,

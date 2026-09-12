@@ -15,6 +15,8 @@ export function WalletConnect({
   triggerLabel?: ReactNode;
 } = {}) {
   const {
+    ready,
+    wake,
     wallets,
     unusableWallets,
     connectWallet,
@@ -56,7 +58,10 @@ export function WalletConnect({
           className={triggerClassName}
           aria-haspopup="dialog"
           aria-expanded={open}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            wake();
+            setOpen(true);
+          }}
         >
           {signer !== null ? (
             'Confirm account'
@@ -112,7 +117,9 @@ export function WalletConnect({
             </>
           ) : accountChoice === null ? (
             <>
-              {wallets.length === 0 ? (
+              {!ready ? (
+                <p className="wc-note">Looking for wallets in this browser…</p>
+              ) : wallets.length === 0 ? (
                 <p className="wc-note">
                   No Sui wallet in this browser. On a phone, open weir.social inside your wallet
                   app&rsquo;s own browser — Slush and Phantom both have one. On a computer, install

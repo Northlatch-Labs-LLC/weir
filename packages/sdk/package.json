@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./reading": {
+      "types": "./dist/reading.d.ts",
+      "import": "./dist/reading.js"
     }
   },
   "scripts": {

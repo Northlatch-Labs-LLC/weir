@@ -11,6 +11,8 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
+    ready: true,
+    wake: () => {},
     signer: null,
     signOut: vi.fn(),
     signInWithGoogle: vi.fn(),

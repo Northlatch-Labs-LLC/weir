@@ -46,11 +46,14 @@ const kit = {
   switchAccount,
 };
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
-  usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock('next/navigation', () => {
+  const router = { refresh: vi.fn(), replace: vi.fn(), push: vi.fn() };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/',
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
 
 vi.mock('@mysten/dapp-kit-react', () => ({
   DAppKitProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -72,6 +75,7 @@ function Probe() {
   const s = useSigner();
   return (
     <div>
+      <span data-testid="ready">{s.ready ? 'yes' : 'no'}</span>
       <span data-testid="address">{s.signer?.address ?? 'none'}</span>
       <span data-testid="choice">{s.accountChoice === null ? 'closed' : 'open'}</span>
       <span data-testid="choice-accounts">
@@ -103,7 +107,7 @@ function Probe() {
   );
 }
 
-function mount(network: string | null = 'mainnet') {
+async function mount(network: string | null = 'mainnet') {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({
@@ -112,11 +116,13 @@ function mount(network: string | null = 'mainnet') {
       json: async () => ({ network: 'mainnet', available: false }),
     })),
   );
-  return render(
-    <SignerProvider network={network} rpcUrl="http://127.0.0.1:9000">
+  const view = render(
+    <SignerProvider eager network={network} rpcUrl="http://127.0.0.1:9000">
       <Probe />
     </SignerProvider>,
   );
+  await waitFor(() => expect(screen.getByTestId('ready').textContent).toBe('yes'));
+  return view;
 }
 
 const press = async (label: string) => {
@@ -142,7 +148,7 @@ afterEach(() => {
 describe('several authorised addresses are a question, not a guess', () => {
   it('says nothing when the wallet authorised one', async () => {
     connectResult = { accounts: [A] };
-    mount();
+    await mount();
     await press('connect');
     expect(screen.getByTestId('choice').textContent).toBe('closed');
   });
@@ -150,7 +156,7 @@ describe('several authorised addresses are a question, not a guess', () => {
   it('asks which, when the wallet authorised several', async () => {
     connectResult = { accounts: [A, B] };
     currentWallet = walletWith([A, B]);
-    mount();
+    await mount();
     await press('connect');
     expect(screen.getByTestId('choice').textContent).toBe('open');
     expect(screen.getByTestId('choice-accounts').textContent).toBe(`${A.address},${B.address}`);
@@ -159,7 +165,7 @@ describe('several authorised addresses are a question, not a guess', () => {
   it('switches to the address the reader picked, and closes the question', async () => {
     connectResult = { accounts: [A, B] };
     currentWallet = walletWith([A, B]);
-    mount();
+    await mount();
     await press('connect');
     await press('choose B');
     expect(switchAccount).toHaveBeenCalledWith({ account: B });
@@ -169,7 +175,7 @@ describe('several authorised addresses are a question, not a guess', () => {
   it('lets the reader back out without switching to anything', async () => {
     connectResult = { accounts: [A, B] };
     currentWallet = walletWith([A, B]);
-    mount();
+    await mount();
     await press('connect');
     await press('cancel');
     expect(screen.getByTestId('choice').textContent).toBe('closed');
@@ -181,13 +187,13 @@ describe('reopening the choice', () => {
   it('offers every address the wallet currently authorises', async () => {
     currentWallet = walletWith([A, B]);
     currentAccount = A;
-    mount();
+    await mount();
     await press('reopen');
     expect(screen.getByTestId('choice-accounts').textContent).toBe(`${A.address},${B.address}`);
   });
 
   it('says so rather than opening an empty question when no wallet is connected', async () => {
-    mount();
+    await mount();
     await press('reopen');
     expect(screen.getByTestId('choice').textContent).toBe('closed');
     expect(screen.getByTestId('error').textContent).toContain('no wallet is connected');
@@ -199,13 +205,13 @@ describe('asking the extension again', () => {
     currentWallet = walletWith([A]);
     currentAccount = A;
     connectResult = { accounts: [A] };
-    mount();
+    await mount();
     await press('reauthorize');
     expect(order).toEqual(['disconnect', 'connect']);
   });
 
   it('says so when there is no wallet to ask', async () => {
-    mount();
+    await mount();
     await press('reauthorize');
     expect(screen.getByTestId('error').textContent).toContain('no wallet is connected');
     expect(connect).not.toHaveBeenCalled();
@@ -214,14 +220,14 @@ describe('asking the extension again', () => {
 
 describe('what the provider reports about the wallet', () => {
   it('reports no addresses at all when no wallet is connected', async () => {
-    mount();
+    await mount();
     await waitFor(() => expect(screen.getByTestId('reported').textContent).toBe('null'));
   });
 
   it('reports every address the wallet authorises, not only the bound one', async () => {
     currentWallet = walletWith([A, B]);
     currentAccount = A;
-    mount();
+    await mount();
     await waitFor(() =>
       expect(screen.getByTestId('reported').textContent).toBe(`${A.address},${B.address}`),
     );
@@ -230,7 +236,7 @@ describe('what the provider reports about the wallet', () => {
   it('signs as the account the kit reports as current', async () => {
     currentWallet = walletWith([A]);
     currentAccount = A;
-    mount();
+    await mount();
     await waitFor(() => expect(screen.getByTestId('address').textContent).toBe(A.address));
   });
 });
@@ -239,13 +245,13 @@ describe('a deployment that does not know its network signs nothing', () => {
   it('builds no signer, even with a wallet and an account connected', async () => {
     currentWallet = walletWith([A]);
     currentAccount = A;
-    mount(null);
+    await mount(null);
     await waitFor(() => expect(screen.getByTestId('reported').textContent).toBe(A.address));
     expect(screen.getByTestId('address').textContent).toBe('none');
   });
 
   it('refuses to connect, and says why, rather than connecting into nothing', async () => {
-    mount(null);
+    await mount(null);
     await press('connect');
     expect(connect).not.toHaveBeenCalled();
     expect(screen.getByTestId('error').textContent).toContain('which network it is on');
@@ -257,7 +263,7 @@ describe('signing out', () => {
     currentWallet = walletWith([A]);
     currentAccount = A;
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, '{"maxEpoch":1}');
-    mount();
+    await mount();
     await press('sign out');
 
     expect(disconnect).toHaveBeenCalled();

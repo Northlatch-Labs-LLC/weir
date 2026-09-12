@@ -34,6 +34,8 @@ const signInWithGoogle = vi.fn();
 
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
+    ready: true,
+    wake: () => {},
     wallets: [WALLET],
     unusableWallets: [],
     signInWithGoogle,

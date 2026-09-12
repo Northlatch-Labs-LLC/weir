@@ -352,13 +352,13 @@ describe('the prover payload, which no compiler checks', () => {
 describe('the address derivation is pinned to the non-legacy form', () => {
   it.each([
     ['app/api/zklogin/complete/route.ts', /computeZkLoginAddressFromSeed\([^)]*,\s*false\)/],
-    ['components/SignerProvider.tsx', /legacyAddress:\s*false/],
+    ['components/signer/SignerKit.tsx', /legacyAddress:\s*false/],
   ])('%s derives with legacyAddress false', (path, pattern) => {
     expect(readFileSync(join(root, path), 'utf8')).toMatch(pattern);
   });
 
   it('constructs the signer with the expected address, so a wrong flag throws instead of signing', () => {
-    const source = readFileSync(join(root, 'components/SignerProvider.tsx'), 'utf8');
+    const source = readFileSync(join(root, 'components/signer/SignerKit.tsx'), 'utf8');
     const constructor = source.slice(
       source.indexOf('new ZkLoginSigner('),
       source.indexOf('return zkLoginSignerAdapter'),

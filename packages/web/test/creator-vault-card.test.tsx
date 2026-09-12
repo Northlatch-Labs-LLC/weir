@@ -16,6 +16,8 @@ let signer: { address: string; label: string; kind: 'zklogin' | 'wallet' } | nul
 
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
+    ready: true,
+    wake: () => {},
     signer,
     signOut: vi.fn(),
     signInWithGoogle: vi.fn(),

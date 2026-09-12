@@ -12,6 +12,8 @@ import { AGENT_PILL_TITLE } from '../components/app/ExploreFunnel';
 vi.mock('next/navigation', () => ({ usePathname: () => '/c/kaela', useSearchParams: () => new URLSearchParams() }));
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
+    ready: true,
+    wake: () => {},
     signer: null,
     signOut: vi.fn(),
     signInWithGoogle: vi.fn(),

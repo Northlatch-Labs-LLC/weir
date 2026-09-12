@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const PROVIDER = readFileSync(resolve(process.cwd(), 'components/SignerProvider.tsx'), 'utf8');
+const PROVIDER = readFileSync(resolve(process.cwd(), 'components/signer/SignerKit.tsx'), 'utf8');
 
 const SIGN_OUT = (() => {
   const start = PROVIDER.indexOf('const signOut = useCallback(');

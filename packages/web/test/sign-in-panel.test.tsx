@@ -12,6 +12,8 @@ let wallets: { name: string }[] = [];
 vi.mock('next/navigation', () => ({ usePathname: () => '/signin' }));
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
+    ready: true,
+    wake: () => {},
     signer: null,
     wallets,
     unusableWallets: [],

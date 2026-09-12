@@ -1,7 +1,8 @@
 import { opaqueDetail } from './opaque';
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
-import { fail, ok, unlockIdentity, type Reading } from '@projectx-social/sdk';
+import { unlockIdentity } from '@projectx-social/sdk';
+import { fail, ok, type Reading } from '@projectx-social/sdk/reading';
 
 export const MACHINE_EDITION_MARKER = '#machine';
 

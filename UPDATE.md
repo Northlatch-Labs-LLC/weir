@@ -7,6 +7,45 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (evening) · Step 2 done: the app is light until you sign in
+
+**Step 2 is closed.** A stranger's first page carries 527 KB of JavaScript in a modern browser, down from
+1,569 KB (636 KB and 1,678 KB counting the polyfill file only old browsers fetch). Nothing was removed:
+Slush, Phantom, every Wallet Standard wallet, Google zkLogin, Seal decryption and every money flow are the
+same code with the same behaviour. What changed is when the browser downloads the heavy part.
+
+**How.** `components/SignerProvider.tsx` is thin now. It mounts on every page but fetches
+`components/signer/SignerKit.tsx` (the wallet kit, the Sui SDK, zkLogin: one 635 KB chunk) only when a
+sign-in is stored in this browser, a wallet was connected before, the reader is on `/signin`, `/join`,
+`/agents/declare` or `/account/recovery`, or a screen asks for it (the Connect wallet control asks when
+opened). The kit publishes into a store that screens read through `useSyncExternalStore`, so it can arrive
+late without remounting the page, and a publish re-renders subscribers only, never the provider or the
+kit. `useSigner()` gained `ready` and `wake`. The three places that would say "no wallet in this browser"
+wait for `ready` before saying it, and the Google button on `/signin` is disabled until then. `@mysten/seal`
+is imported inside the decrypt path of `SealedBody` and `SealedMedia`. The SDK gained the subpath
+`@projectx-social/sdk/reading` (the `Reading` type with `ok`/`fail`, a file with no imports), because
+`lib/zklogin.ts` took them from the SDK index and that pulled the Sui client onto every page.
+
+**Proof.** `pnpm exec next build`, served by `next start` on a clean port, JavaScript summed from the
+`<script src>` files each page's HTML names: `/` 636 KB in 10 files (the plan measured `/` at 1,678 KB in
+11); `/explore` 642; `/signin` 641; `/security` 643; `/join` 651; `/c/weir` 671. Of the 636, 109 KB is the
+`noModule` polyfill, 379 KB is React and Next's own runtime, 143 KB is this app. `tsc --noEmit` clean.
+`pnpm -C packages/web test`: 180 files, 2,492 tests passing with Postgres up. `pnpm -C packages/ui test`: 32
+passing. In the browser on localhost:3000, `/signin` shows Continue with Google enabled and Slush detected,
+with no console errors; `/` loads the kit only because this browser connected a wallet before.
+
+**Tests moved, and why.** Four tests read the provider's source (`sign-out`, `zklogin` twice,
+`statement-drift`); they read `components/signer/SignerKit.tsx` now, where that code lives. The three provider
+tests pass `eager` so the kit mounts at once, and `wallet-accounts` waits for `ready` before pressing, as a
+screen does. Six tests that mock `useSigner` carry `ready: true` and `wake`. The router mock in three tests
+returns one object, as Next's `useRouter` does. Nothing skipped or loosened.
+
+**Not done here.** The plan's 500 KB target is missed by 27 KB, against a 379 KB floor set by React and
+Next. The 143 KB of app code on the landing is the next place to look, then the SDK index imports left on
+`/waitlist` and `/creators` (two handle-length constants pull `@mysten/sui/bcs` with them).
+
+---
+
 ## 2026-09-12 (later) · Step 1 done: one look everywhere. Two door rules added. One open item found.
 
 **Step 1 is closed.** `components/design/` no longer exists. Every routed screen renders from `packages/ui`

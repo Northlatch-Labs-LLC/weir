@@ -62,7 +62,7 @@ const copies: Array<{ file: string; kind: string; expected: string }> = [
     expected: `action: name vault\\nvault: ${SLOT}\\nname: ${SLOT}\\nbio: ${SLOT}\\ncoin: ${SLOT}`,
   },
   {
-    file: 'components/SignerProvider.tsx',
+    file: 'components/signer/SignerKit.tsx',
     kind: 'read-content',
     expected: `action: read content`,
   },
@@ -271,7 +271,7 @@ describe('the head', () => {
     'components/Messages.tsx',
     'components/Notifications.tsx',
     'components/PerksEditor.tsx',
-    'components/SignerProvider.tsx',
+    'components/signer/SignerKit.tsx',
     'components/StudioComposer.tsx',
   ];
 

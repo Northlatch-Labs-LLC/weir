@@ -11,7 +11,7 @@ export function SignIn({
 }: { compact?: boolean; returnTo?: string } = {}) {
   const pathname = usePathname();
   const destination = returnTo ?? pathname;
-  const { signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount, cancelAccountChoice, reopenAccountChoice, reauthorizeWallet, signOut, error } = useSigner();
+  const { ready, signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount, cancelAccountChoice, reopenAccountChoice, reauthorizeWallet, signOut, error } = useSigner();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -82,7 +82,7 @@ export function SignIn({
   const onDoor = pathname === '/signin' || pathname === '/join';
   return (
     <div className={compact ? 'signin signin--compact' : 'signin'}>
-      {wallets.length === 0 && unusableWallets.length === 0 ? (
+      {ready && wallets.length === 0 && unusableWallets.length === 0 ? (
         compact ? (
           <p className="signin-note" style={{ margin: 0 }}>
             A Sui wallet is needed to sign in — Slush or Phantom.

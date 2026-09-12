@@ -40,10 +40,13 @@ vi.mock('@mysten/dapp-kit-core', () => ({
 vi.mock('@mysten/sui/grpc', () => ({ SuiGrpcClient: class {} }));
 
 const refresh = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh, replace: vi.fn() }),
-  usePathname: () => '/',
-}));
+vi.mock('next/navigation', () => {
+  let router: { refresh: typeof refresh; replace: ReturnType<typeof vi.fn> } | null = null;
+  return {
+    useRouter: () => (router ??= { refresh, replace: vi.fn() }),
+    usePathname: () => '/',
+  };
+});
 
 const { SignerProvider, useSigner } = await import('../components/SignerProvider');
 
@@ -79,7 +82,7 @@ function serve(...sessionAnswers: unknown[]) {
 
 const mount = () =>
   render(
-    <SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000">
+    <SignerProvider eager network="mainnet" rpcUrl="http://127.0.0.1:9000">
       <Probe />
     </SignerProvider>,
   );
@@ -199,7 +202,7 @@ describe('switching address', () => {
 
     currentAccount = B;
     rerender(
-      <SignerProvider network="mainnet" rpcUrl="http://127.0.0.1:9000">
+      <SignerProvider eager network="mainnet" rpcUrl="http://127.0.0.1:9000">
         <Probe />
       </SignerProvider>,
     );
