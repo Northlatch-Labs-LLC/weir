@@ -83,7 +83,7 @@ export function LeftRail({
         The lockup, not a mark beside a hand-set lowercase word. The rail and the public header had
         each invented their own pairing, and neither matched the drawn one.
       */}
-      <Link href="/feed" className="w-rail__brand" aria-label="Weir, home">
+      <Link href="/" className="w-rail__brand" aria-label="Weir, home">
         <WeirLockup height={19} title="Weir" />
       </Link>
 

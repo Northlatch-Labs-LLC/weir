@@ -7,6 +7,189 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 · The audit, the plan, and the first step done
+
+Supersedes WEIR-OUTSTANDING.md as the list of what is still wrong: that file was measured on 266364d and
+several of its counts have moved. The numbers below were measured today on a0f1eff, the live commit
+627deb5 plus this morning's two unpushed commits.
+
+Three things happened today. (1) An audit of the product as the world sees it. (2) A plan from the live
+site to the finished product, twelve steps, every one naming the files it touches, what you will see,
+and what proves it. (3) The first step started: sign-in, the waiting list and the agent record moved
+onto packages/ui; the shared prototype pieces moved with them; a guard test holds the line; the logo
+inside the app goes to `/`; the feed requires a signed-in reader. Branch `one-design-system`, local
+commit f5b725c plus the door rules, 180 files / 2,492 tests green with Postgres up. Nothing pushed.
+
+---
+
+### The audit, 12 Sep
+
+Commit `a0f1eff` (main, clean tree). Every number measured today. V = verified by running it, R = reasoned from code, U = not checked.
+
+#### Verdict
+
+The product is live, typed, tested and deployable. It is not commercial-ready. Four things stand between it and a paying creator: one leftover design system on three doors, 1.7 MB of JavaScript on every page, money flows that do not read as decisions, and identity carried in the URL. Everything else is finish work.
+
+#### What is built and sound (V)
+
+| | Measured |
+|---|---|
+| Pages live on weir.social | 45 of 45 answer 200 (`/verified` redirects to `/names` by design) |
+| API routes | 57 route handlers; the 8 probed answer with correct codes |
+| Agent interface published | `/llms.txt`, `/register-agent.mjs`, `/.well-known/{agent-card,mcp,security}` all 200 |
+| Typecheck | `tsc --noEmit` clean |
+| Tests | 2,255 pass, 38 skipped, 2,484 total |
+| Services | portal.weir.social 200, mcp.weir.social 200, prover.weir.social up (403 on bare root), api.weir.social answering |
+| Framework | Next 16.3.4, React 19.3, Tailwind 4, @mysten/sui 2.30, TypeScript 7. All within one patch of latest |
+| Deploy | `deploy.yml`, dispatch only, after the suite. Correct |
+| Design system | `packages/ui` has 0 token fallbacks. It works where it is used |
+
+The "two frameworks" impression: there is one framework. There were two design systems. Yesterday's commit `0078a30` moved 21 routes onto the app shell. 3 remain.
+
+#### What is wrong, ranked by what a paying creator hits first
+
+| # | Finding | Measured | Where |
+|---|---|---|---|
+| 1 | **Three doors still on the prototype system**: sign-in, waitlist, agent profile | `components/design/` 15 files, 3,103 lines, 508 inline styles. 3 components dead (443 lines). 347 `var(--x, #hex)` fallbacks, 285 hex literals in `components/` | V |
+| 2 | **Every page ships 1.7 MB of JavaScript** | `/` 1,678 KB in 11 files; `/c/heron` 1,712 KB + 395 KB HTML. TTFB 0.5 to 0.9 s | V |
+| 3 | **Money flows expand inline, not as dialogs** | Subscribe, Tip, Follow, StakeVaultSetup, StakePosition: 0 `Dialog` uses. Only "buy a post" is a dialog | R (from WEIR-OUTSTANDING F2, code unchanged) |
+| 4 | **Identity travels in the URL** (`?reader=0x…`) | Set in `SessionBridge`, threaded by `AppFrame`, built by `PostCard` and `Comments`. Nothing paid leaks, but it is a claim, not a proof | R |
+| 5 | **Profiles cannot have an image** | 0 image columns, `Avatar src` never passed | R |
+| 6 | **Tests that do not test** | 87 of 179 web test files read source text; 7 assert prose sentences. Signer guard regex misses `signTransaction(` | R |
+| 7 | **Two real unit failures** | `test/idempotency-namespace.test.ts`, `test/quotas.test.ts`: 5 assertions | V |
+| 8 | **Local suite cannot run the database tests** | 192 fail on this Mac because Postgres 16 is not running (socket missing) and 14 want a dev server on :3000. Not code defects | V |
+| 9 | **Metadata** | 4 routes no metadata incl. the front door; 15 title only | R |
+| 10 | **Gateway shows the wrong host** | Dashboard prints `window.location.origin` as the API base. On portal.weir.social that is the portal host, not api.weir.social. README and CLI default to `localhost:3001`. `/health` is 404 | R for dashboard, V for docs and health |
+| 11 | **Dependencies** | 9 packages one patch behind; pnpm 12.3.4 vs 12.4.1. No major version behind | V |
+| 12 | **Repo sprawl** | `work/`, `LOGS/`, `Claude/`, `.weir-reg`, screenshots in root; 44,544 comment lines were stripped to 1,673 by an agent (F13); `packages/site` deleted, recoverable | V |
+
+Not looked at: rendering in a real browser at three widths, signed in with a wallet (WEIR-OUTSTANDING F11 says nobody has). U.
+
+#### Steps, in order, each one visible when done
+
+1. **One design system.** Move `signin`, `waitlist`, `agents/[handle]` onto `packages/ui` + `components/app`. Delete `components/design/`. Add a CI count that fails when inline styles or token fallbacks rise. Gate: `components/design` gone, counts to 0 in new code, three screens seen in a browser at 1440/834/390.
+2. **Cut the JavaScript.** `next build` with the analyzer, name the three largest chunks, remove or lazy-load them. Gate: landing page under 500 KB JS, measured with curl as above.
+3. **Identity from the session, not the URL.** Remove `?reader=` from `SessionBridge`, `AppFrame`, `PostCard`, `Comments`; derive from `provenReader()` server-side. Gate: `grep -rn 'reader=' components app` returns 0; sign-in and feed still work in a browser.
+4. **Money as decisions.** Subscribe, Tip, Vault open, Deposit, Withdraw on the existing Radix `Dialog` with simulate → quote → sign stages. Gate: each flow seen in a browser with a real wallet; nothing signed before simulation.
+5. **A face on every profile.** One additive migration, upload through the existing Walrus path, `Avatar src` wired, Open Graph image per creator. Gate: heron and wren have images live.
+6. **Gateway on one hostname.** Public base URL from config, dashboard prints it, docs and CLI default to it, `/health` answers 200. Gate: a customer following the portal gets `https://api.weir.social/v1` and a working call.
+7. **Tests that fail when behaviour breaks.** Fix the 2 unit failures; start Postgres and get the database suite green locally; convert the 7 prose assertions; widen the signer guard. Gate: `pnpm -C packages/web test` exit 0 on this Mac with the count reported.
+8. **Metadata and hygiene.** Title, description, OG per route; root folders that are not product moved out of the repo. Gate: 0 routes without metadata.
+
+One step at a time, from this desk, in a branch, one PR, seen in a browser before it is called done. Nothing on a server changes in steps 1 to 5.
+
+#### Files this audit produced
+
+`AUDIT-2026-09-12.md` (this), `graphify-out/` (graph of 6,211 nodes, 394 communities; `graph.html` to browse, `GRAPH_REPORT.md`). Nothing else was written or changed.
+
+
+---
+
+### The plan, 12 Sep
+
+12 Sep 2026. Everything named here is a real file, page, package or host in this repository or on your estate. Nothing is invented.
+
+#### 1. What exists today, by name
+
+**The live site, weir.social, commit `627deb5`.** One Next.js app in `packages/web`.
+- 45 pages. The public doors: `/` (landing), `/signin`, `/waitlist`, `/join`, `/security`, `/disclosure`, `/agents`, `/agents/build`, `/agents/declare`, `/agents/reference`, `/legal/*`. The app inside the rail: `/feed`, `/explore`, `/explore/agents`, `/creators`, `/c/[handle]` (a creator), `/p/[id]` (a post), `/vault`, `/treasury`, `/chests`, `/alerts`, `/messages`, `/studio`, `/creator`, `/earnings`, `/purchases`, `/referrals`, `/names`, `/account/recovery`, `/admin`.
+- 57 API routes under `/api/*`: accounts, creators, posts, comments, follow, checkout (unlock, subscribe, tip), stake, names, messages, keys, agents (declare, sponsor, seeking), admin, waitlist, zkLogin, seal, media.
+- The agent interface, already published: `/llms.txt` (the full instructions an agent reads), `/register-agent.mjs` (one script: sponsor gas, declare with two signatures, name a vault, set a profile), `/.well-known/weir-agent.json` (signed manifest), `/.well-known/mcp.json`, `/api/agents/*`.
+
+**The packages.** `sdk` (TypeScript client for the Move package), `signer` (the custody boundary, four key adapters), `policy` (pure spend rules), `purse` (the one process that holds a hot key on a host), `daemon` (harvests stake vaults each epoch), `mcp` (the Model Context Protocol server at mcp.weir.social), `agent` and `agent-runtime` (the agent's own client and loop), `room`, `ui` (the design system), `wren` (a host recipe).
+
+**The contracts, on mainnet.** `sui-contracts`: account, creator, entitlement, key_registry, platform, stake_ladder, stake_vault. `sui-contracts-mind`: agent_mind. `sui-contracts-soul`: soul.
+
+**The hosts.** DigitalOcean: gateway-first (api + portal), services-first (mcp), prover-first (zkLogin prover), heron-first and wren-first (the two living citizens). exe.dev: weir-reader, weir-chronicler, weir-assayer, weir-scout, weir-witness (the five swarm citizens on picoclaw).
+
+**Research and development.** `labs`: Northlatch Labs' own agent harness, one Go binary forked from picoclaw, that wakes a citizen, gives it its files and the chain, lets it act once, and exits. Local only. Not part of this plan's deliverable except as documentation of how a citizen is built.
+
+#### 2. What "finished" means. Six things a customer can do, each one a test.
+
+1. A human lands on `/`, understands it, signs in (Google or wallet), claims a handle, publishes, sets a price, and gets paid in SUI. Every screen in one look. No placeholder anywhere.
+2. A human reader finds a creator, subscribes or tips, and sees exactly what they will pay before anything is signed.
+3. An agent, reading only `/llms.txt`, registers with gas paid for it, declares itself with two signatures, names a vault, publishes, buys, and is listed with a verifiable record at `/agents/[handle]`.
+4. An operator launches their own agent: declares it from `/agents/declare`, installs the citizen on a host with one command, and watches it wake, act and earn.
+5. You, as admin, open `/admin` and see revenue, the waitlist, access codes, site mode, and can act on them.
+6. Everything loads fast, on a phone and a laptop, and the tests prove the behaviour, not the wording.
+
+#### 3. The transformation, in the order I will do it
+
+Each step: what changes (files), what you will see, what proves it. One step at a time on the branch `one-design-system` on this Mac. Nothing goes live until you say publish.
+
+##### Step 1. One look everywhere. Started today.
+- Done today: `/signin`, `/waitlist`, `/agents/[handle]` rebuilt on `packages/ui`; the shared pieces moved; a guard test that stops the old look coming back.
+- Remaining: `/agents/reference` (the 1,111-line `components/design/Agents.tsx`), `/security` (`Security.tsx`), `/chests` (`Chests.tsx`), and four dead files (`Home`, `Creator`, `Disclosure`, `ExploreAgents`) with the tests that pin them, retargeted to the live screens they describe. Then the prototype folder is deleted and the two prototype stylesheets `app/ported.css` and `app/weir.css` shrink to what the app still uses.
+- You see: every page uses the same header, rail, cards, buttons and type. One footer. The guard test keeps it that way.
+- Proof: `components/design/` gone; inline-style count in `components/app` recorded and only allowed to fall; each rebuilt page checked in a browser at 1440, 834 and 390.
+
+##### Step 2. Fast.
+- Today every page ships 1.7 MB of JavaScript. Measured: 758 KB + 286 KB + 92 KB of it is the Sui SDK and wallet kit, pulled in by `components/SignerProvider.tsx`, which the root layout mounts on every page.
+- Change: the provider keeps its small context and wallet detection; the heavy Sui and wallet-kit code loads only when a reader connects, signs, or opens a page that needs the chain. `SealedMedia` and `SealedBody` load the Seal library only when a sealed post is opened.
+- You see: pages open in under a second on a phone.
+- Proof: the landing page under 500 KB of JavaScript, measured with the same command that measured 1.7 MB today.
+
+##### Step 3. Identity from the session, never the URL.
+- Today `?reader=0x…` is written into links by `components/SessionBridge.tsx`, `components/app/AppFrame.tsx`, `components/PostCard.tsx`, `components/Comments.tsx`, `components/PostActions.tsx`, `components/JoinFlow.tsx`, `components/AccountMenu.tsx`, `components/feed/FeedView.tsx`, `app/c/[handle]/page.tsx`, and eleven screens that thread it through `AppFrame`.
+- Change: every one of those derives the reader from `provenReader()` (a signature-backed session) on the server. The parameter disappears.
+- You see: clean addresses. A copied link never carries someone else's address.
+- Proof: `grep -rn 'reader=' components app` returns nothing; sign-in, feed, creator page and comments work in a browser signed in and out.
+
+##### Step 4. Money as decisions.
+- Today only "buy a post" (`components/app/UnlockDialog.tsx`) is a dialog with simulate, quote, sign. `SubscribeButton`, `TipButton`, `StakeVaultSetup`, `StakePosition` and the "become a member" card in `CreatorScreen` expand inline on the page.
+- Change: each of those becomes a dialog on the existing `packages/ui` `Dialog`: what you get, what it costs (read from the chain, integers, decimals from coin metadata), simulate, then the sign button, then real stages until the chain confirms. The entitlement logic in `lib/entitlement.ts` and `app/api/checkout/*` does not change.
+- You see: subscribe, tip, open a vault, deposit, withdraw all look like decisions, the same way, everywhere.
+- Proof: each flow exercised in a browser with a real wallet on mainnet with a small amount you choose, or on the simulate step only if you choose not to spend; nothing is signed that was not simulated.
+
+##### Step 5. A face on every profile.
+- Today no image column exists and `Avatar` never receives a `src`. Every profile is a hash pattern.
+- Change: one additive migration (`db/023_profile_image.sql`), upload through the existing Walrus path in `lib/walrus.ts` and `app/api/studio/upload`, a control in `/creator`, `Avatar src` wired in `CreatorScreen`, `PostCard`, the directory rows and the agent record, and an Open Graph image per creator in `lib/structured-data.ts`.
+- You see: heron and wren with real images; your own profile with the image you upload.
+- Proof: the two live citizens carry images; a share link shows the image.
+
+##### Step 6. The three rules of the door. Done today, on the branch.
+- The logo inside the app goes to `/`. The feed requires a signed-in reader and sends a stranger to `/signin?next=/feed`. Home stays home.
+
+##### Step 7. Launch your own agent, from the site.
+- Today the pieces exist but a person has to assemble them: `/agents/declare` (the two-signature declaration), `/register-agent.mjs` (the script), `llms.txt` (the recipe), the labs harness (local only), the swarm's AGENT.md files (on the VMs).
+- Change: one page, `/agents/build`, becomes the launch path. Step by step: choose a name, declare (operator signs, agent signs), sponsor gas, name the vault, then one command that installs the citizen on any Linux host: the labs binary, its `AGENT.md`, its key, its gateway profile, its clock. The page shows the agent waking for the first time and its record filling in.
+- How Northlatch Labs builds a citizen, written once in the handbook: the harness (`labs`), the one file the agent lives by (`AGENT.md`), the keys it holds and never shows, the gateway profile with its monthly cap, the beat (systemd timer where there is systemd, the loop where there is not), and what it may and may not do (`policy`).
+- You see: a stranger with a wallet and a VPS launches an agent in fifteen minutes without talking to us.
+- Proof: a new agent launched from that page, declared on chain, listed at `/explore/agents`, first post published.
+
+##### Step 8. Admin.
+- Today `/admin` exists, gated by `isSiteAdmin` and a proved session, with revenue, waitlist insight, site mode and access codes behind `/api/admin/*`.
+- Change: no new powers. Verify each control does what its label says, add what is missing for launch (invite a creator, close or open the door, see today's revenue in SUI), and write it down.
+- You see: one page where you run the site.
+- Proof: each control exercised on the branch with your admin session.
+
+##### Step 9. The gateway tells the truth.
+- Today the dashboard prints its own hostname as the API base, the README and CLI default to `localhost:3001`, `/health` answers 404.
+- Change (in the gateway repo, `~/Desktop/claudeexp/xlaunch/gateway`): a `PUBLIC_URL` setting, the dashboard prints it, docs and CLI default to `https://api.weir.social`, `/health` answers 200.
+- You see: a customer following the portal gets a working address on the first try.
+
+##### Step 10. Tests that test behaviour, and a green suite here.
+- Today 86 of 178 web test files read source text; 7 assert sentences; the signer guard misses `signTransaction(`.
+- Change: each prose assertion becomes a behaviour assertion or is removed with its reason written down; the signer guard widened; the two real failures (`idempotency-namespace`, `quotas`) fixed.
+- Proof: `pnpm -C packages/web test` exit 0 on this Mac with Postgres up, count reported.
+
+##### Step 11. Metadata and hygiene.
+- Title, description and Open Graph on every route (3 have none, 14 have no description). Root folders that are not product (`work/`, `LOGS/`, `Claude/`, screenshots) moved out. Dependencies brought to latest patch.
+
+##### Step 12. The handbook.
+- One document, `HANDBOOK.md`, in the repo root and on your Desktop: how a creator uses it, how a reader pays, how an agent registers, how you launch and run your own agent the Northlatch way, how admin works, how to develop further (packages, tests, deploy), and what is built today with its proof.
+
+#### 4. What I will not do without your word
+- Push to GitHub or deploy to weir.social.
+- Spend on mainnet beyond what you name.
+- Change a published contract or run a non-additive migration.
+- Add a dependency that is not already in the workspace.
+- Touch any server, VM, key or token.
+
+#### 5. How you will hear from me
+One line per finished step: what changed, the proof, the address on localhost:3000 to look at. Then, at the end, the handbook and the word "ready". You answer with "publish" or with what is wrong.
+
+
 ## 2026-09-06 · SEC-003 CLOSED: the signing path is diff-reviewable text again; SEC-006 confirmed already closed
 
 Supersedes nothing; extends the entries below.
