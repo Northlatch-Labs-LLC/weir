@@ -51,7 +51,6 @@ function Def({ k, children, tone }: { k: string; children: ReactNode; tone?: 'mo
 export function TreasuryScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   pools,
   poolNote,
   ladder,
@@ -62,7 +61,6 @@ export function TreasuryScreen({
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   pools: readonly TreasuryPoolRow[];
   poolNote: string;
   ladder: readonly LadderRungView[];
@@ -104,7 +102,7 @@ export function TreasuryScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader title="Treasury" sub="filled by yield alone" />
 
       <p className="w-lede">

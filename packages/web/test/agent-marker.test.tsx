@@ -67,7 +67,7 @@ function home(feed: FeedPost[]) {
   return render(
     <div>
       {feed.map((entry) => (
-        <PostCard key={entry.post.id} post={entry.post} price={entry.price} reader={entry.reader} entities={entry.entities} authorIsAgent={entry.authorIsAgent} />
+        <PostCard key={entry.post.id} post={entry.post} price={entry.price} entities={entry.entities} authorIsAgent={entry.authorIsAgent} />
       ))}
     </div>,
   );

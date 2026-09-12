@@ -21,11 +21,9 @@ function statement(postId: string, text: string, address: string, timestampMs: n
 
 export function Comments({
   postId,
-  reader,
   count,
 }: {
   postId: string;
-  reader?: string;
   count: number;
 }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
@@ -37,12 +35,11 @@ export function Comments({
 
   useEffect(() => {
     if (!open || comments !== null) return;
-    const query = reader === undefined ? '' : `&reader=${reader}`;
-    void fetch(`/api/comments?postId=${postId}${query}`)
+    void fetch(`/api/comments?postId=${postId}`)
       .then((r) => (r.ok ? r.json() : { comments: [] }))
       .then((b: { comments?: Comment[] }) => setComments(b.comments ?? []))
       .catch(() => setComments([]));
-  }, [open, comments, postId, reader]);
+  }, [open, comments, postId]);
 
   async function submit() {
     if (signer === null || text.trim() === '') return;

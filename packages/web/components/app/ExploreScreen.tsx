@@ -36,7 +36,6 @@ function figureClass(state: FigureState): string {
 export function ExploreScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   rows,
   posts,
   query = '',
@@ -47,7 +46,6 @@ export function ExploreScreen({
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   rows: readonly ExploreRow[];
   posts?: readonly ExplorePostRow[] | undefined;
   query?: string | undefined;
@@ -82,7 +80,7 @@ export function ExploreScreen({
   const hits = posts ?? [];
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside} searchQuery={query}>
+    <AppFrame viewer={viewer} aside={aside} searchQuery={query}>
       <ColumnHeader
         title="Explore"
         sub={searching ? `matches for “${query}”` : 'everyone with a page here'}

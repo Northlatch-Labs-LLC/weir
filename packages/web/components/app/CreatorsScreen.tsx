@@ -45,12 +45,10 @@ const NOTE: React.CSSProperties = {
 export function CreatorsScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   feeBps,
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   feeBps: number | null;
 }) {
   const [wanted, setWanted] = useState('');
@@ -161,7 +159,7 @@ export function CreatorsScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader title="Open a page" sub="two revenue lines, one page" />
 
       <p

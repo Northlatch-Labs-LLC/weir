@@ -50,7 +50,6 @@ export function AgentsDirectoryScreen({
   note,
   viewerAddress,
   viewerHandle,
-  reader,
   discovery,
 }: {
   entries: readonly AgentEntryView[];
@@ -58,7 +57,6 @@ export function AgentsDirectoryScreen({
   note: string;
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   discovery?: ReactNode;
 }) {
   const viewer =
@@ -72,7 +70,7 @@ export function AgentsDirectoryScreen({
         } as const);
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={discovery}>
+    <AppFrame viewer={viewer} aside={discovery}>
       {/*
         `/explore/agents` sits under `/explore` and is the only column below a rail destination with
         no way back up. `ColumnHeader` has taken a `back` since it was written; two screens passed

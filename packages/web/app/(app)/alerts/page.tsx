@@ -34,12 +34,7 @@ function paymentIcon(what: string): AlertView['icon'] {
   return 'support';
 }
 
-export default async function NotificationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string }>;
-}) {
-  const { reader } = await searchParams;
+export default async function NotificationsPage() {
 
   const viewer = fold(
     await provenReader(),
@@ -53,7 +48,6 @@ export default async function NotificationsPage({
         discovery={<Discovery />}
         viewerAddress={null}
         viewerHandle={null}
-        {...(reader === undefined ? {} : { reader })}
         alerts={[]}
         truncated={false}
       />
@@ -73,7 +67,6 @@ export default async function NotificationsPage({
         discovery={<Discovery />}
         viewerAddress={viewer}
         viewerHandle={handle}
-        {...(reader === undefined ? {} : { reader })}
         alerts={[]}
         truncated={false}
         failure={`${reading.failure.kind}: ${reading.failure.detail}`}
@@ -141,7 +134,6 @@ export default async function NotificationsPage({
       discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
-      {...(reader === undefined ? {} : { reader })}
       alerts={alerts}
       truncated={feed.truncated}
     />

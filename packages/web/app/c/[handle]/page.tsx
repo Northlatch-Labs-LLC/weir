@@ -63,15 +63,14 @@ export default async function CreatorPage({
   searchParams,
 }: {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ reader?: string; tab?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { handle } = await params;
-  const { reader, tab: requestedTab } = await searchParams;
+  const { tab: requestedTab } = await searchParams;
   const tab: CreatorTab = requestedTab === 'membership' ? 'membership' : 'posts';
   const tabHref = (t: CreatorTab) => {
     const q = new URLSearchParams();
     if (t !== 'posts') q.set('tab', t);
-    if (reader !== undefined) q.set('reader', reader);
     const qs = q.toString();
     return `/c/${encodeURIComponent(handle)}${qs === '' ? '' : `?${qs}`}`;
   };
@@ -96,13 +95,13 @@ export default async function CreatorPage({
 
   const posts = await listPosts({ handle, limit: POSTS_PAGE });
   const followers = await countFollowers(handle);
-  const following = await isFollowing(reader ?? null, handle);
   const viewerReading = await provenReader();
   const viewer = fold(
     viewerReading,
     (v) => v,
     () => null,
   );
+  const following = await isFollowing(viewer, handle);
   const entitlementReading = await readEntitlements(viewer);
   const entitlements = fold(
     entitlementReading,
@@ -243,7 +242,6 @@ export default async function CreatorPage({
       post.access.kind === 'paid' && coinDecimals !== null
         ? `${formatUnits(BigInt(post.access.price), coinDecimals)}${coinSymbol === '' ? '' : ` ${coinSymbol}`}`
         : undefined,
-    reader,
     entities: entitiesOf({
       tiers: activeTiers.length,
       stakeVaultId: onChainStakeVault ?? null,
@@ -363,7 +361,6 @@ export default async function CreatorPage({
         tabHref={{ posts: tabHref('posts'), membership: tabHref('membership') }}
         viewerAddress={viewer}
         viewerHandle={ownerName}
-        {...(reader === undefined ? {} : { reader })}
         emptyMessage={
           profilePosts.length === 0
             ? `${profile.displayName} has not published anything yet.`

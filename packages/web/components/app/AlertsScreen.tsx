@@ -29,7 +29,6 @@ type Filter = 'all' | 'money';
 export function AlertsScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   alerts,
   truncated,
   failure,
@@ -37,7 +36,6 @@ export function AlertsScreen({
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   alerts: readonly AlertView[];
   truncated: boolean;
   failure?: string | undefined;
@@ -83,7 +81,7 @@ export function AlertsScreen({
   return (
     <AppFrame
       viewer={viewer}
-      reader={reader}
+     
       aside={
         <>
           {aside}

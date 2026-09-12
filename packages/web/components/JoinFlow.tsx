@@ -254,10 +254,10 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           </a>
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-          <a className="btn" href={`/c/${handle.trim()}?reader=${signer.address}`}>
+          <a className="btn" href={`/c/${handle.trim()}`}>
             Go to your page
           </a>
-          <a className="btn ghost" href={`/?reader=${signer.address}`}>
+          <a className="btn ghost" href={`/`}>
             Go to the feed
           </a>
           <a className="btn ghost" href="/creator">

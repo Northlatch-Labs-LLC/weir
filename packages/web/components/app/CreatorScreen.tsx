@@ -44,7 +44,6 @@ export function CreatorScreen({
   tabHref,
   viewerAddress,
   viewerHandle,
-  reader,
   emptyMessage,
 }: {
   profile: {
@@ -79,7 +78,6 @@ export function CreatorScreen({
   tabHref: Record<CreatorTab, string>;
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   emptyMessage: string;
 }) {
   const viewer =
@@ -128,7 +126,7 @@ export function CreatorScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader
         title={profile.displayName}
         sub={counts.followers === 1 ? '1 follower' : `${counts.followers} followers`}

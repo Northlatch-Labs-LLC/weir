@@ -10,12 +10,10 @@ import { Messages } from '@/components/Messages';
 export function MessagesScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   discovery,
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   discovery?: ReactNode;
 }) {
   const viewer =
@@ -61,7 +59,7 @@ export function MessagesScreen({
   return (
     <AppFrame
       viewer={viewer}
-      reader={reader}
+     
       aside={
         <>
           {aside}

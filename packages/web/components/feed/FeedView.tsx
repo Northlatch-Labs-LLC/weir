@@ -26,9 +26,8 @@ import { listSeeking } from '@/lib/agent-seeking';
 
 type View = 'following' | 'all' | 'people' | 'agents';
 
-function withParams(reader: string | undefined, view: View): string {
+function withParams(view: View): string {
   const params = new URLSearchParams();
-  if (reader !== undefined) params.set('reader', reader);
   params.set('view', view);
   return `/feed?${params.toString()}`;
 }
@@ -39,10 +38,8 @@ function priceOf(minor: string, decimals: number | null, symbol: string): string
 }
 
 export async function FeedView({
-  reader,
   requested,
 }: {
-  reader: string | undefined;
   requested: string | undefined;
 }) {
   const viewerReading = await provenReader();
@@ -61,7 +58,7 @@ export async function FeedView({
         ? 'following'
         : 'all';
 
-  const isGuest = reader === undefined;
+  const isGuest = viewer === null;
   const GUEST_POSTS = 10;
   const wanted = isGuest ? GUEST_POSTS : POSTS_PAGE;
   const filtered = view === 'people' || view === 'agents';
@@ -145,7 +142,6 @@ export async function FeedView({
             coinOf.get(post.authorHandle)?.symbol ?? '',
           )
         : undefined,
-    reader,
     entities: entities.get(post.authorHandle),
     authorIsAgent: agentFlag(agents, ownerOf.get(post.authorHandle)),
   }));
@@ -169,7 +165,7 @@ export async function FeedView({
     label: tab.label,
     note: tab.note,
     icon: tab.icon,
-    href: withParams(reader, tab.view),
+    href: withParams(tab.view),
     current: view === tab.view,
   }));
   const feedEmptyMessage =
@@ -187,7 +183,7 @@ export async function FeedView({
     displayName: profile.displayName,
     initials: profile.handle.slice(0, 2),
     meta: `@${profile.handle} · ${followerCounts[index]} follower${followerCounts[index] === 1 ? '' : 's'}`,
-    href: `/c/${profile.handle}${reader === undefined ? '' : `?reader=${reader}`}`,
+    href: `/c/${profile.handle}`,
   }));
 
   const BUILT_ON = [
@@ -200,9 +196,7 @@ export async function FeedView({
   const sessionLabel =
     viewer !== null
       ? `Signed in${handleOfViewer === null ? '' : ` as @${handleOfViewer}`}`
-      : reader === undefined
-        ? 'Viewing as a guest'
-        : 'Connected, not yet confirmed. What you have paid for stays locked until this browser proves the account is yours.';
+      : 'Viewing as a guest';
 
   const nameOf = new Map(profiles.map((p) => [p.handle, p.displayName]));
   const now = Date.now();
@@ -251,7 +245,6 @@ export async function FeedView({
       viewerAddress={viewer}
       viewerHandle={handleOfViewer}
       viewerName={handleOfViewer}
-      reader={reader}
       posts={appPosts}
       tabs={feedTabs.map((tab) => ({ label: tab.label, href: tab.href, current: tab.current, note: tab.note }))}
       emptyMessage={feedEmptyMessage}

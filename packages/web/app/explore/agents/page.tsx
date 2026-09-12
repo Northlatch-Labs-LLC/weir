@@ -18,12 +18,7 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ExploreAgentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string }>;
-}) {
-  const { reader } = await searchParams;
+export default async function ExploreAgentsPage() {
 
   const viewer = fold(
     await provenReader(),
@@ -84,7 +79,6 @@ export default async function ExploreAgentsPage({
       note={side.note}
       viewerAddress={viewer}
       viewerHandle={viewerHandle}
-      {...(reader === undefined ? {} : { reader })}
       discovery={<Discovery />}
     />
   );

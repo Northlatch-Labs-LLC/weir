@@ -44,15 +44,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function PostPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ reader?: string }>;
-}) {
+export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { reader: requested } = await searchParams;
 
   const found = await post(id);
   if (found === null) notFound();
@@ -63,7 +56,6 @@ export default async function PostPage({
     (v) => v,
     () => null,
   );
-  const reader = viewer ?? requested;
   const entitlements = fold(
     await readEntitlements(viewer),
     (v) => v,
@@ -125,7 +117,6 @@ export default async function PostPage({
         : {})}
       viewerAddress={viewer}
       viewerHandle={viewerHandle}
-      {...(reader === undefined ? {} : { reader })}
       commentCount={comments.length}
       coinType={profile?.coinType ?? null}
     />

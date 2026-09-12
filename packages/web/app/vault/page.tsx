@@ -16,12 +16,7 @@ export const dynamic = 'force-dynamic';
 
 const sui = (mist: bigint): string => `${formatUnits(mist, SUI_DECIMALS)} SUI`;
 
-export default async function VaultPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string }>;
-}) {
-  const { reader } = await searchParams;
+export default async function VaultPage() {
 
   const viewer = fold(
     await provenReader(),
@@ -35,7 +30,6 @@ export default async function VaultPage({
         discovery={<Discovery />}
         viewerAddress={null}
         viewerHandle={null}
-        {...(reader === undefined ? {} : { reader })}
         rows={[]}
         total={null}
         totalPending={null}
@@ -60,7 +54,6 @@ export default async function VaultPage({
         discovery={<Discovery />}
         viewerAddress={viewer}
         viewerHandle={handle}
-        {...(reader === undefined ? {} : { reader })}
         rows={[]}
         total={null}
         totalPending={null}
@@ -88,7 +81,6 @@ export default async function VaultPage({
       discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
-      {...(reader === undefined ? {} : { reader })}
       rows={rows}
       total={sui(backing.value.totalPrincipalMist)}
       totalPending={sui(backing.value.totalPendingRebateMist)}

@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 export default async function FeedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reader?: string; view?: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
-  const { reader, view } = await searchParams;
+  const { view } = await searchParams;
   /*
     The feed is for signed-in readers. Home is where a reader signs in; the feed is where they go
     after. A reader with no proved session is sent to sign in and returned here.
@@ -28,5 +28,5 @@ export default async function FeedPage({
     () => null,
   );
   if (viewer === null) redirect('/signin?next=/feed');
-  return <FeedView reader={reader} requested={view} />;
+  return <FeedView requested={view} />;
 }

@@ -11,12 +11,7 @@ export const metadata: Metadata = { title: titleFor('/studio') };
 
 export const dynamic = 'force-dynamic';
 
-export default async function Studio({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string }>;
-}) {
-  const { reader } = await searchParams;
+export default async function Studio() {
 
   const viewer = fold(
     await provenReader(),
@@ -37,7 +32,6 @@ export default async function Studio({
       discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
-      {...(reader === undefined ? {} : { reader })}
     />
   );
 }

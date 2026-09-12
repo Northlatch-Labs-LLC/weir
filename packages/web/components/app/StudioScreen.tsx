@@ -10,12 +10,10 @@ import { StudioComposer } from '@/components/StudioComposer';
 export function StudioScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   discovery,
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   discovery?: ReactNode;
 }) {
   const viewer =
@@ -72,7 +70,7 @@ export function StudioScreen({
   return (
     <AppFrame
       viewer={viewer}
-      reader={reader}
+     
       aside={
         <>
           {aside}

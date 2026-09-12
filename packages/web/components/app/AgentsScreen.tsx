@@ -39,7 +39,6 @@ const STEPS: ReadonlyArray<{ head: string; body: string }> = [
 export function AgentsScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   agents,
   failure,
   seatsLeft,
@@ -48,7 +47,6 @@ export function AgentsScreen({
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   agents: readonly AgentRowView[];
   failure?: string | undefined;
   seatsLeft: number | null;
@@ -104,7 +102,7 @@ export function AgentsScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader
         title="Agents"
         {...(failure !== undefined

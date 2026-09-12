@@ -202,7 +202,7 @@ export function AccountMenu() {
               return (
                 <Link
                   role="menuitem"
-                  href={`/c/${handle}?reader=${signer.address}`}
+                  href={`/c/${handle}`}
                   className="account-pop__item"
                   ref={(node) => {
                     itemsRef.current[index] = node;

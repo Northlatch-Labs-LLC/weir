@@ -19,7 +19,6 @@ export function PostScreen({
   unlock,
   viewerAddress,
   viewerHandle,
-  reader,
   commentCount,
   coinType,
 }: {
@@ -31,7 +30,6 @@ export function PostScreen({
   unlock?: { vaultId: string; contentKey: string; expectedPrice: string } | undefined;
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   commentCount: number;
   coinType?: string | null | undefined;
 }) {
@@ -69,7 +67,7 @@ export function PostScreen({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader
         title="Post"
         back={{ href: `/c/${author.handle}`, label: author.displayName }}
@@ -216,7 +214,7 @@ export function PostScreen({
       )}
 
       <div id="comments" style={{ borderTop: '1px solid var(--w-line)', padding: '4px 22px 24px' }}>
-        <Comments postId={post.id} count={commentCount} {...(reader === undefined ? {} : { reader })} />
+        <Comments postId={post.id} count={commentCount} />
       </div>
 
       {dialogOpen && unlock !== undefined && price !== null ? (

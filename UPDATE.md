@@ -7,6 +7,34 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (night) · Step 3 done: identity from the session, never the URL
+
+**Step 3 is closed.** No link on the site carries `?reader=0x…` any more. Who is asking is answered once, on
+the server, by `provenReader()` in `lib/read-session.ts`: the cookie a browser earns by signing a statement.
+A copied link is a clean address and never names someone else. `components/SessionBridge.tsx`, whose only
+job was writing the address into the URL, is gone from the root layout, with its test.
+
+**What changed, in files.** `components/app/AppFrame.tsx` links plainly and the search form carries no hidden
+address. The eleven screens that threaded `reader` into the frame no longer take it (`Agents`,
+`AgentsDirectory`, `Alerts`, `Creator`, `Creators`, `Explore`, `FeedApp`, `Messages`, `Post`, `Studio`,
+`Treasury`, `Vault`). `PostCard`, `PostActions` and `Comments` build addresses without it; the comments
+request is `/api/comments?postId=…`, which the route always answered from the session. `feed/FeedView.tsx`
+counts a guest as "no proved session" and its tabs link without the parameter. Nine pages stopped reading
+`reader` from `searchParams`; `/c/[handle]` asks `isFollowing` about the proved viewer, and `/p/[id]` no
+longer falls back to a claimed address. `JoinFlow` and `AccountMenu` link to the profile and home plainly.
+
+**Proof.** `grep -rn 'reader=' components app` returns nothing. `tsc --noEmit` clean. `next build` clean.
+`pnpm -C packages/web test`: 179 files, 2,485 tests passing (seven fewer: the bridge's six and the layout
+check that mounted it). In the browser on localhost:3000 signed out: `/c/weir` 29 links and `/p/heron-demo-0`
+30 links, none carrying `reader=`, no hidden input, no console errors; `/feed` lands on `/signin?next=/feed`;
+"Read 3 comments" fetches `/api/comments?postId=heron-demo-0` and shows the three.
+
+**Not verified here.** The signed-in feed and creator page in a browser: this desk's browser holds no proved
+session and Google sign-in depends on the restored OAuth client. The server gate and `FeedView` are covered
+by the suite; the owner's own browser is the check.
+
+---
+
 ## 2026-09-12 (evening) · Step 2 done: the app is light until you sign in
 
 **Step 2 is closed.** A stranger's first page carries 527 KB of JavaScript in a modern browser, down from

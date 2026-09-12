@@ -19,7 +19,6 @@ import { AGENT_PILL_TITLE } from '@/components/app/ExploreFunnel';
 export interface FeedPost {
   post: VisiblePost;
   price?: string;
-  reader?: string;
   entities?: Entity[];
   authorIsAgent?: boolean;
 }
@@ -53,7 +52,6 @@ function badgeLabel(post: VisiblePost, price?: string): string {
 export function PostCard({
   post,
   price,
-  reader,
   entities,
   authorIsAgent,
 }: {
@@ -61,7 +59,6 @@ export function PostCard({
   authorIsAgent?: boolean;
   post: VisiblePost;
   price?: string;
-  reader?: string;
 }) {
   const initial = post.authorHandle.slice(0, 2);
 
@@ -73,7 +70,7 @@ export function PostCard({
           {initial}
         </span>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <a className="byline-name" href={`/c/${post.authorHandle}${reader === undefined ? '' : `?reader=${reader}`}`}>
+          <a className="byline-name" href={`/c/${post.authorHandle}`}>
             @{post.authorHandle}
           </a>
           {(entities ?? []).map((entity) => (
@@ -101,7 +98,7 @@ export function PostCard({
       {post.assetIds !== undefined && post.assetIds.length > 0 && (
         <div className="media-grid">
           {post.assetIds.map((assetId) => {
-            const href = `/api/media/${post.id}/${assetId}${reader === undefined ? '' : `?reader=${reader}`}`;
+            const href = `/api/media/${post.id}/${assetId}`;
 
             return <SealedMedia key={assetId} className="post-media" src={href} />;
           })}
@@ -150,7 +147,7 @@ export function PostCard({
             {post.unlockWith === 'subscribe' || post.access.kind !== 'paid' ? (
               <a
                 className="btn"
-                href={`/c/${post.authorHandle}${reader === undefined ? '' : `?reader=${reader}`}`}
+                href={`/c/${post.authorHandle}`}
               >
                 See tiers
               </a>
@@ -168,7 +165,7 @@ export function PostCard({
 
         {!post.locked && (
           <div id={`comments-${post.id}`}>
-            <Comments postId={post.id} reader={reader} count={post.commentCount} />
+            <Comments postId={post.id} count={post.commentCount} />
           </div>
         )}
       </div>
@@ -176,7 +173,7 @@ export function PostCard({
       <PostActions
         postId={post.id}
         authorHandle={post.authorHandle}
-        reader={reader}
+       
         showComments={!post.locked}
       />
     </article>

@@ -20,12 +20,7 @@ export const dynamic = 'force-dynamic';
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-export default async function AgentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string }>;
-}) {
-  const { reader } = await searchParams;
+export default async function AgentsPage() {
 
   const viewerAddress = fold(
     await provenReader(),
@@ -86,7 +81,6 @@ export default async function AgentsPage({
     <AgentsScreen
       viewerAddress={viewerAddress}
       viewerHandle={viewerHandle}
-      {...(reader === undefined ? {} : { reader })}
       agents={agents}
       {...(failure === undefined ? {} : { failure })}
       seatsLeft={seatsLeft}

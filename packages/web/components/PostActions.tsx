@@ -32,18 +32,16 @@ function Glyph({ d }: { d: string }) {
 export function PostActions({
   postId,
   authorHandle,
-  reader,
   showComments,
 }: {
   postId: string;
   authorHandle: string;
-  reader?: string;
   showComments: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
 
-  const creatorHref = `/c/${authorHandle}${reader === undefined ? '' : `?reader=${reader}`}`;
+  const creatorHref = `/c/${authorHandle}`;
 
   async function share() {
     const url = `${window.location.origin}/c/${authorHandle}#${postId}`;

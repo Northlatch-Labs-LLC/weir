@@ -30,7 +30,6 @@ export function FeedApp({
   viewerAddress,
   viewerHandle,
   viewerName,
-  reader,
   posts,
   tabs,
   emptyMessage,
@@ -43,7 +42,6 @@ export function FeedApp({
   viewerAddress: string | null;
   viewerHandle: string | null;
   viewerName: string | null;
-  reader?: string | undefined;
   posts: readonly PostView[];
   tabs: readonly FeedTab[];
   emptyMessage: string;
@@ -62,7 +60,7 @@ export function FeedApp({
 
   function RailLink({ href, children, ...rest }: { href: string; children: ReactNode; className?: string | undefined }) {
     return (
-      <NextLink href={reader === undefined ? href : `${href}${href.includes('?') ? '&' : '?'}reader=${reader}`} {...rest}>
+      <NextLink href={href} {...rest}>
         {children}
       </NextLink>
     );
@@ -132,7 +130,7 @@ export function FeedApp({
   );
 
   return (
-    <AppFrame viewer={viewer} reader={reader} aside={aside}>
+    <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader
         title="Home"
         {...(current?.note === undefined ? {} : { sub: current.note })}
@@ -146,7 +144,7 @@ export function FeedApp({
       />
 
       {viewer.signedIn ? (
-        <NextLink href={reader === undefined ? '/studio' : `/studio?reader=${reader}`} className="w-prompt">
+        <NextLink href="/studio" className="w-prompt">
           <Avatar address={viewer.address} size={44} />
           <span className="w-prompt__say">What are you publishing?</span>
           <span className="w-btn w-btn--primary w-btn--sm">Publish</span>

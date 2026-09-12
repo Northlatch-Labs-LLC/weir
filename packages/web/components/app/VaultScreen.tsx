@@ -20,7 +20,6 @@ export type BackingRowView = {
 export function VaultScreen({
   viewerAddress,
   viewerHandle,
-  reader,
   rows,
   total,
   totalPending,
@@ -32,7 +31,6 @@ export function VaultScreen({
 }: {
   viewerAddress: string | null;
   viewerHandle: string | null;
-  reader?: string | undefined;
   rows: readonly BackingRowView[];
   total: string | null;
   totalPending: string | null;
@@ -77,7 +75,7 @@ export function VaultScreen({
   return (
     <AppFrame
       viewer={viewer}
-      reader={reader}
+     
       aside={
         <>
           {aside}

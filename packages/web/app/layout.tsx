@@ -4,7 +4,6 @@ import { geist, geistMono, inter, jetbrainsMono, sourceSerif } from './fonts';
 import { fold } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { SignerProvider } from '@/components/SignerProvider';
-import { SessionBridge } from '@/components/SessionBridge';
 import { AppShell } from '@/components/shell/AppShell';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/structured-data';
@@ -82,7 +81,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           network={fold(siteConfig(), (config) => config.network as string, () => null)}
           rpcUrl={fold(siteConfig(), (config) => config.grpcUrl, () => null)}
         >
-          <SessionBridge />
           <AppShell>{children}</AppShell>
                   </SignerProvider>
       </body>

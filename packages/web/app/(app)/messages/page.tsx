@@ -11,12 +11,7 @@ export const metadata: Metadata = { title: titleFor('/messages') };
 
 export const dynamic = 'force-dynamic';
 
-export default async function MessagesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ reader?: string }>;
-}) {
-  const { reader } = await searchParams;
+export default async function MessagesPage() {
 
   const viewer = fold(
     await provenReader(),
@@ -38,7 +33,6 @@ export default async function MessagesPage({
       discovery={<Discovery />}
       viewerAddress={viewer}
       viewerHandle={handle}
-      {...(reader === undefined ? {} : { reader })}
     />
   );
 }
