@@ -30,7 +30,10 @@ export default async function Join({
   return (
     <div className="w-join">
       <div className="w-join__main">
-        <PageHead title="Pick your name" lede="A handle nobody can take off you, claimed on chain." />
+        <PageHead
+          title="Create your account"
+          lede="Three steps: how you sign, your handle, and the claim on chain. No password, no email, and it is free."
+        />
 
         <JoinFlow referrer={referrer} />
 

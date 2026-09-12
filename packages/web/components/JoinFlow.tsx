@@ -2,9 +2,12 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Avatar } from '@projectx-social/ui';
+import { MAX_HANDLE_LEN, MIN_HANDLE_LEN } from '@projectx-social/sdk';
 import { useSigner } from '@/components/SignerProvider';
-import { SignIn } from '@/components/SignIn';
+import { SignInDoors } from '@/components/app/SignInDoors';
+import { SOCIAL } from '@/lib/social-links';
 import { formatSui } from '@/lib/units';
 
 type HandleState =
@@ -22,6 +25,15 @@ type AccountState =
   | { state: 'registered'; handle: string }
   | { state: 'unmeasured'; detail: string };
 
+/*
+  Three numbered steps, one question each, the way every social network's door works: how you
+  will sign, the handle, then the claim. The chain is the third step's challenge — the
+  registration is simulated, priced, and signed as exactly the bytes that were simulated.
+*/
+type Step = 'account' | 'handle' | 'claim' | 'done';
+
+const STEP_NUMBER: Record<Exclude<Step, 'done'>, number> = { account: 1, handle: 2, claim: 3 };
+
 function short(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
@@ -30,6 +42,8 @@ const sui = formatSui;
 
 export function JoinFlow({ referrer }: { referrer: string | null }) {
   const { signer } = useSigner();
+  const router = useRouter();
+  const [step, setStep] = useState<Step>(signer === null ? 'account' : 'handle');
   const [handle, setHandle] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [handleState, setHandleState] = useState<HandleState>({ state: 'idle' });
@@ -40,8 +54,20 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const typed = handle.trim().toLowerCase();
+  const lengthOk = typed.length >= MIN_HANDLE_LEN && typed.length <= MAX_HANDLE_LEN;
+  const charsOk = typed !== '' && /^[a-z0-9_]+$/.test(typed);
+
+  /* Somebody who signed in on step 1 moves on; somebody who signed out is back at the door. */
   useEffect(() => {
-    const typed = handle.trim();
+    if (signer === null) {
+      setStep('account');
+      return;
+    }
+    setStep((was) => (was === 'account' ? 'handle' : was));
+  }, [signer]);
+
+  useEffect(() => {
     if (typed === '') {
       setHandleState({ state: 'idle' });
       return;
@@ -93,31 +119,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [handle]);
-
-  async function simulate() {
-    if (signer === null) return;
-    setBusy(true);
-    setError(null);
-    setQuote(null);
-    try {
-      const r = await fetch('/api/account/prepare', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sender: signer.address, handle: handle.trim(), referrer }),
-      });
-      const body = (await r.json()) as {
-        quote?: { bytes: string; gasMist: string };
-        error?: string;
-      };
-      if (body.quote === undefined) setError(body.error ?? 'the registration could not be simulated');
-      else setQuote(body.quote);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  }, [typed]);
 
   useEffect(() => {
     const address = signer?.address;
@@ -159,9 +161,42 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     };
   }, [signer?.address]);
 
+  /* A quote was simulated for one sender. When the wallet moves, it is nobody's quote. */
   useEffect(() => {
     setQuote(null);
+    setStep((was) => (was === 'claim' ? 'handle' : was));
   }, [signer?.address]);
+
+  async function simulate() {
+    if (signer === null) return;
+    setBusy(true);
+    setError(null);
+    setQuote(null);
+    try {
+      const r = await fetch('/api/account/prepare', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sender: signer.address, handle: typed, referrer }),
+      });
+      const body = (await r.json()) as {
+        quote?: { bytes: string; gasMist: string };
+        error?: string;
+      };
+      if (body.quote === undefined) setError(body.error ?? 'the registration could not be simulated');
+      else setQuote(body.quote);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* The third step's challenge starts the moment it is reached. */
+  useEffect(() => {
+    if (step !== 'claim' || quote !== null || busy || error !== null) return;
+    void simulate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   async function signAndSubmit() {
     if (signer === null || quote === null) return;
@@ -179,13 +214,14 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
       if (body.digest === undefined) setError(body.error ?? 'the registration was not accepted');
       else {
         setDigest(body.digest);
-        setAccountState({ state: 'registered', handle: handle.trim() });
+        setAccountState({ state: 'registered', handle: typed });
+        setStep('done');
 
         const profileTimestampMs = Date.now();
         const profileName = displayName.trim();
         const profileStatement =
           `Weir\naddress: ${signer.address}\nissued: ${profileTimestampMs}\norigin: ${window.location.origin}` +
-          `\naction: set profile\nhandle: ${handle.trim()}\nname: ${profileName}`;
+          `\naction: set profile\nhandle: ${typed}\nname: ${profileName}`;
 
         void signer
           .signPersonalMessage(new TextEncoder().encode(profileStatement))
@@ -195,7 +231,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({
                 address: signer.address,
-                handle: handle.trim(),
+                handle: typed,
                 displayName: profileName,
                 signature,
                 timestampMs: profileTimestampMs,
@@ -221,99 +257,195 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     }
   }
 
-  if (signer === null) {
+  const help = (
+    <p className="w-wizard__help">
+      Having trouble?{' '}
+      <a href={SOCIAL[0]?.href} target="_blank" rel="noreferrer noopener">
+        Ask {SOCIAL[0]?.handle}
+      </a>
+    </p>
+  );
+
+  const referrerNote =
+    referrer === null ? null : (
+      <p className="w-card__note">
+        Referred by <span className="w-mono">{short(referrer)}</span>. Recorded once, at creation,
+        and it can never be changed afterwards: the protocol has no setter for it.
+      </p>
+    );
+
+  if (step === 'done' && digest !== null) {
     return (
-      <div className="panel">
-        <SignIn />
-        {referrer !== null && (
-          <p className="section-note">
-            Referred by <span className="mono">{short(referrer)}</span>. Recorded once, at creation,
-            and can never be changed afterwards.
-          </p>
-        )}
-        <p className="section-note" style={{ marginBottom: 0 }}>
-          Your account is an object on Sui that only your address can hold, and it cannot be
-          transferred.
+      <div className="w-wizard" aria-live="polite">
+        <p className="w-wizard__count">Your account exists</p>
+        <h2 className="w-wizard__title">You are @{typed}</h2>
+        <p className="w-wizard__lede">
+          Your account is an object on Sui that only your address can hold. The handle is yours
+          for as long as you keep the keys.
         </p>
-        {error !== null && <p className="unmeasured">{error}</p>}
+        <p className="w-card__note">
+          <a href={`https://suiscan.xyz/mainnet/tx/${digest}`} target="_blank" rel="noreferrer">
+            <span className="w-mono">{digest.slice(0, 14)}…</span>
+          </a>
+        </p>
+        {pageWarning !== null && <p className="w-field__note w-field__note--bad">{pageWarning}</p>}
+        <div className="w-wizard__foot">
+          <span />
+          <button type="button" className="w-btn w-btn--primary" onClick={() => router.push('/welcome')}>
+            Continue
+          </button>
+        </div>
       </div>
     );
   }
 
-  if (digest !== null) {
+  if (step === 'account' || signer === null) {
     return (
-      <div className="panel">
-        <h2 style={{ marginTop: 0 }}>You are @{handle.trim()}</h2>
-        <p>
-          The account object is yours and cannot be moved. You can now subscribe, tip, unlock posts
-          and deposit into creator vaults.
+      <div className="w-wizard">
+        <p className="w-wizard__count">Step 1 of 3</p>
+        <h2 className="w-wizard__title">Your account</h2>
+        <p className="w-wizard__lede">
+          How you will sign. Either way ends the same: a real Sui address, and your keys are what
+          sign for it. Nothing to remember, nothing to reset.
         </p>
-        <p className="mono" style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-          <a href={`https://suiscan.xyz/mainnet/tx/${digest}`} target="_blank" rel="noreferrer">
-            {digest}
-          </a>
-        </p>
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-          <a className="btn" href={`/c/${handle.trim()}`}>
-            Go to your page
-          </a>
-          <a className="btn ghost" href={`/`}>
-            Go to the feed
-          </a>
-          <a className="btn ghost" href="/creator">
-            Become a creator
-          </a>
+        <div className="w-wizard__body">
+          <SignInDoors returnTo="/join" />
+          {referrerNote}
+          <p className="w-card__note">
+            Your account is an object on Sui that only your address can hold, and it cannot be
+            transferred.
+          </p>
         </div>
-
-        {pageWarning !== null && (
-          <div className="note warn" style={{ marginTop: 14 }}>
-            <span className="lbl">Your page is not ready yet</span>
-            <p>
-              {pageWarning} Your account is registered and the handle is yours. This only affects
-              the page, and reloading it in a moment usually resolves it.
-            </p>
-          </div>
-        )}
+        {help}
       </div>
     );
   }
 
   if (accountState.state === 'unknown') {
     return (
-      <div className="panel" role="status">
-        <p style={{ margin: 0, color: 'var(--text-tertiary)' }}>
-          Checking whether this address already holds a handle…
-        </p>
+      <div className="w-wizard">
+        <p className="w-wizard__count">Step 2 of 3</p>
+        <h2 className="w-wizard__title">Choose your handle</h2>
+        <p className="w-card__note">Reading the register for {short(signer.address)}…</p>
       </div>
     );
   }
 
   if (accountState.state === 'registered') {
     return (
-      <div className="panel">
-        <h2 style={{ marginTop: 0 }}>You already have an account</h2>
-        <p>
-          <span className="mono">{short(signer.address)}</span> holds{' '}
+      <div className="w-wizard">
+        <p className="w-wizard__count">Already done</p>
+        <h2 className="w-wizard__title">You already have an account</h2>
+        <p className="w-wizard__lede">
+          The address <span className="w-mono">{short(signer.address)}</span> holds{' '}
           <strong>@{accountState.handle}</strong>. One account per address is enforced by the
-          contract, so there is nothing to do here.
+          contract, so there is nothing to claim here.
         </p>
-        <a className="btn" href="/feed">
-          Go to the feed
-        </a>
+        <div className="w-wizard__foot">
+          <span />
+          <a className="w-btn w-btn--primary" href="/feed">
+            Go to your feed
+          </a>
+        </div>
       </div>
     );
   }
 
   if (accountState.state === 'unmeasured') {
     return (
-      <div className="panel">
-        <div className="note crit">
-          <span className="lbl">Could not read the registry</span>
-          <p>
-            {accountState.detail}. Registration is blocked rather than offered: if you already have
-            an account, opening another aborts and costs you gas to find out.
+      <div className="w-wizard">
+        <p className="w-wizard__count">Step 2 of 3</p>
+        <h2 className="w-wizard__title">Choose your handle</h2>
+        <p className="w-field__note w-field__note--bad">
+          Could not read the registry: {accountState.detail}. Registration is blocked rather than
+          offered: if you already have an account, claiming another would fail on chain, and the
+          page will not guess. Reload to try again.
+        </p>
+        {help}
+      </div>
+    );
+  }
+
+  if (step === 'claim') {
+    const failed = error !== null;
+    const stage = failed
+      ? error
+      : quote === null
+        ? 'Checking the claim against the chain.'
+        : busy
+          ? 'Waiting for your wallet, then sending it.'
+          : 'Checked against the chain. Nothing signed yet.';
+    return (
+      <div className="w-wizard">
+        <p className="w-wizard__count">Step 3 of 3</p>
+        <h2 className="w-wizard__title">Claim it on chain</h2>
+        <p className="w-wizard__lede">
+          The chain is the challenge. The registration is simulated first, priced, and then you sign
+          exactly the bytes that were simulated.
+        </p>
+        <div className="w-wizard__body">
+          <dl className="w-facts">
+            <div>
+              <dt>Handle</dt>
+              <dd>@{typed}</dd>
+            </div>
+            <div>
+              <dt>Name</dt>
+              <dd>{displayName.trim() === '' ? typed : displayName.trim()}</dd>
+            </div>
+            {referrer === null ? null : (
+              <div>
+                <dt>Referred by</dt>
+                <dd className="w-mono">{short(referrer)}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Price</dt>
+              <dd>Free</dd>
+            </div>
+            <div>
+              <dt>Gas</dt>
+              <dd>{quote === null ? 'being read from the chain' : `${sui(quote.gasMist)} SUI`}</dd>
+            </div>
+          </dl>
+          <p className={failed ? 'w-stage w-stage--failed' : 'w-stage'} role="status">
+            {stage}
+          </p>
+          <p className="w-card__note">
+            Registering accepts our <a href="/legal/terms">Terms of Service</a> and our{' '}
+            <a href="/legal/privacy">Privacy Policy</a>. If you go on to publish or take payment,
+            the <a href="/legal/creator-terms">Creator Terms</a> apply as well.
           </p>
         </div>
+        <div className="w-wizard__foot">
+          <button
+            type="button"
+            className="w-btn w-btn--quiet"
+            disabled={busy}
+            onClick={() => {
+              setQuote(null);
+              setError(null);
+              setStep('handle');
+            }}
+          >
+            Back
+          </button>
+          {failed ? (
+            <button type="button" className="w-btn w-btn--primary" onClick={() => { setError(null); void simulate(); }}>
+              Check again
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="w-btn w-btn--primary"
+              disabled={busy || quote === null}
+              onClick={() => void signAndSubmit()}
+            >
+              {busy && quote !== null ? 'Waiting for your signature…' : 'Sign and claim'}
+            </button>
+          )}
+        </div>
+        {help}
       </div>
     );
   }
@@ -321,116 +453,95 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   const ready = handleState.state === 'available';
 
   return (
-    <div className="panel">
-      <label className="k" htmlFor="handle">
-        CHOOSE A HANDLE
-      </label>
-      <input
-        id="handle"
-        className="comment-input"
-        style={{ width: '100%', marginTop: 6 }}
-        value={handle}
-        autoComplete="off"
-        spellCheck={false}
-        onChange={(e) => setHandle(e.target.value)}
-        placeholder="lowercase, 3 to 30 characters: a-z, 0-9, _"
-      />
-
-      <p className="enc-status" style={{ minHeight: 20 }}>
-        {handleState.state === 'idle' && <>Your permanent name on the protocol.</>}
-        {handleState.state === 'checking' && <>checking…</>}
-        {handleState.state === 'available' && (
-          <>
-            <span className="enc-tag">free</span> @{handle.trim()} is available
-          </>
-        )}
-        {handleState.state === 'taken' && (
-          <>
-            <span className="enc-tag off">taken</span> @{handle.trim()} belongs to{' '}
-            <span className="mono">{short(handleState.owner)}</span>
-          </>
-        )}
-        {handleState.state === 'invalid' && (
-          <>
-            <span className="enc-tag off">invalid</span> {handleState.message}
-          </>
-        )}
-        {handleState.state === 'unmeasured' && (
-          <span className="unmeasured">
-            Could not check availability: {handleState.detail}. It stays blocked rather than guessed.
-          </span>
-        )}
+    <div className="w-wizard">
+      <p className="w-wizard__count">Step 2 of 3</p>
+      <h2 className="w-wizard__title">Choose your handle</h2>
+      <p className="w-wizard__lede">
+        Your permanent name on the protocol. It is claimed on chain, and nobody can take it off you.
       </p>
-
-      <label className="k" htmlFor="display-name" style={{ display: 'block', marginTop: 14 }}>
-        AND WHAT SHOULD YOUR PAGE CALL YOU?
-      </label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
-        <span style={{ lineHeight: 0, flexShrink: 0 }}>
-          <Avatar address={signer.address} size={64} />
-        </span>
-        <input
-          id="display-name"
-          className="comment-input"
-          style={{ flex: 1, minWidth: 0 }}
-          value={displayName}
-          autoComplete="name"
-          maxLength={60}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder={handle.trim() === '' ? 'Your name, as people should read it' : handle.trim()}
-        />
-      </div>
-      <p className="enc-status" style={{ minHeight: 20 }}>
-        Your name is shown above your posts and you can change it whenever you like — unlike the
-        handle, it is not on chain. The picture is drawn from your address, so it is yours and
-        nobody else&rsquo;s.
-      </p>
-
-      {referrer !== null && (
-        <div className="note" style={{ marginTop: 4 }}>
-          <span className="lbl">Referred by {short(referrer)}</span>
-          <p>
-            Recorded once, at creation. The protocol has no setter for it, so this cannot be changed
-            or removed later, by you or by us.
-          </p>
-        </div>
-      )}
-
-      {quote === null ? (
-        <button
-          className="btn"
-          type="button"
-          style={{ marginTop: 12 }}
-          disabled={!ready || busy}
-          onClick={() => void simulate()}
-        >
-          {busy ? 'Simulating…' : 'Check and continue'}
-        </button>
-      ) : (
-        <div className="note" style={{ marginTop: 12 }}>
-          <span className="lbl">Simulated. Nothing signed yet</span>
-          <p>
-            Claiming <strong>@{handle.trim()}</strong> costs{' '}
-            <strong>{sui(quote.gasMist)} SUI</strong> in gas. Registration itself is free; the
-            protocol charges for creator vaults, never for an identity.
-          </p>
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
-              {busy ? 'Waiting for your signature…' : 'Sign and register'}
-            </button>
-            <button className="btn ghost" type="button" disabled={busy} onClick={() => setQuote(null)}>
-              Back
-            </button>
+      <div className="w-wizard__body">
+        <div className="w-field">
+          <label htmlFor="handle">Handle</label>
+          <div className="w-field__row">
+            <span aria-hidden="true">@</span>
+            <input
+              id="handle"
+              className="w-input"
+              value={handle}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(e) => setHandle(e.target.value)}
+              placeholder="yourname"
+            />
           </div>
-          <p className="legal-consent">
-            Registering accepts our <a href="/legal/terms">Terms of Service</a> and our{' '}
-            <a href="/legal/privacy">Privacy Policy</a>. If you go on to publish or take payment,
-            the <a href="/legal/creator-terms">Creator Terms</a> apply as well.
+          <ul className="w-req" aria-label="What a handle needs">
+            <li data-met={typed === '' ? undefined : lengthOk}>
+              {MIN_HANDLE_LEN} to {MAX_HANDLE_LEN} characters
+            </li>
+            <li data-met={typed === '' ? undefined : charsOk}>Lowercase letters, numbers and underscores</li>
+            <li
+              data-met={
+                handleState.state === 'available' ? true : handleState.state === 'taken' ? false : undefined
+              }
+            >
+              Not taken
+            </li>
+          </ul>
+          <p className="w-field__note" role="status">
+            {handleState.state === 'idle' && <>Type a handle to check it.</>}
+            {handleState.state === 'checking' && <>Checking…</>}
+            {handleState.state === 'available' && <>@{typed} is available.</>}
+            {handleState.state === 'taken' && (
+              <>
+                @{typed} is taken. It belongs to <span className="w-mono">{short(handleState.owner)}</span>.
+              </>
+            )}
+            {handleState.state === 'invalid' && <>{handleState.message}</>}
+            {handleState.state === 'unmeasured' && (
+              <span className="w-field__note--bad">
+                Could not check availability: {handleState.detail}. It stays blocked rather than guessed.
+              </span>
+            )}
           </p>
         </div>
-      )}
 
-      {error !== null && <p className="unmeasured">{error}</p>}
+        <div className="w-field">
+          <label htmlFor="display-name">Name, as people should read it (optional)</label>
+          <div className="w-field__row">
+            <span aria-hidden="true">
+              <Avatar address={signer.address} size={44} />
+            </span>
+            <input
+              id="display-name"
+              className="w-input"
+              value={displayName}
+              autoComplete="name"
+              maxLength={60}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={typed === '' ? 'Your name' : typed}
+            />
+          </div>
+          <p className="w-field__note">
+            Shown above your posts; change it whenever you like. The mark is drawn from your address.
+          </p>
+        </div>
+
+        {referrerNote}
+      </div>
+
+      <div className="w-wizard__foot">
+        <span />
+        <button
+          type="button"
+          className="w-btn w-btn--primary"
+          disabled={!ready || busy}
+          onClick={() => setStep('claim')}
+        >
+          Next
+        </button>
+      </div>
+      {help}
     </div>
   );
 }

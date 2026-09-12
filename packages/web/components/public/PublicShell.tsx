@@ -7,6 +7,7 @@ import { SOCIAL } from '@/lib/social-links';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, WeirLine, WeirLockup, WeirMark } from '@projectx-social/ui';
+import { useSigner } from '@/components/SignerProvider';
 
 const PUBLIC_NAV: readonly { href: string; label: string }[] = [
   { href: '/explore', label: 'Creators' },
@@ -122,6 +123,27 @@ export function PublicFooter() {
   );
 }
 
+/*
+  The two doors, fixed to the bottom of a signed-out page on a phone, where the header has folded
+  them into a menu. The same pair the rail shows, in the same order; it disappears once a signer
+  exists and on the doors themselves.
+*/
+export function PublicDock() {
+  const pathname = usePathname();
+  const { signer } = useSigner();
+  if (signer !== null || pathname === '/signin' || pathname === '/join' || pathname === '/welcome') return null;
+  return (
+    <nav className="w-dock" aria-label="Join or sign in">
+      <NextLink href="/join" className="w-btn w-btn--primary">
+        Create account
+      </NextLink>
+      <NextLink href="/signin" className="w-btn w-btn--quiet">
+        Sign in
+      </NextLink>
+    </nav>
+  );
+}
+
 export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="w-app w-land">
@@ -135,6 +157,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
         </main>
         <PublicFooter />
       </div>
+      <PublicDock />
     </div>
   );
 }

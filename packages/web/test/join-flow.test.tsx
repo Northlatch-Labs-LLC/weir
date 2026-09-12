@@ -7,8 +7,21 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 let signer: { address: string; kind: string; label: string; signTransaction: ReturnType<typeof vi.fn> } | null = null;
-vi.mock('@/components/SignerProvider', () => ({ useSigner: () => ({ signer }) }));
-vi.mock('@/components/SignIn', () => ({ SignIn: () => <div>sign in</div> }));
+vi.mock('@/components/SignerProvider', () => ({
+  useSigner: () => ({
+    signer,
+    ready: true,
+    wake: () => {},
+    wallets: [],
+    unusableWallets: [],
+    signInWithGoogle: vi.fn(async () => undefined),
+    connectWallet: vi.fn(async () => undefined),
+  }),
+}));
+vi.mock('next/navigation', () => {
+  const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
+  return { useRouter: () => router, usePathname: () => '/join' };
+});
 
 const { JoinFlow } = await import('../components/JoinFlow');
 
@@ -57,7 +70,8 @@ describe('signed out', () => {
     signer = null;
     mockAccount({ state: 'available' });
     render(<JoinFlow referrer={null} />);
-    expect(screen.getByText('sign in')).toBeTruthy();
+    expect(screen.getByText('Sign in with Google')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 3')).toBeTruthy();
     expect(screen.getByText(/cannot be transferred/i)).toBeTruthy();
   });
 });
@@ -88,7 +102,7 @@ describe('checking a handle', () => {
     const input = container.querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'nova' } });
     await waitFor(() => expect(screen.getByText(/taken/i)).toBeTruthy(), { timeout: 3000 });
-    expect(screen.getByText('Check and continue').closest('button')?.disabled).toBe(true);
+    expect(screen.getByText('Next').closest('button')?.disabled).toBe(true);
   });
 
   it('does not treat an unreadable registry as available', async () => {
@@ -98,7 +112,7 @@ describe('checking a handle', () => {
     const input = container.querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'nova' } });
     await waitFor(() => expect(screen.queryByText(/available/i)).toBeNull(), { timeout: 3000 });
-    expect(screen.getByText('Check and continue').closest('button')?.disabled).toBe(true);
+    expect(screen.getByText('Next').closest('button')?.disabled).toBe(true);
   });
 
   it('explains why a handle is malformed instead of just refusing it', async () => {
@@ -118,7 +132,7 @@ describe('an address that already holds an account', () => {
 
     await waitFor(() => expect(screen.queryByText(/already have an account/i)).not.toBeNull());
     expect(screen.getByText(/@nova/)).toBeTruthy();
-    expect(screen.queryByLabelText(/CHOOSE A HANDLE/i)).toBeNull();
+    expect(screen.queryByLabelText(/^Handle$/)).toBeNull();
   });
 
   it('blocks rather than guessing when the registry could not be read', async () => {
@@ -127,7 +141,7 @@ describe('an address that already holds an account', () => {
 
     await waitFor(() => expect(screen.queryByText(/could not read the registry/i)).not.toBeNull());
     expect(screen.getByText(/the node is unreachable/)).toBeTruthy();
-    expect(screen.queryByLabelText(/CHOOSE A HANDLE/i)).toBeNull();
+    expect(screen.queryByLabelText(/^Handle$/)).toBeNull();
   });
 
   it('offers registration to an address that holds nothing yet', async () => {
@@ -151,8 +165,8 @@ describe('the quote belongs to the address it was simulated for', () => {
     const input = view.container.querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'disposable' } });
     await waitFor(() => expect(screen.getByText(/available/i)).toBeTruthy(), { timeout: 3000 });
-    fireEvent.click(screen.getByText('Check and continue'));
-    await waitFor(() => expect(screen.queryByText(/Simulated/)).not.toBeNull());
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(screen.queryByText(/Nothing signed yet/)).not.toBeNull());
     return { view, calls };
   }
 
@@ -170,15 +184,15 @@ describe('the quote belongs to the address it was simulated for', () => {
     signer = { address: '0xother', kind: 'wallet', label: 'Slush', signTransaction: vi.fn(async () => 'sig') };
     view.rerender(<JoinFlow referrer={null} />);
 
-    await waitFor(() => expect(screen.queryByText(/Simulated/)).toBeNull());
-    expect(screen.queryByText('Check and continue')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText(/Nothing signed yet/)).toBeNull());
+    expect(screen.queryByText('Next')).not.toBeNull();
   });
 
   it('signs and submits exactly the bytes that were simulated', async () => {
     const { calls } = await simulateFor('0xda78');
     const sign = signer!.signTransaction;
 
-    fireEvent.click(screen.getByText('Sign and register'));
+    fireEvent.click(screen.getByText('Sign and claim'));
 
     await waitFor(() => expect(sign).toHaveBeenCalledWith('AAAAquote'));
     const submitted = calls.find((call) => call.url.includes('/api/checkout/submit'));

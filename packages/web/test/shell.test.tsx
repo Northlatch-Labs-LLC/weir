@@ -13,6 +13,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/AccountMenu', () => ({
   AccountMenu: () => <div data-testid="account-menu" />,
 }));
+vi.mock('@/components/SignerProvider', () => ({ useSigner: () => ({ signer: null }) }));
 
 let session: { ok: true; value: string | null } | { ok: false; failure: unknown } = { ok: true, value: null };
 vi.mock('@/lib/read-session', () => ({ provenReader: async () => session }));
@@ -124,10 +125,15 @@ describe('the frame', () => {
     expect(foot?.querySelector('a[href="/legal/terms"]')).not.toBeNull();
   });
 
-  it('offers the wallet control to a guest, on every route it wraps', async () => {
+  it('offers a guest the two doors, create account first, on every route it wraps', async () => {
     session = { ok: true, value: null };
-    const { getByTestId } = await shell();
-    expect(getByTestId('wallet-connect')).toBeTruthy();
+    const { container, queryByTestId } = await shell();
+    const doors = [...container.querySelectorAll('nav.w-rail .w-rail__connect a')].map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
+    expect(doors).toEqual([
+      ['Create account', '/join'],
+      ['Sign in', '/signin'],
+    ]);
+    expect(queryByTestId('wallet-connect')).toBeNull();
   });
 
   it('gives a proved session the account menu, not a link to its own page', async () => {

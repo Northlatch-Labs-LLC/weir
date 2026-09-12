@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSigner } from '@/components/SignerProvider';
+import { Wall } from '@/components/app/Wall';
 
 export function SignIn({
   compact = false,
@@ -118,11 +119,7 @@ export function SignIn({
         )
       ) : (
         <div className="signin-wallets">
-          {onDoor ? null : (
-            <a className="w-btn w-btn--primary w-btn--sm" href={next}>
-              Sign in
-            </a>
-          )}
+          {onDoor ? null : <Wall compact />}
           {!compact && session?.available === true && (
             <p className="signin-note">
               Google, or a Sui wallet. Either way the address is <strong>yours</strong>, and the keys stay on your device.

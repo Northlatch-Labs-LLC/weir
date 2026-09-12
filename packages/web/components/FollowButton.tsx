@@ -5,12 +5,14 @@ import { useState } from 'react';
 import { useSigner } from '@/components/SignerProvider';
 import { SignInPrompt } from '@/components/SignInPrompt';
 
-function statement(handle: string, following: boolean, address: string, timestampMs: number): string {
+export function followStatement(handle: string, following: boolean, address: string, timestampMs: number): string {
   return (
     `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
     `\naction: ${following ? 'follow' : 'unfollow'}\ncreator: ${handle}`
   );
 }
+
+const statement = followStatement;
 
 export function FollowButton({
   handle,

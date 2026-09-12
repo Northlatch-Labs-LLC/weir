@@ -21,6 +21,7 @@ import { readVault } from '@/lib/stake';
 import { listPerks, readSupportersFirst } from '@/lib/perks';
 import { standingOf } from '@/lib/supporters';
 import { FollowButton } from '@/components/FollowButton';
+import { Wall } from '@/components/app/Wall';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { cache } from 'react';
@@ -214,9 +215,7 @@ export default async function CreatorPage({
           Not for sale right now: the coin scale is being read from the chain.
         </p>
       ) : viewer === null ? (
-        <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
-          Sign in to join
-        </a>
+        <Wall why="Joining needs an account." compact />
       ) : (
         <SubscribeButton
           vaultId={profile.vaultId}
@@ -251,18 +250,14 @@ export default async function CreatorPage({
 
   const subscribeSlot =
     viewer === null ? (
-      <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
-        Sign in to follow
-      </a>
+      <Wall compact />
     ) : (
       <FollowButton handle={profile.handle} initialFollowing={following} initialCount={followers} />
     );
 
   const depositSlot =
     viewer === null ? (
-      <a className="btn" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
-        Sign in to become a member
-      </a>
+      <Wall why="Becoming a member needs an account." />
     ) : onChainStakeVault === undefined ? (
       <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
         This account has not opened a pool yet, so there is nowhere to deposit.
@@ -280,9 +275,7 @@ export default async function CreatorPage({
 
   const tipSlot =
     profile.vaultId === null || coinDecimals === null ? undefined : viewer === null ? (
-      <a className="btn ghost" href={`/signin?next=${encodeURIComponent(`/c/${profile.handle}`)}`}>
-        Sign in to tip
-      </a>
+      <Wall why="Tipping needs an account." compact />
     ) : (
       <TipButton vaultId={profile.vaultId} decimals={coinDecimals} symbol={coinSymbol} />
     );

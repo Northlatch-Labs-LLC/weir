@@ -29,6 +29,7 @@ const PUBLIC_EXACT: readonly string[] = [
   '/waitlist',
   '/signin',
   '/join',
+  '/welcome',
   '/add-funds',
   '/agents/build',
   '/agents/reference',

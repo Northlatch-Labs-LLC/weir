@@ -135,6 +135,7 @@ const ELSEWHERE: readonly Destination[] = [
   { href: '/names', label: 'Your .sui name', icon: 'name', section: 'Your account' },
   { href: '/account/recovery', label: 'Recovery', icon: 'key', section: 'Your account' },
   { href: '/auth/callback', label: 'Signing in', icon: 'key', parent: '/signin' },
+  { href: '/welcome', label: 'Welcome', icon: 'spark', parent: '/join' },
 ];
 
 export const DESTINATIONS: ReadonlyMap<string, Destination> = (() => {

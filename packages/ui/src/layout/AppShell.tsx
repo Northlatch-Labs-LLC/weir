@@ -128,15 +128,18 @@ export function LeftRail({
             </>
           )}
         </>
-      ) : connect === undefined ? (
-        <Link href="/signin" className="w-btn w-btn--primary w-rail__publish">
-          Sign in
-        </Link>
       ) : (
+        /*
+          The two doors every social network shows a stranger, in this order, everywhere. The wallet
+          connect control belongs behind the Sign in door, not in the rail: a stranger is asked to
+          create an account or sign in, never to "connect".
+        */
         <div className="w-rail__connect">
-          {connect}
-          <Link href="/signin" className="w-rail__alt">
-            or continue with Google
+          <Link href="/join" className="w-btn w-btn--primary">
+            Create account
+          </Link>
+          <Link href="/signin" className="w-btn w-btn--quiet">
+            Sign in
           </Link>
         </div>
       )}
@@ -184,7 +187,11 @@ export function BottomBar({
 }) {
   const all: readonly NavItem[] = viewer.signedIn
     ? [...items, { href: '/vault', label: 'Vault', icon: 'vault' as IconName }]
-    : [...items, { href: '/signin', label: 'Sign in', icon: 'profile' as IconName }];
+    : [
+        ...items,
+        { href: '/join', label: 'Join', icon: 'plus' as IconName },
+        { href: '/signin', label: 'Sign in', icon: 'profile' as IconName },
+      ];
 
   return (
     <nav className="w-bottom" aria-label="Weir">

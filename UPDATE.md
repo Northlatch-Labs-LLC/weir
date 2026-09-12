@@ -7,6 +7,56 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (night) · The join journey is built: two doors everywhere, three steps, then welcome
+
+**Built, on the branch.** The journey ruled in the entry below now runs on localhost:3000. A stranger sees
+the same two buttons everywhere, in the same order: **Create account** then **Sign in**. In the rail
+(`packages/ui` `LeftRail`, guests no longer get a "Connect wallet" control), in the bottom bar under 834px
+(`Join`, `Sign in`), in the public header, and in a new dock fixed to the bottom of every signed-out public
+page on a phone (`PublicDock` in `components/public/PublicShell.tsx`). Every wall on the creator page, the
+inline sign-in panels and the follow prompt render `components/app/Wall.tsx`: the two doors plus one line
+saying what is behind them, and both carry `?next=` back to the page.
+
+**`/join` is a wizard, "Step 1 of 3".** `components/JoinFlow.tsx` was rewritten as the three steps. Step 1
+"Your account" is the same two cards as `/signin` (`components/app/SignInDoors.tsx`, now shared by both
+doors); a reader who is already signed in starts at step 2. Step 2 "Choose your handle": one field checked
+live against the register, three requirement lines that turn as they are met (3 to 30 characters read from
+the contract's limits; lowercase letters, numbers, underscores; not taken), a taken handle names its owner,
+an unreadable register blocks rather than guesses, and the display name is an optional line that defaults
+to the handle. Step 3 "Claim it on chain" simulates on arrival, shows handle, name, referrer, price (free)
+and the gas read from the simulation, a stage line, and **Sign and claim**, which signs exactly the bytes
+that were simulated; a failure offers **Check again**. An address that already holds an account is told
+so and sent to its feed. Every step ends with "Having trouble? Ask @weirsocial".
+
+**`/welcome` is the onboarding.** After the claim, **Continue** lands on `app/welcome/page.tsx`, which
+needs a proved session. "Suggested for you" lists the directory's eight most-followed pages, the reader's
+own left out, declared agents marked from the register, anyone already followed shown as such; **Follow**
+per row and **Follow all** sign the same statement `FollowButton` signs, one signature each, with a
+"Following 2 of 6…" line, then **Continue** or **Skip**. Then "You're in": three slides (keys stay on your
+device; people and agents hold the same account; what you pay for lands in your wallet) and **Let's go** to
+`/feed`. No interests screen and no face screen yet: the face screen arrives with step 5's image upload.
+
+**Proof.** `tsc --noEmit` clean in `web` and `ui`. `next build` clean; `/welcome` is a route.
+`pnpm -C packages/ui test`: 32 passing. `pnpm -C packages/web test`: 181 files, 2,495 tests passing
+(two new files: `wall.test.tsx`, `welcome-flow.test.tsx`; `join-flow.test.tsx` retargeted to the wizard's
+copy — "Next" for "Check and continue", "Sign and claim" for "Sign and register", "Nothing signed yet" for
+"Simulated"; `shell.test.tsx` now asserts the two doors where it asserted the wallet control;
+`site-map.test.ts` lists `/welcome` as reached from `/join`). In the browser on localhost:3000 signed out:
+`/join` shows "Step 1 of 3 · Your account" with the Google card and Slush detected; `/c/heron` shows two
+walls with Create account → `/join?next=/c/heron` and Sign in → `/signin?next=/c/heron` and no "Sign in
+to…" link; at 596px `/security` shows the dock with both doors; `/explore` has the rail's two doors and the
+bottom bar's Join and Sign in, and no "Connect wallet" button.
+
+**Not verified in a browser here.** Steps 2 and 3 of the wizard and `/welcome` need a signer; this desk's
+browser holds none. Both are covered by the suite (handle checking, the quote belonging to the address,
+signing exactly the simulated bytes, follows signing in order). The owner's own browser is the check.
+
+**Seen, not caused here.** `/c/heron` logs one React warning, a list child without a key rendered by
+`CreatorScreen` from something `CreatorPage` hands it; the page's only change in this work is the four
+walls, so it predates this and is noted for step 9.
+
+---
+
 ## 2026-09-12 (night) · The join journey, taken from Bluesky. This governs every step from here.
 
 **The owner's instruction.** The identity stays exactly as built: a Sui wallet or Google through zkLogin, a

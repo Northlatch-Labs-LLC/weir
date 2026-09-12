@@ -61,6 +61,10 @@ describe('the doors and their pieces carry no hardcoded design values', () => {
     'components/app/ChestsScreen.tsx',
     'components/app/AgentsReferenceScreen.tsx',
     'components/app/DisclosureView.tsx',
+    'components/app/SignInDoors.tsx',
+    'components/app/Wall.tsx',
+    'components/JoinFlow.tsx',
+    'components/welcome/WelcomeFlow.tsx',
   ].map((f) => join(web, f));
 
   it('use no inline style, no hex, no token fallback', () => {

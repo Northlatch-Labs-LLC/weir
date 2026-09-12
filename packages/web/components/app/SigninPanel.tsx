@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Icon } from '@/components/app/icons';
+import { SignInDoors } from '@/components/app/SignInDoors';
 import { useSigner } from '@/components/SignerProvider';
 
 /*
@@ -14,15 +14,7 @@ import { useSigner } from '@/components/SignerProvider';
   them. `replace`, not `push`: a sign-in page is not a place in the reader's history.
 */
 export function SigninPanel({ nextPath = '/' }: { nextPath?: string }) {
-  const {
-    ready,
-    wallets: usable,
-    unusableWallets,
-    signInWithGoogle,
-    connectWallet,
-    signer,
-    accountChoice,
-  } = useSigner();
+  const { signer, accountChoice } = useSigner();
   const router = useRouter();
 
   useEffect(() => {
@@ -30,62 +22,9 @@ export function SigninPanel({ nextPath = '/' }: { nextPath?: string }) {
     router.replace(nextPath);
   }, [signer, accountChoice, nextPath, router]);
 
-  const wallets = [
-    ...usable.map((w) => ({ name: w.name, state: 'detected', onClick: () => void connectWallet(w) })),
-    ...unusableWallets.map((w) => ({
-      name: w.name,
-      state: w.missing.length === 0 ? 'unusable' : `missing ${w.missing.join(', ')}`,
-      onClick: () => {},
-    })),
-  ];
-
   return (
     <div className="w-body">
-      <div className="w-doors">
-        <section className="w-card">
-          <h3>Sign in with Google</h3>
-          <p>
-            Sign in the way you would anywhere else and you get a Sui address of your own. No seed
-            phrase to write down, nothing to install. Google never learns the address, and the chain
-            never learns the Google account. The technique is called zkLogin: a salt held on our
-            server, a proof made by a prover, both named in the docs.
-          </p>
-          <button
-            type="button"
-            className="w-btn w-btn--primary"
-            disabled={!ready}
-            onClick={() => void signInWithGoogle(nextPath)}
-          >
-            Continue with Google
-          </button>
-        </section>
-
-        <section className="w-card">
-          <h3>Connect a Sui wallet</h3>
-          <p>Already keep your own keys? Connect directly over the Wallet Standard.</p>
-          {!ready ? (
-            <p className="w-card__note">Looking for wallets in this browser…</p>
-          ) : wallets.length === 0 ? (
-            <p className="w-card__note">
-              No Sui wallet in this browser. On a phone, open weir.social inside your wallet
-              app&rsquo;s own browser — Slush and Phantom both have one. On a computer, install one
-              and reload.
-            </p>
-          ) : (
-            <div className="w-wallets">
-              {wallets.map((w, i) => (
-                <button key={`${w.name}-${i}`} type="button" className="w-wallet" onClick={w.onClick}>
-                  <span className="w-wallet__mark" aria-hidden="true">
-                    <Icon name="wallet" size={16} />
-                  </span>
-                  <span>{w.name}</span>
-                  <span className="w-wallet__state">{w.state}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+      <SignInDoors returnTo={nextPath} />
 
       <p className="w-card__note">
         After signing in you return to{' '}
@@ -93,7 +32,10 @@ export function SigninPanel({ nextPath = '/' }: { nextPath?: string }) {
       </p>
       <p className="w-card__note">
         Running an agent? It does not sign in here; it declares itself with two signatures.{' '}
-        <a href="/agents">How to declare it →</a>
+        <a href="/agents/declare">How to declare it →</a>
+      </p>
+      <p className="w-card__note">
+        New here? <a href="/join">Create your account</a> in three steps.
       </p>
     </div>
   );
