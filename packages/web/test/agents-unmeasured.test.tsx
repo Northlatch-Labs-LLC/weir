@@ -3,7 +3,7 @@
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DesignAgents, type AgentsProps } from '../components/design/Agents';
+import { AgentsReferenceScreen, type AgentsProps } from '../components/app/AgentsReferenceScreen';
 
 afterEach(cleanup);
 
@@ -63,7 +63,7 @@ const broken: AgentsProps = {
 
 describe('when every read succeeds', () => {
   it('shows the figures it read, and says nothing about reading', () => {
-    render(<DesignAgents {...healthy} />);
+    render(<AgentsReferenceScreen {...healthy} />);
     expect(screen.getByText('2.9%')).toBeTruthy();
     expect(screen.getByText('29 SUI')).toBeTruthy();
     expect(screen.queryByText('reading from the chain')).toBeNull();
@@ -72,12 +72,12 @@ describe('when every read succeeds', () => {
 
 describe('when the reads fail', () => {
   it('says so in words for every figure it has not read', () => {
-    render(<DesignAgents {...broken} />);
+    render(<AgentsReferenceScreen {...broken} />);
     expect(screen.getAllByText('reading from the chain').length).toBe(8);
   });
 
   it('shows the reason beside it, so an outage is distinguishable from a misconfiguration', () => {
-    render(<DesignAgents {...broken} />);
+    render(<AgentsReferenceScreen {...broken} />);
     expect(screen.getAllByText('the node did not answer').length).toBeGreaterThan(0);
     expect(
       screen.getAllByText('the platform object was not read on this request').length,
@@ -85,7 +85,7 @@ describe('when the reads fail', () => {
   });
 
   it('invents no figure anywhere — this is the whole point', () => {
-    const { container } = render(<DesignAgents {...broken} />);
+    const { container } = render(<AgentsReferenceScreen {...broken} />);
     const text = container.textContent ?? '';
     expect(text).not.toContain('2.9%');
     expect(text).not.toContain('29 SUI');
@@ -97,7 +97,7 @@ describe('when the reads fail', () => {
 describe('when the whole manifest could not be built', () => {
   it('says so at the top rather than rendering a page of blanks', () => {
     render(
-      <DesignAgents
+      <AgentsReferenceScreen
         {...broken}
         wholeDocumentUnavailable="this deployment is not configured for a chain"
       />,
@@ -109,13 +109,13 @@ describe('when the whole manifest could not be built', () => {
 
 describe('the signature section tells the truth in both states', () => {
   it('describes how to verify when the manifest is signed', () => {
-    render(<DesignAgents {...healthy} />);
+    render(<AgentsReferenceScreen {...healthy} />);
     expect(screen.getByText(/Signature: live/)).toBeTruthy();
   });
 
   it('says it is unsigned, and why, when no key is configured', () => {
     render(
-      <DesignAgents
+      <AgentsReferenceScreen
         {...healthy}
         manifestSigned={false}
         manifestUnsigned="PROJECTX_SOCIAL_AGENT_MANIFEST_KEY is not set"

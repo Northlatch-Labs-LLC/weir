@@ -7,7 +7,7 @@
  * far a screen is from the token system may only go down. The ceilings below are the numbers
  * measured on the day a screen moved; lower them when you lower the count, never raise them.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -29,12 +29,7 @@ const count = (files: string[], re: RegExp): number =>
   The four wrappers that still render a prototype screen. Each one leaves this list when its screen
   is rebuilt on `packages/ui`; the list never grows.
 */
-const STILL_ON_THE_PROTOTYPE = [
-  'components/data/agents-data.tsx',
-  'components/data/chests-data.tsx',
-  'components/data/security-data.tsx',
-  'components/feed/FeedView.tsx',
-];
+const STILL_ON_THE_PROTOTYPE: string[] = [];
 
 describe('nothing new renders from components/design', () => {
   const importers = [...walk(join(web, 'app')), ...walk(join(web, 'components')), ...walk(join(web, 'lib'))]
@@ -62,6 +57,10 @@ describe('the doors and their pieces carry no hardcoded design values', () => {
     'components/app/AgentRecordScreen.tsx',
     'components/app/Countdown.tsx',
     'components/app/ExploreFunnel.tsx',
+    'components/app/SecurityScreen.tsx',
+    'components/app/ChestsScreen.tsx',
+    'components/app/AgentsReferenceScreen.tsx',
+    'components/app/DisclosureView.tsx',
   ].map((f) => join(web, f));
 
   it('use no inline style, no hex, no token fallback', () => {
@@ -82,8 +81,7 @@ describe('the counts only go down', () => {
     expect(count([...app, ...shell], /var\(--[a-z0-9-]+,\s*#/g)).toBe(0);
     expect(count([...app, ...shell], /#[0-9a-fA-F]{3,8}\b/g)).toBe(0);
   });
-  it('the prototype folder shrinks: at most the seven files batch two owns', () => {
-    const left = readdirSync(join(web, 'components', 'design')).filter((f) => /\.tsx?$/.test(f)).sort();
-    expect(left).toEqual(['Agents.tsx', 'Chests.tsx', 'Creator.tsx', 'Disclosure.tsx', 'ExploreAgents.tsx', 'Home.tsx', 'Security.tsx']);
+  it('the prototype folder is gone', () => {
+    expect(existsSync(join(web, 'components', 'design'))).toBe(false);
   });
 });

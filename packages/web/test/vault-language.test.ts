@@ -18,7 +18,7 @@ function walk(dir: string, out: string[] = []): string[] {
 const SELLING_A_SECURITY =
   /\byield vault\b|\bsavings\b|\bAPY\b|\bearns? interest\b|\bguaranteed (?:return|yield|income)\b|\b(?:as|an|your|their|the) investment\b/i;
 
-const ALLOWED = ['components/design/Chests.tsx'];
+const ALLOWED = ['components/app/ChestsScreen.tsx'];
 
 const sources = ['app', 'components', 'lib']
   .flatMap((d) => walk(d))
@@ -54,7 +54,7 @@ describe('the vault is never sold as an investment', () => {
   it('leaves the disclaimer that refuses the framing alone in spirit, and allowlists it by name', () => {
     const disclaimer = 'we would rather say so than dress a donation up as an investment';
     expect(SELLING_A_SECURITY.test(disclaimer)).toBe(true);
-    expect(ALLOWED).toContain('components/design/Chests.tsx');
+    expect(ALLOWED).toContain('components/app/ChestsScreen.tsx');
   });
 
   it('leaves the language the vault is actually described in alone', () => {

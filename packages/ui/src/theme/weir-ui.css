@@ -2659,4 +2659,124 @@
 
   /* Two doors side by side where the column is wide enough, stacked where it is not. */
   .w-doors { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); align-items: start; }
+
+  /* ==========================================================================
+     Documents with sections: security, chests, the agents reference.
+     ========================================================================== */
+  .w-doc__section { margin-top: 40px; }
+  .w-doc__section > .w-kicker { margin-bottom: 8px; }
+  .w-doc__section > h2 { margin: 0 0 8px; }
+  .w-doc__section > .w-doc__lede { margin-top: 8px; }
+  .w-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); margin-top: 18px; }
+  .w-grid--wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+  .w-grid > .w-card { min-width: 0; }
+
+  /* A guarantee: an icon, a claim, and the mechanism that enforces it. */
+  .w-guarantee__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 12px;
+    border-radius: var(--w-r-md);
+    border: 1px solid var(--w-line-strong);
+    background: var(--w-raised);
+    color: var(--w-mint);
+  }
+  .w-guarantee__how {
+    margin: 12px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--w-line);
+    font-family: var(--w-mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--w-mint);
+  }
+
+  /* A large figure with a title beneath it: what only a chain can do. */
+  .w-big { margin: 0; font-family: var(--w-mono); font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--w-mint); }
+  .w-big--unread { font-family: var(--w-sans); font-size: 17px; font-style: italic; color: var(--w-rose); }
+  .w-big + h3 { margin-top: 10px; }
+
+  /* A side-by-side answer: ours, then theirs. */
+  .w-cmp { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); margin-top: 12px; }
+  .w-cmp__cell { padding: 12px 14px; border-radius: var(--w-r-md); border: 1px solid var(--w-line); background: var(--w-raised); }
+  .w-cmp__cell--ours { border-color: rgba(140, 247, 198, 0.35); background: rgba(140, 247, 198, 0.06); }
+  .w-cmp__cell > .w-kicker { margin-bottom: 6px; }
+  .w-cmp__cell > p { margin: 0; font-family: var(--w-sans); font-size: 13.5px; line-height: 1.55; color: var(--w-ink-9); }
+  .w-card--ours { border-color: rgba(140, 247, 198, 0.35); background: rgba(140, 247, 198, 0.05); }
+
+  /* A published contract: name, tag, id, what it does, and the two actions. */
+  .w-contract { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .w-contract__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .w-contract__head h3 { margin: 0; }
+  .w-contract__id { margin: 8px 0 0; font-family: var(--w-mono); font-size: 12.5px; color: var(--w-ink-10); overflow-wrap: anywhere; }
+  .w-contract__id--none { font-family: var(--w-sans); font-style: italic; color: var(--w-ink-7); }
+  .w-contract__actions { display: grid; gap: 8px; }
+  @media (max-width: 520px) { .w-contract { grid-template-columns: minmax(0, 1fr); } }
+
+  /* A plain comparison table that stacks on a phone. */
+  .w-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-family: var(--w-sans); font-size: 13.5px; }
+  .w-table th, .w-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--w-line); vertical-align: top; }
+  .w-table th { font-family: var(--w-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-7); }
+  .w-table th.w-table__ours, .w-table td.w-table__ours { background: rgba(140, 247, 198, 0.05); }
+  .w-table th.w-table__ours { color: var(--w-mint); }
+  .w-table td:first-child { font-family: var(--w-mono); font-size: 12.5px; color: var(--w-ink-7); white-space: nowrap; }
+  .w-table tr:last-child td { border-bottom: 0; }
+  .w-table__wrap { overflow-x: auto; border: 1px solid var(--w-line); border-radius: var(--w-r-md); margin-top: 14px; }
+  .w-table__wrap .w-table { margin-top: 0; }
+
+  /* A share of the whole, drawn as a bar. */
+  .w-meter { display: block; width: 100%; height: 8px; margin-top: 14px; border-radius: var(--w-r-full); border: 1px solid var(--w-line); background: var(--w-ground); overflow: hidden; appearance: none; -webkit-appearance: none; }
+  .w-meter::-webkit-progress-bar { background: var(--w-ground); }
+  .w-meter::-webkit-progress-value { background: var(--w-mint); }
+  .w-meter::-moz-progress-bar { background: var(--w-mint); }
+
+  /* A short number field with its unit beside it. */
+  .w-amount { display: flex; align-items: center; gap: 10px; }
+  .w-amount > .w-input { width: 9rem; }
+  .w-amount > span { font-family: var(--w-mono); font-size: 12.5px; color: var(--w-ink-7); }
+
+  /* A row of small pressable amounts. */
+  .w-amounts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .w-card .w-btn--block { width: 100%; margin-top: 12px; }
+  .w-card__tag { margin-left: auto; }
+  .w-card__title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .w-card__title-row h3 { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+  .w-card__title-row h3 > span:first-child { color: var(--w-mint); display: inline-flex; }
+
+  /* The built-on list: a small mark, a name, a note. */
+  .w-built { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .w-built > li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--w-line); border-radius: var(--w-r-md); background: var(--w-panel); }
+  .w-built__mark { flex: 0 0 auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--w-line); border-radius: var(--w-r-sm); background: var(--w-raised); font-family: var(--w-mono); font-size: 11px; color: var(--w-mint); }
+  .w-built__mark img { width: 20px; height: 20px; object-fit: contain; display: block; }
+  .w-built__name { font-family: var(--w-sans); font-size: 14.5px; font-weight: 600; color: var(--w-ink-10); text-decoration: none; }
+  .w-built__note { display: block; font-family: var(--w-sans); font-size: 13px; color: var(--w-ink-7); }
+
+  /* Reference pages: the agents reference and its siblings. */
+  .w-doc__warn { color: var(--w-rose); }
+  .w-doc__strong { margin: 0; font-family: var(--w-sans); font-size: 17px; font-weight: 600; color: var(--w-ink-10); }
+  .w-center { text-align: center; }
+  .w-field--after { margin-top: 12px; }
+  .w-field__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .w-pre--scroll { white-space: pre; overflow-x: auto; }
+  .w-stepcard { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .w-stepcard h3 { margin-top: 2px; }
+  .w-actions--after { margin-top: 12px; }
+  .w-table__card { padding: 6px 12px; overflow-x: auto; }
+  .w-table__card .w-table { margin-top: 0; }
+  .w-table__caption { caption-side: bottom; padding: 12px 0 6px; text-align: left; font-family: var(--w-sans); font-size: 12.5px; line-height: 1.55; color: var(--w-ink-7); }
+  .w-doc .w-outcome { margin-top: 18px; }
+  .w-doc .w-outcome p { margin: 0; }
+  .w-doc .w-card > p:first-of-type { margin-top: 0; }
+  .w-doc .w-grid + .w-card, .w-doc .w-card + .w-card, .w-doc .w-card + h3, .w-doc h3 + .w-card { margin-top: 14px; }
+
+  /* The declared-agent line under a creator's handle: the register's answer, or that it was not read. */
+  .w-identity { margin: 0 0 10px; max-width: 58ch; }
+  .w-identity__line p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--w-sans); font-size: 14px; color: var(--w-ink-9); }
+  .w-identity__line details { margin-top: 6px; font-family: var(--w-sans); font-size: 13.5px; color: var(--w-ink-7); }
+  .w-identity__line summary { cursor: pointer; color: var(--w-ink-7); }
+  .w-identity__line details p { display: block; margin-top: 6px; line-height: 1.6; color: var(--w-ink-7); }
+  .w-identity__unread { margin: 0; font-size: 13.5px; }
 }

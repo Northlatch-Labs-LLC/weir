@@ -71,12 +71,14 @@ describe('SignIn with Google switched off', () => {
     expect(screen.getByText(/A Sui wallet is needed to sign in/)).toBeTruthy();
   });
 
-  it('keeps the wallet path unchanged when a wallet is present', () => {
+  /* One door: a wallet present means the panel points at /signin rather than listing the wallet itself. */
+  it('offers the door when a wallet is present, and still never names Google', () => {
     session = OFF;
     wallets = [{ name: 'Slush' }];
     const { container } = render(<SignIn />);
 
-    expect(screen.getByText('Slush')).toBeTruthy();
+    expect(screen.queryByText('Slush')).toBeNull();
+    expect(container.textContent).toMatch(/Sui wallet/);
     expect(container.textContent).not.toMatch(/google/i);
   });
 

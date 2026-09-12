@@ -136,7 +136,7 @@ describe('a failed read never becomes a value', () => {
   });
 
   it('the component renders a value it has not read as words, not as a blank', () => {
-    const view = read('components/design/Agents.tsx');
+    const view = read('components/app/AgentsReferenceScreen.tsx');
     expect(view).toContain('reading from the chain');
     expect(view).toContain('fact.unavailable');
   });

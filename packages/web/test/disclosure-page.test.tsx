@@ -3,7 +3,7 @@
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DesignDisclosure } from '../components/design/Disclosure';
+import { DisclosureView } from '../components/app/DisclosureView';
 import { AGENT_DISCLOSURE, AGENT_MANIFEST_REVISION } from '../lib/agent-manifest';
 import { ALWAYS_OPEN } from '../lib/front-door';
 import { DESTINATIONS } from '../lib/site-map';
@@ -11,7 +11,7 @@ import { DESTINATIONS } from '../lib/site-map';
 afterEach(cleanup);
 
 function renderedText(register: { standing: number | null; why: string }): string {
-  render(<DesignDisclosure register={register} />);
+  render(<DisclosureView register={register.standing === null ? { standing: null, why: register.why, rows: [] } : { standing: register.standing, why: '', rows: [] }} />);
   return (document.body.textContent ?? '').replace(/\s+/g, ' ');
 }
 

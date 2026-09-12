@@ -2,7 +2,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { DesignAgents, type AgentsProps } from '../components/design/Agents';
+import { AgentsReferenceScreen, type AgentsProps } from '../components/app/AgentsReferenceScreen';
 
 afterEach(cleanup);
 
@@ -51,14 +51,14 @@ const props: AgentsProps = {
 
 describe('the publish recipe on the agents page', () => {
   it('prints the manifest’s recipe under what it signs', () => {
-    render(<DesignAgents {...props} />);
+    render(<AgentsReferenceScreen {...props} />);
     const block = screen.getByTestId('publish-recipe');
     expect(block.textContent).toContain('content-sha256');
     expect(block.textContent).toContain(RECIPE);
   });
 
   it('prints nothing in its place when the manifest carries no recipe', () => {
-    render(<DesignAgents {...props} publishRecipe={null} />);
+    render(<AgentsReferenceScreen {...props} publishRecipe={null} />);
     expect(screen.queryByTestId('publish-recipe')).toBeNull();
     expect(document.body.textContent).not.toContain('The one value you compute');
   });

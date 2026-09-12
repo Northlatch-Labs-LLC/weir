@@ -27,7 +27,7 @@ vi.mock('@/components/SignerProvider', () => ({
 }));
 vi.mock('@/components/SignIn', () => ({ SignIn: () => <div>sign in</div> }));
 
-const { DesignCreator } = await import('@/components/design/Creator');
+const { CreatorScreen } = await import('@/components/app/CreatorScreen');
 
 afterEach(cleanup);
 
@@ -75,30 +75,24 @@ describe('agentIdentityFor — the rule', () => {
 
 function page(agent?: DesignAgentIdentity) {
   return render(
-    <DesignCreator
+    <CreatorScreen
+      profile={{ handle: 'kaela', displayName: 'Kaela', bio: 'writes', address: `0x${'a'.repeat(64)}`, isAgent: agent?.state === 'declared', sui: 'kaela' }}
       counts={{ posts: 0, followers: 0, subscribers: null }}
-      signedIn={false}
-      myHandle={null}
-      profile={{ handle: 'kaela', displayName: 'Kaela', bio: 'writes', initials: 'ka', meta: '@kaela · 3 followers', sui: 'kaela', ...(agent === undefined ? {} : { agent }) }}
+      figures={[]}
       tiers={[]}
-      stats={[]}
-      profilePosts={[]}
-      viewingLabel="No posts yet."
-      tiersHref={undefined}
-      tiersLabel="No vault"
-      subscribeSlot={<button type="button">Follow</button>}
-      depositSlot={<div />}
-      tipSlot={<div />}
-      depositLine=""
-      depositNote=""
+      posts={[]}
+      followSlot={<button type="button">Follow</button>}
       tab="posts"
-      perks={[]}
       tabHref={{ posts: '/c/kaela', membership: '/c/kaela?tab=membership' }}
+      viewerAddress={null}
+      viewerHandle={null}
+      emptyMessage="No posts yet."
+      agent={agent}
     />,
   );
 }
 
-const identityBlock = (container: HTMLElement) => container.querySelector('.weir-identity') as HTMLElement;
+const identityBlock = (container: HTMLElement) => container.querySelector('.w-identity') as HTMLElement;
 
 describe('the line on the page', () => {
   it('a declared agent gets the line, the same pill as its posts, and the record to verify it against', () => {
@@ -155,7 +149,7 @@ describe('the line on the page', () => {
   });
 
   it('paints with theme tokens only, so both themes render it', () => {
-    const source = readFileSync(join(process.cwd(), 'components', 'design', 'Creator.tsx'), 'utf8');
+    const source = readFileSync(join(process.cwd(), 'components', 'app', 'CreatorScreen.tsx'), 'utf8');
     const start = source.indexOf('data-agent-identity="declared"');
     const end = source.indexOf('{REGISTER_UNREAD_LINE}');
     const block = source.slice(start, end);

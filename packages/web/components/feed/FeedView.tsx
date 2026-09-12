@@ -13,7 +13,6 @@ import {
 import { accountHandle } from '@/lib/accounts';
 import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
-import { DesignHome } from '@/components/design/Home';
 import type { FeedPost } from '@/components/PostCard';
 import type { PostView } from '@projectx-social/ui';
 import { FeedApp, type FeedCreator } from '@/components/app/FeedApp';

@@ -5,11 +5,11 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DesignAgents, type AgentsProps } from '../components/design/Agents';
+import { AgentsReferenceScreen, type AgentsProps } from '../components/app/AgentsReferenceScreen';
 
 afterEach(cleanup);
 
-const source = readFileSync(join(import.meta.dirname, '..', 'components/design/Agents.tsx'), 'utf8');
+const source = readFileSync(join(import.meta.dirname, '..', 'components/app/AgentsReferenceScreen.tsx'), 'utf8');
 
 const HOSTED = ['weir_search', 'weir_quote', 'weir_read', 'weir_authorship', 'weir_agents', 'weir_seeking'];
 
@@ -64,7 +64,7 @@ function rendered(): string {
 
 describe('the tool count is taken from the table, not typed above it', () => {
   it('prints as many tool rows as it claims tools', () => {
-    const { container } = render(<DesignAgents {...props} />);
+    const { container } = render(<AgentsReferenceScreen {...props} />);
     const names = [...container.querySelectorAll('td')]
       .map((td) => td.textContent ?? '')
       .filter((t) => /^weir_[a-z]+$/.test(t));
@@ -73,7 +73,7 @@ describe('the tool count is taken from the table, not typed above it', () => {
   });
 
   it('never RENDERS a tool count spelled as a word, which is what nothing can check', () => {
-    render(<DesignAgents {...props} />);
+    render(<AgentsReferenceScreen {...props} />);
     expect(rendered()).not.toMatch(/\b(six|seven|eight|nine|ten|eleven|twelve)\s+tools\b/i);
     expect(source).toContain('{MCP_TOOLS.length} tools in');
   });
@@ -81,7 +81,7 @@ describe('the tool count is taken from the table, not typed above it', () => {
 
 describe('the hosted list is the manifest’s, not a remembered one', () => {
   it('names exactly the tools the manifest says the hosted server registers', () => {
-    render(<DesignAgents {...props} />);
+    render(<AgentsReferenceScreen {...props} />);
     const text = rendered();
     for (const tool of HOSTED) expect([tool, text.includes(tool)]).toEqual([tool, true]);
     expect(text).toContain(`${HOSTED.length} of them on the hosted server`);
@@ -89,7 +89,7 @@ describe('the hosted list is the manifest’s, not a remembered one', () => {
   });
 
   it('marks a row hosted iff the manifest named it, so the count above is checkable by eye', () => {
-    const { container } = render(<DesignAgents {...props} />);
+    const { container } = render(<AgentsReferenceScreen {...props} />);
     const rows = [...container.querySelectorAll('tr')].filter((tr) =>
       /^weir_[a-z]+$/.test(tr.querySelector('td')?.textContent ?? ''),
     );
@@ -98,14 +98,14 @@ describe('the hosted list is the manifest’s, not a remembered one', () => {
   });
 
   it('names no hosted tool at all when the manifest published no list', () => {
-    render(<DesignAgents {...props} hostedTools={[]} />);
+    render(<AgentsReferenceScreen {...props} hostedTools={[]} />);
     const text = rendered();
     expect(text).toContain('published no tool list');
     expect(text).not.toContain('of them on the hosted server');
   });
 
   it('sends a buyer to the published package rather than promising a future one', () => {
-    render(<DesignAgents {...props} />);
+    render(<AgentsReferenceScreen {...props} />);
     expect(rendered()).toContain('npm i @projectx-social/mcp');
     expect(source).not.toContain('once it is published');
   });
@@ -113,7 +113,7 @@ describe('the hosted list is the manifest’s, not a remembered one', () => {
 
 describe('the page stops promising it cannot disagree with the manifest', () => {
   it('says which parts are read and which are ours, and which wins', () => {
-    render(<DesignAgents {...props} />);
+    render(<AgentsReferenceScreen {...props} />);
     const text = rendered();
     expect(text).toContain('read from the deployment when this page renders');
     expect(text).toContain('where they disagree with the manifest, the manifest wins');
@@ -121,7 +121,7 @@ describe('the page stops promising it cannot disagree with the manifest', () => 
   });
 
   it('prints no gas figure and no machine-edition cut-off date', () => {
-    render(<DesignAgents {...props} />);
+    render(<AgentsReferenceScreen {...props} />);
     const text = rendered();
     expect(text).not.toContain('fraction of a cent');
     expect(text).not.toMatch(/after September 2026/);

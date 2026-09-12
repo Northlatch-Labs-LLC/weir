@@ -198,7 +198,7 @@ describe('the way in is never absent', () => {
   it('leads with signing in, not with installing an extension', () => {
     const source = readFileSync(resolve(process.cwd(), 'components/SignIn.tsx'), 'utf8');
     const branch = source.slice(source.indexOf('wallets.length === 0 && unusableWallets.length === 0'));
-    const signIn = branch.indexOf('href="/signin"');
+    const signIn = branch.indexOf('href={next}');
     const slush = branch.indexOf('slush.app');
     expect(signIn).toBeGreaterThan(-1);
     expect(signIn, 'the sign-in link must come before the wallet installs').toBeLessThan(slush);

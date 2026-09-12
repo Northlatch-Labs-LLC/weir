@@ -7,6 +7,48 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (later) · Step 1 done: one look everywhere. Two door rules added. One open item found.
+
+**Step 1 is closed.** `components/design/` no longer exists. Every routed screen renders from `packages/ui`
+classes and tokens. Rebuilt today on the branch `one-design-system`: `/signin`, `/waitlist`,
+`/agents/[handle]`, `/security`, `/chests`, `/agents/reference`, `/disclosure`. The creator page got back two
+things the prototype had and the live page had lost: the declared-agent line under the handle (with the
+record link and the two-signature note) and the tip control inside the Membership tab. The disclosure page
+now reports an unreadable register as unread, never as empty. The guard test `test/design-system-guard.test.ts`
+holds the line: no import of the prototype anywhere, the rebuilt files carry no inline style, hex or token
+fallback, the inline-style count under `components/app` may only fall from 200.
+
+**Door rules from the owner, done.** The logo inside the app goes to `/`. `/feed` requires a proved session
+and sends a stranger to `/signin?next=/feed`. `/explore` signed out shows only declared agents and their paid
+posts, with a line saying so; the whole directory and every free post need an account. There is one sign-in:
+the inline panels on `/join`, `/creator` and `/earnings` point at `/signin` instead of listing wallets a second
+time, and keep their honest wallet guidance. The signer provider lists each wallet once (Slush registered
+itself three times and React warned on the duplicate key).
+
+**Proof.** `tsc --noEmit` clean. `pnpm -C packages/web test`: 180 files, 2,492 tests, all passing with Postgres
+up on this Mac. `pnpm -C packages/ui test`: 32 passing. Each rebuilt page read in the browser on localhost:3000:
+one header, one footer, no horizontal overflow, zero inline styles inside the document at 1440, 834 and 390 for
+the three doors and at 1440 for the rest.
+
+**Tests moved, and why.** Five tests pinned the deleted prototype files. They now pin the live screens that do
+the same job: `creator-vault-card` and `agent-identity-line` render `CreatorScreen`; `operator-footprint-shown`
+renders `AgentsDirectoryScreen`; `disclosure-page` renders `DisclosureView`; `agent-marker` renders `PostCard`.
+One assertion changed meaning on purpose: the inline sign-in "keeps the wallet path" became "offers the door",
+because one sign-in was the owner's rule. `agents-ctas` asserts the site's button class `w-btn` instead of the
+prototype's `btn`. Nothing was skipped or loosened.
+
+**Open item, not code: Google sign-in is broken on the live site.** Google answers `401 deleted_client` for
+client `40250543449-…`. That client lives in Google Cloud project `project-198c177e-4711-457b-9a5` (project
+number 40250543449), which is in DELETE_REQUESTED since 9 Sep and can be restored until 9 Oct. The owner
+restores it in the Cloud console (IAM & Admin → Manage resources → resources pending deletion) or with
+`gcloud projects undelete project-198c177e-4711-457b-9a5`. No code change is needed; localhost uses the same client.
+
+**Also seen, left for their steps.** `/agents/reference` still carries 9 inline styles from
+`components/public/AgentsIntro.tsx` (step 1 leftovers, counted by the guard's ceiling). The web bundle is
+unchanged at 1.7 MB (step 2). `?reader=` still travels in URLs (step 3).
+
+---
+
 ## 2026-09-12 · The audit, the plan, and the first step done
 
 Supersedes WEIR-OUTSTANDING.md as the list of what is still wrong: that file was measured on 266364d and

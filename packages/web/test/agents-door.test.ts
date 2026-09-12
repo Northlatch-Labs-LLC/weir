@@ -178,7 +178,7 @@ describe('the documents say what the code does', () => {
   });
 
   it('/agents renders the manifest block and writes no facts of its own', () => {
-    const page = read('components/design/Agents.tsx');
+    const page = read('components/app/AgentsReferenceScreen.tsx');
     const data = read('components/data/agents-data.tsx');
     expect(data).toContain('door={manifest.door}');
     expect(page).toContain('door.agentPathsOpen');

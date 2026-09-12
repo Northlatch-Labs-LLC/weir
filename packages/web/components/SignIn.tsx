@@ -11,7 +11,7 @@ export function SignIn({
 }: { compact?: boolean; returnTo?: string } = {}) {
   const pathname = usePathname();
   const destination = returnTo ?? pathname;
-  const { signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount, cancelAccountChoice, reopenAccountChoice, signInWithGoogle, reauthorizeWallet, connectWallet, signOut, error } = useSigner();
+  const { signer, wallets, unusableWallets, session, accountChoice, walletAccounts, chooseAccount, cancelAccountChoice, reopenAccountChoice, reauthorizeWallet, signOut, error } = useSigner();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -72,53 +72,17 @@ export function SignIn({
     );
   }
 
+  /*
+    One door. Every way in (Google through zkLogin, a Sui wallet) lives on /signin, and the reader
+    comes back here afterwards. A second sign-in panel on this page was a second product. What
+    stays is the honest note: nothing about Google until the server has said whether it is on
+    offer, and where to get a wallet when this browser has none.
+  */
+  const next = `/signin?next=${encodeURIComponent(destination)}`;
+  const onDoor = pathname === '/signin' || pathname === '/join';
   return (
     <div className={compact ? 'signin signin--compact' : 'signin'}>
-
-      {(session?.available === true || wallets.length > 0) && (
-        <div className="signin-wallets">
-          {!compact && <span className="signin-or">choose how you sign in</span>}
-
-          {session?.available === true && (
-            <button
-              className="btn btn-google"
-              type="button"
-              onClick={() => void signInWithGoogle(destination)}
-            >
-              <GoogleMark />
-              {compact ? 'Google' : 'Continue with Google'}
-            </button>
-          )}
-
-          {wallets.map((wallet) => (
-            <button
-              key={wallet.name}
-              className="btn"
-              type="button"
-              disabled={session === null}
-              onClick={() => void connectWallet(wallet)}
-            >
-              {wallet.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!compact && session?.available === true && (
-        <p className="signin-note">
-          Either way the address is <strong>yours</strong>, and the keys stay on your device.
-        </p>
-      )}
-
-      {!compact &&
-        unusableWallets.map((wallet) => (
-          <p className="unmeasured" key={wallet.name}>
-            {wallet.name} is out of date — it cannot {wallet.missing.join(' or ')}. Update the
-            extension and reload.
-          </p>
-        ))}
-
-      {wallets.length === 0 && unusableWallets.length === 0 && (
+      {wallets.length === 0 && unusableWallets.length === 0 ? (
         compact ? (
           <p className="signin-note" style={{ margin: 0 }}>
             A Sui wallet is needed to sign in — Slush or Phantom.
@@ -132,14 +96,14 @@ export function SignIn({
               No Sui wallet in this browser. On a phone, open weir.social inside your wallet app&rsquo;s
               own browser — Slush and Phantom both have one. On a computer, install one and reload.
             </p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+            <div className="w-actions w-actions--after">
               {pathname === '/signin' || pathname === '/join' ? null : (
-                <a className="w-btn w-btn--primary w-btn--sm" href="/signin">
+                <a className="w-btn w-btn--primary w-btn--sm" href={next}>
                   Sign in
                 </a>
               )}
               <a
-                className={pathname === '/signin' || pathname === '/join' ? 'w-btn w-btn--primary w-btn--sm' : 'w-btn w-btn--quiet w-btn--sm'}
+                className={onDoor ? 'w-btn w-btn--primary w-btn--sm' : 'w-btn w-btn--quiet w-btn--sm'}
                 href="https://slush.app"
                 target="_blank"
                 rel="noreferrer noopener"
@@ -152,8 +116,21 @@ export function SignIn({
             </div>
           </div>
         )
+      ) : (
+        <div className="signin-wallets">
+          {onDoor ? null : (
+            <a className="w-btn w-btn--primary w-btn--sm" href={next}>
+              Sign in
+            </a>
+          )}
+          {!compact && session?.available === true && (
+            <p className="signin-note">
+              Google, or a Sui wallet. Either way the address is <strong>yours</strong>, and the keys stay on your device.
+            </p>
+          )}
+          {!compact && session?.available === false && <p className="signin-note">Sign in with your Sui wallet.</p>}
+        </div>
       )}
-
       {error !== null && <p className="unmeasured">{error}</p>}
     </div>
   );
@@ -204,16 +181,5 @@ function WalletAccountReport({
         </button>
       </div>
     </div>
-  );
-}
-
-function GoogleMark() {
-  return (
-    <svg viewBox="0 0 18 18" width="15" height="15" aria-hidden focusable="false">
-      <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.3-.2-1.9H9v3.5h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5Z" />
-      <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18Z" />
-      <path fill="#FBBC05" d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H.9a9 9 0 0 0 0 8l3-2.3Z" />
-      <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6Z" />
-    </svg>
   );
 }

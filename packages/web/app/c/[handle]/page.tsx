@@ -347,6 +347,7 @@ export default async function CreatorPage({
         }))}
         posts={appPosts}
         followSlot={subscribeSlot}
+        agent={agentIdentity}
         tipSlot={tipSlot}
         tipNote={tipNote}
         figuresNote={noVaultNote}

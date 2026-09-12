@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { statementFor } from '@projectx-social/sdk';
-import { DesignAgents, type AgentsProps } from '../components/design/Agents';
+import { AgentsReferenceScreen, type AgentsProps } from '../components/app/AgentsReferenceScreen';
 import { endpointCatalogue } from '../lib/agent-manifest';
 
 afterEach(cleanup);
@@ -62,14 +62,14 @@ function pasted(container: HTMLElement): string {
 
 describe('the four actions are on the page', () => {
   it('leads with a section called Start here, before the walkthrough', () => {
-    render(<DesignAgents {...healthy} />);
+    render(<AgentsReferenceScreen {...healthy} />);
     const start = screen.getByRole('heading', { name: /start here/i });
     const join = screen.getByRole('heading', { name: /how an agent joins/i });
     expect(start.compareDocumentPosition(join) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('gives the operator real links, styled as the site styles every other button', () => {
-    render(<DesignAgents {...healthy} />);
+    render(<AgentsReferenceScreen {...healthy} />);
     const manifest = screen.getByRole('link', { name: /open the manifest/i });
     const script = screen.getByRole('link', { name: /download the registration script/i });
     const seats = screen.getByRole('link', { name: /check seats live/i });
@@ -77,12 +77,12 @@ describe('the four actions are on the page', () => {
     expect(script).toHaveProperty('href', expect.stringContaining('/register-agent.mjs'));
     expect(seats).toHaveProperty('href', expect.stringContaining('/api/agents/sponsor'));
     for (const link of [manifest, script, seats]) {
-      expect(link.className.split(' ')).toContain('btn');
+      expect(link.className.split(' ')).toContain('w-btn');
     }
   });
 
   it('gives the agent commands built against the origin it is on, not a host typed here', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     const text = pasted(container);
     expect(text).toContain(`curl -sD headers.txt ${ORIGIN}/.well-known/weir-agent.json`);
     expect(text).toContain(`curl -O ${ORIGIN}/register-agent.mjs`);
@@ -92,14 +92,14 @@ describe('the four actions are on the page', () => {
   });
 
   it('follows the origin it is given, so a mirror prints commands that reach the mirror', () => {
-    const { container } = render(<DesignAgents {...healthy} origin="https://mirror.example" />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} origin="https://mirror.example" />);
     const text = pasted(container);
     expect(text).toContain('https://mirror.example/api/agents/sponsor');
     expect(text).not.toContain(ORIGIN);
   });
 
   it('makes every pasteable block reachable by keyboard', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     const blocks = Array.from(container.querySelectorAll('pre'));
     expect(blocks.length).toBeGreaterThanOrEqual(5);
     for (const pre of blocks) expect(pre.getAttribute('tabindex')).toBe('0');
@@ -108,13 +108,13 @@ describe('the four actions are on the page', () => {
 
 describe('the sponsored account, which is the primary action', () => {
   it('shows the live seat count against the total, and never a number of its own', () => {
-    render(<DesignAgents {...healthy} />);
+    render(<AgentsReferenceScreen {...healthy} />);
     expect(screen.getByText('45 of 50')).toBeTruthy();
   });
 
   it('says the count is unmeasured when the read failed, rather than showing zero', () => {
     render(
-      <DesignAgents
+      <AgentsReferenceScreen
         {...healthy}
         seats={{ ...healthy.seats, remaining: { value: null, unavailable: 'the seat table did not answer' } }}
       />,
@@ -126,7 +126,7 @@ describe('the sponsored account, which is the primary action', () => {
 
   it('prints no sponsorship command at all when the deployment does not sponsor', () => {
     const { container } = render(
-      <DesignAgents
+      <AgentsReferenceScreen
         {...healthy}
         seats={{ offered: false, whyNot: 'the sponsor key is not set on this deployment', total: 50, remaining: { value: null, unavailable: 'not offered' } }}
       />,
@@ -138,19 +138,19 @@ describe('the sponsored account, which is the primary action', () => {
   });
 
   it('states the handle rule the route enforces, in the numbers the SDK uses', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     expect(pasted(container)).toMatch(/3-30 characters, a-z 0-9 _ only/);
   });
 
   it('tells the agent the one thing that breaks the flow: sign the bytes, do not rebuild them', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     expect(pasted(container)).toMatch(/submit signatures \[yours, sponsorSignature\] in that order/);
   });
 });
 
 describe('the MCP server, which a stranger cannot obtain today', () => {
   it('says so, and prints no command that would fail', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     expect(screen.getByText(/not yet obtainable/i)).toBeTruthy();
     const everything = container.textContent ?? '';
     expect(everything).not.toMatch(/npx\s+@projectx-social/);
@@ -160,7 +160,7 @@ describe('the MCP server, which a stranger cannot obtain today', () => {
 
   it('prints the command only when told it is obtainable', () => {
     const { container } = render(
-      <DesignAgents {...healthy} mcp={{ obtainable: true, hosted: 'https://mcp.weir.social/mcp', command: '{"mcpServers":{"weir":{}}}' }} />,
+      <AgentsReferenceScreen {...healthy} mcp={{ obtainable: true, hosted: 'https://mcp.weir.social/mcp', command: '{"mcpServers":{"weir":{}}}' }} />,
     );
     expect(pasted(container)).toContain('"mcpServers"');
     expect(screen.queryByText(/not yet obtainable/i)).toBeNull();
@@ -181,7 +181,7 @@ describe('the declaration', () => {
   }
 
   it('prints the agent statement byte-for-byte as statementFor produces it', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     const template = Array.from(container.querySelectorAll('pre'))
       .map((p) => p.textContent ?? '')
       .find((t) => t.includes('action: declare agent'));
@@ -197,7 +197,7 @@ describe('the declaration', () => {
   });
 
   it('prints the operator statement byte-for-byte as statementFor produces it', () => {
-    const { container } = render(<DesignAgents {...healthy} />);
+    const { container } = render(<AgentsReferenceScreen {...healthy} />);
     const template = Array.from(container.querySelectorAll('pre'))
       .map((p) => p.textContent ?? '')
       .find((t) => t.includes('action: declare operator'));
@@ -214,7 +214,7 @@ describe('the declaration', () => {
 
   it('prints nothing for a deployment whose manifest publishes no declaration endpoint', () => {
     const { container } = render(
-      <DesignAgents {...healthy} paths={{ ...healthy.paths, declare: null }} />,
+      <AgentsReferenceScreen {...healthy} paths={{ ...healthy.paths, declare: null }} />,
     );
     expect(pasted(container)).not.toContain('declare agent');
     expect(screen.getByText(/does not publish a declaration endpoint/)).toBeTruthy();
@@ -237,7 +237,7 @@ describe('what the page is told is true of the repository', () => {
   });
 
   it('types no route path into the component itself', () => {
-    const source = readFileSync(join(ROOT, 'components', 'design', 'Agents.tsx'), 'utf8')
+    const source = readFileSync(join(ROOT, 'components', 'app', 'AgentsReferenceScreen.tsx'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/^\s*\/\/.*$/gm, ' ');
     expect(source).not.toMatch(/['"`]\/api\/agents\/(sponsor|declare)['"`]/);
@@ -247,7 +247,7 @@ describe('what the page is told is true of the repository', () => {
 describe('agents looking for an operator', () => {
   it('shows each listed agent in its own words, marked untrusted, with a claim link to the operator page', () => {
     const listing = { address: `0x${'7'.repeat(64)}`, handle: 'wanderer', model: 'claude', purpose: 'reads contracts', words: 'Claim me and I will earn.', createdAtMs: 1 };
-    render(<DesignAgents {...healthy} seeking={{ listings: [listing], truncated: false, unavailable: null }} />);
+    render(<AgentsReferenceScreen {...healthy} seeking={{ listings: [listing], truncated: false, unavailable: null }} />);
     const card = document.querySelector(`[data-seeking="${listing.address}"]`) as HTMLElement;
     expect(card).not.toBeNull();
     expect(card.querySelector('[data-untrusted="true"]')?.textContent).toBe(listing.words);
@@ -257,10 +257,10 @@ describe('agents looking for an operator', () => {
   });
 
   it('says nobody is waiting when the list is empty, and says the list could not be read when it could not', () => {
-    const { unmount } = render(<DesignAgents {...healthy} />);
+    const { unmount } = render(<AgentsReferenceScreen {...healthy} />);
     expect(document.querySelector('[data-seeking-empty="true"]')).not.toBeNull();
     unmount();
-    render(<DesignAgents {...healthy} seeking={{ listings: [], truncated: false, unavailable: 'store timed out' }} />);
+    render(<AgentsReferenceScreen {...healthy} seeking={{ listings: [], truncated: false, unavailable: 'store timed out' }} />);
     expect(document.querySelector('[data-seeking-unavailable="true"]')?.textContent).toContain('store timed out');
     expect(document.querySelector('[data-seeking-empty="true"]')).toBeNull();
   });

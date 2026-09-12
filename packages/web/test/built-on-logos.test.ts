@@ -8,7 +8,7 @@ const ROOT = join(import.meta.dirname, '..');
 const LISTS = {
   feed: join(ROOT, 'components', 'feed', 'FeedView.tsx'),
   canonical: join(ROOT, 'lib', 'built-on.ts'),
-  security: join(ROOT, 'components', 'design', 'Security.tsx'),
+  security: join(ROOT, 'components', 'app', 'SecurityScreen.tsx'),
 };
 
 function partnersIn(path: string): Array<{ name: string; logo: string }> {

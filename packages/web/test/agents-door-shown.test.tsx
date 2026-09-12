@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DesignAgents, type AgentsProps } from '../components/design/Agents';
+import { AgentsReferenceScreen, type AgentsProps } from '../components/app/AgentsReferenceScreen';
 import { WaitlistPanel } from '../components/app/WaitlistPanel';
 
 afterEach(cleanup);
@@ -58,7 +58,7 @@ const agentsProps = (door: AgentsProps['door']): AgentsProps => ({
 
 describe('/agents answers "can my agent do this today"', () => {
   it('says a declared agent registers and acts now, and names the declaration as the gate', () => {
-    render(<DesignAgents {...agentsProps(OPEN_TO_MACHINES)} />);
+    render(<AgentsReferenceScreen {...agentsProps(OPEN_TO_MACHINES)} />);
     expect(screen.getByRole('heading', { name: 'The door, today' })).not.toBeNull();
     const said = document.body.textContent ?? '';
     expect(said).toContain('A declared agent registers and acts here now.');
@@ -67,7 +67,7 @@ describe('/agents answers "can my agent do this today"', () => {
   });
 
   it('keeps the people half separate, with the date and the label together', () => {
-    render(<DesignAgents {...agentsProps(OPEN_TO_MACHINES)} />);
+    render(<AgentsReferenceScreen {...agentsProps(OPEN_TO_MACHINES)} />);
     const said = document.body.textContent ?? '';
     expect(said).toContain('People are a different reader.');
     expect(said).toContain('1 December 2026');
@@ -77,7 +77,7 @@ describe('/agents answers "can my agent do this today"', () => {
 
   it('prints no date at all when the deployment holds none', () => {
     render(
-      <DesignAgents
+      <AgentsReferenceScreen
         {...agentsProps({ ...OPEN_TO_MACHINES, peopleOnboardFromMs: null, peopleOnboardLabel: null })}
       />,
     );
@@ -89,7 +89,7 @@ describe('/agents answers "can my agent do this today"', () => {
 
   it('names the paths that closed, rather than repeating the good sentence, when one closes', () => {
     render(
-      <DesignAgents
+      <AgentsReferenceScreen
         {...agentsProps({ ...OPEN_TO_MACHINES, agentPathsClosed: ['/api/'], agentPathsOpen: false })}
       />,
     );
@@ -100,7 +100,7 @@ describe('/agents answers "can my agent do this today"', () => {
   });
 
   it('paints the door legibly in the first frame rather than fading it in', () => {
-    render(<DesignAgents {...agentsProps(OPEN_TO_MACHINES)} />);
+    render(<AgentsReferenceScreen {...agentsProps(OPEN_TO_MACHINES)} />);
     const panel = screen.getByRole('heading', { name: 'The door, today' }).closest('section');
     expect(panel).not.toBeNull();
     expect(panel!.hasAttribute('data-reveal')).toBe(true);
@@ -114,7 +114,7 @@ describe('/agents answers "can my agent do this today"', () => {
   });
 
   it('says where it read the answer, so the reader can check it', () => {
-    render(<DesignAgents {...agentsProps(OPEN_TO_MACHINES)} />);
+    render(<AgentsReferenceScreen {...agentsProps(OPEN_TO_MACHINES)} />);
     const said = document.body.textContent ?? '';
     expect(said).toContain('/.well-known/weir-agent.json');
     expect(said).toContain('Where this paragraph and that document disagree, the document wins.');

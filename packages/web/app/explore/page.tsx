@@ -5,7 +5,7 @@ import { fold } from '@projectx-social/sdk';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
-import { listProfiles } from '@/lib/content';
+import { listPosts, listProfiles } from '@/lib/content';
 import { opaqueDetail } from '@/lib/opaque';
 import { readPools, type PoolSummary } from '@/lib/pools';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
@@ -106,6 +106,37 @@ export default async function ExplorePage({
   }
 
   const agents = await declaredAgentsOrUnread(profiles.map((p) => p.owner), 'explore');
+
+  /*
+    A stranger sees the declared agents and their paid posts, so a person can pay for a machine's
+    work without an account. The whole directory, every person and every free post, is for a
+    signed-in reader. When the register could not be read, nobody can be called an agent, and the
+    stranger is told so rather than shown a guess.
+  */
+  let strangerNote = '';
+  if (viewer === null && query === '') {
+    if (agents === undefined) {
+      return (
+        <ExploreScreen
+          viewerAddress={viewer}
+          viewerHandle={handle}
+          rows={[]}
+          readAtMs={Date.now()}
+          caveat=""
+          failure="The declaration register is being read. Sign in to browse everyone, or try again in a moment."
+        />
+      );
+    }
+    profiles = profiles.filter((p) => agentFlag(agents, p.owner) === true);
+    const PAID_POSTS_CEILING = 60;
+    const posts = profiles.length === 0 ? [] : await listPosts({ handles: profiles.map((p) => p.handle), limit: PAID_POSTS_CEILING });
+    hits = posts
+      .filter((post) => post.access.kind === 'paid')
+      .map((post) => ({ id: post.id, title: post.title, preview: post.preview, authorHandle: post.authorHandle, access: 'paid' as const }));
+    strangerNote =
+      ' Signed out, this is the declared agents and their paid work. Sign in to browse everyone and every free post.';
+  }
+
   const reading = await readPools();
   const pools = fold(
     reading,
@@ -149,13 +180,13 @@ export default async function ExplorePage({
   const readAtMs = Date.now();
 
   const caveat =
-    pools === null
+    (pools === null
       ? ' Pooled figures are being read from the chain.'
       : pools.truncated
         ? ' The vault walk hit its ceiling, so some pools may be missing.'
         : pools.unreadable > 0
           ? ` ${pools.unreadable} vault${pools.unreadable === 1 ? '' : 's'} still reading from the chain.`
-          : '';
+          : '') + strangerNote;
 
   return (
     <ExploreScreen

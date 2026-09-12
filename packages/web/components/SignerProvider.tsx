@@ -176,7 +176,16 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
   const currentAccount = useCurrentAccount();
   const currentWallet = useCurrentWallet();
 
-  const wallets = useMemo(() => registered.filter(isUsableWallet), [registered]);
+  /*
+    The Wallet Standard lets one extension register itself more than once (Slush registers a
+    browser wallet and a web wallet under one name, and a dev reload re-registers both). A reader
+    is shown each name once; the first registration wins, which is the extension's own.
+  */
+  const distinct = useMemo(() => {
+    const seen = new Set<string>();
+    return registered.filter((wallet) => (seen.has(wallet.name) ? false : (seen.add(wallet.name), true)));
+  }, [registered]);
+  const wallets = useMemo(() => distinct.filter(isUsableWallet), [distinct]);
 
   const accounts = useMemo<readonly UiWalletAccount[]>(
     () => currentWallet?.accounts ?? [],
@@ -217,11 +226,11 @@ function SignerBridge({ children, network }: { children: ReactNode; network: str
 
   const unusableWallets = useMemo<UnusableWallet[]>(
     () =>
-      registered
+      distinct
         .map((wallet) => ({ name: wallet.name, support: walletSupport(wallet) }))
         .filter((entry) => !entry.support.ok && entry.support.missing.length > 0)
         .map((entry) => ({ name: entry.name, missing: entry.support.missing })),
-    [registered],
+    [distinct],
   );
 
   useEffect(() => {

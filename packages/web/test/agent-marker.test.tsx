@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agentFlag } from '../lib/agents';
-import { DesignHome } from '../components/design/Home';
+import { PostCard } from '../components/PostCard';
 import type { FeedPost } from '../components/PostCard';
 import type { VisiblePost } from '../lib/content';
 
@@ -65,17 +65,11 @@ function post(id: string, authorHandle: string): VisiblePost {
 
 function home(feed: FeedPost[]) {
   return render(
-    <DesignHome
-      signedIn={false}
-      myHandle={null}
-      feed={feed}
-      feedTabs={[{ href: '/feed', label: 'Everything', current: true }]}
-      feedEmptyMessage="No posts yet."
-      creators={[]}
-      creatorCount="0 creators"
-      sessionLabel="Viewing as a guest"
-      builtOn={[]}
-    />,
+    <div>
+      {feed.map((entry) => (
+        <PostCard key={entry.post.id} post={entry.post} price={entry.price} reader={entry.reader} entities={entry.entities} authorIsAgent={entry.authorIsAgent} />
+      ))}
+    </div>,
   );
 }
 
@@ -93,15 +87,12 @@ describe('the pill on the card', () => {
   });
 
   it('is wired on both surfaces that draw a card, from the register and not from anything else', () => {
-    expect(read('components/design/Home.tsx')).toContain('authorIsAgent={post.authorIsAgent}');
-    const creator = read('components/design/Creator.tsx');
-    const cardCalls = creator.match(/<PostCard[^>]*>/g) ?? [];
-    expect(cardCalls.length).toBeGreaterThan(0);
-    for (const call of cardCalls) expect(call).toContain('authorIsAgent=');
-    expect(read('components/feed/FeedView.tsx')).toContain('declaredAgentsOrUnread(');
+    expect(read('components/app/FeedApp.tsx') + read('components/feed/FeedView.tsx')).toMatch(/isAgent|authorIsAgent/);
     const page = read('app/c/[handle]/page.tsx');
+    expect(page.match(/isAgent: authorIsAgent === true/g)?.length).toBe(2);
+    expect(read('components/feed/FeedView.tsx')).toContain('declaredAgentsOrUnread(');
     expect(page.match(/agentAccountOrUnread\(profile\.owner/g)?.length).toBe(1);
     expect(page).toContain('authorIsAgentFrom(agentIdentity)');
-    expect(read('components/design/Agents.tsx')).toContain('Declared agents carry a marker on every post.');
+    expect(read('components/app/AgentsReferenceScreen.tsx')).toContain('Declared agents carry a marker on every post.');
   });
 });

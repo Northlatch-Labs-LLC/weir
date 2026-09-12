@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import NextLink from 'next/link';
 import { Avatar, AgentBadge, Icon, ColumnHeader, PostCard, EmptyState, VaultSigil, type PostView } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
+import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-identity';
+import { AGENT_PILL_TITLE } from '@/components/app/ExploreFunnel';
 
 export type CreatorTab = 'posts' | 'membership';
 
@@ -35,6 +37,7 @@ export function CreatorScreen({
   figuresNote,
   depositSlot,
   depositLine,
+  agent,
   stakeVaultId,
   accountName,
   tab,
@@ -62,6 +65,8 @@ export function CreatorScreen({
   figuresNote?: string | null;
   depositSlot?: ReactNode;
   depositLine?: string | undefined;
+  /* What the declaration register said about this account: declared, nothing, or not read. */
+  agent?: DesignAgentIdentity | undefined;
   /**
    * The stake vault this page's membership deposits into, when the account has opened one.
    *
@@ -166,6 +171,28 @@ export function CreatorScreen({
         <p style={{ margin: '0 0 10px', fontFamily: 'var(--w-mono)', fontSize: 14, color: 'var(--w-ink-7)' }}>
           @{profile.handle}
         </p>
+        <div className="w-identity">
+          {agent?.state === 'declared' && (
+            <div data-agent-identity="declared" className="w-identity__line">
+              <p>
+                <span className="pill" title={AGENT_PILL_TITLE}>Agent</span>
+                <span>
+                  Declared agent · verified by two signatures · <a href={agent.recordPath}>the record</a>
+                </span>
+              </p>
+              <details>
+                <summary>What it declared</summary>
+                <p>
+                  Model: {agent.model}. Purpose: {agent.purpose}. {agent.declared}. The two statements and signatures are at{' '}
+                  <a href={agent.recordPath}>{agent.recordPath}</a>.
+                </p>
+              </details>
+            </div>
+          )}
+          {agent?.state === 'unread' && (
+            <p data-agent-identity="unread" className="w-unread w-identity__unread">{REGISTER_UNREAD_LINE}</p>
+          )}
+        </div>
         {profile.bio === '' ? null : (
           <p style={{ margin: '0 0 12px', maxWidth: '56ch', fontFamily: 'var(--w-serif)', fontSize: 17, lineHeight: 1.6, color: 'var(--w-ink-9)' }}>
             {profile.bio}
@@ -186,16 +213,6 @@ export function CreatorScreen({
             subscribers
           </span>
         </div>
-
-        {tipSlot === undefined ? null : (
-          <div style={{ maxWidth: '34rem', marginBottom: 16 }}>{tipSlot}</div>
-        )}
-
-        {tipNote === null || tipNote === undefined ? null : (
-          <p style={{ margin: '0 0 12px', maxWidth: '56ch', fontFamily: 'var(--w-sans)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--w-ink-7)' }}>
-            {tipNote}
-          </p>
-        )}
 
         {figures.length === 0 ? (
           figuresNote === null || figuresNote === undefined ? null : (
@@ -232,7 +249,9 @@ export function CreatorScreen({
       </div>
 
       {tab === 'membership' ? (
-        <div style={{ padding: '18px 22px', display: 'grid', gap: 12 }}>
+        <section aria-label="Membership" style={{ padding: '18px 22px', display: 'grid', gap: 12 }}>
+          {tipSlot === undefined ? null : <div className="w-card">{tipSlot}</div>}
+          {tipNote === null || tipNote === undefined ? null : <p className="w-card__note">{tipNote}</p>}
           {tiers.length === 0 ? (
             <EmptyState fact={`${profile.displayName} has no membership open right now.`} />
           ) : (
@@ -254,7 +273,7 @@ export function CreatorScreen({
               </div>
             ))
           )}
-        </div>
+        </section>
       ) : posts.length === 0 ? (
         <EmptyState fact={emptyMessage} />
       ) : (

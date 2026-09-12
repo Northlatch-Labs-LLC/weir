@@ -30,40 +30,35 @@ vi.mock('@/components/SignerProvider', () => ({
   }),
 }));
 
-const { DesignCreator } = await import('@/components/design/Creator');
+const { CreatorScreen } = await import('@/components/app/CreatorScreen');
 const { TipButton } = await import('@/components/TipButton');
 
 const PROFILE = {
   handle: 'nova',
   displayName: 'Nova',
   bio: 'A bio.',
-  initials: 'no',
-  meta: '@nova · 3 followers',
+  address: `0x${'a'.repeat(64)}`,
+  isAgent: false,
   sui: 'nova.sui',
 };
 
 function card(overrides: { tipSlot?: ReactNode } = {}) {
   return render(
-    <DesignCreator
-      counts={{ posts: 0, followers: 0, subscribers: null }}
-      signedIn
-      myHandle="nova"
+    <CreatorScreen
       profile={PROFILE}
+      counts={{ posts: 0, followers: 0, subscribers: null }}
+      figures={[]}
       tiers={[
         {
-          price: '10 USDC',
+          price: '10 SUI',
           cadence: 'Monthly · every 30 days',
-          net: 'Creator keeps 9.71 USDC',
+          net: 'Creator keeps 9.71 SUI',
           held: false,
           action: <button type="button" data-testid="subscribe">Join</button>,
         },
       ]}
-      stats={[]}
-      profilePosts={[]}
-      viewingLabel="Viewing as a guest"
-      tiersHref={undefined}
-      tiersLabel="No vault"
-      subscribeSlot={<button type="button" data-testid="follow">Follow</button>}
+      posts={[]}
+      followSlot={<button type="button" data-testid="follow">Follow</button>}
       depositSlot={
         <div data-testid="deposit">
           <label htmlFor="amount">AMOUNT · SUI</label>
@@ -72,10 +67,11 @@ function card(overrides: { tipSlot?: ReactNode } = {}) {
       }
       tipSlot={overrides.tipSlot ?? <button type="button" data-testid="tip">Send a tip</button>}
       depositLine="Pool SUI behind this account."
-      depositNote="Withdrawable in full, any time."
       tab="membership"
-      perks={[]}
       tabHref={{ posts: '/c/nova', membership: '/c/nova?tab=membership' }}
+      viewerAddress={null}
+      viewerHandle={null}
+      emptyMessage="No posts yet."
     />,
   );
 }
@@ -85,27 +81,28 @@ afterEach(cleanup);
 describe('the support-vault card', () => {
   it('offers exactly one amount field, and it is the one the transaction is built from', () => {
     const { container } = card();
-    const aside = container.querySelector('aside');
-    expect(aside).not.toBeNull();
+    /* The shell's own search field also lives in the aside; the pool card is the money surface. */
+    const pool = container.querySelector('aside .w-card--money');
+    expect(pool).not.toBeNull();
 
-    const fields = aside!.querySelectorAll('input');
+    const fields = pool!.querySelectorAll('input');
     expect(fields.length).toBe(1);
-    expect(aside!.querySelector('[data-testid="deposit"]')?.contains(fields[0]!)).toBe(true);
+    expect(pool!.querySelector('[data-testid="deposit"]')?.contains(fields[0]!)).toBe(true);
   });
 
   it('leaves no label pointing at a control that is gone', () => {
     const { container } = card();
-    const aside = container.querySelector('aside')!;
-    for (const label of aside.querySelectorAll('label[for]')) {
+    const pool = container.querySelector('aside .w-card--money')!;
+    for (const label of pool.querySelectorAll('label[for]')) {
       const target = label.getAttribute('for')!;
-      expect(aside.querySelector(`#${target}`)).not.toBeNull();
+      expect(pool.querySelector(`#${target}`)).not.toBeNull();
     }
   });
 
   it('keeps the tip out of the pool card', () => {
     const { container } = card();
-    const aside = container.querySelector('aside')!;
-    expect(aside.querySelector('[data-testid="tip"]')).toBeNull();
+    const pool = container.querySelector('aside .w-card--money')!;
+    expect(pool.querySelector('[data-testid="tip"]')).toBeNull();
   });
 
   it('puts the tip where the design already explains it', () => {
@@ -116,10 +113,10 @@ describe('the support-vault card', () => {
 
   it('keeps the membership purchase in the tier card and out of the pool card', () => {
     const { container } = card();
-    const aside = container.querySelector('aside')!;
+    const pool = container.querySelector('aside .w-card--money')!;
     const membership = container.querySelector('section[aria-label="Membership"]')!;
     expect(membership.querySelector('[data-testid="subscribe"]')).not.toBeNull();
-    expect(aside.querySelector('[data-testid="subscribe"]')).toBeNull();
+    expect(pool.querySelector('[data-testid="subscribe"]')).toBeNull();
   });
 });
 

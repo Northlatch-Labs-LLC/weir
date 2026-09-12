@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const PAGE = join(process.cwd(), 'components/design/Agents.tsx');
+const PAGE = join(process.cwd(), 'components/app/AgentsReferenceScreen.tsx');
 const TOOLS = join(process.cwd(), '../mcp/src/tools.ts');
 
 const page = readFileSync(PAGE, 'utf8');

@@ -3,7 +3,7 @@ import 'server-only';
 
 import { headers } from 'next/headers';
 import { agentManifest, AGENT_MANIFEST_DNS_ANCHOR, AGENT_MANIFEST_PATH } from '@/lib/agent-manifest';
-import { DesignAgents, type AgentFact, type AgentEndpointRow } from '@/components/design/Agents';
+import { AgentsReferenceScreen, type AgentFact, type AgentEndpointRow } from '@/components/app/AgentsReferenceScreen';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SPONSORSHIP_SEATS, loadSponsor, seatsRemaining } from '@/lib/sponsor';
@@ -125,7 +125,7 @@ export async function AgentsData() {
     manifest.authentication.statements.find((s) => s.kind === 'publish')?.computed?.['contentSha256'] ?? null;
 
   return (
-    <DesignAgents
+    <AgentsReferenceScreen
       network={measured(chain?.network, chainWhy)}
       originalPackageId={measured(chain?.originalPackageId, chainWhy)}
       latestPackageId={measured(chain?.latestPackageId, chainWhy)}
