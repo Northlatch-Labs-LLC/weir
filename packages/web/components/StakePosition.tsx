@@ -2,8 +2,9 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
+import { DigestLine, MoneyDialog } from '@/components/app/MoneyDialog';
+import { useCheckout } from '@/components/app/use-checkout';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 
 const sui = (mist: string) => formatUnits(BigInt(mist), SUI_DECIMALS);
@@ -15,21 +16,35 @@ interface VaultView {
   rebatePoolMist: string; rebateBps: string; solvent: boolean;
 }
 interface Position { principalMist: string; pendingRebateMist: string }
+interface Quote { bytes: string; gasMist: string }
 
 type Load =
   | { state: 'idle' | 'loading' }
   | { state: 'ready'; vault: VaultView; position: Position | null }
   | { state: 'unmeasured'; detail: string };
 
+function toMist(input: string): bigint | null {
+  const text = input.trim();
+  if (!/^\d+(\.\d{1,9})?$/.test(text)) return null;
+  const [whole = '0', frac = ''] = text.split('.');
+  return BigInt(whole + frac.padEnd(9, '0'));
+}
+
+/*
+  What a member holds in a vault, and the two decisions they can take: withdraw the principal,
+  claim their share of the yield. Each is a dialog that shows the chain's answer before the one
+  signature. The figures are read from the chain and never invented: an unread vault says so.
+*/
 export function StakePosition({ vaultId }: { vaultId: string }) {
-  const { signer } = useSigner();
+  const withdraw = useCheckout<Quote>();
+  const rebate = useCheckout<Quote>();
+  const signer = withdraw.signer;
   const [accountId, setAccountId] = useState<string | null>(null);
   const [load, setLoad] = useState<Load>({ state: 'idle' });
   const [amount, setAmount] = useState('');
-  const [quote, setQuote] = useState<{ what: 'withdraw' | 'rebate'; bytes: string; gasMist: string } | null>(null);
-  const [digest, setDigest] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [shape, setShape] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<'withdraw' | 'rebate' | null>(null);
+  const [withdrawing, setWithdrawing] = useState<bigint | null>(null);
 
   const refresh = useCallback(async (who: string) => {
     setLoad({ state: 'loading' });
@@ -55,64 +70,11 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
       .catch(() => setAccountId(null));
   }, [signer, refresh]);
 
-  async function simulate(what: 'withdraw' | 'rebate') {
-    if (signer === null || accountId === null) return;
-    setBusy(true); setError(null); setQuote(null); setDigest(null);
-    try {
-      const url = what === 'withdraw' ? '/api/stake/withdraw' : '/api/stake/rebate';
-      const payload: Record<string, string> = {
-        sender: signer.address, vaultId, accountId,
-      };
-      if (what === 'withdraw') {
-        const typed = amount.trim();
-        const all = load.state === 'ready' ? (load.position?.principalMist ?? '0') : '0';
-        if (typed === '') payload['amountMist'] = all;
-        else {
-          if (!/^\d+(\.\d{1,9})?$/.test(typed)) { setError('Enter an amount in SUI, for example 0.5'); return; }
-          const [whole = '0', frac = ''] = typed.split('.');
-          payload['amountMist'] = BigInt(whole + frac.padEnd(9, '0')).toString();
-        }
-      }
-      const r = await fetch(url, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const b = (await r.json()) as { quote?: { bytes: string; gasMist: string }; error?: string };
-      if (b.quote === undefined) setError(b.error ?? 'that could not be simulated');
-      else setQuote({ what, bytes: b.quote.bytes, gasMist: b.quote.gasMist });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally { setBusy(false); }
-  }
-
-  async function signAndSubmit() {
-    if (signer === null || quote === null) return;
-    setBusy(true); setError(null);
-    try {
-      const signature = await signer.signTransaction(quote.bytes);
-      const r = await fetch('/api/checkout/submit', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bytes: quote.bytes, signature }),
-      });
-      const b = (await r.json()) as { digest?: string; error?: string };
-      if (b.digest === undefined) { setError(b.error ?? 'that was not accepted'); return; }
-      setDigest(b.digest);
-      setQuote(null);
-      setAmount('');
-      await refresh(signer.address);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally { setBusy(false); }
-  }
-
   if (signer === null) {
     return (
-      <div className="panel">
-        <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
-          Sign in to see what you have deposited here and to take it back.
-        </p>
+      <div className="w-money">
+        <p className="w-dialog__after">Sign in to see what you have deposited here and to take it back.</p>
         <SignIn />
-        {error !== null && <p className="unmeasured">{error}</p>}
       </div>
     );
   }
@@ -130,28 +92,49 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
   }
 
   if (load.state !== 'ready') {
-    return <div className="panel"><p style={{ margin: 0, color: 'var(--text-tertiary)' }}>Reading the vault…</p></div>;
+    return <p className="w-dialog__after">Reading the vault…</p>;
   }
 
   const { vault, position } = load;
   const principal = BigInt(position?.principalMist ?? '0');
-  const rebate = BigInt(position?.pendingRebateMist ?? '0');
+  const pending = BigInt(position?.pendingRebateMist ?? '0');
+
+  const startWithdraw = () => {
+    if (accountId === null) return;
+    const typed = amount.trim();
+    const mist = typed === '' ? principal : toMist(typed);
+    if (mist === null || mist === 0n) {
+      setShape('Enter an amount in SUI, for example 0.5');
+      return;
+    }
+    setShape(null);
+    setWithdrawing(mist);
+    setDialog('withdraw');
+    void withdraw.simulate('/api/stake/withdraw', { vaultId, accountId, amountMist: mist.toString() });
+  };
+
+  const startRebate = () => {
+    if (accountId === null) return;
+    setDialog('rebate');
+    void rebate.simulate('/api/stake/rebate', { vaultId, accountId });
+  };
+
+  const closeDialog = () => {
+    setDialog(null);
+    withdraw.reset();
+    rebate.reset();
+  };
+
+  const landed = async () => {
+    setAmount('');
+    closeDialog();
+    await refresh(signer.address);
+  };
 
   return (
-    <>
-      {digest !== null && (
-        <div className="note" style={{ marginBottom: 'var(--space-20)' }}>
-          <span className="lbl">Done</span>
-          <p>
-            <a href={`https://suiscan.xyz/mainnet/tx/${digest}`} target="_blank" rel="noreferrer">
-              <span className="mono">{digest.slice(0, 14)}…</span>
-            </a>
-          </p>
-        </div>
-      )}
-
+    <div className="w-money">
       {!vault.solvent && (
-        <div className="note crit" style={{ marginBottom: 'var(--space-20)' }}>
+        <div className="note crit">
           <span className="lbl">Invariant violated</span>
           <p>
             The vault reports less backing than principal. The contract asserts against this on
@@ -163,26 +146,24 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
 
       <div className="card">
         <span className="k">YOUR DEPOSIT</span>
-        <div style={{ display: 'grid', gap: 'var(--space-20)', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginTop: 'var(--space-12)' }}>
-          <div className="stat">
-            <span className="k">Principal (yours)</span>
-            <span className="v" style={{ color: principal > 0n ? 'var(--text-prize)' : undefined }}>
-              {sui(position?.principalMist ?? '0')}
-            </span>
+        <dl className="w-facts w-facts--grid">
+          <div>
+            <dt>Principal (yours)</dt>
+            <dd>{sui(position?.principalMist ?? '0')} SUI</dd>
           </div>
-          <div className="stat">
-            <span className="k">Your share accrued</span>
-            <span className="v">{sui(position?.pendingRebateMist ?? '0')}</span>
+          <div>
+            <dt>Your share accrued</dt>
+            <dd>{sui(position?.pendingRebateMist ?? '0')} SUI</dd>
           </div>
-        </div>
+        </dl>
 
         {position === null ? (
-          <p className="section-note" style={{ marginBottom: 0 }}>
+          <p className="w-card__note">
             You have not deposited here. This is a measured answer — the vault&rsquo;s table was
             read and holds no entry for your address.
           </p>
         ) : (
-          <p className="locked-why">
+          <p className="w-card__note">
             Your share is a lower bound: the contract accrues on interaction, so anything earned
             since you last touched this vault is not in that figure yet.
           </p>
@@ -192,7 +173,7 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
       {principal > 0n && (
         <div className="card">
           <span className="k">TAKE IT BACK</span>
-          <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-10) 0 var(--space-16)' }}>
+          <p className="w-dialog__after">
             In full, at any time, with no waiting period and no approval. If the vault&rsquo;s liquid
             balance is short, the contract unwinds delegated stake in this same transaction. The
             forgone yield is the creator&rsquo;s loss, never yours.
@@ -207,61 +188,115 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
                 <a href="/join">Claim a handle</a> to withdraw.
               </p>
             </div>
-          ) : quote?.what === 'withdraw' ? (
-            <div className="note">
-              <span className="lbl">Checked against the chain. Nothing signed yet</span>
-              <p>Gas <strong>{sui(quote.gasMist)} SUI</strong>. The principal returns to this address.</p>
-              <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
-                <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
-                  {busy ? 'Waiting for your signature…' : 'Sign and withdraw'}
-                </button>
-                <button className="btn ghost" type="button" disabled={busy} onClick={() => setQuote(null)}>Back</button>
-              </div>
-            </div>
           ) : (
-            <div style={{ display: 'flex', gap: 'var(--space-8)', flexWrap: 'wrap' }}>
-              <input
-                className="comment-input" style={{ maxWidth: 220 }} inputMode="decimal"
-                aria-label="Amount of SUI to withdraw"
-                placeholder={`All of it: ${sui(position?.principalMist ?? '0')} SUI`}
-                value={amount} onChange={(e) => setAmount(e.target.value)}
-              />
-              <button className="btn" type="button" disabled={busy} onClick={() => void simulate('withdraw')}>
-                {busy ? 'Checking…' : 'Withdraw'}
-              </button>
+            <div className="w-field">
+              <div className="w-field__row w-money__row">
+                <input
+                  className="w-input"
+                  inputMode="decimal"
+                  aria-label="Amount of SUI to withdraw"
+                  placeholder={`All of it: ${sui(position?.principalMist ?? '0')} SUI`}
+                  value={amount}
+                  onChange={(e) => {
+                    setAmount(e.target.value);
+                    setShape(null);
+                  }}
+                />
+                <button type="button" className="w-btn w-btn--primary" onClick={startWithdraw}>
+                  Withdraw
+                </button>
+              </div>
+              {shape === null ? null : <p className="w-field__note w-field__note--bad">{shape}</p>}
             </div>
           )}
         </div>
       )}
 
-      {rebate > 0n && accountId !== null && (
+      {pending > 0n && accountId !== null && (
         <div className="card">
           <span className="k">YOUR GIVE-BACK</span>
-          <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-10) 0 var(--space-16)' }}>
+          <p className="w-dialog__after">
             This creator hands back {Number(vault.rebateBps) / 100}% of what their vault earns to
             the people who are members. You have{' '}
             <strong>{sui(position?.pendingRebateMist ?? '0')} SUI</strong> accrued.
           </p>
-          {quote?.what === 'rebate' ? (
-            <div className="note">
-              <span className="lbl">Checked against the chain. Nothing signed yet</span>
-              <p>Gas <strong>{sui(quote.gasMist)} SUI</strong>.</p>
-              <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
-                <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
-                  {busy ? 'Waiting for your signature…' : 'Sign and claim'}
-                </button>
-                <button className="btn ghost" type="button" disabled={busy} onClick={() => setQuote(null)}>Back</button>
-              </div>
-            </div>
-          ) : (
-            <button className="btn" type="button" disabled={busy} onClick={() => void simulate('rebate')}>
-              {busy ? 'Checking…' : 'Claim my share'}
-            </button>
-          )}
+          <button type="button" className="w-btn w-btn--primary" onClick={startRebate}>
+            Claim my share
+          </button>
         </div>
       )}
 
-      {error !== null && <p className="unmeasured">{error}</p>}
-    </>
+      {dialog === 'withdraw' && withdrawing !== null ? (
+        <MoneyDialog
+          title="Withdraw your principal"
+          stage={withdraw.stage}
+          error={withdraw.error}
+          blocked={withdraw.blocked}
+          signed={withdraw.signed}
+          facts={[
+            { label: 'Returns to this address', value: `${formatUnits(withdrawing, SUI_DECIMALS)} SUI`, strong: true },
+            { label: 'Gas', value: withdraw.quote === null ? 'being read from the chain' : `${sui(withdraw.quote.gasMist)} SUI` },
+          ]}
+          factsNote="No waiting period and no approval. If the vault's liquid balance is short, the contract unwinds delegated stake in this same transaction."
+          stageNote={{ simulating: 'Checking the withdrawal against the vault.' }}
+          primaryLabel={withdraw.stage === 'submitting' ? 'Waiting for your signature…' : 'Sign and withdraw'}
+          primaryDisabled={withdraw.quote === null}
+          onPrimary={() => void withdraw.signAndSubmit()}
+          onCancel={closeDialog}
+          onClose={closeDialog}
+          done={
+            withdraw.digest === null ? null : (
+              <>
+                <div className="w-dialog__done">
+                  <p>Withdrawn. The principal is back at this address.</p>
+                  <DigestLine digest={withdraw.digest} />
+                </div>
+                <div className="w-dialog__actions">
+                  <button type="button" className="w-btn w-btn--primary" onClick={() => void landed()}>
+                    Done
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
+      ) : null}
+
+      {dialog === 'rebate' ? (
+        <MoneyDialog
+          title="Claim your share"
+          stage={rebate.stage}
+          error={rebate.error}
+          blocked={rebate.blocked}
+          signed={rebate.signed}
+          facts={[
+            { label: 'Your share accrued', value: `${sui(position?.pendingRebateMist ?? '0')} SUI`, strong: true },
+            { label: 'Gas', value: rebate.quote === null ? 'being read from the chain' : `${sui(rebate.quote.gasMist)} SUI` },
+          ]}
+          factsNote="A lower bound: the contract accrues on interaction, so the amount that lands can be higher than shown."
+          stageNote={{ simulating: 'Checking the claim against the vault.' }}
+          primaryLabel={rebate.stage === 'submitting' ? 'Waiting for your signature…' : 'Sign and claim'}
+          primaryDisabled={rebate.quote === null}
+          onPrimary={() => void rebate.signAndSubmit()}
+          onCancel={closeDialog}
+          onClose={closeDialog}
+          done={
+            rebate.digest === null ? null : (
+              <>
+                <div className="w-dialog__done">
+                  <p>Claimed.</p>
+                  <DigestLine digest={rebate.digest} />
+                </div>
+                <div className="w-dialog__actions">
+                  <button type="button" className="w-btn w-btn--primary" onClick={() => void landed()}>
+                    Done
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
+      ) : null}
+    </div>
   );
 }

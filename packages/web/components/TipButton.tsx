@@ -2,14 +2,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useState } from 'react';
-import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
-
-type Blocker =
-  | { kind: 'no-account' }
-  | { kind: 'self-payment' }
-  | { kind: 'insufficient-balance'; have: string; need: string }
-  | { kind: 'tier-inactive' };
+import { DigestLine, MoneyDialog } from '@/components/app/MoneyDialog';
+import { useCheckout } from '@/components/app/use-checkout';
+import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 
 interface Quote {
   bytes: string;
@@ -26,6 +22,11 @@ function toMinor(input: string, decimals: number): bigint | null {
   return value > 0n ? value : null;
 }
 
+/*
+  A tip is a decision: the amount is typed on the page, and the dialog shows what the vault says
+  the creator receives and Weir takes, in the creator's coin at its own scale, before the one
+  signature. It buys nothing; it is simply theirs.
+*/
 export function TipButton({
   vaultId,
   decimals,
@@ -35,68 +36,16 @@ export function TipButton({
   decimals: number;
   symbol: string;
 }) {
-  const { signer } = useSigner();
   const [amount, setAmount] = useState('');
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [blocked, setBlocked] = useState<Blocker | null>(null);
-  const [digest, setDigest] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [open, setOpen] = useState(false);
+  const checkout = useCheckout<Quote>();
   const minor = toMinor(amount, decimals);
+  const money = (raw: string | bigint) => `${formatUnits(BigInt(raw), decimals)} ${symbol}`;
 
-  async function simulate() {
-    if (signer === null || minor === null) return;
-    setBusy(true);
-    setError(null);
-    setBlocked(null);
-    setQuote(null);
-    try {
-      const response = await fetch('/api/checkout/tip', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sender: signer.address, vaultId, amount: minor.toString() }),
-      });
-      const body = (await response.json()) as { quote?: Quote; blocked?: Blocker; error?: string };
-      if (body.blocked !== undefined) setBlocked(body.blocked);
-      else if (body.quote === undefined) setError(body.error ?? 'this could not be simulated');
-      else setQuote(body.quote);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function signAndSubmit() {
-    if (signer === null || quote === null) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const signature = await signer.signTransaction(quote.bytes);
-      const response = await fetch('/api/checkout/submit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bytes: quote.bytes, signature }),
-      });
-      const body = (await response.json()) as { digest?: string; error?: string };
-      if (body.digest === undefined) setError(body.error ?? 'the payment was not accepted');
-      else {
-        setDigest(body.digest);
-        setAmount('');
-        setQuote(null);
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (signer === null) {
+  if (checkout.signer === null) {
     return (
-      <div className="panel">
-        <p className="locked-why" style={{ marginTop: 0 }}>
+      <div className="w-money">
+        <p className="w-dialog__after">
           Send this creator any amount, once. It buys nothing and it is simply theirs.
         </p>
         <SignIn compact />
@@ -104,88 +53,99 @@ export function TipButton({
     );
   }
 
+  const close = () => {
+    setOpen(false);
+    checkout.reset();
+  };
+  const quote = checkout.quote;
+
   return (
-    <div className="panel">
-      <label className="k" htmlFor="tip" style={{ display: 'block', marginBottom: 6 }}>
-        SEND A TIP · {symbol}
-      </label>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <input
-          id="tip"
-          className="comment-input"
-          inputMode="decimal"
-          placeholder={`0.00 ${symbol}`}
-          value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value);
-            setQuote(null);
-            setBlocked(null);
-          }}
-        />
+    <div className="w-money">
+      <div className="w-field">
+        <label htmlFor="tip">Send a tip · {symbol}</label>
+        <div className="w-field__row w-money__row">
+          <input
+            id="tip"
+            className="w-input"
+            inputMode="decimal"
+            placeholder={`0.00 ${symbol}`}
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+          <button
+            type="button"
+            className="w-btn w-btn--primary"
+            disabled={minor === null}
+            onClick={() => {
+              if (minor === null) return;
+              setOpen(true);
+              void checkout.simulate('/api/checkout/tip', { vaultId, amount: minor.toString() });
+            }}
+          >
+            Send a tip
+          </button>
+        </div>
+        {amount.trim() !== '' && minor === null ? (
+          <p className="w-field__note w-field__note--bad">
+            Enter an amount above zero with at most {decimals} decimal places.
+          </p>
+        ) : (
+          <p className="w-field__note">Any amount, once. It buys nothing and it is simply theirs.</p>
+        )}
       </div>
 
-      {digest !== null && (
-        <div className="note" style={{ marginTop: 'var(--space-12)' }}>
-          <span className="lbl">Sent</span>
-          <p>
-            <a href={`https://suiscan.xyz/mainnet/tx/${digest}`} target="_blank" rel="noreferrer">
-              <span className="mono">{digest.slice(0, 14)}…</span>
-            </a>
-          </p>
-        </div>
-      )}
-
-      {blocked !== null && (
-        <p className="unmeasured" style={{ marginBottom: 0 }}>
-          {blocked.kind === 'no-account' ? (
-            <>
-              Tipping needs an account. It is free apart from gas. <a href="/join">Claim a handle</a>.
-            </>
-          ) : blocked.kind === 'self-payment' ? (
-            'This is your own vault.'
-          ) : blocked.kind === 'insufficient-balance' ? (
-            `Not enough ${symbol} for that.`
-          ) : (
-            'This vault is not accepting payments.'
-          )}
-        </p>
-      )}
-
-      {quote !== null ? (
-        <div className="note" style={{ marginTop: 'var(--space-12)' }}>
-          <span className="lbl">Checked against the chain. Nothing signed yet</span>
-          <p>
-            The creator receives <strong>{quote.creatorReceives}</strong> and the platform{' '}
-            <strong>{quote.platformReceives}</strong>.
-          </p>
-          <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
-            <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>
-              {busy ? 'Sending…' : 'Confirm and send'}
-            </button>
-            <button className="btn ghost" type="button" disabled={busy} onClick={() => setQuote(null)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginTop: 'var(--space-12)' }}>
-          <button
-            className="btn"
-            type="button"
-            disabled={busy || minor === null}
-            onClick={() => void simulate()}
-          >
-            {busy ? 'Checking…' : 'Send a tip'}
-          </button>
-          {amount.trim() !== '' && minor === null && (
-            <p className="unmeasured" style={{ marginBottom: 0 }}>
-              Enter an amount above zero with at most {decimals} decimal places.
-            </p>
-          )}
-        </div>
-      )}
-
-      {error !== null && <p className="unmeasured">{error}</p>}
+      {open && minor !== null ? (
+        <MoneyDialog
+          title="Send a tip"
+          stage={checkout.stage}
+          error={checkout.error}
+          blocked={checkout.blocked}
+          signed={checkout.signed}
+          facts={
+            quote === null
+              ? [{ label: 'Tip', value: money(minor), strong: true }]
+              : [
+                  { label: 'Tip', value: money(minor), strong: true },
+                  { label: 'The creator receives', value: money(quote.creatorReceives) },
+                  { label: 'Weir takes', value: money(quote.platformReceives) },
+                  { label: 'Gas', value: `${formatUnits(BigInt(quote.gasMist), SUI_DECIMALS)} SUI` },
+                ]
+          }
+          factsNote="What the creator receives is read from the vault when the tip is checked, not assumed here."
+          stageNote={{ simulating: 'Checking the tip against the vault.' }}
+          refusals={{
+            'insufficient-balance': `Not enough ${symbol} for that.`,
+            'tier-inactive': 'This vault is not accepting payments.',
+          }}
+          primaryLabel={checkout.stage === 'submitting' ? 'Sending…' : 'Confirm and send'}
+          primaryDisabled={quote === null}
+          onPrimary={() => void checkout.signAndSubmit()}
+          onCancel={close}
+          onClose={close}
+          done={
+            checkout.digest === null ? null : (
+              <>
+                <div className="w-dialog__done">
+                  <p>Sent.</p>
+                  <DigestLine digest={checkout.digest} />
+                </div>
+                <div className="w-dialog__actions">
+                  <button
+                    type="button"
+                    className="w-btn w-btn--primary"
+                    onClick={() => {
+                      setAmount('');
+                      close();
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }

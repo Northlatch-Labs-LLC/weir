@@ -65,6 +65,14 @@ describe('the doors and their pieces carry no hardcoded design values', () => {
     'components/app/Wall.tsx',
     'components/JoinFlow.tsx',
     'components/welcome/WelcomeFlow.tsx',
+    'components/app/MoneyDialog.tsx',
+    'components/app/use-checkout.ts',
+    'components/app/UnlockDialog.tsx',
+    'components/DepositCheckout.tsx',
+    'components/SubscribeButton.tsx',
+    'components/TipButton.tsx',
+    'components/StakePosition.tsx',
+    'components/StakeVaultSetup.tsx',
   ].map((f) => join(web, f));
 
   it('use no inline style, no hex, no token fallback', () => {

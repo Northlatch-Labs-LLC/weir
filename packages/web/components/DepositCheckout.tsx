@@ -2,8 +2,9 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useState } from 'react';
-import { useSigner } from '@/components/SignerProvider';
 import { SignIn } from '@/components/SignIn';
+import { DigestLine, MoneyDialog } from '@/components/app/MoneyDialog';
+import { useCheckout } from '@/components/app/use-checkout';
 import { VAULT_DISCLOSURE_SHORT } from '@/lib/vault-disclosure';
 
 const MIST_PER_SUI = 1_000_000_000n;
@@ -14,16 +15,6 @@ interface Quote {
   gasMist: string;
   amountMist: string;
 }
-
-type Stage =
-  | { name: 'idle' }
-  | { name: 'simulating' }
-  | { name: 'needs-account' }
-  | { name: 'quoted'; quote: Quote }
-  | { name: 'signing' }
-  | { name: 'submitting' }
-  | { name: 'done'; digest: string }
-  | { name: 'failed'; message: string };
 
 function sui(mist: bigint): string {
   const negative = mist < 0n;
@@ -40,191 +31,125 @@ function toMist(input: string): bigint | null {
   return BigInt(whole + frac.padEnd(9, '0'));
 }
 
+/*
+  A deposit is a decision: the amount is typed on the page, and the dialog shows what the chain
+  said it will do — what is deposited, the gas, the total leaving the wallet — before the one
+  signature. The principal stays the depositor's, and the dialog says so in the vault's own words.
+*/
 export function DepositCheckout({ vaultId }: { vaultId: string }) {
-  const { signer } = useSigner();
   const [amount, setAmount] = useState('1');
-  const [stage, setStage] = useState<Stage>({ name: 'idle' });
+  const [shape, setShape] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const checkout = useCheckout<Quote>();
 
-  async function simulate() {
-    if (signer === null) return;
-    const mist = toMist(amount);
-    if (mist === null) {
-      setStage({ name: 'failed', message: 'Enter an amount in SUI, up to 9 decimal places.' });
-      return;
-    }
-
-    setStage({ name: 'simulating' });
-    try {
-      const response = await fetch('/api/checkout/prepare', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sender: signer.address, vaultId, amountMist: mist.toString() }),
-      });
-      const body = (await response.json()) as {
-        quote?: Quote;
-        needsAccount?: boolean;
-        error?: string;
-      };
-
-      if (body.needsAccount === true) return setStage({ name: 'needs-account' });
-      if (body.quote === undefined) {
-        return setStage({ name: 'failed', message: body.error ?? 'the simulation failed' });
-      }
-      setStage({ name: 'quoted', quote: body.quote });
-    } catch (error) {
-      setStage({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
-    }
-  }
-
-  async function confirm(quote: Quote) {
-    if (signer === null) return;
-    setStage({ name: 'signing' });
-    try {
-      const signature = await signer.signTransaction(quote.bytes);
-
-      setStage({ name: 'submitting' });
-      const response = await fetch('/api/checkout/submit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bytes: quote.bytes, signature: signature }),
-      });
-      const body = (await response.json()) as { digest?: string; error?: string };
-
-      if (body.digest === undefined) {
-        return setStage({ name: 'failed', message: body.error ?? 'submission failed' });
-      }
-      setStage({ name: 'done', digest: body.digest });
-    } catch (error) {
-      setStage({ name: 'failed', message: error instanceof Error ? error.message : String(error) });
-    }
-  }
-
-  if (signer === null) {
+  if (checkout.signer === null) {
     return (
-      <div className="panel">
-        <p style={{ marginTop: 0 }}>
+      <div className="w-money">
+        <p className="w-dialog__after">
           Sign in to deposit. Your principal stays yours and is withdrawable at any time.
         </p>
         <SignIn />
-        {stage.name === 'failed' && <p className="unmeasured">{stage.message}</p>}
       </div>
     );
   }
 
+  const start = () => {
+    const mist = toMist(amount);
+    if (mist === null) {
+      setShape('Enter an amount in SUI, up to 9 decimal places.');
+      return;
+    }
+    setShape(null);
+    setOpen(true);
+    void checkout.simulate('/api/checkout/prepare', { vaultId, amountMist: mist.toString() });
+  };
+
+  const close = () => {
+    setOpen(false);
+    checkout.reset();
+  };
+
+  const quote = checkout.quote;
+
   return (
-    <div className="panel">
-      <label className="k" htmlFor="amount" style={{ display: 'block', marginBottom: 6 }}>
-        AMOUNT · SUI
-      </label>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
-          id="amount"
-          className="field mono"
-          value={amount}
-          inputMode="decimal"
-          onChange={(event) => {
-            setAmount(event.target.value);
-            if (stage.name === 'quoted') setStage({ name: 'idle' });
-          }}
-          style={{ fontSize: 18, padding: '9px 12px', width: 160 }}
-        />
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={() => void simulate()}
-          disabled={stage.name === 'simulating'}
-        >
-          {stage.name === 'simulating' ? 'Checking…' : 'Check the deposit'}
-        </button>
-      </div>
-
-      <p className="k" style={{ marginTop: 14 }}>
-        MINIMUM 1 SUI · CHECKED ON CHAIN BEFORE ANYTHING IS SIGNED
-      </p>
-
-      {stage.name === 'needs-account' && (
-        <div className="note warn">
-          <span className="lbl">Account required</span>
-          <p>
-            This address has no Weir account yet. You need one to deposit. Claiming a handle
-            is free apart from gas.
-          </p>
-        </div>
-      )}
-
-      {stage.name === 'quoted' && (
-        <>
-          <div className="note">
-            <span className="lbl">What will happen</span>
-            <table style={{ marginTop: 4 }}>
-              <tbody>
-                <tr>
-                  <td>Deposited (stays yours, withdrawable)</td>
-                  <td className="num">{sui(BigInt(stage.quote.amountMist))} SUI</td>
-                </tr>
-                <tr>
-                  <td>Network gas</td>
-                  <td className="num">{sui(BigInt(stage.quote.gasMist))} SUI</td>
-                </tr>
-                <tr>
-                  <td>
-                    <strong>Total leaving your wallet</strong>
-                  </td>
-                  <td className="num">
-                    <strong>{sui(-BigInt(stage.quote.suiDeltaMist))} SUI</strong>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p className="locked-why" data-clause="short" style={{ marginBottom: 0 }}>
-              {VAULT_DISCLOSURE_SHORT}
-            </p>
-          </div>
-          <button className="btn" type="button" onClick={() => void confirm(stage.quote)}>
-            Confirm and sign
+    <div className="w-money">
+      <div className="w-field">
+        <label htmlFor="amount">Amount · SUI</label>
+        <div className="w-field__row w-money__row">
+          <input
+            id="amount"
+            className="w-input"
+            value={amount}
+            inputMode="decimal"
+            onChange={(event) => {
+              setAmount(event.target.value);
+              setShape(null);
+            }}
+          />
+          <button type="button" className="w-btn w-btn--primary" onClick={start}>
+            Check the deposit
           </button>
-        </>
-      )}
-
-      {(stage.name === 'signing' || stage.name === 'submitting') && (
-        <p className="k" style={{ marginTop: 16 }}>
-          {stage.name === 'signing' ? 'AWAITING YOUR WALLET…' : 'SUBMITTING…'}
-        </p>
-      )}
-
-      {stage.name === 'done' && (
-        <div className="note">
-          <span className="lbl">Deposited</span>
-          <p>
-            <a
-              className="mono"
-              href={`https://suiscan.xyz/mainnet/tx/${stage.digest}`}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {stage.digest.slice(0, 10)}…
-            </a>
-            . Your principal is redeemable in full at any time.
-          </p>
         </div>
-      )}
+        {shape === null ? null : <p className="w-field__note w-field__note--bad">{shape}</p>}
+      </div>
+      <p className="w-money__kicker">Minimum 1 SUI · checked on chain before anything is signed</p>
 
-      {stage.name === 'failed' && (
-        <div className="note crit">
-          <span className="lbl">Nothing was signed</span>
-          <p className="mono" style={{ fontSize: 13 }}>
-            {stage.message}
-          </p>
-          {signer !== null && (
-            <div style={{ marginTop: 12 }}>
-              <p className="unmeasured" style={{ margin: 0 }}>
-                If this wallet is short of SUI, add some from wherever you hold it, then check
-                again.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      {open ? (
+        <MoneyDialog
+          title="Deposit into this vault"
+          stage={checkout.stage}
+          error={checkout.error}
+          blocked={checkout.blocked}
+          signed={checkout.signed}
+          facts={
+            quote === null
+              ? [{ label: 'Deposited (stays yours, withdrawable)', value: `${amount.trim()} SUI` }]
+              : [
+                  { label: 'Deposited (stays yours, withdrawable)', value: `${sui(BigInt(quote.amountMist))} SUI` },
+                  { label: 'Network gas', value: `${sui(BigInt(quote.gasMist))} SUI` },
+                  { label: 'Total leaving your wallet', value: `${sui(-BigInt(quote.suiDeltaMist))} SUI`, strong: true },
+                ]
+          }
+          factsNote={VAULT_DISCLOSURE_SHORT}
+          stageNote={{
+            simulating: 'Checking the deposit against the chain.',
+            'awaiting-signature': 'What will happen, checked against the chain. Nothing signed yet.',
+          }}
+          refusals={{
+            'no-account': (
+              <>
+                Account required. This address has no Weir account yet, and you need one to deposit.{' '}
+                <a href="/join">Claiming a handle</a> is free apart from gas.
+              </>
+            ),
+          }}
+          refusalNote="Nothing was signed."
+          primaryLabel={checkout.stage === 'submitting' ? 'Waiting for your wallet…' : 'Confirm and sign'}
+          primaryDisabled={quote === null}
+          onPrimary={() => void checkout.signAndSubmit()}
+          onCancel={close}
+          onClose={close}
+          done={
+            checkout.digest === null ? null : (
+              <>
+                <div className="w-dialog__done">
+                  <p>Deposited.</p>
+                  <DigestLine digest={checkout.digest} />
+                  <p>Your principal is redeemable in full at any time.</p>
+                </div>
+                <div className="w-dialog__actions">
+                  <button type="button" className="w-btn w-btn--quiet" onClick={close}>
+                    Close
+                  </button>
+                  <button type="button" className="w-btn w-btn--primary" onClick={() => window.location.reload()}>
+                    Reload and see it
+                  </button>
+                </div>
+              </>
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }

@@ -7,6 +7,40 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (afternoon, PDT) · Step 4 done: money as decisions
+
+**Step 4 is closed.** Every payment on the site is now a dialog of the same shape: what you get and what it
+costs as rows read from the chain, one stage line, Cancel and the one button that advances, a refusal that
+names its reason, a landed transaction that shows its digest. Subscribe, tip, deposit into a pool, withdraw
+principal, claim a member's share, open a support vault, claim yield and set the members' share all run
+through it, as unlocking a post already did. Nothing is signed that was not simulated, and the bytes
+signed are the bytes simulated. `lib/entitlement.ts`, `app/api/checkout/*` and `use-unlock.ts` are untouched.
+
+**What was built.** `components/app/use-checkout.ts` is the one hook: simulate on a named route for this
+sender, hold the quote, sign exactly those bytes, submit, and only then report the digest; it also knows
+whether the wallet has signed, so a failure after signing is "not accepted", never "nothing was signed".
+`components/app/MoneyDialog.tsx` is the one body on `packages/ui` `Dialog`: who it concerns, the fact rows,
+the stage line, the actions, a flow's own words for a refusal where the generic sentence would be wrong.
+`UnlockDialog`, `SubscribeButton`, `TipButton`, `DepositCheckout`, `StakePosition` and `StakeVaultSetup` are
+rewritten on them; the "become a member" card on a creator page is the deposit dialog. Two things the old
+inline panels got wrong are fixed on the way: the tip showed the creator's receipt in minor units (now in
+the coin at its own scale), and gas is formatted through the named SUI scale, which the settlement guard
+now enforces on these files. 84 inline styles left these six files (22, 11, 7, 9, 13, 22), all now at zero
+and listed in the design guard. Two amounts still live on the page rather than in the dialog, the tip
+amount and the deposit amount: the field is the question, the dialog is the decision.
+
+**Proof.** `tsc --noEmit` clean. `next build` clean. `pnpm -C packages/ui test`: 32 passing.
+`pnpm -C packages/web test`: 181 files, 2,495 tests passing; the deposit, stake-position and
+stake-vault-setup tests pass against the dialogs unchanged in intent, with two tip-field assertions
+retargeted from computed inline styles to the classes the stylesheet defines. In the browser on
+localhost:3000 signed out: `/c/heron?tab=membership` renders the tip wall and no errors of its own; the
+money dialogs need a signer and could not be opened from this desk's browser.
+
+**Not verified here.** Each flow exercised with a real wallet on mainnet, which the plan leaves to the
+owner's choice of amount. The simulate step of each flow is the same code path the tests drive.
+
+---
+
 ## 2026-09-12 (night) · The join journey is built: two doors everywhere, three steps, then welcome
 
 **Built, on the branch.** The journey ruled in the entry below now runs on localhost:3000. A stranger sees

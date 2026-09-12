@@ -127,14 +127,14 @@ describe('the tip field', () => {
     signer = { address: '0xaaa', label: 'Wallet', kind: 'wallet' };
     const { container } = render(<TipButton vaultId="0xv" decimals={6} symbol="USDC" />);
     const label = container.querySelector('label[for="tip"]')!;
-    expect(getComputedStyle(label).display).toBe('block');
+    expect(label.parentElement?.classList.contains('w-field')).toBe(true);
   });
 
   it('gives the field the flex row its own class requires', () => {
     signer = { address: '0xaaa', label: 'Wallet', kind: 'wallet' };
     const { container } = render(<TipButton vaultId="0xv" decimals={6} symbol="USDC" />);
     const input = container.querySelector('#tip')!;
-    expect(getComputedStyle(input.parentElement!).display).toBe('flex');
+    expect(input.parentElement?.classList.contains('w-field__row')).toBe(true);
   });
 });
 
