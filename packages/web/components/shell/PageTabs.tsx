@@ -2,7 +2,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Icon } from '@/components/design/icons';
+import { Icon } from '@/components/app/icons';
 import { isHere, type Destination } from '@/lib/site-map';
 
 export interface Tab extends Pick<Destination, 'href' | 'label'> {

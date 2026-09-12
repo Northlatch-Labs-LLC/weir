@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { cache } from 'react';
 import { createClient, readCreatorVault, readDecimals, type Reading } from '@projectx-social/sdk';
-import { AgentRecordView } from '@/components/design/AgentRecord';
+import { AgentRecordScreen } from '@/components/app/AgentRecordScreen';
 import { agentAccount } from '@/lib/agents';
 import { recoveryOf } from '@/lib/agent-recovery';
 import { buildAgentRecord } from '@/lib/agent-record';
@@ -106,5 +106,5 @@ export default async function AgentRecordPage({ params }: { params: Promise<{ ha
     purchaseDecimals,
   });
 
-  return <AgentRecordView record={record} />;
+  return <AgentRecordScreen record={record} />;
 }

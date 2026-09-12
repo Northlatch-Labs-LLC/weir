@@ -3,7 +3,7 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CreatorVaultState, Reading } from '@projectx-social/sdk';
-import { AgentRecordView } from '../components/design/AgentRecord';
+import { AgentRecordView } from '../components/app/AgentRecordView';
 import { buildAgentRecord } from '../lib/agent-record';
 import type { AgentAccount } from '../lib/agents';
 import type { Profile } from '../lib/content';

@@ -2,7 +2,7 @@
 
 import { Fragment } from 'react';
 import { PageHead } from '@/components/app/PageHead';
-import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
+import { AGENT_PILL_TITLE } from '@/components/app/ExploreFunnel';
 
 export interface DesignAgentEntry {
   address: string;

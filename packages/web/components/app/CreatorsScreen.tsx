@@ -5,7 +5,7 @@ import { useState, type ChangeEvent, type ReactNode } from 'react';
 import NextLink from 'next/link';
 import { ColumnHeader, EmptyState } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
-import { useHandleAvailability } from '@/components/design/use-handle-availability';
+import { useHandleAvailability } from '@/components/app/use-handle-availability';
 import { handleShapeProblem } from '@/lib/waitlist';
 
 const FIELD: React.CSSProperties = {

@@ -4,7 +4,7 @@
 import NextLink from 'next/link';
 import { PageHead } from '@/components/app/PageHead';
 import { Fragment, useState, type ReactNode } from 'react';
-import { useReveals } from '@/components/design/use-weir-line';
+import { useReveals } from '@/components/shell/use-reveals';
 
 export interface DesignChest {
   name: string;

@@ -3,7 +3,7 @@ import { createClient, fold, readPlatform } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { keyRegistryId } from '@/lib/keys';
 import { MAX_PLATFORM_FEE_BPS } from '@/lib/admin';
-import { Icon } from '@/components/design/icons';
+import { Icon } from '@/components/app/icons';
 import {
   DesignSecurity,
   type DesignCmpCard,

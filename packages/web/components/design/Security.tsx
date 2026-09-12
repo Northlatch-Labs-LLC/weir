@@ -3,7 +3,7 @@
 
 import { PageHead } from '@/components/app/PageHead';
 import { Fragment, type ReactNode } from 'react';
-import { useReveals } from '@/components/design/use-weir-line';
+import { useReveals } from '@/components/shell/use-reveals';
 import { BUILT_ON } from '@/lib/built-on';
 
 export interface DesignGuarantee {

@@ -2,9 +2,9 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 import { PageHead } from '@/components/app/PageHead';
-import { useReveals } from '@/components/design/use-weir-line';
+import { useReveals } from '@/components/shell/use-reveals';
 import { useEffect, useState, type ReactNode } from 'react';
-import { absoluteDate } from '@/components/design/Countdown';
+import { absoluteDate } from '@/components/app/Countdown';
 import { Icon } from '@projectx-social/ui';
 import { AgentsIntro } from '@/components/public/AgentsIntro';
 

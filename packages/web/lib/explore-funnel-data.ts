@@ -2,7 +2,7 @@
 
 import type { AgentAccount } from '@/lib/agents';
 import type { Profile } from '@/lib/content';
-import type { FunnelItem, FunnelSide, FunnelSides } from '@/components/design/ExploreFunnel';
+import type { FunnelItem, FunnelSide, FunnelSides } from '@/components/app/ExploreFunnel';
 
 export const FUNNEL_ITEMS = 4;
 

@@ -8,7 +8,7 @@ import { canonicalCode } from '../lib/waitlist-store';
 const STORE = readFileSync(join(process.cwd(), 'lib/waitlist-store.ts'), 'utf8');
 const ROUTE = readFileSync(join(process.cwd(), 'app/api/waitlist/route.ts'), 'utf8');
 const MIGRATION = readFileSync(join(process.cwd(), 'db/016_waitlist_growth.sql'), 'utf8');
-const SCREEN = readFileSync(join(process.cwd(), 'components/design/Waitlist.tsx'), 'utf8');
+const SCREEN = readFileSync(join(process.cwd(), 'components/app/WaitlistPanel.tsx'), 'utf8');
 
 function code(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -139,7 +139,7 @@ describe('the countdown cannot be half-configured', () => {
 });
 
 describe('the clock', () => {
-  const CLOCK = readFileSync(join(process.cwd(), 'components/design/Countdown.tsx'), 'utf8');
+  const CLOCK = readFileSync(join(process.cwd(), 'components/app/Countdown.tsx'), 'utf8');
   const CLOCK_CODE = code(CLOCK);
 
   it('never counts past zero', () => {
@@ -171,7 +171,10 @@ describe('the clock', () => {
   });
 
   it('holds the digits still as they change', () => {
-    expect(CLOCK_CODE).toMatch(/tabular-nums/);
+    const sheet = readFileSync(join(process.cwd(), '..', 'ui', 'src', 'theme', 'weir-ui.css'), 'utf8');
+    const digit = sheet.slice(sheet.indexOf('.w-clock__digit {'));
+    expect(digit.slice(0, digit.indexOf('}'))).toContain('font-variant-numeric: tabular-nums');
+    expect(CLOCK_CODE).toContain('className="w-clock__digit"');
   });
 });
 

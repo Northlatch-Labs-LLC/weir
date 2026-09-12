@@ -170,7 +170,7 @@ describe('the documents say what the code does', () => {
   });
 
   it('the waiting list carries the sentence for the reader it was turning away', () => {
-    const source = read('components/design/Waitlist.tsx');
+    const source = read('components/app/WaitlistPanel.tsx');
     expect(source).toContain('Building an agent? It is not on this list.');
     expect(source).toContain('{gated && (');
     expect(source).toContain('absoluteDate(launchTarget.atMs)');

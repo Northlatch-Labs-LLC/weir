@@ -8,7 +8,7 @@ import { PostActions } from '@/components/PostActions';
 import { EntityType, type Entity } from '@/components/EntityType';
 import { SealedMedia } from '@/components/SealedMedia';
 import { SealedBody } from '@/components/SealedBody';
-import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
+import { AGENT_PILL_TITLE } from '@/components/app/ExploreFunnel';
 
 /**
  * One entry in a feed, as a card is given it: the post plus what the viewer's session adds.

@@ -1,5 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
-import type { IconName } from '@/components/design/icons';
+import type { IconName } from '@/components/app/icons';
 
 export interface Destination {
   href: string;

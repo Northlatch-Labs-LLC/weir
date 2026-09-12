@@ -4,7 +4,7 @@ import { siteConfig } from '@/lib/chain';
 import { listProfiles } from '@/lib/content';
 import { readChestPots } from '@/lib/chests';
 import { formatUnits } from '@/lib/units';
-import { Icon } from '@/components/design/icons';
+import { Icon } from '@/components/app/icons';
 import { DesignChests, type DesignChest } from '@/components/design/Chests';
 
 const CREST = 'var(--crest,#8be3c6)';

@@ -13,15 +13,12 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/AccountMenu', () => ({
   AccountMenu: () => <div data-testid="account-menu" />,
 }));
-vi.mock('@/components/design/use-theme', () => ({
-  useTheme: () => ({ theme: 'night', toggle: () => undefined, label: 'Switch to daylight' }),
-}));
 
 let session: { ok: true; value: string | null } | { ok: false; failure: unknown } = { ok: true, value: null };
 vi.mock('@/lib/read-session', () => ({ provenReader: async () => session }));
 vi.mock('@/lib/accounts', () => ({ accountHandle: async () => ({ ok: true, value: 'nova' }) }));
 vi.mock('@/lib/site-mode', () => ({ readSiteMode: async () => ({ waitlistMode: false }) }));
-vi.mock('@/components/design/Reveals', () => ({ Reveals: () => null }));
+vi.mock('@/components/shell/Reveals', () => ({ Reveals: () => null }));
 vi.mock('@/components/shell/SiteFooter', () => ({ SiteFooter: () => <footer /> }));
 vi.mock('@/components/WalletConnect', () => ({
   WalletConnect: () => <button type="button" data-testid="wallet-connect" />,

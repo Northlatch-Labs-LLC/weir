@@ -43,7 +43,7 @@ describe('lib/ does not import from components/', () => {
   });
 
   it('leaves a type-only import alone, because it is erased before it can run', () => {
-    const line = "import type { IconName } from '@/components/design/icons';";
+    const line = "import type { IconName } from '@/components/app/icons';";
     expect(/^\s*import\s+type\s/.test(line)).toBe(true);
   });
 });

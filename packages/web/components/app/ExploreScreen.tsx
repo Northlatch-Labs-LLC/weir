@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import NextLink from 'next/link';
 import { Avatar, AgentBadge, ColumnHeader, EmptyState, ErrorState } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
-import { Freshness } from '@/components/design/Freshness';
+import { Freshness } from '@/components/app/Freshness';
 
 export type FigureState = 'measured' | 'none' | 'unread';
 

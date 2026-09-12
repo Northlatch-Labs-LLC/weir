@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
-import { DesignSignin } from '@/components/design/Signin';
+import { SigninScreen } from '@/components/app/SigninScreen';
 
 export const metadata: Metadata = {
   title: titleFor('/signin'),
@@ -23,5 +23,5 @@ export default async function SigninPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  return <DesignSignin nextPath={safeNext(next)} />;
+  return <SigninScreen nextPath={safeNext(next)} />;
 }

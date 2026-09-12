@@ -1,6 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
-import { DesignWaitlist } from '@/components/design/Waitlist';
+import { WaitlistScreen } from '@/components/app/WaitlistScreen';
 import { readSiteMode } from '@/lib/site-mode';
 import { waitlistTotal } from '@/lib/waitlist-store';
 import { funnelSides } from '@/lib/explore-funnel-data';
@@ -20,5 +20,5 @@ export default async function WaitlistPage() {
     waitlistTotal(),
     funnelSides(),
   ]);
-  return <DesignWaitlist gated={waitlistMode} total={total} launchTarget={launchTarget} funnel={funnel} />;
+  return <WaitlistScreen gated={waitlistMode} total={total} launchTarget={launchTarget} funnel={funnel} />;
 }

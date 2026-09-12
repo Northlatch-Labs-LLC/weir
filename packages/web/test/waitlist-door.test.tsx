@@ -19,7 +19,7 @@ vi.mock('../lib/waitlist', async (importOriginal) => {
   };
 });
 
-const { DesignWaitlist } = await import('../components/design/Waitlist');
+const { WaitlistPanel } = await import('../components/app/WaitlistPanel');
 
 const standing = (over: Partial<WaitlistStanding> = {}): WaitlistStanding => ({
   position: 47,
@@ -31,7 +31,7 @@ const standing = (over: Partial<WaitlistStanding> = {}): WaitlistStanding => ({
 
 async function joinList(props: { gated?: boolean } = {}, value?: WaitlistStanding) {
   submitted.outcome = { ok: true, already: false, ...(value === undefined ? {} : { standing: value }) };
-  render(<DesignWaitlist {...props} />);
+  render(<WaitlistPanel {...props} />);
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } });
   fireEvent.click(screen.getByRole('button', { name: props.gated ? 'Join the waiting list' : 'Join the list' }));
   await screen.findByText(/on the list\.|You are on the list\./);
@@ -63,7 +63,7 @@ describe('the link out of the waiting list is a door the proxy opens', () => {
   }
 
   it('admits every path the waiting list links to', () => {
-    render(<DesignWaitlist />);
+    render(<WaitlistPanel />);
     const open = alwaysOpen();
 
     const targets = [...document.querySelectorAll('a[href^="/"]')]
@@ -80,7 +80,7 @@ describe('the link out of the waiting list is a door the proxy opens', () => {
   it('names /security specifically, because that is the link the page carries', () => {
     expect(alwaysOpen()).toContain('/security');
     expect(screen.queryByRole('link', { name: 'Read the contracts' })).toBeNull();
-    render(<DesignWaitlist />);
+    render(<WaitlistPanel />);
     expect(screen.getByRole('link', { name: 'Read the contracts' }).getAttribute('href')).toBe('/security');
   });
 });
@@ -132,7 +132,7 @@ describe('the openness claim follows the gate', () => {
 describe('the handle field never fails silently', () => {
   async function noteFor(handle: string, body: unknown = {}): Promise<string> {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })));
-    render(<DesignWaitlist />);
+    render(<WaitlistPanel />);
     fireEvent.change(screen.getByLabelText(/Handle you want/), { target: { value: handle } });
     const field = screen.getByLabelText(/Handle you want/);
     const note = field.closest('div')?.parentElement?.querySelector('p');
@@ -168,7 +168,7 @@ describe('the handle field never fails silently', () => {
       'fetch',
       vi.fn(async () => new Response(JSON.stringify({ handle: { state: 'invalid' } }), { status: 200 })),
     );
-    render(<DesignWaitlist />);
+    render(<WaitlistPanel />);
     fireEvent.change(screen.getByLabelText(/Handle you want/), { target: { value: 'well_formed_handle' } });
     await vi.advanceTimersByTimeAsync(600);
     vi.useRealTimers();
@@ -184,7 +184,7 @@ describe('the handle field never fails silently', () => {
   it('states the contract bounds, not literals', () => {
     expect(MIN_HANDLE_LEN).toBe(3);
     expect(MAX_HANDLE_LEN).toBe(30);
-    const source = readFileSync(join(web, 'components', 'design', 'Waitlist.tsx'), 'utf8');
+    const source = readFileSync(join(web, 'components', 'app', 'WaitlistPanel.tsx'), 'utf8');
     expect(source).toContain('MIN_HANDLE_LEN');
     expect(source).toContain('MAX_HANDLE_LEN');
   });

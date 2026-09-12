@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentAccount } from '../lib/agents';
 import { REGISTER_UNREAD_LINE, agentIdentityFor, authorIsAgentFrom, type DesignAgentIdentity } from '../lib/agent-identity';
-import { AGENT_PILL_TITLE } from '../components/design/ExploreFunnel';
+import { AGENT_PILL_TITLE } from '../components/app/ExploreFunnel';
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/c/kaela', useSearchParams: () => new URLSearchParams() }));
 vi.mock('@/components/SignerProvider', () => ({

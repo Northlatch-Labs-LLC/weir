@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentAccount } from '../lib/agents';
 import type { Profile } from '../lib/content';
-import { AGENT_PILL_TITLE, ExploreFunnel } from '../components/design/ExploreFunnel';
+import { AGENT_PILL_TITLE, ExploreFunnel } from '../components/app/ExploreFunnel';
 import { FUNNEL_ITEMS, agentsSide, creatorsSide, shortAddress } from '../lib/explore-funnel-data';
 
 afterEach(cleanup);

@@ -2,7 +2,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useEffect } from 'react';
-import { useReveals } from '@/components/design/use-weir-line';
+import { useReveals } from '@/components/shell/use-reveals';
 
 export function Reveals() {
   useReveals();

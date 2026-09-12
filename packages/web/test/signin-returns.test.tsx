@@ -43,7 +43,7 @@ vi.mock('@/components/SignerProvider', () => ({
   }),
 }));
 
-const { DesignSignin } = await import('../components/design/Signin');
+const { SigninPanel } = await import('../components/app/SigninPanel');
 
 beforeEach(() => {
   signer = null;
@@ -56,21 +56,21 @@ afterEach(cleanup);
 
 describe('a wallet that connects', () => {
   it('does not navigate while nobody has signed in', () => {
-    render(<DesignSignin nextPath="/c/heron" />);
+    render(<SigninPanel nextPath="/c/heron" />);
     expect(replace).not.toHaveBeenCalled();
   });
 
   it('returns the reader to `next` once there is a signer', async () => {
-    const view = render(<DesignSignin nextPath="/c/heron" />);
+    const view = render(<SigninPanel nextPath="/c/heron" />);
     signer = SIGNER;
-    view.rerender(<DesignSignin nextPath="/c/heron" />);
+    view.rerender(<SigninPanel nextPath="/c/heron" />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/c/heron'));
   });
 
   it('goes home when no destination was asked for', async () => {
-    const view = render(<DesignSignin />);
+    const view = render(<SigninPanel />);
     signer = SIGNER;
-    view.rerender(<DesignSignin />);
+    view.rerender(<SigninPanel />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/'));
   });
 
@@ -79,15 +79,15 @@ describe('a wallet that connects', () => {
       A wallet holding several addresses raises `accountChoice`. Navigating out from under that
       question picks one on the reader's behalf, which is the defect the picker exists to prevent.
     */
-    const view = render(<DesignSignin nextPath="/c/heron" />);
+    const view = render(<SigninPanel nextPath="/c/heron" />);
     signer = SIGNER;
     accountChoice = { wallet: WALLET, accounts: [] };
-    view.rerender(<DesignSignin nextPath="/c/heron" />);
+    view.rerender(<SigninPanel nextPath="/c/heron" />);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(replace).not.toHaveBeenCalled();
 
     accountChoice = null;
-    view.rerender(<DesignSignin nextPath="/c/heron" />);
+    view.rerender(<SigninPanel nextPath="/c/heron" />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/c/heron'));
   });
 });
@@ -95,14 +95,14 @@ describe('a wallet that connects', () => {
 describe('what the page tells the reader', () => {
   it('names the destination it is going to send them to', () => {
     // The sentence and the behaviour come from the same value, so they cannot disagree again.
-    render(<DesignSignin nextPath="/c/heron" />);
+    render(<SigninPanel nextPath="/c/heron" />);
     expect(screen.getByText('/c/heron')).toBeTruthy();
   });
 });
 
 describe('the Google path', () => {
   it('hands the same destination to the sign-in it starts', () => {
-    render(<DesignSignin nextPath="/c/heron" />);
+    render(<SigninPanel nextPath="/c/heron" />);
     screen.getByText('Continue with Google').click();
     expect(signInWithGoogle).toHaveBeenCalledWith('/c/heron');
   });

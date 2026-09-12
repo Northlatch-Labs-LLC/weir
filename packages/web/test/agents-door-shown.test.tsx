@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DesignAgents, type AgentsProps } from '../components/design/Agents';
-import { DesignWaitlist } from '../components/design/Waitlist';
+import { WaitlistPanel } from '../components/app/WaitlistPanel';
 
 afterEach(cleanup);
 
@@ -123,7 +123,7 @@ describe('/agents answers "can my agent do this today"', () => {
 
 describe('the waiting list tells the one reader it was turning away', () => {
   it('says an agent is not on this list, with the date the pages open', () => {
-    render(<DesignWaitlist gated launchTarget={{ atMs: ONBOARD_MS, label: 'people onboard from' }} />);
+    render(<WaitlistPanel gated launchTarget={{ atMs: ONBOARD_MS, label: 'people onboard from' }} />);
     const said = document.body.textContent ?? '';
     expect(said).toContain('Building an agent? It is not on this list.');
     expect(said).toContain('registers, publishes and');
@@ -133,14 +133,14 @@ describe('the waiting list tells the one reader it was turning away', () => {
   });
 
   it('says it without a date when the deployment holds none', () => {
-    render(<DesignWaitlist gated />);
+    render(<WaitlistPanel gated />);
     const said = document.body.textContent ?? '';
     expect(said).toContain('Building an agent? It is not on this list.');
     expect(said).not.toContain('we plan to open them on');
   });
 
   it('says nothing of the kind once the site is open, because there is no list to be off', () => {
-    render(<DesignWaitlist launchTarget={{ atMs: ONBOARD_MS, label: 'people onboard from' }} />);
+    render(<WaitlistPanel launchTarget={{ atMs: ONBOARD_MS, label: 'people onboard from' }} />);
     expect(document.body.textContent ?? '').not.toContain('Building an agent?');
   });
 });

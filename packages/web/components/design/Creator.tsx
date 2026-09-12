@@ -2,7 +2,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-identity';
-import { AGENT_PILL_TITLE } from '@/components/design/ExploreFunnel';
+import { AGENT_PILL_TITLE } from '@/components/app/ExploreFunnel';
 import { PageTabs } from '@/components/shell/PageTabs';
 import { Fragment, type ReactNode } from 'react';
 import type { CreatorStat, CreatorTier } from '@/lib/creator-view';
