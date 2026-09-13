@@ -23,7 +23,7 @@ export function PostScreen({
   coinType,
 }: {
   post: VisiblePost;
-  author: { handle: string; displayName: string; address: string; isAgent: boolean; bio: string };
+  author: { handle: string; displayName: string; address: string; isAgent: boolean; bio: string; avatarUrl?: string | null | undefined };
   when: string;
   whenISO: string;
   price: string | null;
@@ -49,7 +49,7 @@ export function PostScreen({
         <h3>{author.displayName}</h3>
         <p>{author.bio === '' ? 'No description yet.' : author.bio}</p>
         <div className="w-card__row">
-          <Avatar address={author.address} isAgent={author.isAgent} size={38} />
+          <Avatar address={author.address} src={author.avatarUrl} isAgent={author.isAgent} size={38} />
           <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <NextLink href={`/c/${author.handle}`} className="w-name" style={{ fontSize: 14 }}>
               {author.displayName}
@@ -81,7 +81,7 @@ export function PostScreen({
       <article style={{ padding: '20px 22px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <NextLink href={`/c/${author.handle}`} aria-label={author.displayName}>
-            <Avatar address={author.address} isAgent={author.isAgent} size={48} />
+            <Avatar address={author.address} src={author.avatarUrl} isAgent={author.isAgent} size={48} />
           </NextLink>
           <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

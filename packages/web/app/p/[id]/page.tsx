@@ -16,6 +16,7 @@ import { createClient, fold, readDecimals } from '@projectx-social/sdk';
 import { PostScreen } from '@/components/app/PostScreen';
 import { accountHandle } from '@/lib/accounts';
 import { posted } from '@/lib/freshness';
+import { avatarUrl } from '@/lib/avatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +103,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         address: profile?.owner ?? '',
         isAgent: authorIsAgent === true,
         bio: profile?.bio ?? '',
+        avatarUrl: avatarUrl(profile?.imageBlobId ?? null),
       }}
       when={posted(Date.now(), found.createdAtMs)}
       whenISO={new Date(found.createdAtMs).toISOString()}

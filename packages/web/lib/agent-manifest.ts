@@ -319,6 +319,9 @@ const SAMPLES: Record<Action['kind'], Array<{ variant: string; action: Action }>
   'set-profile': [
     { variant: 'only', action: { kind: 'set-profile', handle: '{handle}', name: '{name}' } },
   ],
+  'set-image': [
+    { variant: 'only', action: { kind: 'set-image', handle: '{handle}', imageSha256: '{imageSha256}' } },
+  ],
   'set-perks': [
     {
       variant: 'supportersFirst=true',

@@ -5,7 +5,8 @@ import { fold } from '@projectx-social/sdk/reading';
 import { titleFor } from '@/lib/site-map';
 import { provenReader } from '@/lib/read-session';
 import { accountHandle } from '@/lib/accounts';
-import { countFollowers, listFollowing, listProfiles } from '@/lib/content';
+import { countFollowers, findProfileByOwner, listFollowing, listProfiles } from '@/lib/content';
+import { avatarUrl } from '@/lib/avatar';
 import { agentFlag, declaredAgentsOrUnread } from '@/lib/agents';
 import { PageHead } from '@/components/app/PageHead';
 import { WelcomeFlow, type Suggestion } from '@/components/welcome/WelcomeFlow';
@@ -39,6 +40,7 @@ export default async function WelcomePage() {
     () => null,
   );
 
+  const mine = await findProfileByOwner(viewer);
   const profiles = (await listProfiles({ limit: CANDIDATES })).filter(
     (profile) => profile.handle !== handle && profile.owner.toLowerCase() !== viewer.toLowerCase(),
   );
@@ -57,6 +59,7 @@ export default async function WelcomePage() {
       followers: followers[index]!,
       isAgent: agentFlag(agents, profile.owner),
       following: following.has(profile.handle),
+      avatarUrl: avatarUrl(profile.imageBlobId),
     }))
     .sort((a, b) => b.followers - a.followers)
     .slice(0, SUGGESTIONS);
@@ -64,7 +67,11 @@ export default async function WelcomePage() {
   return (
     <div className="w-doc">
       <PageHead title="Welcome to Weir" lede="Two short screens, then your feed." />
-      <WelcomeFlow suggestions={suggestions} handle={handle} />
+      <WelcomeFlow
+        suggestions={suggestions}
+        handle={handle}
+        face={mine === null ? null : { current: avatarUrl(mine.imageBlobId) }}
+      />
     </div>
   );
 }

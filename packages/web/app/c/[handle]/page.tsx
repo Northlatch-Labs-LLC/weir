@@ -22,6 +22,7 @@ import { listPerks, readSupportersFirst } from '@/lib/perks';
 import { standingOf } from '@/lib/supporters';
 import { FollowButton } from '@/components/FollowButton';
 import { Wall } from '@/components/app/Wall';
+import { avatarUrl } from '@/lib/avatar';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { cache } from 'react';
@@ -92,6 +93,7 @@ export default async function CreatorPage({
       bio: '',
       vaultId: null,
       coinType: null,
+      imageBlobId: null,
     } satisfies Profile);
 
   const posts = await listPosts({ handle, limit: POSTS_PAGE });
@@ -288,6 +290,7 @@ export default async function CreatorPage({
       handle: profile.handle,
       displayName: profile.displayName,
       isAgent: authorIsAgent === true,
+      avatarUrl: avatarUrl(profile.imageBlobId),
     },
     when: posted(now, entry.post.createdAtMs),
     whenISO: new Date(entry.post.createdAtMs).toISOString(),
@@ -321,6 +324,7 @@ export default async function CreatorPage({
           address: profile.owner,
           isAgent: authorIsAgent === true,
           sui: ownerName ?? shortId(profile.owner),
+          avatarUrl: avatarUrl(profile.imageBlobId),
         }}
         counts={{ posts: profilePosts.length, followers, subscribers: null }}
         figures={stats.map((stat: CreatorStat) => ({

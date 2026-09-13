@@ -18,6 +18,7 @@ vi.mock('@/components/SignerProvider', () => ({ useSigner: () => ({ signer: null
 let session: { ok: true; value: string | null } | { ok: false; failure: unknown } = { ok: true, value: null };
 vi.mock('@/lib/read-session', () => ({ provenReader: async () => session }));
 vi.mock('@/lib/accounts', () => ({ accountHandle: async () => ({ ok: true, value: 'nova' }) }));
+vi.mock('@/lib/content', () => ({ findProfileByOwner: async () => null }));
 vi.mock('@/lib/site-mode', () => ({ readSiteMode: async () => ({ waitlistMode: false }) }));
 vi.mock('@/components/shell/Reveals', () => ({ Reveals: () => null }));
 vi.mock('@/components/shell/SiteFooter', () => ({ SiteFooter: () => <footer /> }));

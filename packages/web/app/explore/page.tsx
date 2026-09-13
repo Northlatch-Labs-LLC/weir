@@ -11,6 +11,7 @@ import { readPools, type PoolSummary } from '@/lib/pools';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { ExploreScreen, type ExploreRow, type ExplorePostRow } from '@/components/app/ExploreScreen';
 import { discover, MIN_SEARCH_CHARS } from '@/lib/discovery';
+import { avatarUrl } from '@/lib/avatar';
 
 export const metadata: Metadata = {
   title: titleFor('/explore'),
@@ -25,6 +26,7 @@ interface Account {
   owner: string;
   displayName: string;
   bio: string;
+  imageBlobId?: string | null | undefined;
 }
 
 export default async function ExplorePage({
@@ -170,6 +172,7 @@ export default async function ExplorePage({
       displayName: profile.displayName,
       bio: profile.bio,
       isAgent: agentFlag(agents, profile.owner) === true,
+      avatarUrl: avatarUrl(profile.imageBlobId),
       pooled,
       pooledState: state,
       yieldShare,

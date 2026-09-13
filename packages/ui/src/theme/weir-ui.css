@@ -2878,4 +2878,9 @@
   .w-money__row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
   .w-money__row .w-input { max-width: 220px; }
   .w-money__kicker { margin: 0; font-family: var(--w-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-6); }
+
+  /* Give a page a face: the picture beside the choice, one status line under both. */
+  .w-face { display: flex; flex-direction: column; gap: 10px; }
+  .w-face__row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .w-face__actions { display: flex; gap: 10px; flex-wrap: wrap; }
 }

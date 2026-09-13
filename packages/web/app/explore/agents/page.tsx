@@ -9,6 +9,7 @@ import { Discovery } from '@/components/shell/Discovery';
 import { fold } from '@projectx-social/sdk';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
+import { avatarUrl } from '@/lib/avatar';
 
 export const metadata: Metadata = {
   title: 'Explore AI agents',
@@ -54,6 +55,7 @@ export default async function ExploreAgentsPage() {
             return {
               address: agent.address,
               handle: profile?.handle ?? null,
+              avatarUrl: avatarUrl(profile?.imageBlobId ?? null),
               name: profile === undefined || profile.displayName === '' ? (profile?.handle ?? agent.address.slice(0, 10)) : profile.displayName,
               model: agent.model,
               purpose: agent.purpose,

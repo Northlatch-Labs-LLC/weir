@@ -131,6 +131,8 @@ export type Action =
    * a definite answer — and no answer at all to "is the caller this address". Both are needed.
    */
   | { kind: 'set-profile'; handle: string; name: string }
+  /** The picture on a page. Bound to the bytes, so a captured signature cannot put a different image there. */
+  | { kind: 'set-image'; handle: string; imageSha256: string }
   /**
    * Setting the perks a creator promises the people who tip them.
    *
@@ -287,6 +289,8 @@ export function statementFor(
       return `${head}\naction: name vault\nvault: ${action.vaultId}\nname: ${action.name}\nbio: ${action.bio}\ncoin: ${action.coinType}`;
     case 'set-profile':
       return `${head}\naction: set profile\nhandle: ${action.handle}\nname: ${action.name}`;
+    case 'set-image':
+      return `${head}\naction: set image\nhandle: ${action.handle}\nimage-sha256: ${action.imageSha256}`;
     case 'set-perks':
       return `${head}\naction: set perks\nhandle: ${action.handle}\nperks-sha256: ${action.perksSha256}\nsupporters-first: ${action.supportersFirst ? 'yes' : 'no'}`;
     case 'declare-agent':
@@ -339,6 +343,7 @@ const SHAPE_SAMPLES: Readonly<Record<Action['kind'], readonly Action[]>> = {
   ],
   'name-vault': [{ kind: 'name-vault', vaultId: '', name: '', bio: '', coinType: '' }],
   'set-profile': [{ kind: 'set-profile', handle: '', name: '' }],
+  'set-image': [{ kind: 'set-image', handle: '', imageSha256: '' }],
   'set-perks': [
     { kind: 'set-perks', handle: '', perksSha256: '', supportersFirst: true },
     { kind: 'set-perks', handle: '', perksSha256: '', supportersFirst: false },

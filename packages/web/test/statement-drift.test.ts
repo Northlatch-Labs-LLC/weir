@@ -67,6 +67,11 @@ const copies: Array<{ file: string; kind: string; expected: string }> = [
     expected: `action: read content`,
   },
   {
+    file: 'components/app/FaceControl.tsx',
+    kind: 'set-image',
+    expected: `action: set image\\nhandle: ${SLOT}\\nimage-sha256: ${SLOT}`,
+  },
+  {
     file: 'components/JoinFlow.tsx',
     kind: 'set-profile',
     expected: `action: set profile\\nhandle: ${SLOT}\\nname: ${SLOT}`,
@@ -268,6 +273,7 @@ describe('the head', () => {
     'components/CreatorSetup.tsx',
     'components/FollowButton.tsx',
     'components/JoinFlow.tsx',
+    'components/app/FaceControl.tsx',
     'components/Messages.tsx',
     'components/Notifications.tsx',
     'components/PerksEditor.tsx',

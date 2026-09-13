@@ -7,6 +7,50 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (late afternoon, PDT) · Step 5 done: a face on every profile
+
+**Step 5 is closed.** A page can carry a picture of its own. It is chosen in the browser, hashed there, the
+owner signs a statement naming the handle and that hash, the bytes go to Walrus under the account's own
+storage grant, and only then does the profile row name the blob. It shows on the creator page, above every
+post in the feed and on a post page, in the explore directory and the agents directory, in the welcome
+suggestions, in the rail beside the reader's own name, and on the share card of the page. A page without
+one keeps the mark drawn from its address, as before.
+
+**What was built.** `db/043_profile_image.sql` adds one nullable column `image_blob_id` to `profiles`, with
+a check that it is a Walrus blob id; additive, nothing backfilled. The SDK gained the statement kind
+`set-image` (`action: set image / handle / image-sha256`), published in the agent manifest like every other
+kind. `app/api/account/image` takes the multipart upload: png, jpeg or webp up to 2 MB, refuses anything
+else before verifying a signature, binds the signature to handle and sha256, requires the address to hold
+that handle on chain, stores under the account's durable grant, then names the blob. `app/api/avatar/[blobId]`
+serves a picture only when some profile names the blob (a frame, not a proxy), with its detected type and
+an immutable cache header. `components/app/FaceControl.tsx` is the control, on `/creator` under "Your face"
+and as the first screen of `/welcome`, "Give your profile a face", with **Keep the mark** or **Continue**.
+`app/c/[handle]/opengraph-image.tsx` renders the share card with the picture inlined from Walrus, and the
+profile's JSON-LD carries `image`. The rail, the feed, the creator, post, explore and agents screens pass
+`avatarUrl` to `Avatar`, which already took `src`.
+
+**Proof.** `tsc --noEmit` clean. `next build` clean, `/api/avatar/[blobId]` and `/c/[handle]/opengraph-image`
+listed. `pnpm -C packages/ui test`: 32 passing. `pnpm -C packages/web test`: 183 files, 2,515 tests passing
+(new: `account-image-route` 7 tests, `avatar-route` 4 tests, two face-screen tests in `welcome-flow`; the
+statement-drift, manifest, settlement and route-limiter guards cover the new kind and routes). On
+localhost:3000: `/api/avatar/not-a-blob` answers 400, a well-formed id nobody names answers 404,
+`/c/heron/opengraph-image` answers a 77 KB PNG with the mark, name, handle, followers and bio; `/c/heron`
+declares it as `og:image`. Migration 043 applied to the local dev and test databases through
+`scripts/migrate.mjs --apply`.
+
+**Not verified here.** An upload end to end: this desk's browser holds no signer, and Walrus writes need
+the publisher and its token configured, which the route reports as unconfigured rather than pretending.
+
+**Found on the way, for the owner.** The local databases' migration ledgers carried checksums from before
+two header-only commits (268624d, ec32cf1: the `Built-by` line of 28 migration files), so the runner
+refused to run. On this machine the ledger checksums were refreshed for those files, after checking that
+every changed line in both commits was that header line, and the runner then applied 033 through 043 (the
+local databases were behind as well). **Production's ledger will carry the same drift**; before 043 can be
+applied there, the same refresh is needed or the runner will refuse. That is an operator step on the
+production database and is not done from here.
+
+---
+
 ## 2026-09-12 (afternoon, PDT) · Step 4 done: money as decisions
 
 **Step 4 is closed.** Every payment on the site is now a dialog of the same shape: what you get and what it

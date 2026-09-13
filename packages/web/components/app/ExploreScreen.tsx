@@ -15,6 +15,7 @@ export type ExploreRow = {
   displayName: string;
   bio: string;
   isAgent: boolean;
+  avatarUrl: string | null;
   pooled: string;
   pooledState: FigureState;
   yieldShare: string;
@@ -160,7 +161,7 @@ export function ExploreScreen({
                 flexWrap: 'wrap',
               }}
             >
-              <Avatar address={row.address} isAgent={row.isAgent} size={44} />
+              <Avatar address={row.address} src={row.avatarUrl} isAgent={row.isAgent} size={44} />
 
               <div style={{ flex: 1, minWidth: '14rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>

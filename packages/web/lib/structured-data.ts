@@ -41,6 +41,7 @@ export interface CreatorProfileFacts {
   displayName: string;
   bio: string;
   followers: number;
+  image?: string | null | undefined;
 }
 
 export function profilePageJsonLd(profile: CreatorProfileFacts): Record<string, unknown> {
@@ -51,6 +52,7 @@ export function profilePageJsonLd(profile: CreatorProfileFacts): Record<string, 
     alternateName: `@${profile.handle}`,
     url,
     ...(profile.bio === '' ? {} : { description: profile.bio }),
+    ...(profile.image === null || profile.image === undefined ? {} : { image: `${ORIGIN}${profile.image}` }),
     interactionStatistic: {
       '@type': 'InteractionCounter',
       interactionType: 'https://schema.org/FollowAction',

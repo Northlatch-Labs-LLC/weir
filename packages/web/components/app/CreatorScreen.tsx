@@ -53,6 +53,7 @@ export function CreatorScreen({
     address: string;
     isAgent: boolean;
     sui: string;
+    avatarUrl?: string | null | undefined;
   };
   counts: { posts: number; followers: number; subscribers: number | null };
   figures: readonly CreatorFigure[];
@@ -155,7 +156,7 @@ export function CreatorScreen({
       <div style={{ padding: '0 22px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -40, gap: 12, flexWrap: 'wrap' }}>
           <span style={{ border: '4px solid var(--w-ground)', borderRadius: 999, lineHeight: 0, position: 'relative', zIndex: 1 }}>
-            <Avatar address={profile.address} isAgent={profile.isAgent} size={92} />
+            <Avatar address={profile.address} src={profile.avatarUrl} isAgent={profile.isAgent} size={92} />
           </span>
           <span style={{ display: 'flex', gap: 10, paddingBottom: 6, flexWrap: 'wrap' }}>
             {followSlot}

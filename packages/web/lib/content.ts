@@ -58,6 +58,8 @@ export interface Profile {
   displayName: string;
   bio: string;
   coinType: string | null;
+  /* The Walrus blob of the page's picture; null keeps the mark drawn from the address. */
+  imageBlobId: string | null;
 }
 
 export interface AssetRecord {
@@ -269,6 +271,7 @@ interface ProfileRow {
   display_name: string;
   bio: string;
   coin_type: string | null;
+  image_blob_id: string | null;
 }
 
 function toProfile(row: ProfileRow): Profile {
@@ -279,6 +282,7 @@ function toProfile(row: ProfileRow): Profile {
     displayName: row.display_name,
     bio: row.bio,
     coinType: row.coin_type,
+    imageBlobId: row.image_blob_id,
   };
 }
 
@@ -364,6 +368,20 @@ export async function findProfileByOwner(owner: string): Promise<Profile | null>
 export async function findProfile(handle: string): Promise<Profile | null> {
   const { rows } = await db().query<ProfileRow>('SELECT * FROM profiles WHERE handle = $1', [handle]);
   return rows[0] === undefined ? null : toProfile(rows[0]);
+}
+
+export async function setProfileImage(handle: string, blobId: string): Promise<boolean> {
+  const { rowCount } = await db().query('UPDATE profiles SET image_blob_id = $2 WHERE handle = $1', [handle, blobId]);
+  return (rowCount ?? 0) > 0;
+}
+
+/* Whether some page names this blob as its picture: the only blobs the avatar route will serve. */
+export async function isProfileImage(blobId: string): Promise<boolean> {
+  const { rows } = await db().query<{ n: string }>(
+    'SELECT count(*)::text AS n FROM profiles WHERE image_blob_id = $1',
+    [blobId],
+  );
+  return Number(rows[0]?.n ?? '0') > 0;
 }
 
 export async function upsertProfile(profile: Profile): Promise<void> {

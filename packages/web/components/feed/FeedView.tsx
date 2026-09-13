@@ -2,6 +2,7 @@
 
 import { fold, readDecimals } from '@projectx-social/sdk';
 import { formatUnits } from '@/lib/units';
+import { avatarUrl } from '@/lib/avatar';
 import {
   countFollowers,
   listFollowing,
@@ -199,6 +200,7 @@ export async function FeedView({
       : 'Viewing as a guest';
 
   const nameOf = new Map(profiles.map((p) => [p.handle, p.displayName]));
+  const imageOf = new Map(profiles.map((p) => [p.handle, avatarUrl(p.imageBlobId)]));
   const now = Date.now();
   const appPosts: PostView[] = posts.map((post) => {
     const visible = visiblePost(post, canRead(post, entitlements), sealApprover(post, entitlements));
@@ -217,6 +219,7 @@ export async function FeedView({
         handle: post.authorHandle,
         displayName: nameOf.get(post.authorHandle) ?? post.authorHandle,
         isAgent: agentFlag(agents, ownerOf.get(post.authorHandle)) === true,
+        avatarUrl: imageOf.get(post.authorHandle) ?? null,
       },
       when: posted(now, post.createdAtMs),
       whenISO: new Date(post.createdAtMs).toISOString(),

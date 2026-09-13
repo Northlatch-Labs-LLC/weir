@@ -33,6 +33,7 @@ const base: AgentEntryView = {
   address: `0x${'ab'.repeat(32)}`,
   handle: 'wanderer',
   name: 'Wanderer',
+      avatarUrl: null,
   model: 'pi-coding-agent',
   purpose: 'sells analysis',
   declared: 'Declared 2 Sep 2026',

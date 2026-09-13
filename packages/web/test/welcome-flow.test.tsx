@@ -15,9 +15,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn(), 
 const { WelcomeFlow } = await import('../components/welcome/WelcomeFlow');
 
 const SUGGESTED = [
-  { handle: 'heron', displayName: 'Heron', owner: '0x1', followers: 12, isAgent: true, following: false },
-  { handle: 'wren', displayName: 'Wren', owner: '0x2', followers: 9, isAgent: false, following: false },
-  { handle: 'already', displayName: 'Already', owner: '0x3', followers: 1, isAgent: undefined, following: true },
+  { handle: 'heron', displayName: 'Heron', owner: '0x1', followers: 12, isAgent: true, following: false, avatarUrl: null },
+  { handle: 'wren', displayName: 'Wren', owner: '0x2', followers: 9, isAgent: false, following: false, avatarUrl: null },
+  { handle: 'already', displayName: 'Already', owner: '0x3', followers: 1, isAgent: undefined, following: true, avatarUrl: null },
 ];
 
 function serveFollow(answer: (handle: string) => unknown = () => ({ following: true, followers: 1 })) {
@@ -52,7 +52,7 @@ afterEach(() => {
 describe('suggested for you', () => {
   it('lists the suggestions, marks the declared agent, and shows who is already followed', () => {
     serveFollow();
-    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" />);
+    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" face={null} />);
     expect(screen.getByText('Suggested for you')).toBeTruthy();
     expect(screen.getByText('Heron')).toBeTruthy();
     expect(screen.getByText('Declared agent')).toBeTruthy();
@@ -61,7 +61,7 @@ describe('suggested for you', () => {
 
   it('follows one account with the same signed statement the follow button uses', async () => {
     const calls = serveFollow();
-    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" />);
+    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" face={null} />);
     fireEvent.click(screen.getAllByText('Follow')[0]!);
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(signed[0]).toContain('action: follow\ncreator: heron');
@@ -71,7 +71,7 @@ describe('suggested for you', () => {
 
   it('follows all the rest, one signature each, in order', async () => {
     const calls = serveFollow();
-    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" />);
+    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" face={null} />);
     fireEvent.click(screen.getByText('Follow all'));
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(signed.map((s) => s.split('creator: ')[1])).toEqual(['heron', 'wren']);
@@ -80,23 +80,40 @@ describe('suggested for you', () => {
 
   it('shows the server’s refusal instead of pretending', async () => {
     serveFollow(() => ({ error: 'that page does not exist' }));
-    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" />);
+    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" face={null} />);
     fireEvent.click(screen.getAllByText('Follow')[0]!);
     await waitFor(() => expect(screen.getByText('that page does not exist')).toBeTruthy());
   });
 
   it('skips straight to the introduction', () => {
     serveFollow();
-    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" />);
+    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" face={null} />);
     fireEvent.click(screen.getByText('Skip'));
     expect(screen.getByText(/Three things before you go/)).toBeTruthy();
+  });
+});
+
+describe('the face', () => {
+  it('comes first for a reader with a page, and can be kept as the mark', () => {
+    serveFollow();
+    render(<WelcomeFlow suggestions={SUGGESTED} handle="nova" face={{ current: null }} />);
+    expect(screen.getByText('Give your profile a face')).toBeTruthy();
+    expect(screen.getByText('Choose a picture')).toBeTruthy();
+    fireEvent.click(screen.getByText('Keep the mark'));
+    expect(screen.getByText('Suggested for you')).toBeTruthy();
+  });
+
+  it('is skipped for a reader without a page', () => {
+    serveFollow();
+    render(<WelcomeFlow suggestions={SUGGESTED} handle={null} face={null} />);
+    expect(screen.queryByText('Give your profile a face')).toBeNull();
   });
 });
 
 describe('the introduction', () => {
   it('walks three slides and lands in the feed', () => {
     serveFollow();
-    render(<WelcomeFlow suggestions={[]} handle="nova" />);
+    render(<WelcomeFlow suggestions={[]} handle="nova" face={null} />);
     expect(screen.getByText('Your keys stay on your device')).toBeTruthy();
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
@@ -107,7 +124,7 @@ describe('the introduction', () => {
 
   it('can be skipped to the feed at any slide', () => {
     serveFollow();
-    render(<WelcomeFlow suggestions={[]} handle="nova" />);
+    render(<WelcomeFlow suggestions={[]} handle="nova" face={null} />);
     fireEvent.click(screen.getByText('Skip'));
     expect(push).toHaveBeenCalledWith('/feed');
   });

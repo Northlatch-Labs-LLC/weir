@@ -10,6 +10,9 @@ import { PageHead } from '@/components/app/PageHead';
 import { readProtocol } from '@/lib/chain';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { fold } from '@projectx-social/sdk';
+import { FaceControl } from '@/components/app/FaceControl';
+import { findProfileByOwner } from '@/lib/content';
+import { avatarUrl } from '@/lib/avatar';
 
 export const metadata: Metadata = { title: titleFor('/creator') };
 
@@ -41,6 +44,9 @@ export default async function CreatorPage() {
           () => null,
         );
 
+  const page = viewer === null ? null : await findProfileByOwner(viewer);
+  const face = page === null ? null : { handle: page.handle, current: avatarUrl(page.imageBlobId) };
+
   return (
     <>
       <PageHead
@@ -50,6 +56,12 @@ export default async function CreatorPage() {
       />
       <PageTabs label="Creator studio" items={CREATOR} />
 
+      {face === null ? null : (
+        <section className="card" aria-labelledby="face-title">
+          <h2 id="face-title">Your face</h2>
+          <FaceControl handle={face.handle} current={face.current} />
+        </section>
+      )}
       <div style={{ marginTop: 'var(--space-20)' }}>
         <CreatorSetup />
       </div>

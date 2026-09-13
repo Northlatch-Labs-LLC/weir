@@ -5,6 +5,8 @@ import { Discovery } from '@/components/shell/Discovery';
 import { ChromeRouter } from '@/components/shell/ChromeRouter';
 import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
+import { avatarUrl } from '@/lib/avatar';
+import { findProfileByOwner } from '@/lib/content';
 
 export { isPublicPage, carriesItsOwnFrame, normalisePath } from '@/components/shell/ChromeRouter';
 
@@ -23,6 +25,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           () => null,
         );
 
+  const myFace = viewer === null ? null : avatarUrl((await findProfileByOwner(viewer))?.imageBlobId ?? null);
+
   return (
     <>
       <Reveals />
@@ -30,7 +34,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         viewer={
           viewer === null
             ? { signedIn: false }
-            : { signedIn: true, address: viewer, handle: myHandle, displayName: myHandle }
+            : { signedIn: true, address: viewer, handle: myHandle, displayName: myHandle, avatarUrl: myFace }
         }
         discovery={<Discovery />}
       >

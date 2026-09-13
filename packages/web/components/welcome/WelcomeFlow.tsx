@@ -8,6 +8,7 @@ import { Avatar } from '@projectx-social/ui';
 import { followStatement } from '@/components/FollowButton';
 import { useSigner } from '@/components/SignerProvider';
 import { SOCIAL } from '@/lib/social-links';
+import { FaceControl } from '@/components/app/FaceControl';
 
 export interface Suggestion {
   handle: string;
@@ -17,9 +18,10 @@ export interface Suggestion {
   /* From the declaration register; undefined when the register could not be read. */
   isAgent: boolean | undefined;
   following: boolean;
+  avatarUrl: string | null;
 }
 
-type Screen = 'suggested' | 'ready';
+type Screen = 'face' | 'suggested' | 'ready';
 
 /*
   What happens after the account exists, the way every social network does it: a few people to
@@ -27,10 +29,22 @@ type Screen = 'suggested' | 'ready';
   the same one the follow button signs; with a Google sign-in the ephemeral key signs silently,
   with an extension each is one prompt.
 */
-export function WelcomeFlow({ suggestions, handle }: { suggestions: readonly Suggestion[]; handle: string | null }) {
+export function WelcomeFlow({
+  suggestions,
+  handle,
+  face,
+}: {
+  suggestions: readonly Suggestion[];
+  handle: string | null;
+  /* The picture the page shows now, when the reader holds a page; null keeps the mark. */
+  face: { current: string | null } | null;
+}) {
   const { signer } = useSigner();
   const router = useRouter();
-  const [screen, setScreen] = useState<Screen>(suggestions.length === 0 ? 'ready' : 'suggested');
+  const [screen, setScreen] = useState<Screen>(
+    handle !== null && face !== null ? 'face' : suggestions.length === 0 ? 'ready' : 'suggested',
+  );
+  const afterFace: Screen = suggestions.length === 0 ? 'ready' : 'suggested';
   const [followed, setFollowed] = useState<ReadonlySet<string>>(
     () => new Set(suggestions.filter((s) => s.following).map((s) => s.handle)),
   );
@@ -95,6 +109,31 @@ export function WelcomeFlow({ suggestions, handle }: { suggestions: readonly Sug
     </p>
   );
 
+  if (screen === 'face' && handle !== null && face !== null) {
+    return (
+      <div className="w-wizard">
+        <p className="w-wizard__count">Welcome, @{handle}</p>
+        <h2 className="w-wizard__title">Give your profile a face</h2>
+        <p className="w-wizard__lede">
+          A picture of your own on your page and above your posts, stored on Walrus under your account. Or keep
+          the mark drawn from your address; it is yours and nobody else's.
+        </p>
+        <div className="w-wizard__body">
+          <FaceControl handle={handle} current={face.current} />
+        </div>
+        <div className="w-wizard__foot">
+          <button type="button" className="w-btn w-btn--quiet" onClick={() => setScreen(afterFace)}>
+            Keep the mark
+          </button>
+          <button type="button" className="w-btn w-btn--primary" onClick={() => setScreen(afterFace)}>
+            Continue
+          </button>
+        </div>
+        {help}
+      </div>
+    );
+  }
+
   if (screen === 'suggested') {
     const remaining = suggestions.filter((s) => !followed.has(s.handle)).length;
     return (
@@ -111,7 +150,7 @@ export function WelcomeFlow({ suggestions, handle }: { suggestions: readonly Sug
               const done = followed.has(s.handle);
               return (
                 <li key={s.handle} className="w-suggest__row">
-                  <Avatar address={s.owner} isAgent={s.isAgent === true} size={40} />
+                  <Avatar address={s.owner} src={s.avatarUrl} isAgent={s.isAgent === true} size={40} />
                   <span className="w-suggest__who">
                     <span className="w-suggest__name">
                       <Link href={`/c/${s.handle}`}>{s.displayName}</Link>

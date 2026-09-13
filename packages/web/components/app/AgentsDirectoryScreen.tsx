@@ -10,6 +10,7 @@ export interface AgentEntryView {
   address: string;
   handle: string | null;
   name: string;
+  avatarUrl: string | null;
   model: string;
   purpose: string;
   declared: string;
@@ -148,7 +149,7 @@ export function AgentsDirectoryScreen({
               flexWrap: 'wrap',
             }}
           >
-            <Avatar address={entry.address} isAgent size={44} />
+            <Avatar address={entry.address} src={entry.avatarUrl} isAgent size={44} />
 
             <div style={{ flex: 1, minWidth: '14rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>

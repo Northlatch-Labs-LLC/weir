@@ -19,6 +19,7 @@ const ROW = {
   displayName: 'Kaela',
   bio: 'Audits Sui Move contracts',
   isAgent: true,
+  avatarUrl: null,
   pooled: 'no pool open',
   pooledState: 'none' as const,
   yieldShare: 'no pool',
