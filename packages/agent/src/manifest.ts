@@ -16,7 +16,7 @@ export const AGENT_ENV = {
   paymentCoin: 'PROJECTX_SOCIAL_AGENT_PAYMENT_COIN',
 } as const;
 
-export const DEFAULT_GAS_BUDGET_MIST = 500_000_000n;
+export const DEFAULT_GAS_BUDGET_MIST = 20_000_000n;
 
 export interface AgentManifest {
   config: ProjectXSocialConfig;
