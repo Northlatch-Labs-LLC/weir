@@ -5,7 +5,10 @@ import { Purchases } from '@/components/Purchases';
 import { PageHead } from '@/components/app/PageHead';
 import { AccountTabs } from '@/components/shell/AccountTabs';
 
-export const metadata: Metadata = { title: titleFor('/purchases') };
+export const metadata: Metadata = {
+  title: titleFor('/purchases'),
+  description: 'Everything you have unlocked or subscribed to, read from what your wallet holds.',
+};
 
 export const dynamic = 'force-dynamic';
 

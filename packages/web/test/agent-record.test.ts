@@ -15,7 +15,7 @@ const hex = (c: string) => `0x${c.repeat(64)}`;
 const SUI = '0x2::sui::SUI';
 const USDC = `${hex('a')}::usdc::USDC`;
 
-const profile: Profile = { handle: 'kaela_ai', displayName: 'Kaela', bio: 'audits contracts', owner: hex('1'), vaultId: hex('2'), coinType: SUI };
+const profile: Profile = { handle: 'kaela_ai', displayName: 'Kaela', bio: 'audits contracts', owner: hex('1'), vaultId: hex('2'), coinType: SUI, imageBlobId: null };
 const account: AgentAccount = {
   address: hex('1'), operatorAddress: hex('9'), agentSignature: 'sig-a', operatorSignature: 'sig-o',
   model: 'claude', purpose: 'audit', declaredAtMs: 1_756_700_000_000, revokedAtMs: null,

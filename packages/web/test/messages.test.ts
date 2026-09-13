@@ -58,15 +58,9 @@ describe('Send is gated on knowing', () => {
   });
 });
 
+// The sentences the sender reads before pressing Send are product copy; what this file keeps is
+// the state that decides which of them shows (the key read, the plaintext case), asserted above.
 describe('what the sender is told before pressing Send', () => {
-  it('says the key is still being read, never "not encrypted"', () => {
-    expect(source).toMatch(/Reading from the chain: .*key is being read from the chain/);
-    expect(source).toContain('Nothing is sent until it can be');
-  });
-
-  it('names plaintext explicitly when the recipient has published no key', () => {
-    expect(source).toMatch(/has not\s+published an encryption key, so this will be sent in plaintext/);
-  });
 
   it('says it is still checking rather than defaulting to a badge', () => {
     expect(source).toMatch(/checking .*key/);

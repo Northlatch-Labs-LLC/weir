@@ -7,6 +7,49 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (night, PDT) · Tests that test behaviour; metadata and hygiene; dependencies at their latest patch
+
+**The two suite failures the plan named were not failures of the code.** `idempotency-namespace` and `quotas`
+failed only when the suite was pointed at a database that did not exist; with `PROJECTX_TEST_DATABASE_URL`
+read from `.env.local`, as the helper does, they pass and have passed in every full run today.
+
+**The seven prose assertions on component and page source.** Each became a behaviour assertion or was
+removed with its reason in the test file: the waiting list's agents sentence (`agents-door`) is asserted on
+the rendered panel in `agents-door-shown`, so the source pin went; the creator page's vault-attribution
+sentence (`creator-page`) was copy, and the attribution behaviour beside it stays; the three sentences the
+message sender reads (`messages`) were copy, and the state that chooses between them stays; the reference
+screen's marker sentence moved from `agent-marker` (source) to `agents-mcp-count` (rendered), where two
+more source pins became rendered ones. The other assertions on prose in the suite read the agent manifest
+or the legal text the manifest points at, which are outputs, not source.
+
+**The signer guard, widened.** `test/signing-guard.test.ts` walks every component: each of the ten
+`signTransaction(` calls signs a quote's `bytes` and nothing built in the browser, and each of the twelve
+files that call `signPersonalMessage(` builds an `action:` statement or imports a builder. The scan asserts
+its own reach, so a broken glob fails rather than passing on nothing. 86 of 184 test files still read
+source text; they pin structure (statement heads, SQL shapes, wiring), which is what a source pin is for,
+and are left as they are.
+
+**Metadata.** Every route now carries a title and a description: fifteen routes gained a description, the
+front page carries its own, `/verified` (a redirect) and `/auth/callback` (a client page, through its
+segment layout) carry a title, a description and `robots: noindex`. The creator share card from step 5
+stands as the Open Graph image where a page has one.
+
+**Hygiene.** `LOGS/` (ten screenshots, tracked), `work/`, `graphify-out/` and `Claude outputs/` moved out of
+the repository to `~/WORK.CLAUDE/desk/weir-moved-out/`; `LOGS` is removed from git, the others were never
+tracked. Dependencies at their latest patch: `next` 16.3.5, `@mysten/dapp-kit-core` 1.6.27,
+`@mysten/dapp-kit-react` 2.1.29, `@mysten/seal` 1.4.10, `@mysten/suins` 2.0.6, `zod` 4.6.2, `happy-dom`
+20.14.5. `@mysten/sui` 2.31.0 is a minor, not a patch, and was left at 2.30.0. The SDK's statement tests
+gained the `set-image` kind (a golden vector, the coverage count to 17) which step 5 had missed there.
+
+**Proof.** `tsc --noEmit` from a cold cache, clean in `web`, `ui` and `sdk` (the cold run surfaced five
+profile literals that needed the picture field; all fixed). `next build` on 16.3.5 clean.
+`pnpm -C packages/web test`: 186 files, 2,546 tests passing. `ui`: 32. `sdk`: 19 files, 299 tests. The other
+packages: `policy` 79, `agent` 283, `signer` 146, `daemon` 97, `purse` 211, `mcp` and `room` all checks
+passing; `agent-runtime` has five host-install tests failing on this Mac in files this work did not touch
+(the droplet deploy script's stubbed run asserts an exit of 0 and gets 1), recorded rather than fixed.
+
+---
+
 ## 2026-09-12 (evening, PDT) · The gateway tells the truth: done in its folder, which is not a repository
 
 **Done in `~/Desktop/claudeexp/xlaunch/gateway`.** That folder is not a git repository and has no remote, so

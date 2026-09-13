@@ -10,6 +10,7 @@ import { PageHead } from '@/components/app/PageHead';
 
 export const metadata = {
   title: 'Your .sui name',
+  description: 'Your .sui name: claim one, point it at your address, keep it.',
 };
 
 export const dynamic = 'force-dynamic';

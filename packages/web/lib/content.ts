@@ -384,7 +384,7 @@ export async function isProfileImage(blobId: string): Promise<boolean> {
   return Number(rows[0]?.n ?? '0') > 0;
 }
 
-export async function upsertProfile(profile: Profile): Promise<void> {
+export async function upsertProfile(profile: Omit<Profile, 'imageBlobId'>): Promise<void> {
   await db().query(
     `INSERT INTO profiles (handle, vault_id, owner, display_name, bio, coin_type)
      VALUES ($1, $2, $3, $4, $5, $6)

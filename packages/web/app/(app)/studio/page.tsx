@@ -7,7 +7,10 @@ import { provenReader } from '@/lib/read-session';
 import { StudioScreen } from '@/components/app/StudioScreen';
 import { Discovery } from '@/components/shell/Discovery';
 
-export const metadata: Metadata = { title: titleFor('/studio') };
+export const metadata: Metadata = {
+  title: titleFor('/studio'),
+  description: 'Write a post, choose who can read it, and publish it under your own signature.',
+};
 
 export const dynamic = 'force-dynamic';
 

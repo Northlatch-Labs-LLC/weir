@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Platform',
+  description: 'Run the site: the front door, invitations, today\'s revenue and the platform\'s terms on chain.',
 };
 
 export default async function AdminPage() {

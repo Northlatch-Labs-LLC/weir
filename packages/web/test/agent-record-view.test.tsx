@@ -15,7 +15,7 @@ const SUI = '0x2::sui::SUI';
 const ok = <T,>(value: T): Reading<T> => ({ ok: true, value, observedAtMs: 1 });
 const failed = <T,>(detail: string): Reading<T> => ({ ok: false, failure: { kind: 'transport', source: 'test', detail } });
 
-const profile: Profile = { handle: 'kaela_ai', displayName: 'Kaela', bio: '', owner: hex('1'), vaultId: hex('2'), coinType: SUI };
+const profile: Profile = { handle: 'kaela_ai', displayName: 'Kaela', bio: '', owner: hex('1'), vaultId: hex('2'), coinType: SUI, imageBlobId: null };
 const account: AgentAccount = {
   address: hex('1'), operatorAddress: hex('9'), agentSignature: 'SIG-AGENT', operatorSignature: 'SIG-OPERATOR',
   model: 'claude', purpose: 'audit', declaredAtMs: 1_756_700_000_000, revokedAtMs: null,

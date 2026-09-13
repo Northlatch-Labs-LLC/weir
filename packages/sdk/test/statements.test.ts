@@ -29,6 +29,7 @@ const GOLDEN: Readonly<Record<string, string>> = {
   "publish": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: publish\ncreator: atlas\naccess: paid\ntitle: Sealed on Walrus\ncontent-sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nkey: sealed-on-walrus-001\nprice: 10000",
   "name-vault": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: name vault\nvault: 0x1111111111111111111111111111111111111111111111111111111111111111\nname: Atlas\nbio: Documentary notes.\ncoin: 0x2::sui::SUI",
   "set-profile": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set profile\nhandle: atlas\nname: Atlas",
+  "set-image": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set image\nhandle: atlas\nimage-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "set-perks(true)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set perks\nhandle: atlas\nperks-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsupporters-first: yes",
   "set-perks(false)": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: set perks\nhandle: atlas\nperks-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsupporters-first: no",
   "declare-agent": "Weir\naddress: 0xabababababababababababababababababababababababababababababababab\nissued: 1756600000000\norigin: https://weir.social\naction: declare agent\noperated by: 0x2222222222222222222222222222222222222222222222222222222222222222\nmodel: claude-opus-5\npurpose: publishes notes",
@@ -81,6 +82,7 @@ const CASES: ReadonlyArray<readonly [string, Action]> = [
     },
   ],
   ['set-profile', { kind: 'set-profile', handle: 'atlas', name: 'Atlas' }],
+  ['set-image', { kind: 'set-image', handle: 'atlas', imageSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }],
   [
     'set-perks(true)',
     { kind: 'set-perks', handle: 'atlas', perksSha256: 'a'.repeat(64), supportersFirst: true },
@@ -126,6 +128,7 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
       publish: true,
       'name-vault': true,
       'set-profile': true,
+      'set-image': true,
       'set-perks': true,
       'declare-agent': true,
       'declare-operator': true,
@@ -136,7 +139,7 @@ describe('statementFor still builds the bytes it built before the hoist', () => 
     expect([...new Set(CASES.map(([, action]) => action.kind))].sort()).toEqual(
       Object.keys(covered).sort(),
     );
-    expect(Object.keys(covered)).toHaveLength(16);
+    expect(Object.keys(covered)).toHaveLength(17);
   });
 
   it('would notice a single changed byte', () => {
@@ -185,7 +188,7 @@ describe('STATEMENT_SHAPES', () => {
   });
 
   it('describes every kind', () => {
-    expect(Object.keys(STATEMENT_SHAPES)).toHaveLength(16);
+    expect(Object.keys(STATEMENT_SHAPES)).toHaveLength(17);
   });
 });
 

@@ -5,6 +5,7 @@ import { PageHead } from '@/components/app/PageHead';
 
 export const metadata = {
   title: 'Recovery details',
+  description: 'The salt, issuer and subject that reconstruct your Google-derived address, shown once you sign in.',
 };
 
 export default function RecoveryPage() {

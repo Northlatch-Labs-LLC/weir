@@ -5,7 +5,10 @@ import { Referrals } from '@/components/Referrals';
 import { PageHead } from '@/components/app/PageHead';
 import { AccountTabs } from '@/components/shell/AccountTabs';
 
-export const metadata: Metadata = { title: titleFor('/referrals') };
+export const metadata: Metadata = {
+  title: titleFor('/referrals'),
+  description: 'Your referral link, who used it, and what it earned you.',
+};
 
 export const dynamic = 'force-dynamic';
 

@@ -6,7 +6,10 @@ import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 import { SecurityData } from '@/components/data/security-data';
 
-export const metadata: Metadata = { title: titleFor('/security') };
+export const metadata: Metadata = {
+  title: titleFor('/security'),
+  description: 'How keys, payments and content are protected on Weir, with the contracts to check each claim.',
+};
 
 export const dynamic = 'force-dynamic';
 

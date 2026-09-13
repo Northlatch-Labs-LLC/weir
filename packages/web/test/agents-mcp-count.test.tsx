@@ -107,7 +107,7 @@ describe('the hosted list is the manifest’s, not a remembered one', () => {
   it('sends a buyer to the published package rather than promising a future one', () => {
     render(<AgentsReferenceScreen {...props} />);
     expect(rendered()).toContain('npm i @projectx-social/mcp');
-    expect(source).not.toContain('once it is published');
+    expect(rendered()).not.toContain('once it is published');
   });
 });
 
@@ -117,7 +117,8 @@ describe('the page stops promising it cannot disagree with the manifest', () => 
     const text = rendered();
     expect(text).toContain('read from the deployment when this page renders');
     expect(text).toContain('where they disagree with the manifest, the manifest wins');
-    expect(source).not.toContain('this page cannot disagree with the document your agent fetches');
+    expect(text).not.toContain('this page cannot disagree with the document your agent fetches');
+    expect(text).toContain('Declared agents carry a marker on every post.');
   });
 
   it('prints no gas figure and no machine-edition cut-off date', () => {

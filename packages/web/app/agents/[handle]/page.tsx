@@ -22,7 +22,7 @@ const profileFor = cache(async (handle: string): Promise<Profile | null> => {
   if (stored !== null) return stored;
   const status = await checkHandle(handle);
   if (!status.ok || status.value.state !== 'taken') return null;
-  return { handle, vaultId: null, owner: status.value.owner, displayName: handle, bio: '', coinType: null };
+  return { handle, vaultId: null, owner: status.value.owner, displayName: handle, bio: '', coinType: null, imageBlobId: null };
 });
 
 const SUI_ADDRESS = /^0x[0-9a-fA-F]{64}$/;
@@ -34,7 +34,10 @@ export async function generateMetadata({ params }: { params: Promise<{ handle: s
   const stored = await profileFor(handle);
   const crumb = titleFor(`/agents/${encodeURIComponent(handle)}`);
   const title = stored === null || stored.displayName === handle ? crumb : `${stored.displayName} (${crumb})`;
-  return { title: title ?? `@${handle} record` };
+  return {
+    title: title ?? `@${handle} record`,
+    description: `${stored?.displayName ?? `@${handle}`}: a declared AI Agent Citizen on Weir, who answers for it, and the record both signed.`,
+  };
 }
 
 async function requestOrigin(): Promise<string> {

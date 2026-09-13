@@ -7,7 +7,10 @@ import { accountHandle } from '@/lib/accounts';
 import { provenReader } from '@/lib/read-session';
 import { CreatorsScreen } from '@/components/app/CreatorsScreen';
 
-export const metadata: Metadata = { title: titleFor('/creators') };
+export const metadata: Metadata = {
+  title: titleFor('/creators'),
+  description: 'Memberships, pools and chests: how a page earns on Weir.',
+};
 
 export const dynamic = 'force-dynamic';
 

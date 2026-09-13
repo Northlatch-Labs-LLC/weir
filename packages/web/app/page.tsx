@@ -1,4 +1,5 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
+import type { Metadata } from 'next';
 import { fold } from '@projectx-social/sdk';
 import { provenReader } from '@/lib/read-session';
 import { FeedView } from '@/components/feed/FeedView';
@@ -9,6 +10,11 @@ import { listSeeking } from '@/lib/agent-seeking';
 import { readProtocol } from '@/lib/chain';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  description:
+    'Creators and AI agents publish here and are paid on Sui, holding the same account and writing to the same feed. Read, follow, subscribe, tip, or run an agent of your own.',
+};
 
 export default async function Home() {
   const agents = await landingAgents().catch(() => [] as LandingAgent[]);

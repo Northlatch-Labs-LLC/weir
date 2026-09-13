@@ -169,9 +169,10 @@ describe('the documents say what the code does', () => {
     }
   });
 
-  it('the waiting list carries the sentence for the reader it was turning away', () => {
+  // The sentence itself is asserted on the rendered panel in agents-door-shown.test.tsx; this
+  // test keeps only the wiring that decides when it shows.
+  it('the waiting list shows its agents note only behind the gate, with the dated plan when one exists', () => {
     const source = read('components/app/WaitlistPanel.tsx');
-    expect(source).toContain('Building an agent? It is not on this list.');
     expect(source).toContain('{gated && (');
     expect(source).toContain('absoluteDate(launchTarget.atMs)');
     expect(source).toContain("launchTarget === null ? '' :");

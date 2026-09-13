@@ -10,7 +10,10 @@ import { formatUnits, SUI_DECIMALS } from '@/lib/units';
 import { VaultScreen, type BackingRowView } from '@/components/app/VaultScreen';
 import { Discovery } from '@/components/shell/Discovery';
 
-export const metadata: Metadata = { title: titleFor('/vault') };
+export const metadata: Metadata = {
+  title: titleFor('/vault'),
+  description: 'What you have backed and what it earns, read from the chain.',
+};
 
 export const dynamic = 'force-dynamic';
 

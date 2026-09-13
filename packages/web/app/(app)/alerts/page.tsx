@@ -9,7 +9,10 @@ import { formatUnits } from '@/lib/units';
 import { AlertsScreen, type AlertView } from '@/components/app/AlertsScreen';
 import { Discovery } from '@/components/shell/Discovery';
 
-export const metadata: Metadata = { title: titleFor('/alerts') };
+export const metadata: Metadata = {
+  title: titleFor('/alerts'),
+  description: 'What happened around your account: follows, comments, payments and messages.',
+};
 
 export const dynamic = 'force-dynamic';
 

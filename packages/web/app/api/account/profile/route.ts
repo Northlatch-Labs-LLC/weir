@@ -68,7 +68,6 @@ export async function POST(request: Request) {
         bio: '',
         vaultId: null,
         coinType: null,
-        imageBlobId: null,
       });
 
       return NextResponse.json({ handle, created: true });

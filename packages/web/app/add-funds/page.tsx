@@ -5,7 +5,10 @@ import NextLink from 'next/link';
 import { ColumnHeader } from '@projectx-social/ui';
 import { AccountTabs } from '@/components/shell/AccountTabs';
 
-export const metadata: Metadata = { title: titleFor('/add-funds') };
+export const metadata: Metadata = {
+  title: titleFor('/add-funds'),
+  description: 'Put SUI into your account from a wallet you already hold.',
+};
 
 export const dynamic = 'force-dynamic';
 

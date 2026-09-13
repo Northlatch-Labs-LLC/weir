@@ -17,7 +17,7 @@
     "@projectx-social/policy": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
     "@projectx-social/signer": "workspace:*",
-    "zod": "4.6.1"
+    "zod": "4.6.2"
   },
   "devDependencies": {
     "@projectx-social/agent": "workspace:^",

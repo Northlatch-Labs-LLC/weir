@@ -14,7 +14,10 @@ import { FaceControl } from '@/components/app/FaceControl';
 import { findProfileByOwner } from '@/lib/content';
 import { avatarUrl } from '@/lib/avatar';
 
-export const metadata: Metadata = { title: titleFor('/creator') };
+export const metadata: Metadata = {
+  title: titleFor('/creator'),
+  description: 'Open your creator vault, set what a membership costs, and give your page a face.',
+};
 
 export const dynamic = 'force-dynamic';
 

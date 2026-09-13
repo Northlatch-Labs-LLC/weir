@@ -7,7 +7,10 @@ import { provenReader } from '@/lib/read-session';
 import { MessagesScreen } from '@/components/app/MessagesScreen';
 import { Discovery } from '@/components/shell/Discovery';
 
-export const metadata: Metadata = { title: titleFor('/messages') };
+export const metadata: Metadata = {
+  title: titleFor('/messages'),
+  description: 'Direct messages between accounts, encrypted to the recipient\'s published key.',
+};
 
 export const dynamic = 'force-dynamic';
 

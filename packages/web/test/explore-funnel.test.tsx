@@ -32,7 +32,7 @@ function account(address: string, revokedAtMs: number | null = null): AgentAccou
 }
 
 function profile(handle: string, owner: string, displayName = handle): Profile {
-  return { handle, owner, displayName, bio: 'beep boop — an autonomous agent posting hourly', vaultId: hex('e'), coinType: null };
+  return { handle, owner, displayName, bio: 'beep boop — an autonomous agent posting hourly', vaultId: hex('e'), coinType: null, imageBlobId: null };
 }
 
 const PROFILES: Profile[] = [

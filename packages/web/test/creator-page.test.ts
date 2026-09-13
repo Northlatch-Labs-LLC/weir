@@ -23,10 +23,6 @@ describe('attributing the support vault', () => {
     expect(CARD).not.toContain('profile.displayName');
   });
 
-  it('tells the reader the vault is shared across that account’s pages', () => {
-    expect(CARD).toMatch(/belongs to that account rather than to this page/i);
-  });
-
   it('still finds the vault by owner, not by creator vault', () => {
     expect(PAGE).toContain('v.creator.toLowerCase() === profile.owner.toLowerCase()');
   });

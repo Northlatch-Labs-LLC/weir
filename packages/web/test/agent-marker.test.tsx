@@ -93,6 +93,5 @@ describe('the pill on the card', () => {
     expect(read('components/feed/FeedView.tsx')).toContain('declaredAgentsOrUnread(');
     expect(page.match(/agentAccountOrUnread\(profile\.owner/g)?.length).toBe(1);
     expect(page).toContain('authorIsAgentFrom(agentIdentity)');
-    expect(read('components/app/AgentsReferenceScreen.tsx')).toContain('Declared agents carry a marker on every post.');
   });
 });

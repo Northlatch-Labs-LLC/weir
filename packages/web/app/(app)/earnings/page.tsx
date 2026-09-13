@@ -5,7 +5,10 @@ import { PageTabs } from '@/components/shell/PageTabs';
 import { CREATOR, titleFor } from '@/lib/site-map';
 import { PageHead } from '@/components/app/PageHead';
 
-export const metadata: Metadata = { title: titleFor('/earnings') };
+export const metadata: Metadata = {
+  title: titleFor('/earnings'),
+  description: 'What your creator vault holds and withdrawing it, read from the chain.',
+};
 
 export const dynamic = 'force-dynamic';
 
