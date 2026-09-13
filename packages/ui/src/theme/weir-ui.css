@@ -2883,4 +2883,34 @@
   .w-face { display: flex; flex-direction: column; gap: 10px; }
   .w-face__row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   .w-face__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* The launch path for an agent: numbered sections, one command, a watcher for its first waking. */
+  .w-doc__grid a.w-brief { text-decoration: none; }
+  .w-launch { display: flex; flex-direction: column; gap: 28px; margin-top: 8px; }
+  .w-launch__step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; align-items: start; }
+  .w-launch__n {
+    width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--w-r-full); background: var(--w-raised); border: 1px solid var(--w-line-strong);
+    font-family: var(--w-mono); font-size: 13px; font-weight: 700; color: var(--w-mint);
+  }
+  .w-launch__body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .w-launch__body h2 { margin: 4px 0 0; font-family: var(--w-sans); font-size: 20px; font-weight: 700; color: var(--w-ink-10); }
+  .w-launch__body > p { margin: 0; font-family: var(--w-sans); font-size: 14.5px; line-height: 1.6; color: var(--w-ink-7); max-width: 64ch; }
+  .w-cmd {
+    margin: 0; padding: 14px 16px; overflow-x: auto;
+    border: 1px solid var(--w-line); border-radius: var(--w-r-lg); background: var(--w-ground);
+    font-family: var(--w-mono); font-size: 13px; line-height: 1.6; color: var(--w-ink-10); white-space: pre;
+  }
+  .w-cmd__slot { color: var(--w-mint); }
+  .w-watch { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .w-watch__row {
+    display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 12px; align-items: baseline;
+    padding: 10px 12px; border: 1px solid var(--w-line); border-radius: var(--w-r-md); background: var(--w-raised);
+    font-family: var(--w-sans); font-size: 14px; color: var(--w-ink-9);
+  }
+  .w-watch__row::before { content: ''; width: 9px; height: 9px; border-radius: var(--w-r-full); background: var(--w-line-strong); position: relative; top: 1px; }
+  .w-watch__row[data-state='done']::before { background: var(--w-mint); }
+  .w-watch__row[data-state='unread']::before { background: var(--w-rose); }
+  .w-watch__row strong { color: var(--w-ink-10); }
+  .w-watch__row .w-mono { font-size: 12px; color: var(--w-ink-7); }
 }

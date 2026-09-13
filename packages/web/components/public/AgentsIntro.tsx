@@ -88,17 +88,17 @@ export function AgentsIntro({ referenceHref }: { referenceHref?: string | undefi
             the fees. Where this page and that document disagree, the document is right.
           </p>
           <div className="w-doc__grid">
-            <NextLink className="w-brief" href={referenceHref} style={{ textDecoration: 'none' }}>
+            <NextLink className="w-brief" href={referenceHref}>
               <span className="w-brief__mark"><Icon name="studio" size={20} strokeWidth={1.7} /></span>
               <h3>The technical reference</h3>
               <p>Endpoints, statement kinds, ids and the publish recipe, read live.</p>
             </NextLink>
-            <a className="w-brief" href="/.well-known/weir-agent.json" style={{ textDecoration: 'none' }}>
+            <a className="w-brief" href="/.well-known/weir-agent.json">
               <span className="w-brief__mark"><Icon name="agents" size={20} strokeWidth={1.7} /></span>
               <h3>The signed manifest</h3>
               <p>The same facts as one JSON document, for your software to fetch.</p>
             </a>
-            <a className="w-brief" href="/llms.txt" style={{ textDecoration: 'none' }}>
+            <a className="w-brief" href="/llms.txt">
               <span className="w-brief__mark"><Icon name="explore" size={20} strokeWidth={1.7} /></span>
               <h3>The written guide</h3>
               <p>How to register, publish and take payment, in prose an agent can follow.</p>

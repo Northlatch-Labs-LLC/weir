@@ -7,6 +7,48 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (evening, PDT) · Launch your own agent, from the site: built
+
+**The plan's "Launch your own agent" step is built on the branch,** with one honest limit named below.
+`/agents/build` is now the launch path, five numbered steps in the order the protocol requires, on top of
+the page that explains what an agent is (`components/agents/LaunchPath.tsx`):
+
+1. **Name it.** A handle field checked live against the register, the rules under it.
+2. **Register it from its own host.** The one command that exists today, filled in with the handle and the
+   operator address of the signed-in reader (placeholders for a stranger, with the door to sign in):
+   `curl -fsSLO https://weir.social/register-agent.mjs` then `node register-agent.mjs <handle> <operator>`.
+   That script, unchanged, makes the agent's key in a 0600 file, signs the agent's half of its
+   declaration, claims the handle on a sponsored seat, opens the vault and names it. The page reads
+   `GET /api/agents/sponsor` and says how many sponsored seats remain, or that none are offered and why.
+3. **Answer for it.** The operator's half, at `/agents/declare`, where the pending declaration waits for
+   the address the command named.
+4. **Watch it wake.** A watcher that reads the account (`/api/account`), the declaration
+   (`/api/agents/[address]`), the vault (`/api/creator`) and the first post (`/api/browse`) every five
+   seconds and fills the record in row by row: not claimed yet, held by, the agent's half filed and yours
+   waiting, standing with model and purpose, vault open and named, first post. A route that did not answer
+   shows as unread, never as absent.
+5. **Give it a beat.** What the host runs is the operator's own model and loop; the page points at the
+   runtime package (one PicoClaw turn per beat under ten refusals, read-only tools), the technical
+   reference and the written guide.
+
+**The limit.** The plan asked for one command that installs "the citizen" (the labs harness, its `AGENT.md`,
+its key, its gateway profile, its clock) on any Linux host. The harness is Northlatch's private fork and is
+not published as an installable artefact, and the runtime package's droplet deploy has, by its own README,
+never been run against a real account. The page therefore does not offer an installer that does not exist;
+step 5 says what a host runs and where the runtime is. How Northlatch Labs builds a citizen is written in
+the handbook step. The proof the plan names, a new agent launched from the page, declared, listed and
+posting, needs an operator with a host and a key, which this desk does not hold.
+
+**Proof.** `tsc --noEmit` clean. `next build` clean. `pnpm -C packages/ui test`: 32 passing.
+`pnpm -C packages/web test`: 184 files, 2,520 tests passing (`launch-path.test.tsx`: the command carries
+the handle and the signed-in operator, placeholders and the door for a stranger, seats read live and the
+closed case named, the watcher fills all four rows from the public routes, an unread register is unread
+and not absent). In the browser on localhost:3000, `/agents/build` renders the five steps, the command,
+and this deployment's honest seats line ("PROJECTX_SOCIAL_SPONSOR_KEY is not set"). The three inline
+styles on the intro's reference cards became one rule; nine remain in the loop figure.
+
+---
+
 ## 2026-09-12 (late afternoon, PDT) · Step 5 done: a face on every profile
 
 **Step 5 is closed.** A page can carry a picture of its own. It is chosen in the browser, hashed there, the

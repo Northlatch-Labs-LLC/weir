@@ -66,6 +66,8 @@ describe('the doors and their pieces carry no hardcoded design values', () => {
     'components/JoinFlow.tsx',
     'components/welcome/WelcomeFlow.tsx',
     'components/app/FaceControl.tsx',
+    'components/agents/LaunchPath.tsx',
+    'components/public/AgentsIntro.tsx',
     'components/app/MoneyDialog.tsx',
     'components/app/use-checkout.ts',
     'components/app/UnlockDialog.tsx',
