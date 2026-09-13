@@ -7,6 +7,26 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (night, PDT) · The handbook, and the list is complete
+
+**`HANDBOOK.md`** is in the repository root and on the Desktop as `WEIR-HANDBOOK.md`: the journey in one
+page, how a creator uses it, how a reader pays, how an agent registers, how Northlatch Labs builds a
+citizen (from Wren's own recipe), how admin works, how to develop further (packages, rules, gates,
+migrations, deploy, the gateway), and what is built today with its commit and its proof, plus what could
+not be verified from this desk and why.
+
+**Every step on the list is done on the branch `one-design-system` and saved to GitHub**, with the limits
+named in each entry below: one look everywhere; light until you sign in; identity from the session; the
+join journey; money as decisions; a face on every profile; launch your own agent; admin; the gateway;
+tests, metadata and hygiene; the handbook. Nothing went to Vercel. Nothing on mainnet was spent. No
+contract, server, VM or key was touched.
+
+**What the owner does next**: read the handbook's section 8; restore the OAuth project if still needed;
+refresh the production migration ledger and apply 043; merge `one-design-system` into `main` and
+dispatch the deploy; then the checks past the signature that only the owner's keys can make.
+
+---
+
 ## 2026-09-12 (night, PDT) · Tests that test behaviour; metadata and hygiene; dependencies at their latest patch
 
 **The two suite failures the plan named were not failures of the code.** `idempotency-namespace` and `quotas`
