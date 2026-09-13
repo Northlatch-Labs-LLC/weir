@@ -7,6 +7,34 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (evening, PDT) · The gateway tells the truth: done in its folder, which is not a repository
+
+**Done in `~/Desktop/claudeexp/xlaunch/gateway`.** That folder is not a git repository and has no remote, so
+these changes are on disk only; where the gateway's repository lives is the owner's to say, and nothing
+here was pushed anywhere.
+
+- **`PUBLIC_URL`** in `server/src/lib/config.ts`: the address customers reach the gateway at. Unset, null;
+  set, an absolute http(s) URL with trailing slashes dropped; anything else refuses to start naming the
+  variable. Documented in `README.md`'s table, `.env.example` and `DEPLOY.md`.
+- **The dashboard prints it.** `GET /api/settings/api-key` carries `publicUrl` beside the unified key, and
+  the three places that print the API base (the Keys page, the getting-started card, the command palette)
+  print `${publicUrl}/v1` when it is set, and fall back to the page origin only when it is not.
+- **Docs and CLI default to `https://api.weir.social`.** The CLI's default `--url` (which
+  `XLAUNCH_GATEWAY_URL` overrides), its README, and the `setup-xlaunch` example in the gateway README.
+  The local-development lines that say the dev server listens on 3001 are unchanged, because they are true.
+- **`/health` answers 200.** The same handler as `/livez`, at the name portals and probes expect: 200 with
+  status, version and uptime when the database answers and the encryption key is loaded, 503 otherwise.
+
+**Proof.** In the gateway: `server` config tests 17 passing (three new for `PUBLIC_URL`), status tests 8
+passing (one new: `/health` answers exactly as `/livez`), `cli` 109 passing, the client builds. The full
+server suite: 237 files pass, 4 fail in areas this work did not touch (a legacy migration baseline, the
+backup dump's table list, the CSP inline-bootstrap hash between `app.ts` and `client/index.html`, and the
+client-context middleware's field set); none of those files or the code under them changed here, and they are
+recorded rather than fixed, since they are not the step. The bootstrap test refuses
+Node 26 on this Mac by its own version guard.
+
+---
+
 ## 2026-09-12 (evening, PDT) · Admin: every control read against its label, today's revenue added
 
 **The plan's admin step, done on the branch, with no new powers.** `/admin` shows, to a proved session that
