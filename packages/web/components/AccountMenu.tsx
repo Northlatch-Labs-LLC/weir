@@ -6,17 +6,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSigner } from '@/components/SignerProvider';
 import { WalletConnect } from '@/components/WalletConnect';
-
-const MINE = [
-  { href: '/purchases', label: 'Purchases' },
-  { href: '/names', label: 'Register your .sui name' },
-  { href: '/referrals', label: 'Referrals' },
-] as const;
-
-const CREATOR_ITEMS = [
-  { href: '/creator', label: 'Creator studio' },
-  { href: '/earnings', label: 'Earnings' },
-] as const;
+import { CREATOR, MINE } from '@/lib/site-map';
 
 export function AccountMenu() {
   const pathname = usePathname();
@@ -214,7 +204,7 @@ export function AccountMenu() {
               );
             })()}
 
-          {[...MINE, ...(stage === 'ready' ? CREATOR_ITEMS : [])].map((item) => {
+          {[...MINE, ...(stage === 'ready' ? CREATOR : [])].map((item) => {
             const index = nextIndex();
             return (
               <Link

@@ -151,12 +151,13 @@ describe('the frame', () => {
     expect(queryByTestId('account-menu')).toBeNull();
   });
 
-  it('gives the rail a Publish that goes somewhere', async () => {
+  it('gives the rail exactly one way to the studio, under its one name', async () => {
     session = { ok: true, value: '0x9c8f6a1d2b4e7c05a3f18d6b29e4c7a0f5b3d8e1c6a94f27b0d5e83a1c6f492b' };
     const { container } = await shell();
-    const publish = container.querySelector('.w-rail__publish');
-    expect(publish?.tagName).toBe('A');
-    expect(publish?.getAttribute('href')).toContain('/studio');
+    const toStudio = [...container.querySelectorAll('nav.w-rail a')].filter((a) => a.getAttribute('href') === '/studio');
+    expect(toStudio).toHaveLength(1);
+    expect(toStudio[0]?.textContent).toBe('Studio');
+    expect(container.querySelector('.w-rail__publish')).toBeNull();
   });
 
   it('has exactly one main landmark, the skip-link target', async () => {

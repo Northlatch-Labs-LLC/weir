@@ -30,7 +30,7 @@ export const NAV: readonly NavItem[] = [
   { href: '/agents', label: 'Agents', icon: 'agents' },
   { href: '/alerts', label: 'Alerts', icon: 'alerts' },
   { href: '/messages', label: 'Messages', icon: 'messages' },
-  { href: '/vault', label: 'Vault', icon: 'vault' },
+  { href: '/vault', label: 'Memberships', icon: 'vault' },
   { href: '/studio', label: 'Studio', icon: 'studio' },
 ];
 
@@ -65,7 +65,6 @@ export function LeftRail({
   Link,
   nav = NAV,
   viewer,
-  onPublish,
   connect,
   account,
 }: {
@@ -73,7 +72,6 @@ export function LeftRail({
   Link: LinkComponent;
   nav?: readonly NavItem[] | undefined;
   viewer: Viewer;
-  onPublish?: (() => void) | undefined;
   connect?: ReactNode;
   account?: ReactNode;
 }) {
@@ -100,15 +98,6 @@ export function LeftRail({
 
       {viewer.signedIn ? (
         <>
-          {onPublish === undefined ? (
-            <Link href="/studio" className="w-btn w-btn--primary w-rail__publish">
-              Publish
-            </Link>
-          ) : (
-            <button type="button" className="w-btn w-btn--primary w-rail__publish" onClick={onPublish}>
-              Publish
-            </button>
-          )}
           {account ?? (
             <>
               {connect}
@@ -147,18 +136,28 @@ export function LeftRail({
   );
 }
 
-export function ColumnFooter({ Link }: { Link: LinkComponent }) {
+export type FootLink = { href: string; label: string };
+
+export const FOOT: readonly FootLink[] = [
+  { href: '/explore', label: 'Explore' },
+  { href: '/creators', label: 'Earn' },
+  { href: '/agents', label: 'Agents' },
+  { href: '/security', label: 'Security' },
+  { href: '/legal/terms', label: 'Terms' },
+  { href: '/legal/privacy', label: 'Privacy' },
+  { href: '/legal/creator-terms', label: 'Creator terms' },
+  { href: '/disclosure', label: 'Disclosure' },
+];
+
+export function ColumnFooter({ Link, links = FOOT }: { Link: LinkComponent; links?: readonly FootLink[] | undefined }) {
   return (
     <footer className="w-foot">
       <div className="w-foot__links">
-        <Link href="/explore">Explore</Link>
-        <Link href="/creators">Open a page</Link>
-        <Link href="/agents">Agents</Link>
-        <Link href="/security">Security</Link>
-        <Link href="/legal/terms">Terms</Link>
-        <Link href="/legal/privacy">Privacy</Link>
-        <Link href="/legal/creator-terms">Creator terms</Link>
-        <Link href="/disclosure">Disclosure</Link>
+        {links.map((link) => (
+          <Link key={link.href} href={link.href}>
+            {link.label}
+          </Link>
+        ))}
       </div>
       <div className="w-foot__line">
         <WeirMark size={16} />
@@ -186,7 +185,7 @@ export function BottomBar({
   viewer: Viewer;
 }) {
   const all: readonly NavItem[] = viewer.signedIn
-    ? [...items, { href: '/vault', label: 'Vault', icon: 'vault' as IconName }]
+    ? [...items, { href: '/vault', label: 'Memberships', icon: 'vault' as IconName }]
     : [
         ...items,
         { href: '/join', label: 'Join', icon: 'plus' as IconName },
@@ -261,11 +260,11 @@ export function AppShell({
   nav,
   aside,
   children,
-  onPublish,
   connect,
   account,
   searchQuery,
   searchHidden,
+  footer,
 }: {
   pathname: string;
   Link: LinkComponent;
@@ -273,11 +272,11 @@ export function AppShell({
   nav?: readonly NavItem[] | undefined;
   aside?: ReactNode;
   children: ReactNode;
-  onPublish?: (() => void) | undefined;
   connect?: ReactNode;
   account?: ReactNode;
   searchQuery?: string | undefined;
   searchHidden?: Readonly<Record<string, string>> | undefined;
+  footer?: readonly FootLink[] | undefined;
 }) {
   return (
     <div className="w-app">
@@ -285,13 +284,13 @@ export function AppShell({
         Skip to content
       </a>
       <div className="w-app__inner">
-        <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} onPublish={onPublish} connect={connect} account={account} />
+        <LeftRail pathname={pathname} Link={Link} nav={nav} viewer={viewer} connect={connect} account={account} />
         <main id="w-main" className="w-column">
           <div className="w-column__search">
             <SearchBox query={searchQuery ?? ''} hidden={searchHidden} />
           </div>
           {children}
-          <ColumnFooter Link={Link} />
+          <ColumnFooter Link={Link} links={footer} />
         </main>
         {aside === undefined ? null : (
           <aside className="w-aside" aria-label="Discover">
@@ -303,7 +302,7 @@ export function AppShell({
         )}
       </div>
       {viewer.signedIn ? (
-        <Link href="/studio" className="w-fab" aria-label="Publish something">
+        <Link href="/studio" className="w-fab" aria-label="Studio">
           <Icon name="plus" size={24} strokeWidth={2.2} />
         </Link>
       ) : null}

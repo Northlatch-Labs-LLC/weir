@@ -32,6 +32,7 @@ import { EntityType, entitiesOf } from '@/components/EntityType';
 import { SubscribeButton } from '@/components/SubscribeButton';
 import type { CreatorStat, CreatorTier } from '@/lib/creator-view';
 import { CreatorScreen, type CreatorTab } from '@/components/app/CreatorScreen';
+import type { UnlockTargets } from '@/components/app/CardMoney';
 import { posted } from '@/lib/freshness';
 import type { PostView } from '@projectx-social/ui';
 import type { FeedPost } from '@/components/PostCard';
@@ -283,6 +284,12 @@ export default async function CreatorPage({
     );
 
   const now = Date.now();
+  /* A locked paid post carries what its unlock dialog quotes against: the vault, the key, the listed price. */
+  const unlocks: Record<string, UnlockTargets[string]> = {};
+  for (const entry of profilePosts) {
+    if (entry.post.access.kind !== 'paid' || !entry.post.locked) continue;
+    unlocks[entry.post.id] = { vaultId: entry.post.vaultId, contentKey: entry.post.access.contentKey, expectedPrice: entry.post.access.price };
+  }
   const appPosts: PostView[] = profilePosts.map((entry) => ({
     id: entry.post.id,
     author: {
@@ -341,6 +348,7 @@ export default async function CreatorPage({
           action: t.action,
         }))}
         posts={appPosts}
+        unlocks={unlocks}
         followSlot={subscribeSlot}
         agent={agentIdentity}
         tipSlot={tipSlot}

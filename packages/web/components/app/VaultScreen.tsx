@@ -83,7 +83,7 @@ export function VaultScreen({
         </>
       }
     >
-      <ColumnHeader title="Vault" sub="your money" />
+      <ColumnHeader title="Memberships" sub="what you back, and what it earns" />
 
       {viewerAddress === null ? (
         <EmptyState

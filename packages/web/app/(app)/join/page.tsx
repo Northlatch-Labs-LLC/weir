@@ -31,7 +31,7 @@ export default async function Join({
     <div className="w-join">
       <div className="w-join__main">
         <PageHead
-          title="Create your account"
+          title="Create account"
           lede="Three steps: how you sign, your handle, and the claim on chain. No password, no email, and it is free."
         />
 

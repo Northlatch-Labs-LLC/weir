@@ -9,6 +9,8 @@ export {
   BottomBar,
   ColumnHeader,
   ColumnFooter,
+  FOOT,
+  type FootLink,
   NAV,
   BOTTOM,
   type NavItem,

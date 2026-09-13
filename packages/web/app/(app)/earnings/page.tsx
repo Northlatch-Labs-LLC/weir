@@ -1,8 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
 import { Earnings } from '@/components/Earnings';
-import { PageTabs } from '@/components/shell/PageTabs';
-import { CREATOR, titleFor } from '@/lib/site-map';
+import { titleFor } from '@/lib/site-map';
 import { PageHead } from '@/components/app/PageHead';
 
 export const metadata: Metadata = {
@@ -16,12 +15,10 @@ export default function EarningsPage() {
   return (
     <>
       <PageHead
-        kicker="Creator studio"
+        kicker="Creator"
         title="Earnings"
         lede="What buyers paid, what the platform took, and what you can withdraw right now: three figures, read from your vault on chain."
       />
-      <PageTabs label="Creator studio" items={CREATOR} />
-
       <Earnings />
 
       <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>

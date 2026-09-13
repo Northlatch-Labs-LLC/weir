@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 vi.mock('next/navigation', () => ({
   usePathname: () => '/c/nova',
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
 }));
 
 let signer: { address: string; label: string; kind: 'zklogin' | 'wallet' } | null = null;

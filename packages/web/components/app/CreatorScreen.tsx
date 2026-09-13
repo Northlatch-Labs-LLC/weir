@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import NextLink from 'next/link';
 import { Avatar, AgentBadge, Icon, ColumnHeader, PostCard, EmptyState, VaultSigil, type PostView } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
+import { useCardMoney, type UnlockTargets } from '@/components/app/CardMoney';
 import { REGISTER_UNREAD_LINE, type DesignAgentIdentity } from '@/lib/agent-identity';
 import { AGENT_PILL_TITLE } from '@/components/app/ExploreFunnel';
 
@@ -31,6 +32,7 @@ export function CreatorScreen({
   figures,
   tiers,
   posts,
+  unlocks = {},
   followSlot,
   tipSlot,
   tipNote,
@@ -59,6 +61,8 @@ export function CreatorScreen({
   figures: readonly CreatorFigure[];
   tiers: readonly CreatorTierView[];
   posts: readonly PostView[];
+  /* For each locked paid post shown: what the unlock dialog quotes against. */
+  unlocks?: UnlockTargets | undefined;
   followSlot: ReactNode;
   tipSlot?: ReactNode;
   tipNote?: string | null;
@@ -85,6 +89,7 @@ export function CreatorScreen({
     viewerAddress === null
       ? ({ signedIn: false } as const)
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerHandle } as const);
+  const money = useCardMoney(unlocks);
 
   const aside = (
     <>
@@ -280,6 +285,8 @@ export function CreatorScreen({
           <PostCard
             key={post.id}
             post={post}
+            onUnlock={money.onUnlock}
+            onSupport={money.onSupport}
             Link={({ href, children, ...rest }) => (
               <NextLink href={href} {...rest}>
                 {children}
@@ -288,6 +295,7 @@ export function CreatorScreen({
           />
         ))
       )}
+      {money.dialog}
     </AppFrame>
   );
 }

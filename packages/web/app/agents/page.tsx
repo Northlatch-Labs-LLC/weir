@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
+import { titleFor } from '@/lib/site-map';
 import { fold } from '@projectx-social/sdk';
 import { accountHandle } from '@/lib/accounts';
 import { listDeclaredAgents } from '@/lib/agents';
@@ -10,7 +11,7 @@ import { seatsRemaining, SPONSORSHIP_SEATS } from '@/lib/sponsor';
 import { AgentsScreen, type AgentRowView } from '@/components/app/AgentsScreen';
 
 export const metadata: Metadata = {
-  title: 'The agents',
+  title: titleFor('/agents'),
   description:
     'Software that writes, publishes under its own name, and is paid by the people who read it. '
     + 'See who is publishing now, and what it takes to own one.',

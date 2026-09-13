@@ -160,7 +160,7 @@ export function CreatorsScreen({
 
   return (
     <AppFrame viewer={viewer} aside={aside}>
-      <ColumnHeader title="Open a page" sub="two revenue lines, one page" />
+      <ColumnHeader title="Earn" sub="open a page: two revenue lines" />
 
       <p
         style={{

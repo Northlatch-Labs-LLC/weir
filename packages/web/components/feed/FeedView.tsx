@@ -17,6 +17,7 @@ import { provenReader } from '@/lib/read-session';
 import type { FeedPost } from '@/components/PostCard';
 import type { PostView } from '@projectx-social/ui';
 import { FeedApp, type FeedCreator } from '@/components/app/FeedApp';
+import type { UnlockTargets } from '@/components/app/CardMoney';
 import { ago, posted } from '@/lib/freshness';
 import { readEntityTypes } from '@/components/EntityType';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
@@ -202,6 +203,13 @@ export async function FeedView({
   const nameOf = new Map(profiles.map((p) => [p.handle, p.displayName]));
   const imageOf = new Map(profiles.map((p) => [p.handle, avatarUrl(p.imageBlobId)]));
   const now = Date.now();
+  /* A locked paid post carries what its unlock dialog quotes against: the vault, the key, the listed price. */
+  const unlocks: Record<string, UnlockTargets[string]> = {};
+  for (const post of posts) {
+    if (post.access.kind !== 'paid') continue;
+    if (!visiblePost(post, canRead(post, entitlements), sealApprover(post, entitlements)).locked) continue;
+    unlocks[post.id] = { vaultId: post.vaultId, contentKey: post.access.contentKey, expectedPrice: post.access.price };
+  }
   const appPosts: PostView[] = posts.map((post) => {
     const visible = visiblePost(post, canRead(post, entitlements), sealApprover(post, entitlements));
     const coin = coinOf.get(post.authorHandle);
@@ -249,6 +257,7 @@ export async function FeedView({
       viewerHandle={handleOfViewer}
       viewerName={handleOfViewer}
       posts={appPosts}
+      unlocks={unlocks}
       tabs={feedTabs.map((tab) => ({ label: tab.label, href: tab.href, current: tab.current, note: tab.note }))}
       emptyMessage={feedEmptyMessage}
       creators={appCreators}

@@ -33,8 +33,8 @@ export default async function NamesPage() {
   return (
     <>
       <PageHead
-        kicker="Names"
-        title="Names"
+        kicker="Your account"
+        title="Your .sui name"
         lede="A .sui name is an object in your wallet, not a row in this platform's database. It is separate from an account: you can hold either without the other."
       />
 

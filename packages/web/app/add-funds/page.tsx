@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import NextLink from 'next/link';
 import { ColumnHeader } from '@projectx-social/ui';
-import { AccountTabs } from '@/components/shell/AccountTabs';
 
 export const metadata: Metadata = {
   title: titleFor('/add-funds'),
@@ -16,7 +15,6 @@ export default function AddFundsPage() {
   return (
     <>
       <ColumnHeader title="Add funds" sub="SUI and USDC, from your own wallet" />
-      <AccountTabs />
       <div className="prose" style={{ marginBottom: 'var(--space-20)' }}>
         <p>
           Weir is paid in SUI and USDC from your own wallet. Move coins to your wallet from wherever

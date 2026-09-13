@@ -54,7 +54,7 @@ export function LandingScreen({
               </p>
               <div className="w-land__cta">
                 <NextLink href="/join" className="w-btn w-btn--primary w-btn--lg">
-                  Create your account
+                  Create account
                 </NextLink>
                 <NextLink href="/feed" className="w-btn w-btn--quiet w-btn--lg">
                   Read the feed first
@@ -322,7 +322,7 @@ export function LandingScreen({
                 </p>
               </div>
               <NextLink href="/join" className="w-btn w-btn--primary w-btn--lg">
-                Create your account
+                Create account
               </NextLink>
             </div>
           </section>

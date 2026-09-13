@@ -67,7 +67,7 @@ export function UnlockDialog({
       refusals={{
         'no-account': (
           <>
-            Buying needs an account. It is free apart from gas. <a href="/join">Create your account</a>.
+            Buying needs an account. It is free apart from gas. <a href="/join">Create account</a>.
           </>
         ),
         'self-payment': 'This is your own vault, so there is nothing to buy.',

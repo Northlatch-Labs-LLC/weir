@@ -9,7 +9,11 @@ import type { AgentAccount } from '../lib/agents';
 import { REGISTER_UNREAD_LINE, agentIdentityFor, authorIsAgentFrom, type DesignAgentIdentity } from '../lib/agent-identity';
 import { AGENT_PILL_TITLE } from '../components/app/ExploreFunnel';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/c/kaela', useSearchParams: () => new URLSearchParams() }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/c/kaela',
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+}));
 vi.mock('@/components/SignerProvider', () => ({
   useSigner: () => ({
     ready: true,

@@ -28,7 +28,7 @@ function refusal(blocked: Blocker): ReactNode {
     case 'no-account':
       return (
         <>
-          This needs an account. It is free apart from gas. <a href="/join">Create your account</a>.
+          This needs an account. It is free apart from gas. <a href="/join">Create account</a>.
         </>
       );
     case 'self-payment':

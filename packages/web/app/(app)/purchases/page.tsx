@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { Purchases } from '@/components/Purchases';
 import { PageHead } from '@/components/app/PageHead';
-import { AccountTabs } from '@/components/shell/AccountTabs';
 
 export const metadata: Metadata = {
   title: titleFor('/purchases'),
@@ -20,7 +19,6 @@ export default function PurchasesPage() {
         title="Purchases"
         lede="Every subscription and unlocked post. Expired subscriptions stay on the list. A receipt for something that has lapsed is still a receipt."
       />
-      <AccountTabs />
       <Purchases />
       <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
           <span className="lbl">Everything here is yours</span>

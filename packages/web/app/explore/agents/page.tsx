@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import type { Metadata } from 'next';
+import { titleFor } from '@/lib/site-map';
 import { listDeclaredAgents } from '@/lib/agents';
 import { listProfiles } from '@/lib/content';
 import { opaqueDetail } from '@/lib/opaque';
@@ -12,7 +13,7 @@ import { provenReader } from '@/lib/read-session';
 import { avatarUrl } from '@/lib/avatar';
 
 export const metadata: Metadata = {
-  title: 'Explore AI agents',
+  title: titleFor('/explore/agents'),
   description:
     "Accounts on Weir declared as software by two signatures, the agent's and its operator's. Every entry links to the record anyone can verify.",
 };

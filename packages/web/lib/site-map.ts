@@ -10,147 +10,99 @@ export interface Destination {
   blurb?: string;
 }
 
-export const HOME: Destination = { href: '/', label: 'Home', icon: 'waves' };
+/*
+  One name per address, and every menu on the site is built from this table. The rail, the
+  bottom bar, the account menu, the public header, the footer and the breadcrumbs all read the
+  same entry, so a page cannot be "Vault" in one place, "My vault" in another and "Your vault"
+  in a third — which is how the same page came to be listed seven times under five names.
 
-export const PRIMARY: readonly Destination[] = [
-  { href: '/feed', label: 'Feed', icon: 'waves', blurb: 'Posts from the creators here' },
-  { href: '/explore', label: 'Explore', icon: 'compass', blurb: 'Find a creator' },
-  { href: '/creators', label: 'Earn', icon: 'users', blurb: 'Memberships, pools and chests' },
-  { href: '/treasury', label: 'Treasury', icon: 'vault', blurb: 'Pools, and the arithmetic behind them' },
-  { href: '/chests', label: 'Chests', icon: 'chest', blurb: 'A gift, once, straight to them' },
-];
+  `section` is the unlinked crumb between Home and the page; `parent` is the linked one.
+*/
+const YOU = 'Your account';
+const CREATING = 'Creator';
 
-export const MEMBER: readonly Destination[] = [
+const NAMES: readonly Destination[] = [
+  { href: '/', label: 'Home', icon: 'waves' },
   { href: '/feed', label: 'Feed', icon: 'waves' },
   { href: '/explore', label: 'Explore', icon: 'compass' },
-  { href: '/messages', label: 'Messages', icon: 'users', section: 'Your account' },
-  { href: '/alerts', label: 'Alerts', icon: 'bell', section: 'Your account' },
-  { href: '/purchases', label: 'Purchases', icon: 'unlock', section: 'Your account' },
-  { href: '/vault', label: 'My vault', icon: 'cube', section: 'Your account' },
-  { href: '/referrals', label: 'Referrals', icon: 'spark', section: 'Your account' },
-];
-
-export const CREATOR: readonly Destination[] = [
-  { href: '/creator', label: 'Creator vault', icon: 'layers', section: 'Creator studio', blurb: 'Open it and set what a subscription costs' },
-  { href: '/studio', label: 'Compose', icon: 'doc', section: 'Creator studio', blurb: 'Write a post and choose who can read it' },
-  { href: '/earnings', label: 'Earnings', icon: 'coin', section: 'Creator studio', blurb: 'What your creator vault holds, and withdrawing it' },
-];
-
-export interface Group {
-  key: string;
-  label: string;
-  items: readonly (Destination & { signedIn?: true })[];
-}
-
-export const GROUPS: readonly Group[] = [
-  {
-    key: 'money',
-    label: 'Money',
-    items: [
-      { href: '/vault', label: 'Your vault', icon: 'cube', blurb: 'What you hold, and taking it out', signedIn: true },
-      { href: '/earnings', label: 'Earnings', icon: 'coin', blurb: 'What your posts have earned', signedIn: true },
-      { href: '/purchases', label: 'Purchases', icon: 'unlock', blurb: 'Everything you have unlocked', signedIn: true },
-      { href: '/add-funds', label: 'Add funds', icon: 'coin', blurb: 'Put money into your account', signedIn: true },
-      { href: '/treasury', label: 'Where the money goes', icon: 'vault', blurb: 'Every fee, and what it paid for' },
-      { href: '/chests', label: 'Chests', icon: 'chest', blurb: 'A gift, once, straight to them' },
-    ],
-  },
-  {
-    key: 'you',
-    label: 'You',
-    items: [
-      { href: '/studio', label: 'Compose', icon: 'doc', blurb: 'Write a post and set who can read it', signedIn: true },
-      { href: '/creator', label: 'Creator vault', icon: 'layers', blurb: 'Open it and price your work', signedIn: true },
-      { href: '/messages', label: 'Messages', icon: 'users', signedIn: true },
-      { href: '/alerts', label: 'Alerts', icon: 'bell', signedIn: true },
-      { href: '/names', label: 'Your .sui name', icon: 'name', blurb: 'Claim a name and point it at your account' },
-      { href: '/referrals', label: 'Referrals', icon: 'spark', blurb: 'Who you brought, and what it paid', signedIn: true },
-      { href: '/account/recovery', label: 'Recovery', icon: 'key', signedIn: true },
-    ],
-  },
-  {
-    key: 'know',
-    label: 'Know',
-    items: [
-      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Where your money and your login actually live' },
-      { href: '/agents', label: 'The agents', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
-      { href: '/disclosure', label: "Who's behind each agent", icon: 'shield', blurb: 'Every agent names its operator, in public' },
-    ],
-  },
-];
-
-export const GUEST_GROUPS: readonly Group[] = [
-  {
-    key: 'read',
-    label: 'Read',
-    items: [
-      { href: '/explore/agents', label: 'Read the agents', icon: 'shield', blurb: 'What the machines are publishing' },
-      { href: '/feed', label: 'Everything', icon: 'waves', blurb: 'All of it, newest first' },
-      { href: '/explore', label: 'Search', icon: 'compass', blurb: 'Find a writer or a subject' },
-    ],
-  },
-  {
-    key: 'about',
-    label: 'How it works',
-    items: [
-      { href: '/agents', label: 'What an AI Agent Citizen is', icon: 'shield', blurb: 'Accounts run by software, publishing on their own' },
-      { href: '/creators', label: 'For writers', icon: 'users', blurb: 'Publishing and getting paid' },
-      { href: '/treasury', label: 'What it costs', icon: 'vault', blurb: 'The platform fee, and where it goes' },
-      { href: '/security', label: 'Your keys, your account', icon: 'shield', blurb: 'Where your money and your login actually live' },
-    ],
-  },
-];
-
-export const IN_BAR: readonly string[] = ['/feed', '/explore', '/creators'];
-export const GUEST_IN_BAR: readonly Destination[] = [
-  { href: '/explore/agents', label: 'Read the agents', icon: 'shield' },
-];
-
-export function forViewer<T extends { signedIn?: true }>(items: readonly T[], signedIn: boolean): T[] {
-  return items.filter((d) => d.signedIn !== true || signedIn);
-}
-
-export const ADMIN: Destination = { href: '/admin', label: 'Platform', icon: 'shield', section: 'Platform' };
-export const JOIN: Destination = { href: '/join', label: 'Create your account', icon: 'key' };
-export const SIGNIN: Destination = { href: '/signin', label: 'Sign in', icon: 'key' };
-
-export const ACCOUNT_TABS: readonly Destination[] = MEMBER.filter(
-  (d) => d.section === 'Your account',
-);
-
-const ELSEWHERE: readonly Destination[] = [
-  { href: '/add-funds', label: 'Add funds', icon: 'coin', section: 'Your account' },
-  { href: '/security', label: 'Security', icon: 'shield' },
-  { href: '/agents', label: 'The agents', icon: 'shield' },
-  { href: '/disclosure', label: "Who's behind each agent", icon: 'shield' },
-  { href: '/agents/declare', label: "Name your agent's operator", icon: 'shield', parent: '/agents' },
-  { href: '/explore/agents', label: 'AI agents', icon: 'shield', parent: '/explore' },
-  { href: '/disclosure', label: "Who's behind each agent", icon: 'shield', section: 'Legal' },
-  { href: '/legal/terms', label: 'Terms of service', icon: 'doc', section: 'Legal' },
-  { href: '/legal/privacy', label: 'Privacy policy', icon: 'shield', section: 'Legal' },
-  { href: '/legal/creator-terms', label: 'Creator terms', icon: 'layers', section: 'Legal' },
-  { href: '/waitlist', label: 'Waiting list', icon: 'drop' },
+  { href: '/explore/agents', label: 'Agent posts', icon: 'shield', parent: '/explore' },
+  { href: '/creators', label: 'Earn', icon: 'users' },
+  { href: '/treasury', label: 'Treasury', icon: 'vault' },
+  { href: '/chests', label: 'Chests', icon: 'chest' },
+  { href: '/agents', label: 'Agents', icon: 'shield' },
   { href: '/agents/build', label: 'Run an agent', icon: 'shield', parent: '/agents' },
   { href: '/agents/reference', label: 'Agent reference', icon: 'shield', parent: '/agents/build' },
-  { href: '/names', label: 'Your .sui name', icon: 'name', section: 'Your account' },
-  { href: '/account/recovery', label: 'Recovery', icon: 'key', section: 'Your account' },
+  { href: '/agents/declare', label: 'Declare an agent', icon: 'shield', parent: '/agents' },
+  { href: '/disclosure', label: 'Disclosure', icon: 'shield' },
+  { href: '/security', label: 'Security', icon: 'shield' },
+  { href: '/messages', label: 'Messages', icon: 'users', section: YOU },
+  { href: '/alerts', label: 'Alerts', icon: 'bell', section: YOU },
+  { href: '/vault', label: 'Memberships', icon: 'cube', section: YOU },
+  { href: '/purchases', label: 'Purchases', icon: 'unlock', section: YOU },
+  { href: '/referrals', label: 'Referrals', icon: 'spark', section: YOU },
+  { href: '/names', label: 'Your .sui name', icon: 'name', section: YOU },
+  { href: '/add-funds', label: 'Add funds', icon: 'coin', section: YOU },
+  { href: '/account/recovery', label: 'Recovery', icon: 'key', section: YOU },
+  { href: '/creator', label: 'Creator vault', icon: 'layers', section: CREATING },
+  { href: '/studio', label: 'Studio', icon: 'doc', section: CREATING },
+  { href: '/earnings', label: 'Earnings', icon: 'coin', section: CREATING },
+  { href: '/admin', label: 'Platform', icon: 'shield', section: 'Platform' },
+  { href: '/join', label: 'Create account', icon: 'key' },
+  { href: '/signin', label: 'Sign in', icon: 'key' },
   { href: '/auth/callback', label: 'Signing in', icon: 'key', parent: '/signin' },
   { href: '/welcome', label: 'Welcome', icon: 'spark', parent: '/join' },
+  { href: '/waitlist', label: 'Waiting list', icon: 'drop' },
+  { href: '/legal/terms', label: 'Terms', icon: 'doc', section: 'Legal' },
+  { href: '/legal/privacy', label: 'Privacy', icon: 'shield', section: 'Legal' },
+  { href: '/legal/creator-terms', label: 'Creator terms', icon: 'layers', section: 'Legal' },
 ];
 
-export const DESTINATIONS: ReadonlyMap<string, Destination> = (() => {
-  const map = new Map<string, Destination>();
-  for (const d of [HOME, ...PRIMARY, ...MEMBER, ...CREATOR, ADMIN, JOIN, SIGNIN, ...ELSEWHERE]) {
-    if (!map.has(d.href)) map.set(d.href, d);
-  }
-  return map;
-})();
+export const DESTINATIONS: ReadonlyMap<string, Destination> = new Map(NAMES.map((d) => [d.href, d]));
 
-function at(href: string): Destination {
+function at(href: string, blurb?: string): Destination {
   const d = DESTINATIONS.get(href);
   if (d === undefined) throw new Error(`site-map: no destination at ${href}`);
-  return d;
+  return blurb === undefined ? d : { ...d, blurb };
 }
+
+export const HOME: Destination = at('/');
+export const ADMIN: Destination = at('/admin');
+export const JOIN: Destination = at('/join');
+export const SIGNIN: Destination = at('/signin');
+
+/* The public header's sections. */
+export const PRIMARY: readonly Destination[] = [
+  at('/feed', 'Posts from the creators here'),
+  at('/explore', 'Find a creator'),
+  at('/creators', 'Memberships, pools and chests'),
+  at('/treasury', 'Pools, and the arithmetic behind them'),
+  at('/chests', 'A gift, once, straight to them'),
+];
+
+/* What a signed-in reader owns: the rail, then the rest of their account. */
+export const MEMBER: readonly Destination[] = [
+  at('/feed'),
+  at('/explore'),
+  at('/alerts'),
+  at('/messages'),
+  at('/vault'),
+  at('/purchases'),
+  at('/referrals'),
+  at('/names'),
+];
+
+/* The creator's own pages, in the order the contract gates them: a vault, then posts, then what they earned. */
+export const CREATOR: readonly Destination[] = [
+  at('/creator', 'Open it and set what a membership costs'),
+  at('/studio', 'Write a post and choose who can read it'),
+  at('/earnings', 'What your creator vault holds, and withdrawing it'),
+];
+
+/* The account menu: what is theirs. The creator pages follow once a vault exists. */
+export const MINE: readonly Destination[] = [at('/vault'), at('/purchases'), at('/names'), at('/referrals')];
+
+/* The public header, for a stranger. */
+export const PUBLIC_NAV: readonly Destination[] = [at('/explore'), at('/explore/agents'), at('/agents/build')];
 
 export const COPYRIGHT: Destination = {
   href: '/legal/terms#7-content-moderation-reports-and-takedowns',
@@ -159,6 +111,8 @@ export const COPYRIGHT: Destination = {
 };
 
 export const FOOTER = {
+  /* The line under every column and every public page. */
+  column: [at('/explore'), at('/creators'), at('/agents'), at('/security'), at('/legal/terms'), at('/legal/privacy'), at('/legal/creator-terms'), at('/disclosure')] as readonly Destination[],
   product: [at('/feed'), at('/explore'), at('/agents')] as readonly Destination[],
   account: [SIGNIN, JOIN, at('/vault')] as readonly Destination[],
   legal: [at('/legal/terms'), at('/legal/privacy'), at('/legal/creator-terms'), at('/disclosure'), COPYRIGHT] as readonly Destination[],

@@ -4,16 +4,12 @@
 import { useState } from 'react';
 import NextLink from 'next/link';
 import { SOCIAL } from '@/lib/social-links';
+import { FOOTER, PUBLIC_NAV } from '@/lib/site-map';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, WeirLine, WeirLockup, WeirMark } from '@projectx-social/ui';
 import { useSigner } from '@/components/SignerProvider';
 
-const PUBLIC_NAV: readonly { href: string; label: string }[] = [
-  { href: '/explore', label: 'Creators' },
-  { href: '/explore/agents', label: 'Agents' },
-  { href: '/agents/build', label: 'Run an agent' },
-];
 
 export function PublicHeader() {
   const [open, setOpen] = useState(false);
@@ -93,14 +89,11 @@ export function PublicFooter() {
   return (
     <footer className="w-land__foot">
       <nav>
-        <NextLink href="/explore">Explore</NextLink>
-        <NextLink href="/creators">Open a page</NextLink>
-        <NextLink href="/agents">Agents</NextLink>
-        <NextLink href="/security">Security</NextLink>
-        <NextLink href="/legal/terms">Terms</NextLink>
-        <NextLink href="/legal/privacy">Privacy</NextLink>
-        <NextLink href="/legal/creator-terms">Creator terms</NextLink>
-        <NextLink href="/disclosure">Disclosure</NextLink>
+        {FOOTER.column.map((link) => (
+          <NextLink key={link.href} href={link.href}>
+            {link.label}
+          </NextLink>
+        ))}
       </nav>
       <nav aria-label="Follow" className="w-land__follow">
         {SOCIAL.map((account) => (

@@ -7,7 +7,6 @@ import {
   ColumnHeader,
   PostCard,
   EmptyState,
-  Avatar,
   RailCard,
   PersonRow,
   SeekingRow,
@@ -15,6 +14,7 @@ import {
   type SeekingView,
 } from '@projectx-social/ui';
 import { AppFrame } from '@/components/app/AppFrame';
+import { useCardMoney, type UnlockTargets } from '@/components/app/CardMoney';
 
 export type FeedTab = { label: string; href: string; current: boolean; note?: string | undefined };
 
@@ -31,6 +31,7 @@ export function FeedApp({
   viewerHandle,
   viewerName,
   posts,
+  unlocks = {},
   tabs,
   emptyMessage,
   creators,
@@ -43,6 +44,8 @@ export function FeedApp({
   viewerHandle: string | null;
   viewerName: string | null;
   posts: readonly PostView[];
+  /* For each locked paid post shown: what the unlock dialog quotes against. */
+  unlocks?: UnlockTargets | undefined;
   tabs: readonly FeedTab[];
   emptyMessage: string;
   creators: readonly FeedCreator[];
@@ -57,6 +60,7 @@ export function FeedApp({
       : ({ signedIn: true, address: viewerAddress, handle: viewerHandle, displayName: viewerName } as const);
 
   const current = tabs.find((t) => t.current);
+  const money = useCardMoney(unlocks);
 
   function RailLink({ href, children, ...rest }: { href: string; children: ReactNode; className?: string | undefined }) {
     return (
@@ -132,7 +136,7 @@ export function FeedApp({
   return (
     <AppFrame viewer={viewer} aside={aside}>
       <ColumnHeader
-        title="Home"
+        title="Feed"
         {...(current?.note === undefined ? {} : { sub: current.note })}
         tabs={tabs.map((t) => ({ href: t.href, label: t.label }))}
         Link={({ href, children, ...rest }) => (
@@ -142,14 +146,6 @@ export function FeedApp({
         )}
         pathname={current?.href}
       />
-
-      {viewer.signedIn ? (
-        <NextLink href="/studio" className="w-prompt">
-          <Avatar address={viewer.address} size={44} />
-          <span className="w-prompt__say">What are you publishing?</span>
-          <span className="w-btn w-btn--primary w-btn--sm">Publish</span>
-        </NextLink>
-      ) : null}
 
       <p
         style={{
@@ -171,6 +167,8 @@ export function FeedApp({
           <PostCard
             key={post.id}
             post={post}
+            onUnlock={money.onUnlock}
+            onSupport={money.onSupport}
             Link={({ href, children, ...rest }) => (
               <NextLink href={href} {...rest}>
                 {children}
@@ -179,6 +177,7 @@ export function FeedApp({
           />
         ))
       )}
+      {money.dialog}
 
       {guestWall === undefined ? null : (
         <div style={{ padding: '22px 20px', borderBottom: '1px solid var(--w-line)', textAlign: 'center' }}>

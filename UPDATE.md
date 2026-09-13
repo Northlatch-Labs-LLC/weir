@@ -7,6 +7,64 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-13 (early, PDT) · Money buttons that work, sign-in that lands on the feed, the loop that was hitting the site, one name per page
+
+**What the owner found on the live site, and what was wrong.**
+
+- **Paying for a paid post did nothing** on `/feed` and on a creator's page. Both screens drew the shared
+  card without its handlers, so "Unlock · 0.05 SUI", "Subscribe" and "Support" had no click action; only
+  the single-post page opened the dialog. The production logs agreed: a day of traffic and not one request
+  to `/api/checkout/*`. Now `components/app/CardMoney.tsx` gives both screens the handlers: Unlock opens
+  the same dialog the post page opens, against the vault, key and listed price the server read for that
+  post (`unlocks` on `FeedApp` and `CreatorScreen`, built in `FeedView` and `app/c/[handle]/page.tsx`);
+  a priced post the page holds no target for goes to the post itself rather than doing nothing; Subscribe
+  goes to the tiers and Support to the tip on the creator's page. `test/card-money.test.tsx`: the card's
+  button opens the dialog, and the dialog's button posts `sender, vaultId, contentKey, expectedPrice` to
+  `/api/checkout/unlock`.
+- **Sign in put the reader back on the front page.** The sign-in page's `next` guard, the Google callback's
+  fallback and the panel's default all said `/`. `lib/after-signin.ts` is the one rule now: a path on this
+  site is honoured; nothing, `/`, another origin or a door lands on `/feed`. The front page itself sends a
+  reader whose session the server has proved to `/feed` (`app/page.tsx`), which is where the account
+  menu, alerts and memberships are.
+- **The redirect loop the owner watched** — `/feed` and `/signin` about 285 times each in fifteen minutes.
+  The feed asks the server for a proved session; the sign-in page left the moment a wallet connected,
+  while the read-proof signature was still open in the wallet. `SigninPanel` now waits for the proof,
+  then asks `/api/session` the same question the destination will ask, and only then goes; while waiting
+  it says what it is waiting for, and a declined or unkept proof stops there with a button to confirm
+  again. `test/signin-returns.test.tsx` covers connected-but-unproved (stays), declined (stays, offers to
+  ask again), proved (goes), and proved-but-server-disagrees (stops, cannot loop). The owner confirmed
+  the loop stopped the moment the read-content signature was given, which is exactly the fault.
+- **A second navigation header** sat on Purchases, Referrals, Add funds, Earnings and Creator vault,
+  repeating what the rail and the account menu already list. Removed, with `AccountTabs`.
+- **The same page under several names.** `/vault` was "Vault", "My vault" and "Your vault" — and it is
+  where you see what you have put into creators' vaults, so it is **Memberships**. `/studio` was "Studio",
+  "Compose", "Publish" (a rail button), and "What are you publishing? · Publish" (a feed prompt): it is
+  **Studio**, and the rail has one way to it (the phone keeps the plus button). `/creator` was "Creator
+  vault", "Creator studio" and "Become a creator": **Creator vault**. `/creators` was "Earn" and "Open a
+  page": **Earn**. `/agents` was "Agents" and "The agents"; `/explore/agents` was "Agents", "AI agents",
+  "Read the agents" and "Explore AI agents": **Agent posts**. `/join` was "Create your account" and
+  "Create account": **Create account**. `lib/site-map.ts` is now one table with one name per address, and
+  the rail, the bottom bar, the account menu, the public header, both footers and the breadcrumbs are
+  built from it; `test/site-map.test.ts` asserts that no address is listed under two names anywhere.
+
+**Proof.** `pnpm -C packages/ui typecheck` clean, 32/32; `pnpm -C packages/web typecheck` clean; the full
+web suite 2556/2556 (188 files) after the card and sign-in changes, and again after the naming changes
+(see the commit). On localhost:3000: `/feed` as a stranger shows the sign-in page saying "After signing in
+you return to your feed"; `/vault` is titled Memberships; `/purchases` has no second header; the front
+page and every public page say Create account.
+
+**Not done, and named:** the "Run an agent" page is long (owner's word: minor); the footer sits off-centre
+on some pages (minor); `/api/posts` has failed with `seal media key` 8 times since 9 Sep for 7 callers —
+the Seal committee call after the paying transaction, which already retries once; the cause is on the
+key-server side and is not touched here. The Google OAuth project is still propagating its restore on
+Google's side; if it does not come back, a new OAuth client under a new project needs only its client id
+and redirect URI set in the environment, nothing in the code.
+
+**Nothing deployed.** Saved to GitHub on `one-design-system` for the owner to put on the development
+deployment and then, on their word, on `main`.
+
+---
+
 ## 2026-09-12 (late night, PDT) · Production migrated and deployed at c16cde4, on the owner's word
 
 **The production database** (Supabase project `projectx-social`, Postgres 17). Its ledger carried the

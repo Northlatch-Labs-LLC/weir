@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { Referrals } from '@/components/Referrals';
 import { PageHead } from '@/components/app/PageHead';
-import { AccountTabs } from '@/components/shell/AccountTabs';
 
 export const metadata: Metadata = {
   title: titleFor('/referrals'),
@@ -20,7 +19,6 @@ export default function ReferralsPage() {
         title="Referrals"
         lede="Never out of the creator's. The share is a percentage of the platform fee, so a creator receives exactly what they would have received anyway."
       />
-      <AccountTabs />
       <Referrals />
       <div data-reveal className="note" style={{ marginTop: 'var(--space-28)' }}>
         <span className="lbl">Where the money comes from</span>

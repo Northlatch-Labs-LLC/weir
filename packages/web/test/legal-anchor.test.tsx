@@ -35,10 +35,10 @@ describe('the copyright link resolves', () => {
 describe('the footer carries it', () => {
   it('lists Copyright alongside the documents that must be findable', () => {
     expect(FOOTER.legal.map((d) => d.label)).toEqual([
-      'Terms of service',
-      'Privacy policy',
+      'Terms',
+      'Privacy',
       'Creator terms',
-      "Who's behind each agent",
+      'Disclosure',
       'Copyright',
     ]);
   });

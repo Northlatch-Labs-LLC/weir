@@ -4,8 +4,7 @@ import { CreatorSetup } from '@/components/CreatorSetup';
 import { PerksEditor } from '@/components/PerksEditor';
 import { readCreatorSetup } from '@/lib/creator-setup';
 import { provenReader } from '@/lib/read-session';
-import { PageTabs } from '@/components/shell/PageTabs';
-import { CREATOR, titleFor } from '@/lib/site-map';
+import { titleFor } from '@/lib/site-map';
 import { PageHead } from '@/components/app/PageHead';
 import { readProtocol } from '@/lib/chain';
 import { formatUnits, SUI_DECIMALS } from '@/lib/units';
@@ -53,11 +52,10 @@ export default async function CreatorPage() {
   return (
     <>
       <PageHead
-        kicker="Creator studio"
-        title="Become a creator"
+        kicker="Creator"
+        title="Creator vault"
         lede="Open your creator vault and set what a membership costs. Three steps, in the order the contract requires them."
       />
-      <PageTabs label="Creator studio" items={CREATOR} />
 
       {face === null ? null : (
         <section className="card" aria-labelledby="face-title">

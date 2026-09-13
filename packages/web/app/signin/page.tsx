@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import { titleFor } from '@/lib/site-map';
 import { SigninScreen } from '@/components/app/SigninScreen';
+import { afterSignIn } from '@/lib/after-signin';
 
 export const metadata: Metadata = {
   title: titleFor('/signin'),
@@ -12,9 +13,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export function safeNext(raw: string | undefined): string {
-  if (raw === undefined) return '/';
-  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
-  return raw;
+  return afterSignIn(raw);
 }
 
 export default async function SigninPage({

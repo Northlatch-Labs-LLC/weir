@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { readIdTokenFromFragment, SESSION_STORAGE_KEY, type PendingSession } from '@/lib/zklogin';
 import { completeGoogleSignIn } from '@/components/SignerProvider';
+import { afterSignIn } from '@/lib/after-signin';
 
 type State =
   | { phase: 'working'; detail: string }
@@ -51,8 +52,7 @@ export default function AuthCallbackPage() {
         setState({ phase: 'done', address: session.address });
 
         const stored = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
-        const returnTo =
-          stored === null ? '/' : ((JSON.parse(stored) as PendingSession).returnTo || '/');
+        const returnTo = afterSignIn(stored === null ? null : (JSON.parse(stored) as PendingSession).returnTo);
         window.location.assign(returnTo);
       } catch (cause) {
         if (!cancelled) {

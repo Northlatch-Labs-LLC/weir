@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { fold } from '@projectx-social/sdk';
 import { provenReader } from '@/lib/read-session';
 import { FeedView } from '@/components/feed/FeedView';
@@ -8,6 +9,7 @@ import { listProfiles, countFollowers } from '@/lib/content';
 import { listDeclaredAgents } from '@/lib/agents';
 import { listSeeking } from '@/lib/agent-seeking';
 import { readProtocol } from '@/lib/chain';
+import { FEED } from '@/lib/after-signin';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +19,18 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
+  /*
+    The front page is addressed to a stranger. A reader whose session this server has already
+    proved has a home of their own, and every social network opens there: the feed, with their
+    account in the rail.
+  */
+  const reader = fold(
+    await provenReader(),
+    (value) => value,
+    () => null,
+  );
+  if (reader !== null) redirect(FEED);
+
   const agents = await landingAgents().catch(() => [] as LandingAgent[]);
 
   const fee = fold(

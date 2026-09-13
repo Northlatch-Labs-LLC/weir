@@ -81,16 +81,16 @@ describe('safeNext — the sign-in redirect', () => {
   });
 
   it('falls back to the root when nothing was asked for', () => {
-    expect(safeNext(undefined)).toBe('/');
+    expect(safeNext(undefined)).toBe('/feed');
   });
 
   it('refuses an absolute URL', () => {
-    expect(safeNext('https://evil.example/steal')).toBe('/');
-    expect(safeNext('http://evil.example')).toBe('/');
+    expect(safeNext('https://evil.example/steal')).toBe('/feed');
+    expect(safeNext('http://evil.example')).toBe('/feed');
   });
 
   it('refuses a protocol-relative URL', () => {
-    expect(safeNext('//evil.example/steal')).toBe('/');
+    expect(safeNext('//evil.example/steal')).toBe('/feed');
   });
 });
 

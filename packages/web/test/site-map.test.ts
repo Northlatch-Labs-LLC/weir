@@ -3,16 +3,15 @@ import { readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  ACCOUNT_TABS,
   ADMIN,
   CREATOR,
   DESTINATIONS,
   FOOTER,
   JOIN,
-  GROUPS,
-  GUEST_GROUPS,
   MEMBER,
+  MINE,
   PRIMARY,
+  PUBLIC_NAV,
   SIGNIN,
   crumbsFor,
   isHere,
@@ -73,8 +72,12 @@ describe('the site map knows every page', () => {
     '/agents/declare': 'reached from an agent\'s request and the /agents guide, by operator',
     '/vault/[id]': 'reached from Treasury and a creator page, by vault',
     '/add-funds': 'the card-purchase flow it led to is removed; kept because links to it exist',
+    '/account/recovery': 'reached from the security page and the account menu, by a reader who set it up',
+    '/treasury': 'reached from the public header sections and a vault page',
+    '/chests': 'reached from the public header sections and a creator page',
+    '/security': 'reached from the footer of every public page',
+    '/creators': 'reached from the public header sections',
     '/p/[id]': 'reached from any card in the feed, a creator page or a shared link, by post',
-    '/agents/build': 'what running an agent means, reached from the header and the front page',
     '/agents/reference': 'the technical guide, reached from /agents/build; a person does not navigate to it',
   };
   const inAMenu = new Set(
@@ -85,8 +88,8 @@ describe('the site map knows every page', () => {
       ADMIN,
       JOIN,
       SIGNIN,
-      ...GROUPS.flatMap((g) => g.items),
-      ...GUEST_GROUPS.flatMap((g) => g.items),
+      ...MINE,
+      ...PUBLIC_NAV,
       ...FOOTER.product,
       ...FOOTER.account,
       ...FOOTER.gated,
@@ -132,20 +135,20 @@ describe('the trail', () => {
       { label: 'Your account', href: null },
       { label: 'Purchases', href: null },
     ]);
-    expect(crumbsFor('/studio')[1]).toEqual({ label: 'Creator studio', href: null });
+    expect(crumbsFor('/studio')[1]).toEqual({ label: 'Creator', href: null });
   });
 
   it('follows a parent chain and tolerates a trailing slash', () => {
     expect(crumbsFor('/agents/reference/').map((c) => c.label)).toEqual([
       'Home',
-      'The agents',
+      'Agents',
       'Run an agent',
       'Agent reference',
     ]);
   });
 
   it('hangs the registration page off Home', () => {
-    expect(crumbsFor('/join').map((c) => c.label)).toEqual(['Home', 'Create your account']);
+    expect(crumbsFor('/join').map((c) => c.label)).toEqual(['Home', 'Create account']);
   });
 
   it('puts a name under the account, not under Creators', () => {
@@ -199,10 +202,6 @@ describe('the lists agree with each other', () => {
   it('orders the creator studio as the contract gates it', () => {
     expect(CREATOR.map((d) => d.href)).toEqual(['/creator', '/studio', '/earnings']);
   });
-  it('derives the account tabs from the rail, so the two cannot drift', () => {
-    for (const tab of ACCOUNT_TABS) expect(MEMBER).toContain(tab);
-    expect(ACCOUNT_TABS.map((d) => d.label)).toContain('My vault');
-  });
   it('builds the footer by address, and these are the addresses', () => {
     expect(FOOTER.product.map((d) => d.href)).toEqual(['/feed', '/explore', '/agents']);
     expect(FOOTER.account.map((d) => d.href)).toEqual(['/signin', '/join', '/vault']);
@@ -222,9 +221,19 @@ describe('the lists agree with each other', () => {
       '/legal/terms#7-content-moderation-reports-and-takedowns',
     ]);
   });
-  it('hands back the entry that carries the blurb when two lists share an address', () => {
-    expect(DESTINATIONS.get('/feed')?.blurb).toBeDefined();
-    expect(DESTINATIONS.get('/explore')?.blurb).toBeDefined();
+  it('gives every address one name, wherever it is listed', () => {
+    const seen = new Map<string, string>();
+    for (const d of [...PRIMARY, ...MEMBER, ...CREATOR, ...MINE, ...PUBLIC_NAV, ...FOOTER.product, ...FOOTER.account, ...FOOTER.gated, ...FOOTER.legal, ADMIN, JOIN, SIGNIN]) {
+      const before = seen.get(d.href);
+      expect(before === undefined || before === d.label, `${d.href} is called both “${before}” and “${d.label}”`).toBe(true);
+      seen.set(d.href, d.label);
+      expect(DESTINATIONS.get(d.href)?.label ?? d.label).toBe(d.label);
+    }
+  });
+  it('calls the membership page what it is, everywhere', () => {
+    expect(DESTINATIONS.get('/vault')?.label).toBe('Memberships');
+    expect(MINE.find((d) => d.href === '/vault')?.label).toBe('Memberships');
+    expect(FOOTER.account.find((d) => d.href === '/vault')?.label).toBe('Memberships');
   });
 });
 

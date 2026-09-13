@@ -7,6 +7,7 @@ import type { ReactNode, CSSProperties } from 'react';
 import { AppShell, type Viewer } from '@projectx-social/ui';
 import { WalletConnect } from '@/components/WalletConnect';
 import { AccountMenu } from '@/components/AccountMenu';
+import { FOOTER } from '@/lib/site-map';
 
 export function AppFrame({
   viewer,
@@ -49,6 +50,7 @@ export function AppFrame({
       searchQuery={searchQuery}
       connect={<WalletConnect triggerClassName="w-btn w-btn--primary" triggerLabel="Connect wallet" />}
       account={<AccountMenu />}
+      footer={FOOTER.column}
     >
       {children}
     </AppShell>
