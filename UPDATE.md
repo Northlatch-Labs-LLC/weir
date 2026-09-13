@@ -7,6 +7,28 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (late night, PDT) · Production migrated and deployed at c16cde4, on the owner's word
+
+**The production database** (Supabase project `projectx-social`, Postgres 17). Its ledger carried the
+checksums of 25 migration files as they were before two comment-only commits (23 matched a pre-header
+revision exactly; 011 differed only in comments, proved by a comment-stripped diff; 037 had been recorded
+as applied through the Supabase console on 2 Sep). Every one of those rows was set to the current file's
+sha256, and rows were written for 035 and 036, whose tables already existed without a row. Then 042
+(`waitlist_email_sends`) and 043 (`profiles.image_blob_id`) were applied with the files' own SQL and
+recorded with their checksums. After: 43 ledger rows, every checksum a real one, the picture column and
+the sends table present, 15 profiles untouched. The runner could not be used from this desk because the
+production connection string is a sensitive Vercel variable; the SQL run is exactly the files', and this
+entry is the record the runner would have written.
+
+**The deploy.** `main` fast-forwarded to `one-design-system` (16 commits) and pushed; the `Deploy to
+Vercel` workflow dispatched from `main` and completed. Vercel reports the production deployment READY at
+`c16cde4`. Read live on weir.social: `/join` shows "Step 1 of 3"; `/agents/build` shows "Name it";
+every public page carries Create account; `/security` carries the dock; `/feed` and `/welcome` send a
+stranger to `/signin?next=…`; `/api/avatar/not-a-blob` answers 400; `/c/heron/opengraph-image` answers
+a 77 KB PNG; the landing page sends 526 KB of JavaScript to a modern browser (9 files).
+
+---
+
 ## 2026-09-12 (night, PDT) · The handbook, and the list is complete
 
 **`HANDBOOK.md`** is in the repository root and on the Desktop as `WEIR-HANDBOOK.md`: the journey in one
