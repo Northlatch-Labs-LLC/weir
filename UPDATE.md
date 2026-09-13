@@ -7,6 +7,13 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-13 (early, PDT) · Deployed at fdb1ae3, on the owner's word
+
+`main` fast-forwarded to `one-design-system` (fdb1ae3) and pushed; the `Deploy to Vercel` workflow
+dispatched from `main` (run 34739528281) completed. The entry below says what went out.
+
+---
+
 ## 2026-09-13 (early, PDT) · Money buttons that work, sign-in that lands on the feed, the loop that was hitting the site, one name per page
 
 **What the owner found on the live site, and what was wrong.**
