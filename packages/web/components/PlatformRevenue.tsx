@@ -19,10 +19,20 @@ interface CurrencyRow {
   vaults: number;
 }
 
+interface TodayRow {
+  coinType: string;
+  decimals: number | null;
+  platformNet: string;
+  gross: string;
+  payments: number;
+}
+
 interface Revenue {
   vaults: VaultRow[];
   byCurrency: CurrencyRow[];
   truncated: boolean;
+  today: { sinceMs: number; payments: number; truncated: boolean; byCurrency: TodayRow[] } | null;
+  todayUnread: string | null;
 }
 
 interface Quote {
@@ -136,9 +146,39 @@ export function PlatformRevenue({ address }: { address: string | null }) {
 
   const { revenue } = load;
   const owing = revenue.vaults.filter((v) => BigInt(v.uncollected) > 0n);
+  const today = revenue.today;
 
   return (
     <div className="card" style={{ marginTop: 'var(--space-20)' }}>
+      <span className="k">TODAY · UTC</span>
+      {today === null ? (
+        <p className="w-card__note" role="status">
+          Today's settlements are being read from the chain{revenue.todayUnread === null ? '' : ` ()`}. The figure appears once it answers.
+        </p>
+      ) : today.payments === 0 ? (
+        <p className="w-card__note">Nothing has settled since midnight UTC. A measured zero: every settlement since then was read and there were none.</p>
+      ) : (
+        <>
+          <dl className="w-facts w-facts--grid">
+            {today.byCurrency.map((row) => (
+              <div key={row.coinType}>
+                <dt>Weir kept · {symbolOf(row.coinType)}</dt>
+                <dd>{amount(row.platformNet, row.decimals)}</dd>
+              </div>
+            ))}
+            {today.byCurrency.map((row) => (
+              <div key={`-gross`}>
+                <dt>Paid in total · {symbolOf(row.coinType)}</dt>
+                <dd>{amount(row.gross, row.decimals)} across {row.payments} payment{row.payments === 1 ? '' : 's'}</dd>
+              </div>
+            ))}
+          </dl>
+          {today.truncated ? (
+            <p className="w-card__note">The walk hit its ceiling before reaching midnight, so these are a floor for today, not the sum.</p>
+          ) : null}
+        </>
+      )}
+
       <span className="k">UNCOLLECTED COMMISSION</span>
 
       {revenue.truncated && (

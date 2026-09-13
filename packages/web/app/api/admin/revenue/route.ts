@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
-import { readPlatformRevenue, type PlatformRevenue } from '@/lib/revenue';
+import { readPlatformRevenue, readRevenueSince, startOfUtcDay, type PlatformRevenue } from '@/lib/revenue';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +10,29 @@ export async function GET(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
+  const window = await readRevenueSince(startOfUtcDay(Date.now()));
+  const today =
+    window.ok
+      ? {
+          sinceMs: window.value.sinceMs,
+          payments: window.value.payments,
+          truncated: window.value.truncated,
+          byCurrency: window.value.byCurrency.map((c) => ({
+            coinType: c.coinType,
+            decimals: c.decimals,
+            platformNet: c.platformNet.toString(),
+            gross: c.gross.toString(),
+            payments: c.payments,
+          })),
+        }
+      : null;
+  const todayUnread = window.ok ? null : window.failure.detail;
   return fold<PlatformRevenue, NextResponse>(
     await readPlatformRevenue(),
     (revenue) =>
       NextResponse.json({
+        today,
+        todayUnread,
         vaults: revenue.vaults.map((v) => ({
           vaultId: v.vaultId,
           coinType: v.coinType,

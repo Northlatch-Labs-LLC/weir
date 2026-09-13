@@ -7,6 +7,48 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-09-12 (evening, PDT) · Admin: every control read against its label, today's revenue added
+
+**The plan's admin step, done on the branch, with no new powers.** `/admin` shows, to a proved session that
+holds this package's `Publisher`, the front door, the access codes and the waiting-list insight; to anyone,
+the platform's terms and measured figures; and to the holder of the `PlatformCap`, the controls. Each
+control was read against what it says:
+
+- **The front door** (`components/SiteModeSwitch.tsx`): "Put the site behind the waiting list" and "Reopen
+  the site" POST `waitlistMode` to `/api/site-mode`, which proves who is asking and whether they may;
+  the gate lets sign-in, the API and the administrator through, so closing cannot lock the owner out.
+  Covered by `site-mode.test.ts` (19 tests). This is "close or open the door".
+- **Invitations** are the access codes (`components/AccessCodesPanel.tsx`): a label for who it is for, a
+  number of uses, an expiry; mint, copy, revoke. A code redeemed at `/waitlist` issues a pass; the join
+  door honours it. Covered by `access-codes.test.ts` and `access-codes-panel.test.tsx`. This is "invite
+  a creator"; nothing new was needed.
+- **The platform controls** (`components/AdminControls.tsx`): the two pause switches, the three fees
+  (bounded by the ceilings mirrored from `platform.move`, asserted by `admin.test.ts`), the treasury
+  sweep; each simulated on `/api/admin/prepare` and signed here or through the multisig path with the
+  committee's real weights. Covered by `admin.test.ts`.
+- **Revenue** (`components/PlatformRevenue.tsx`): the uncollected commission per coin and per vault, read
+  from every creator vault on chain, with the collection prepared per vault.
+
+**Added: today's revenue in SUI.** `lib/revenue.ts` gained `readRevenueSince`, which walks the package's
+`PaymentSettled` events newest first, reads each transaction's checkpoint time once, stops at the first
+settlement before midnight UTC, and sums what Weir kept and what was paid per coin at the coin's own scale;
+the walk is bounded at twenty pages and a walk that hit its ceiling is reported as a floor, never as the sum.
+`/api/admin/revenue` carries it as `today` (or `todayUnread` with the reason), and the panel shows
+"Today · UTC": Weir kept, paid in total across N payments, a measured zero when nothing settled, and
+"being read" when the chain did not answer. On this Mac the route answered live from mainnet: today zero
+payments, measured; lifetime uncollected commission listed per vault.
+
+**Proof.** `tsc --noEmit` clean. `next build` clean. `pnpm -C packages/ui test`: 32 passing.
+`pnpm -C packages/web test`: 185 files, 2,525 tests passing (`revenue-window.test.ts`: sums newest first
+and stops at the window's edge, flags the ceiling as a floor, reads each transaction's clock once, refuses a
+settlement without a checkpoint time, midnight UTC is the start of today).
+
+**Not done here.** The plan's proof, each control exercised with the owner's admin session, needs the
+owner's `Publisher` and `PlatformCap`; this desk holds neither. The controls are verified by reading and by
+their tests, not by pressing them on mainnet.
+
+---
+
 ## 2026-09-12 (evening, PDT) · Launch your own agent, from the site: built
 
 **The plan's "Launch your own agent" step is built on the branch,** with one honest limit named below.
