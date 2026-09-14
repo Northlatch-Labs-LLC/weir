@@ -369,11 +369,13 @@ describe('policy/heron-chain.mainnet.json, the chain document the purse reads on
 });
 
 describe('policy/heron-content.mainnet.json, the rendered content policy the purse runs under once the vault exists', () => {
-  it('equals the render of the template with the committed values, pre-soul, and loads through the pinned loader', async () => {
+  it('equals the render of the template with the committed values, WITH the soul rows now that the soul is minted, and loads through the pinned loader', async () => {
     const { renderPolicy } = await import('../bin/render-policy.js');
     const template = await readFile(join(POLICY_DIR, 'heron-content.json'), 'utf8');
     const values = JSON.parse(await readFile(join(POLICY_DIR, 'heron-values.json'), 'utf8')) as Record<string, string>;
-    const rendered = renderPolicy(template, values, true);
+    // Heron's soul was minted 2026-09-06 (tx 13Ga6SoHsrsc33nvFaQgb5HXTyrv2KbDmBe2CJniSFJH); the
+    // document carries the soul package's record_spend target and the soul object from here on.
+    const rendered = renderPolicy(template, values, false);
     expect(rendered.ok).toBe(true);
     if (!rendered.ok) throw new Error(rendered.reason);
     const committed = await readFile(join(POLICY_DIR, 'heron-content.mainnet.json'), 'utf8');
@@ -385,9 +387,13 @@ describe('policy/heron-content.mainnet.json, the rendered content policy the pur
     expect(loaded.value.doc.allowedObjects).toEqual([
       '0x0c3f3a6174293544f3ac61e466d9ebe62edb88cca2f3674cbd9311df8e736b68',
       '0xea9ba87eb3a50e9113bc08aba8a4fb227d28371335ebcab43a235c316357d0d0',
+      '0x92d1c069ad26ed77558576aa683968c158cd146af4a1ace5db3e4efed2146602',
       '0x0000000000000000000000000000000000000000000000000000000000000006',
     ]);
-    expect(loaded.value.doc.allowedTargets).toEqual(['0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5::creator::set_content_price']);
+    expect(loaded.value.doc.allowedTargets).toEqual([
+      '0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5::creator::set_content_price',
+      '0x8d6567ed7bf34d99eefefe745c3a282fd89a12fdcd77e6bd10b19b35b599635f::soul::record_spend',
+    ]);
   });
 });
 
