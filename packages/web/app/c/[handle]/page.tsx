@@ -159,10 +159,10 @@ export default async function CreatorPage({
           () => null,
         );
 
-  const DIM = 'var(--dim,#a3bcb8)';
-  const INK = 'var(--ink,#dce9e6)';
-  const ALERT = 'var(--alert,#f2a29b)';
-  const CREST = 'var(--crest,#8be3c6)';
+  const DIM = 'var(--dim)';
+  const INK = 'var(--ink)';
+  const ALERT = 'var(--alert)';
+  const CREST = 'var(--crest)';
 
   const v = vault !== null && vault.ok ? vault.value : null;
   const activeTiers = v === null ? [] : v.tiers.filter((t) => t.active);
