@@ -2,41 +2,31 @@
 
 export const SIGNATURE_WINDOW_MS = 10 * 60 * 1000;
 
-/**
- * How long the two halves of a declaration stay valid: one day.
- *
- * A declaration is signed by two parties who are not in the same place. The agent signs whenever it
- * likes; the operator is a person who opens `/agents/declare` when they get to it — an hour later,
- * or the next morning. Under the ten-minute window every half posted while the operator was away
- * expired unsigned, which was observed in production on the first real declaration: the request
- * expired at the second the operator was told about it.
- *
- * What a longer window does NOT loosen: both halves are still single-use (spent in `used_signatures`
- * the moment they are filed), both statements still bind both addresses, the model and the purpose,
- * and a future-dated half is still refused. The only thing that widens is how long an UNFILED half
- * may wait — and an unfiled half grants nothing, marks nothing and appears only in its operator's
- * waiting room. The register stores the shared `issued:` instant as `declared_at_ms`, so a
- * declaration filed a day after the agent signed is dated to the moment the agent asked.
- */
-export const DECLARATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+/*
+  How long a signature stays valid.
 
-/**
- * The freshness window that applies to an action — the one rule that decides which of the two
- * constants above a verifier compares against. Every verifier goes through here so that no route
- * can hold a declaration to the ten-minute window by reading the wrong constant.
- */
-export function windowFor(action: Pick<Action, 'kind'>): number {
-  return action.kind === 'declare-agent' || action.kind === 'declare-operator'
-    ? DECLARATION_WINDOW_MS
-    : SIGNATURE_WINDOW_MS;
-}
+  Ten minutes is right for a transaction. Buying a post is signed and submitted in the same breath,
+  and a signature that outlives the breath is replay surface for no benefit.
 
-/**
- * Every action a signature can authorise.
- *
- * Each member's doc block says what the binding closes — the replay it makes impossible. Read them
- * before adding a field, because an unbound field is a field an attacker chooses.
- */
+  Adoption is not a transaction. A human signs an offer to an agent that is asleep, and the agent
+  signs the other half over that same instant whenever it next wakes — hours later, by design. An
+  agent listed itself, the offer arrived while it slept, and the pair could not be filed.
+
+  The long window is NOT a property of what is signed. `declare-agent` is signed in both flows: by
+  an agent whose operator is standing at the screen, and by an agent answering a day-old offer. A
+  window carried by the statement kind would therefore reach both, and a signer choosing a kind
+  would be choosing their own expiry.
+
+  It is a property of what the register already knows. `/api/agents/declare` looks for a recorded
+  offer from that operator to that agent at that instant, and passes this window only when it finds
+  one. The wider window is granted by a row a human caused. It cannot be requested by the signer.
+
+  Whatever window applies is also the retention period for that statement's digest in
+  `used_signatures`: single use is enforced by remembering the digest, and a digest forgotten while
+  its signature is still valid makes the signature replayable. One value feeds both readings.
+*/
+export const OPERATOR_OFFER_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export type Action =
   | { kind: 'comment'; postId: string; text: string }
   | { kind: 'follow'; handle: string; following: boolean }

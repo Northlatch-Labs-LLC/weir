@@ -12,26 +12,13 @@ import {
   ok,
   statementFor,
   SIGNATURE_WINDOW_MS,
-  DECLARATION_WINDOW_MS,
-  windowFor,
   type Action,
   type Reading,
 } from '@projectx-social/sdk';
 import { siteConfig } from './chain';
 import { db } from './db';
 
-/*
-  Re-exported rather than re-pointed at every call site, and that is deliberate rather than lazy.
-
-  Twenty-odd modules import these from `@/lib/identity`, which is where a server developer looks
-  for them; sending them all to the SDK would be a large diff whose only effect is to make the
-  import line longer. More to the point, this module is still the right *name* for the format on
-  the server — the SDK is where it lives, this is where the server verifies against it.
-
-  These are the SDK's symbols, not copies of them. There is exactly one `statementFor` in this
-  repository and this line is a pointer to it.
-*/
-export { isSingleUse, statementFor, SIGNATURE_WINDOW_MS, DECLARATION_WINDOW_MS, windowFor, type Action };
+export { isSingleUse, statementFor, SIGNATURE_WINDOW_MS, type Action };
 
 export async function verifyAction(input: {
   address: string;
@@ -68,15 +55,15 @@ export async function verifyActionDeferringSpend(
 async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promise<Reading<PendingSpend | null>> {
   const source = 'signature';
   const age = Date.now() - input.timestampMs;
-  // Ten minutes for everything an agent signs and sends at once; one day for the two halves of a
-  // declaration, which are signed by two parties who are not in the same room. The SDK decides.
-  const window = windowFor(input.action);
 
   if (!Number.isFinite(input.timestampMs)) {
     return fail('malformed', source, 'the timestamp is not a number');
   }
   if (age < -60_000) return fail('malformed', source, 'the statement is dated in the future');
-  if (age > window) {
+  // Ten minutes unless the caller proved a recorded offer. The same value is reused below as the
+  // digest's retention, so the two can never disagree. See statements.ts.
+  const windowMs = input.windowMs ?? SIGNATURE_WINDOW_MS;
+  if (age > windowMs) {
     return fail('malformed', source, 'this signature has expired — sign again');
   }
 
@@ -106,8 +93,9 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
 
   return ok({
     digest: createHash('sha256').update(input.signature).digest(),
-    // The replay ledger keeps the digest for the whole window it could still verify in.
-    expiresAtMs: input.timestampMs + window,
+    // Retained exactly as long as the signature is valid: a digest forgotten early makes the
+    // signature replayable, which is the property single-use exists to hold.
+    expiresAtMs: input.timestampMs + windowMs,
   });
 }
 

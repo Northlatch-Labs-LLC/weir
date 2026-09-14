@@ -26,7 +26,8 @@ import {
   type SealConfig,
 } from '@projectx-social/sdk';
 import { explorerUrl, readProtocol, siteConfig, vaultCoinTypes } from './chain';
-import { DECLARATION_WINDOW_MS, SIGNATURE_WINDOW_MS, statementFor, type Action } from './identity';
+import { SIGNATURE_WINDOW_MS, statementFor, type Action } from './identity';
+import { MIND_ENV, mindConfig, type MindConfig } from './mind';
 import { BUDGETS, QUOTAS } from './rate-limit';
 import { READ_SESSION_COOKIE, READ_SESSION_TTL_MS } from './read-session';
 import { SUI_DECIMALS, USDC_DECIMALS } from './units';
@@ -37,34 +38,7 @@ export const AGENT_MANIFEST_VERSION = 'weir-agent/1';
 
 export const AGENT_MANIFEST_PATH = '/.well-known/weir-agent.json';
 
-/**
- * The document's own revision, inside the contract {@link AGENT_MANIFEST_VERSION} names.
- *
- * Two numbers, because they answer two questions and a consumer needs both.
- *
- * `manifest` is the CONTRACT: `weir-agent/1`. It changes only when software written against the
- * old one would read the new document and be wrong — a removed field, a renamed one, a field whose
- * meaning moved. `version` is the REVISION of the content inside that contract, and it goes up
- * whenever this document changes in a way a consumer could act on: a new endpoint, a corrected
- * note, a changed budget.
- *
- * # What a revision is actually for, and it is not changelogs
- *
- * Rollback. Everything below is signed, so a tampered document is caught — but a *stale* document
- * is not tampered with, and replaying yesterday's correctly-signed manifest is the cheap attack
- * against a signed static file. An agent that records the highest `version` it has seen from an
- * origin and refuses a lower one closes that, and the `iat` in the JWS protected header closes the
- * rest by bounding how old a signature may be.
- *
- * Editing this number down in the body does not help an attacker: the body is what is signed, so
- * the digest moves and the signature fails. It is the pair — a monotonic number in signed bytes,
- * and a signed issue time — that makes replay detectable, not either one alone.
- *
- * **Bump this when you change what this document says.** It is not derived from the content,
- * deliberately: a hash-derived version would move on every deploy that changed a whitespace, and a
- * number that changes for reasons nobody meant is a number consumers learn to ignore.
- */
-export const AGENT_MANIFEST_REVISION = 8;
+export const AGENT_MANIFEST_REVISION = 22;
 
 export const MANIFEST_HEADERS = {
   jws: 'x-weir-manifest-jws',
@@ -543,7 +517,7 @@ const ENDPOINTS: ManifestEndpoint[] = [
     purpose:
       'The waiting room for a declaration. POST takes the agent half — address, operatorAddress, ' +
       'model, purpose, timestampMs, agentSignature over the declare-agent statement — verifies it ' +
-      'without spending it, keeps one live request per agent for declarationWindowMs (one day), and answers with ' +
+      'without spending it, keeps one live request per agent for ten minutes, and answers with ' +
       'expiresAtMs and the operator page. GET ?operator=0x… lists the live requests naming that ' +
       'operator; the page at /agents/declare reads it and files both halves through /api/agents/declare.',
     query: ['operator'],
@@ -1249,11 +1223,6 @@ export function manifestFrom(input: ManifestInputs): AgentManifest {
         'rebuilds the statement from your request and verifies against that, so a statement that ' +
         'differs by one character fails as a forgery rather than as a mismatch.',
       signatureWindowMs: SIGNATURE_WINDOW_MS,
-      declarationWindowMs: DECLARATION_WINDOW_MS,
-      declarationWindowNote:
-        'The declare-agent and declare-operator statements are held to declarationWindowMs instead ' +
-        'of signatureWindowMs: they are signed by two parties who are not in the same place, and ' +
-        'both halves are still spent once filed.',
       clockNote:
         'A statement older than the window is refused, and so is one dated more than 60000 ms in ' +
         'the future — a future-dated statement could otherwise be minted now and held forever.',

@@ -8,8 +8,6 @@ import { HEAD_LINES,
   isSingleUse,
   statementFor,
   SIGNATURE_WINDOW_MS,
-  DECLARATION_WINDOW_MS,
-  windowFor,
   STATEMENT_SHAPES,
   type Action,
 } from '../src/statements.js';
@@ -164,20 +162,6 @@ describe('isSingleUse', () => {
 describe('SIGNATURE_WINDOW_MS', () => {
   it('is ten minutes', () => {
     expect(SIGNATURE_WINDOW_MS).toBe(600_000);
-  });
-});
-
-describe('DECLARATION_WINDOW_MS and windowFor', () => {
-  it('a declaration waits one day; everything else keeps the ten minutes', () => {
-    // Pinned for the same reason: the first production declaration expired unsigned under the
-    // ten-minute window, and a half that is spent once filed grants nothing while it waits.
-    expect(DECLARATION_WINDOW_MS).toBe(86_400_000);
-    expect(windowFor({ kind: 'declare-agent' })).toBe(DECLARATION_WINDOW_MS);
-    expect(windowFor({ kind: 'declare-operator' })).toBe(DECLARATION_WINDOW_MS);
-    for (const [, action] of CASES) {
-      if (action.kind === 'declare-agent' || action.kind === 'declare-operator') continue;
-      expect([action.kind, windowFor(action)]).toEqual([action.kind, SIGNATURE_WINDOW_MS]);
-    }
   });
 });
 

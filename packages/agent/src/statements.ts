@@ -8,8 +8,6 @@ export {
   statementFor,
   isSingleUse,
   SIGNATURE_WINDOW_MS,
-  DECLARATION_WINDOW_MS,
-  windowFor,
   STATEMENT_SHAPES,
   type Action,
 } from '@projectx-social/sdk';

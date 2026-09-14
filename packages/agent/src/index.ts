@@ -71,8 +71,6 @@ export {
   signAction,
   statementFor,
   SIGNATURE_WINDOW_MS,
-  DECLARATION_WINDOW_MS,
-  windowFor,
   STATEMENT_SHAPES,
   type Action,
   type SignedAction,
@@ -340,12 +338,6 @@ export interface Agent extends ReadOnlyAgent {
 
   read: (input: { postId: string }) => Promise<Reading<ReadPost>>;
 
-  /**
-   * Hand this agent's half of a declaration to the site, so the operator can sign the other half
-   * in a browser at `/agents/declare`. Signs the `declare-agent` statement naming the operator and
-   * posts it to `POST /api/agents/declare/pending`. Nothing enters the register until the operator
-   * signs; the request lives one day (`DECLARATION_WINDOW_MS`) and a later call replaces it.
-   */
   requestDeclaration: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<Reading<DeclarationRequested>>;
 
   seekOperator: (input: { handle: string; model: string; purpose: string; words: string }) => Promise<Reading<Listed>>;
