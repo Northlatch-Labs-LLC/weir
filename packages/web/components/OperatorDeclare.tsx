@@ -56,6 +56,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
   const [loaded, setLoaded] = useState<Loaded>({ state: 'idle' });
   const [seeking, setSeeking] = useState<SeekingLoaded>({ state: 'idle' });
   const [offered, setOffered] = useState<Record<string, { ok: true; expiresAtMs: number } | { ok: false; why: string }>>({});
+  const [direct, setDirect] = useState({ address: '', model: '', purpose: '' });
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Record<string, { ok: true; recordHref: string; handle: string | null } | { ok: false; why: string }>>({});
@@ -194,6 +195,95 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
     }
   }
 
+  const trimmedDirect = direct.address.trim();
+  const directReady =
+    /^0x[0-9a-fA-F]{64}$/.test(trimmedDirect) && direct.model.trim() !== '' && direct.purpose.trim() !== '';
+  const directResult = offered[trimmedDirect.toLowerCase()] ?? offered[trimmedDirect];
+
+  // An offer made to an address the agent never listed. The list below only holds agents that put
+  // themselves forward, and an agent that has not -- there is no tool that lists one -- could never
+  // be offered for at all, which left its only route the ten-minute one it must ask for while its
+  // operator happens to be at the screen.
+  const offerByAddress = (
+      <div className="w-offer-direct__block" data-offer-direct="true">
+        <p className="w-offer-direct__label">Offer to an agent by address</p>
+        <p className="w-offer-direct__lede">
+          For an agent you run yourself. Sign your half now; it waits in the register, and the agent
+          takes it the next time it wakes. It does not have to be listed below.
+        </p>
+        <div className="w-offer-direct w-offer-direct__card">
+          <div>
+            <p className="w-offer-direct__label">Agent address</p>
+            <input
+              value={direct.address}
+              onChange={(e) => setDirect((d) => ({ ...d, address: e.target.value }))}
+              placeholder="0x…"
+              spellCheck={false}
+              className="w-offer-direct__field w-offer-direct__field--mono"
+              data-direct-address="true"
+            />
+          </div>
+          <div>
+            <p className="w-offer-direct__label">Model</p>
+            <input
+              value={direct.model}
+              onChange={(e) => setDirect((d) => ({ ...d, model: e.target.value }))}
+              placeholder="what is running, one line"
+              className="w-offer-direct__field"
+              data-direct-model="true"
+            />
+          </div>
+          <div>
+            <p className="w-offer-direct__label">Purpose</p>
+            <input
+              value={direct.purpose}
+              onChange={(e) => setDirect((d) => ({ ...d, purpose: e.target.value }))}
+              placeholder="what it is for, one line"
+              className="w-offer-direct__field"
+              data-direct-purpose="true"
+            />
+          </div>
+          <p className="w-offer-direct__note">
+            The model and purpose are signed into your statement and are what the agent accepts. They
+            are shown on the register beside your address, permanently.
+          </p>
+          {signer === null ? (
+            <a href="/signin" className="w-offer-direct__button" data-direct-signin="true">
+              Sign in to make an offer
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="w-offer-direct__button"
+              disabled={!directReady || busy !== null}
+              onClick={() =>
+                void claim({
+                  address: trimmedDirect,
+                  handle: '',
+                  model: direct.model.trim(),
+                  purpose: direct.purpose.trim(),
+                  words: '',
+                  expiresAtMs: 0,
+                })
+              }
+              data-direct-claim="true"
+            >
+              {busy === trimmedDirect ? 'Waiting for the wallet…' : 'Offer to answer for this agent'}
+            </button>
+          )}
+          {directResult !== undefined && directResult.ok ? (
+            <p className="w-offer-direct__done" data-direct-offered="true">
+              Offer posted. It waits until {new Date(directResult.expiresAtMs).toISOString().slice(11, 16)} UTC;
+              the agent takes it on its next waking and appears in the register with you as its operator.
+            </p>
+          ) : null}
+          {directResult !== undefined && !directResult.ok ? (
+            <p className="w-offer-direct__refused" data-direct-refused="true">Not posted: {directResult.why}</p>
+          ) : null}
+        </div>
+      </div>
+  );
+
   const seekingList = (
       <div style={{ marginTop: '1.5rem' }} data-seeking-list="true">
         <p style={LABEL}>Agents looking for an operator</p>
@@ -258,6 +348,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
           <p style={{ ...VALUE, marginBottom: '0.75rem' }}>Connect the wallet the agent named as its operator. The requests addressed to it appear here.</p>
           <SignInPrompt action="sign as the operator" />
         </div>
+        {offerByAddress}
         {seekingList}
       </div>
     );
@@ -315,7 +406,8 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
         : null}
       {loaded.state === 'ready' && loaded.truncated ? <p style={{ ...VALUE, color: 'var(--dim)' }}>More requests exist than this page shows; sign these first.</p> : null}
 
-      {seekingList}
+      {offerByAddress}
+        {seekingList}
     </div>
   );
 }

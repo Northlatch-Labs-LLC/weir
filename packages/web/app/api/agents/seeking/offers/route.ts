@@ -19,9 +19,17 @@ export async function POST(request: Request) {
   const checked = validateOffer(body);
   if (!checked.ok) return NextResponse.json({ error: checked.why }, { status: 400 });
   const offer = checked.offer;
+  // An offer may name any agent address, listed or not. Requiring a listing first made this door
+  // openable only from the inside: an agent that has not listed itself -- and the MCP has no tool
+  // that lists one, only `weir_seeking` which reads -- could never be offered for, so the only
+  // route left was the agent asking and a human answering inside the ten-minute statement window.
+  // An offer to an address that never asked grants nothing on its own: it is an invitation the
+  // agent must still sign with its own key before anything is recorded against it. What is still
+  // refused is offering for an agent whose listing is already claimed, which would be an attempt
+  // to take a seat another operator holds.
   const listed = await seekingFor(offer.agentAddress);
-  if (listed === null || listed.claimedAtMs !== null) {
-    return NextResponse.json({ error: 'that agent is not looking for an operator' }, { status: 404 });
+  if (listed !== null && listed.claimedAtMs !== null) {
+    return NextResponse.json({ error: 'that agent already has an operator' }, { status: 409 });
   }
   const proof = await proveActionWithoutSpending({
     origin: new URL(request.url).origin,

@@ -48,6 +48,10 @@ interface AgentLike {
   requestDeclaration?: (input: { operatorAddress: string; model: string; purpose: string }) => Promise<
     Reading<{ issuedAtMs: number; expiresAtMs: number; operatorPage: string }>
   >;
+  operatorOffers?: () => Promise<Reading<Array<{ operatorAddress: string; model: string; purpose: string; issuedAtMs: number; expiresAtMs: number }>>>;
+  acceptOffer?: (offer: { operatorAddress: string; model: string; purpose: string; issuedAtMs: number; expiresAtMs: number }) => Promise<
+    Reading<{ operatorAddress: string; filedAtMs: number }>
+  >;
   readPreview?: (input: { postId: string }) => Promise<Reading<{ postId: string; handle: string; title: string; body: string; entitledVia: 'public' } | null>>;
   unlock?: (input: { vaultId: string; contentKey: string; priceMinorUnits: bigint; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
   subscribe?: (input: { vaultId: string; tierIndex: number; maxPrice: bigint }) => Promise<Reading<{ digest: string }>>;
@@ -94,6 +98,27 @@ export function portFromAgent(candidate: unknown): WeirPort {
   if (has(agent, 'seeking')) port.seeking = async () => unwrap(await agent.seeking(), 'seeking');
   if (has(agent, 'requestDeclaration')) {
     port.requestDeclaration = async (input) => unwrap(await agent.requestDeclaration(input), 'requestDeclaration');
+  }
+  if (has(agent, 'operatorOffers')) {
+    port.operatorOffers = async () => unwrap(await agent.operatorOffers(), 'operatorOffers');
+  }
+  if (has(agent, 'operatorOffers') && has(agent, 'acceptOffer')) {
+    // The caller names only an operator address. The model, purpose and timestamp that get signed
+    // are read back from the register here, never taken from the tool's arguments: an agent must
+    // not be persuadable into signing a declaration whose terms it was handed rather than read.
+    port.acceptOffer = async ({ operatorAddress }) => {
+      const offers = unwrap(await agent.operatorOffers(), 'operatorOffers');
+      const match = offers.find((o) => o.operatorAddress === operatorAddress);
+      if (match === undefined) {
+        throw new PortRefusal(
+          'precondition',
+          'acceptOffer',
+          `no offer from ${operatorAddress} is waiting for this agent. Read the offers first; an ` +
+            'offer that has expired or was never made cannot be accepted.',
+        );
+      }
+      return unwrap(await agent.acceptOffer(match), 'acceptOffer');
+    };
   }
 
   if (has(agent, 'quote')) {

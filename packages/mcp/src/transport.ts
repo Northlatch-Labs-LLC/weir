@@ -122,6 +122,14 @@ export interface WeirSeekingAgent {
   expiresAtMs: number | null;
 }
 
+export interface WeirOperatorOffer {
+  operatorAddress: string;
+  model: string;
+  purpose: string;
+  issuedAtMs: number;
+  expiresAtMs: number;
+}
+
 export interface WeirPort {
   feed?: (input: { handle?: string; cursor?: string }) => Promise<Reading<WeirFeed>>;
   quote?: (input: { vaultId: string; contentKey: string }) => Promise<WeirQuote>;
@@ -138,6 +146,13 @@ export interface WeirPort {
     model: string;
     purpose: string;
   }) => Promise<{ issuedAtMs: number; expiresAtMs: number; operatorPage: string }>;
+
+  // The other direction of the same door. `requestDeclaration` is the agent asking and a human
+  // answering inside the statement's ten minutes -- which only closes if the human happens to be
+  // at the screen. These two are the operator offering first: the offer waits in the register, and
+  // the agent finds it whenever it next wakes and answers it then.
+  operatorOffers?: () => Promise<WeirOperatorOffer[]>;
+  acceptOffer?: (input: { operatorAddress: string }) => Promise<{ operatorAddress: string; filedAtMs: number }>;
 
   unlock?: (input: {
     vaultId: string;
@@ -215,7 +230,9 @@ export type Capability =
   | 'post'
   | 'send'
   | 'price'
-  | 'declare';
+  | 'declare'
+  | 'offers'
+  | 'accept';
 
 export function agentFromReading(created: unknown): WeirPort {
   const reading = created as { ok?: unknown; value?: unknown; failure?: { detail?: unknown } };
@@ -252,6 +269,11 @@ export function capabilitiesOf(binding: WeirBinding): ReadonlySet<Capability> {
   if (armed && has('send') && has('declaration')) out.add('send');
   if (armed && has('priceContent')) out.add('price');
   if (armed && has('requestDeclaration')) out.add('declare');
+  // Reading the offers waiting for you needs the key that authorises the request, not the
+  // policy: it spends nothing and changes nothing. Accepting one signs a statement, so it is
+  // armed like `declare`.
+  if (binding.signer.kind !== 'none' && has('operatorOffers')) out.add('offers');
+  if (armed && has('acceptOffer')) out.add('accept');
 
   return out;
 }
@@ -617,7 +639,7 @@ export function canonicalOrigin(options: ServerOptions, requestHost: string | un
 
 const SPENDING_TOOLS = ['weir_buy', 'weir_subscribe', 'weir_post', 'weir_send', 'weir_price'] as const;
 
-const WRITING_TOOLS = [...SPENDING_TOOLS, 'weir_declare'] as const;
+const WRITING_TOOLS = [...SPENDING_TOOLS, 'weir_declare', 'weir_accept'] as const;
 
 export function describeTools(tools: readonly string[]): string {
   const has = (name: string): boolean => tools.includes(name);
@@ -631,6 +653,7 @@ export function describeTools(tools: readonly string[]): string {
     can.push('buy, subscribe, price and publish with the bound key');
   }
   if (has('weir_declare')) can.push('declare itself to the register, for its operator to counter-sign');
+  if (has('weir_offers')) can.push('read the offers operators have made to it, and accept one');
   if (can.length === 0) return 'weir.social as a tool: this process registered no tools.';
   const list = can.length === 1 ? can[0] : `${can.slice(0, -1).join(', ')}, and ${can[can.length - 1]}`;
   return `weir.social as a tool: ${list}. An agent holds the same account a person holds.`;
@@ -645,7 +668,7 @@ export function describeFree(tools: readonly string[]): string {
       : 'Every tool on this endpoint is free and reads only. Nothing here can spend, and there ' +
         'is no account to open to use it.';
   }
-  const reads = ['weir_search', 'weir_read', 'weir_authorship', 'weir_quote', 'weir_agents', 'weir_seeking', 'weir_balance'].filter(has);
+  const reads = ['weir_search', 'weir_read', 'weir_authorship', 'weir_quote', 'weir_agents', 'weir_seeking', 'weir_offers', 'weir_balance'].filter(has);
   const parts: string[] = [];
   if (reads.length > 0) {
     const list = reads.length === 1 ? reads[0] : `${reads.slice(0, -1).join(', ')} and ${reads[reads.length - 1]}`;

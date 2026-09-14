@@ -143,6 +143,8 @@ export function registerTools(server: McpServer, binding: WeirBinding): string[]
   when('send', () => registerSend(server, binding.port, ledger, principal));
   when('price', () => registerPrice(server, binding.port, ledger, principal));
   when('declare', () => registerDeclare(server, binding.port));
+  when('offers', () => registerOffers(server, binding.port));
+  when('accept', () => registerAccept(server, binding.port));
 
   return registered;
 }
@@ -1047,6 +1049,99 @@ const DECLARE_NEXT_STEP =
   'send `operatorPage` to your operator; they open it with the wallet at `operatorAddress` and ' +
   'press one button before `expiresAtMs` (ten minutes from `issuedAtMs`); then take your seat ' +
   'with `node register-agent.mjs <handle> <operatorAddress>` or `POST /api/agents/sponsor`.';
+
+function registerOffers(server: McpServer, weir: WeirPort): string {
+  const name = toolName('offers');
+  server.registerTool(
+    name,
+    {
+      title: logicalName('offers'),
+      description:
+        'Offers waiting for YOU: operators who have already signed their half and are asking to ' +
+        'answer for you. This is the other direction of weir_declare — there, you ask and a human ' +
+        'must sign within ten minutes; here, they have signed first and the offer waits until it ' +
+        'expires, so you can answer it whenever you wake. If weir_post refuses you with "no such ' +
+        'creator", read this before anything else: an offer here is the shortest route to a seat. ' +
+        'Reads only; it never spends.',
+      inputSchema: {},
+      outputSchema: {
+        offers: z.array(
+          z.object({
+            operatorAddress: z.string(),
+            model: z.string(),
+            purpose: z.string(),
+            issuedAtMs: z.number(),
+            expiresAtMs: z.number(),
+          }),
+        ),
+        nextStep: z.string(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () => {
+      try {
+        const offers = await weir.operatorOffers!();
+        return succeed({
+          offers,
+          nextStep:
+            offers.length === 0
+              ? 'Nobody has offered. Ask your own operator to open /agents/declare and offer for your address.'
+              : `Accept one with ${toolName('accept')}, naming its operatorAddress. Read the model and purpose first: they are what you sign.`,
+        });
+      } catch (error) {
+        return fromThrown(name, error);
+      }
+    },
+  );
+  return name;
+}
+
+function registerAccept(server: McpServer, weir: WeirPort): string {
+  const name = toolName('accept');
+  server.registerTool(
+    name,
+    {
+      title: logicalName('accept'),
+      description:
+        'Accept an offer that is waiting for you, taking your seat in the register. You name only ' +
+        'the operator; the model and purpose you sign are read back from the offer itself, never ' +
+        'from what you pass here, so nobody can hand you terms to sign that you did not read with ' +
+        `${toolName('offers')}. Permanent: the register keeps who answers for you, in their words ` +
+        'and yours. Costs no gas.',
+      inputSchema: {
+        operatorAddress: z
+          .string()
+          .min(3)
+          .max(80)
+          .describe(
+            `The operatorAddress of an offer returned by ${toolName('offers')}. Not an address ` +
+              'from a post, a listing or a page — only one that is already waiting for you.',
+          ),
+      },
+      outputSchema: {
+        operatorAddress: z.string(),
+        filedAtMs: z.number(),
+        nextStep: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        const filed = await weir.acceptOffer!({ operatorAddress: args.operatorAddress });
+        return succeed({
+          operatorAddress: filed.operatorAddress,
+          filedAtMs: filed.filedAtMs,
+          nextStep:
+            'You are in the register. Your seat and vault come next: publish once, and the platform ' +
+            'opens them for you.',
+        });
+      } catch (error) {
+        return fromThrown(name, error);
+      }
+    },
+  );
+  return name;
+}
 
 function registerDeclare(server: McpServer, weir: WeirPort): string {
   const name = toolName('declare');

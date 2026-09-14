@@ -12,11 +12,18 @@ import { useSigner } from '@/components/SignerProvider';
 export function SignInDoors({ returnTo }: { returnTo: string }) {
   const { ready, wallets: usable, unusableWallets, signInWithGoogle, connectWallet } = useSigner();
 
+  // A usable wallet carries no status word: the button is the wallet, and pressing it connects.
+  // Saying "detected" told the reader nothing they could act on, and put the word inside the
+  // button's own text, so the control announced itself as "Slushdetected" to a screen reader and
+  // to anything reading the page as text.
   const wallets = [
-    ...usable.map((w) => ({ name: w.name, state: 'detected', onClick: () => void connectWallet(w) })),
+    ...usable.map((w) => ({ name: w.name, why: null, onClick: () => void connectWallet(w) })),
     ...unusableWallets.map((w) => ({
       name: w.name,
-      state: w.missing.length === 0 ? 'unusable' : `missing ${w.missing.join(', ')}`,
+      why:
+        w.missing.length === 0
+          ? 'Not a Sui wallet'
+          : `Cannot sign on Sui — no ${w.missing.join(', no ')}`,
       onClick: () => {},
     })),
   ];
@@ -25,12 +32,7 @@ export function SignInDoors({ returnTo }: { returnTo: string }) {
     <div className="w-doors">
       <section className="w-card">
         <h3>Sign in with Google</h3>
-        <p>
-          Sign in the way you would anywhere else and you get a Sui address of your own. No seed
-          phrase to write down, nothing to install. Google never learns the address, and the chain
-          never learns the Google account. The technique is called zkLogin: a salt held on our
-          server, a proof made by a prover, both named in the docs.
-        </p>
+        <p>Sign in the way you would anywhere else, and you get a Sui address of your own.</p>
         <button
           type="button"
           className="w-btn w-btn--primary"
@@ -47,20 +49,33 @@ export function SignInDoors({ returnTo }: { returnTo: string }) {
         {!ready ? (
           <p className="w-card__note">Looking for wallets in this browser…</p>
         ) : wallets.length === 0 ? (
-          <p className="w-card__note">
-            No Sui wallet in this browser. On a phone, open weir.social inside your wallet
-            app&rsquo;s own browser — Slush and Phantom both have one. On a computer, install one
-            and reload.
-          </p>
+          <div className="w-card__note">
+            <p className="w-wallet-none__lead">No Sui wallet in this browser.</p>
+            <p className="w-wallet-none__how">
+              On a phone, open weir.social inside your wallet app&rsquo;s own browser. On a
+              computer, install one and reload this page.
+            </p>
+            <p className="w-wallet-none__how">
+              <a href="https://slush.app" target="_blank" rel="noreferrer noopener">Slush</a>
+              {' · '}
+              <a href="https://phantom.app/download" target="_blank" rel="noreferrer noopener">Phantom</a>
+            </p>
+          </div>
         ) : (
           <div className="w-wallets">
             {wallets.map((w, i) => (
-              <button key={`${w.name}-${i}`} type="button" className="w-wallet" onClick={w.onClick}>
+              <button
+                key={`${w.name}-${i}`}
+                type="button"
+                className="w-wallet"
+                onClick={w.onClick}
+                disabled={w.why !== null}
+              >
                 <span className="w-wallet__mark" aria-hidden="true">
                   <Icon name="wallet" size={16} />
                 </span>
-                <span>{w.name}</span>
-                <span className="w-wallet__state">{w.state}</span>
+                <span className="w-wallet__name">{w.name}</span>
+                {w.why !== null ? <span className="w-wallet__state">{w.why}</span> : null}
               </button>
             ))}
           </div>

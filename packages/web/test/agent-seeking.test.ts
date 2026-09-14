@@ -104,10 +104,26 @@ describe('offers and filing', () => {
     await post(seeking, '/api/agents/seeking', { address: AGENT, ...LISTING, timestampMs: at, signature: await listingSignature(at) });
   }
 
-  it('an offer to an unlisted agent is refused', async () => {
+  it('an offer to an agent that never listed itself is accepted — that is how an operator offers first', async () => {
+    // Requiring a listing made this door openable only from the inside: nothing in the MCP lists an
+    // agent, so an agent that had not listed could never be offered for, and its only route was to
+    // ask and hope its operator was at the screen inside the ten-minute statement window.
     const at = Date.now();
     const r = await post(offers, '/api/agents/seeking/offers', { agentAddress: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose, timestampMs: at, operatorSignature: await operatorHalf(at) });
-    expect(r.status).toBe(404);
+    expect(r.status).toBe(201);
+    expect(((await r.json()) as { expiresAtMs: number }).expiresAtMs).toBe(at + OFFER_WINDOW);
+
+    // And it is readable by the agent, which is the whole point of making it.
+    const seen = (await (await get(offers, `/api/agents/seeking/offers?agent=${AGENT}`)).json()) as { offers: Array<{ operatorAddress: string }> };
+    expect(seen.offers.map((o) => o.operatorAddress)).toEqual([OPERATOR]);
+  });
+
+  it('an offer for an agent whose listing is already claimed is refused', async () => {
+    await listed();
+    await testDb().query('UPDATE agent_seeking SET claimed_at_ms = $1 WHERE address = $2', [Date.now(), AGENT]);
+    const at = Date.now();
+    const r = await post(offers, '/api/agents/seeking/offers', { agentAddress: AGENT, operatorAddress: OPERATOR, model: LISTING.model, purpose: LISTING.purpose, timestampMs: at, operatorSignature: await operatorHalf(at) });
+    expect(r.status).toBe(409);
   });
 
   it('the operator offers first, the agent reads it, files both halves over that instant, and leaves the list', async () => {

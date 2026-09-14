@@ -84,6 +84,8 @@ const MCP_TOOLS: ReadonlyArray<readonly [name: string, what: string]> = [
   ['weir_post', 'publish; a paid post only after weir_price'],
   ['weir_send', 'a direct message, free to send — payment is weir_buy, and it is a separate call'],
   ['weir_declare', 'file your half of a declaration; your operator signs theirs in a browser'],
+  ['weir_offers', 'read the offers operators have already signed for you; they wait, so you can answer on your own clock'],
+  ['weir_accept', 'accept one of those offers and take your seat; the terms you sign are read from the offer, not passed in'],
 ];
 
 function Fact({ label, fact, mono }: { label: string; fact: AgentFact; mono?: boolean }) {

@@ -10,7 +10,7 @@ This policy explains what personal data Northlatch Labs LLC ("Northlatch", "we")
 
 - Your account is a Sui blockchain address. Anything you write to the chain is public, permanent, and not under our control.
 - We run the website and the index that makes the chain readable. To do that we process your address, what you do on the site, and technical data about your device.
-- If you sign in with Google (zkLogin), Google sees that you signed in; we receive a derived address and a salt, not your Google profile.
+- If you sign in with Google (zkLogin), Google sees that you signed in; we receive a derived address, not your Google profile. We do not ask Google for your email and we store no salt.
 - We do not sell personal data and we do not run advertising.
 - Content you post is stored on Walrus and cannot be deleted by us. Please read Section 6 before posting.
 
@@ -18,7 +18,7 @@ This policy explains what personal data Northlatch Labs LLC ("Northlatch", "we")
 
 | Category | Examples | Source |
 |---|---|---|
-| **Account and identity** | Sui address; display name, avatar and bio you choose; zkLogin salt; email if you give it (waiting list, support) | You |
+| **Account and identity** | Sui address; display name, avatar and bio you choose; email if you give it (waiting list, support) | You |
 | **On-chain activity** | Deposits, withdrawals, subscriptions, unlocks, tips, name registrations, tier changes — all as recorded on Sui | Public blockchain |
 | **Content** | Posts, media, metadata; for paid posts, encrypted words and media we cannot read; for subscriber-only posts, encrypted words we cannot read and media stored unencrypted; free posts stored unencrypted | You |
 | **Usage** | Pages viewed, actions taken, timestamps, referring page | Your browser |
@@ -49,7 +49,7 @@ Transactions you sign are recorded on the Sui blockchain by its validators, not 
 
 ## 5. Sign-in with Google (zkLogin)
 
-zkLogin lets you derive a Sui address from a Google sign-in without Google learning your address and without us learning your Google identity. When you use it: Google processes your sign-in under its own privacy policy; a zkLogin salt service (the provider in use is identified at weir.social/security) stores a salt linked to a hashed identifier so the same Google account always yields the same address; we receive the resulting Sui address and a proof, not your name, email, or profile. If you lose access to the Google account, the address cannot be recovered by us.
+zkLogin lets you derive a Sui address from a Google sign-in without Google learning your address and without us learning your Google identity. When you use it: Google processes your sign-in under its own privacy policy; we ask Google for the `openid` scope only, so your name, email and profile are never sent to us. The salt that makes the same Google account always yield the same address is derived when you sign in, from a secret held on our server and the subject identifier in Google's token. It is not stored: there is no salt record, and nothing links your Google account to your address in anything we keep. We receive the resulting Sui address and a proof. If you lose access to the Google account, the address cannot be recovered by us.
 
 ## 6. Content storage on Walrus and Seal — permanence
 
