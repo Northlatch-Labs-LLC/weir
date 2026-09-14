@@ -60,7 +60,7 @@
 # says here so the two cannot be read apart:
 #   --mount type=bind,source=/run/wren-beat/cfg,target=/app/config,readonly=true
 #       the beat's rendered config.json, its .security.yml, and the model credential as
-#       openrouter.token, all 0400 owned by uid 10001, in the unit's own RuntimeDirectory on the
+#       weir-gateway.token, all 0400 owned by uid 10001, in the unit's own RuntimeDirectory on the
 #       host's tmpfs; created for this beat, removed by systemd when the unit stops. This is the
 #       one way the decrypted model credential reaches PicoClaw (wren-beat.service's
 #       LoadCredentialEncrypted=, decrypted for the life of one beat, never under /srv/wren).

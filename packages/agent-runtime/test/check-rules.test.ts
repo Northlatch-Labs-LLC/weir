@@ -461,6 +461,24 @@ test('rule 9 (finding B5): an allow-listed model host over http: (not https:) is
   assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(9, /not https:/));
 });
 
+test('rule 9: the gateway host is allow-listed over https:, so an agent can be routed through it', () => {
+  const config = baseConfig({
+    model_list: [
+      { model_name: 'route-normal', provider: 'openrouter', model: 'auto', api_base: 'https://api.weir.social/v1' },
+    ],
+  });
+  assert.doesNotThrow(() => checkRules(config, { env: {}, argv: [] }));
+});
+
+test('rule 9: the gateway host over http: (not https:) is still refused', () => {
+  const config = baseConfig({
+    model_list: [
+      { model_name: 'route-normal', provider: 'openrouter', model: 'auto', api_base: 'http://api.weir.social/v1' },
+    ],
+  });
+  assert.throws(() => checkRules(config, { env: {}, argv: [] }), refusal(9, /not https:/));
+});
+
 test('rule 9 (finding B5): a model api_base host not on the allow-list is refused', () => {
   const config = baseConfig({
     model_list: [{ model_name: 'route-critical', provider: 'custom', model: 'x', api_base: 'https://evil.example/v1' }],

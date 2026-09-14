@@ -38,7 +38,7 @@ Group=root
 # every unit, --seal, the README and --plan name the same one: the split meant `--seal openrouter`
 # wrote where this unit does not look, this unit failed to start at every tick, and the dead man
 # reported a live host as dead (Security's B3 on step 6).
-LoadCredentialEncrypted=openrouter:/etc/wren/creds/openrouter.cred
+LoadCredentialEncrypted=weir-gateway:/etc/wren/creds/weir-gateway.cred
 
 ExecStart=/srv/wren/bin/wren-beat
 
