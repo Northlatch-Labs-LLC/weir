@@ -17,6 +17,17 @@ export interface BeatState {
   readonly postId?: string;
   readonly handle?: string;
   readonly named?: boolean;
+  /*
+    What this beat cost, booked against the soul's allowance.
+
+    `spentMist` is what the submitted transaction actually cost, read off the chain after the fact
+    — never estimated. "0" means the transaction was rebated more than it cost, which is ordinary
+    on Sui and is not an error. All three are absent on a deployment with no soul configured.
+  */
+  readonly spentMist?: string;
+  readonly spendDigest?: string;
+  /** Set when the spend could not be booked. The beat still succeeded; the books are one behind. */
+  readonly spendError?: string;
 }
 
 export const STATE_FILE = 'latest.json';

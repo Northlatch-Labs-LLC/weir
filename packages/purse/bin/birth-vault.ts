@@ -1,5 +1,24 @@
 #!/usr/bin/env -S npx tsx
 // Built-by: @projectx.sui
+/**
+ * Open Heron's SocialAccount and CreatorVault<SUI> on the projectx_social package, as Heron's
+ * 1-of-2 multisig address, with the hot key as the one member this laptop holds.
+ *
+ * Two transactions, because `creator::open_vault` takes the SocialAccount object that
+ * `account::open` creates. Each is built with the SDK's own builders (packages/sdk/src/tx.ts),
+ * simulated against the node, and only then signed and executed. Gas is paid from Heron's address
+ * balance: an empty gas payment and a ValidDuring expiration, the shape @mysten/sui's own executor
+ * uses for that mode, because Heron's address holds a balance and no coin object yet.
+ *
+ * The hot key is read through the purse's own loader (`--key-file`, 0600, no symlink, never argv,
+ * never env). Nothing here prints a secret; it prints addresses, ids and digests.
+ *
+ * usage: birth-vault.ts --key-file <path> --multisig <doc> --chain <doc> --handle <handle>
+ *                       [--referrer <address>] [--values <path>] [--values-prefix HERON] [--dry-run]
+ * --dry-run builds and simulates both steps as far as the chain state allows and executes nothing.
+ * --values merges <PREFIX>_VAULT_ID and <PREFIX>_CREATOR_CAP_ID into that JSON file when the vault
+ * exists; the prefix is HERON unless --values-prefix names another agent's (WREN).
+ */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Transaction } from '@mysten/sui/transactions';

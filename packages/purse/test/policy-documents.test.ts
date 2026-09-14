@@ -430,3 +430,45 @@ describe('the settlement set is by capability, and its staleness fails closed', 
     expect(refuseMixedMoneyPaths([`${SOUL}::record_spend`])).toBeNull();
   });
 });
+
+/*
+  The settlement set is enumerated by capability in policy-file.ts, and the note there argues that
+  such a list is safe precisely because its staleness REFUSES rather than admits. That argument is
+  only worth the words if it is a test, so here it is: a soul call this file has never heard of,
+  and the one soul call that belongs to the other arm, are both refused beside settle_epoch.
+*/
+describe('the settlement set is by capability, and its staleness fails closed', () => {
+  const SOUL = '0x000000000000000000000000000000000000000000000000000000000000005e::soul';
+
+  it('refuses record_spend beside settle_epoch, though both are in the soul module', () => {
+    // record_spend takes no capability: the contract asserts ctx.sender() == soul.agent, so it is
+    // signed by the hot key that publishes. Grouping by module would have merged the two paths.
+    const refusal = refuseMixedMoneyPaths([`${SOUL}::settle_epoch`, `${SOUL}::record_spend`]);
+    expect(refusal).not.toBeNull();
+    expect(refusal).toContain('record_spend');
+  });
+
+  it('refuses a LedgerCap call it has never heard of, rather than admitting it', () => {
+    const refusal = refuseMixedMoneyPaths([`${SOUL}::settle_epoch`, `${SOUL}::book_something_new`]);
+    expect(refusal).not.toBeNull();
+  });
+
+  it('allows the three it does know, in any order', () => {
+    expect(
+      refuseMixedMoneyPaths([`${SOUL}::book_burned`, `${SOUL}::settle_epoch`, `${SOUL}::book_earned`]),
+    ).toBeNull();
+  });
+
+  it('still refuses a content entry beside them', () => {
+    const refusal = refuseMixedMoneyPaths([
+      `${SOUL}::settle_epoch`,
+      '0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5::creator::set_content_price',
+    ]);
+    expect(refusal).not.toBeNull();
+    expect(refusal).toContain('set_content_price');
+  });
+
+  it('says nothing about a document with no settlement call at all', () => {
+    expect(refuseMixedMoneyPaths([`${SOUL}::record_spend`])).toBeNull();
+  });
+});

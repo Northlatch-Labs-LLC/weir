@@ -30,10 +30,17 @@ export interface ServerArgs {
   readonly apiOrigin?: string | undefined;
   readonly statementsPerDay?: number | undefined;
   readonly vault?: string | undefined;
+  /**
+   * The agent this purse signs for: `heron` when not given. It names the credential systemd places
+   * (`<agent>-hot`) and the prefix of every log line (`<agent>-purse`), and nothing else — the
+   * policy, the members document and the vault are still what bound it. A second citizen runs the
+   * same compiled server with `--agent wren`; Heron's unit passes nothing and behaves as it always has.
+   */
   readonly agent?: string | undefined;
 }
 
 export const DEFAULT_AGENT = 'heron';
+/** `^[a-z][a-z0-9-]{0,31}$`: the same shape --seal accepts for a credential name, for the same reason. */
 const AGENT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 
 const FLAGS = ['--socket', '--policy', '--policy-sha256', '--chain', '--audit', '--spend', '--key-file', '--multisig', '--api-origin', '--statements-per-day', '--vault', '--agent'] as const;
@@ -104,6 +111,7 @@ export function parseServerArgs(argv: readonly string[]): Outcome<ServerArgs> {
   });
 }
 
+/** The credential name a purse for `agent` loads: `heron-hot`, `wren-hot`. */
 export function credentialNameFor(agent: string | undefined): string {
   return `${agent ?? DEFAULT_AGENT}-hot`;
 }

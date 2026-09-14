@@ -160,3 +160,157 @@ describe('the beat checks the schema before it opens the socket', () => {
     expect(written.ruleId).toBe('intent-invalid-locally');
   });
 });
+
+/*
+  Booking what a beat cost.
+
+  The property that matters most here is negative: a failure to book a spend must never turn a
+  beat that published into a beat that reports an error. The post is already on the network; the
+  soul's books being one beat behind is smaller, recoverable, and belongs in `spendError` rather
+  than in `outcome`.
+*/
+describe('the beat books what it actually spent', () => {
+  const SOUL = {
+    packageId: '0x000000000000000000000000000000000000000000000000000000000000005e',
+    soul: { objectId: '0x00000000000000000000000000000000000000000000000000000000000000a1', initialSharedVersion: '7' },
+  };
+  const gasOf = (mist: bigint | null) => async () => ({ ok: true as const, value: mist });
+
+  it('records the gas the submitted transaction actually cost', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const asked: unknown[] = [];
+    const ask: AskPort = {
+      ask: async (intent) => {
+        asked.push(intent);
+        return { ok: true, value: { ok: true, digest: 'DiGeSt', txBytesB64: 'AAAA', signature: 'AQID' } };
+      },
+    };
+    const submit: SubmitPort = { submit: async () => 'OnChainDigest' };
+
+    await runPhaseTwo({
+      runsDir: runs, stateDir: state, beatId: BEAT_ID, ask, submit,
+      recordSpend: { ...SOUL, gasOf: gasOf(1_348_000n) },
+    });
+
+    const written = await readState(state);
+    expect(written.outcome).toBe('signed');
+    expect(written.spentMist).toBe('1348000');
+    expect(written.spendError).toBeUndefined();
+    // The second ask is the record_spend, against this soul, for exactly that number.
+    const spend = asked[1] as { kind: string; amountMist: string; soul: { objectId: string; mutable: boolean } };
+    expect(spend.kind).toBe('record_spend');
+    expect(spend.amountMist).toBe('1348000');
+    expect(spend.soul.objectId).toBe(SOUL.soul.objectId);
+    expect(spend.soul.mutable).toBe(true);
+  });
+
+  it('books nothing when nothing was submitted — a dry run spends no coin', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const asked: unknown[] = [];
+    const ask: AskPort = {
+      ask: async (intent) => {
+        asked.push(intent);
+        return { ok: true, value: { ok: true, digest: 'DiGeSt', txBytesB64: 'AAAA', signature: 'AQID' } };
+      },
+    };
+
+    await runPhaseTwo({
+      runsDir: runs, stateDir: state, beatId: BEAT_ID, ask,
+      recordSpend: { ...SOUL, gasOf: gasOf(1_348_000n) },
+    });
+
+    expect(asked).toHaveLength(1);
+    expect((await readState(state)).spentMist).toBeUndefined();
+  });
+
+  it('books nothing on a refusal, which submitted nothing either', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const submit: SubmitPort = { submit: async () => 'OnChainDigest' };
+
+    await runPhaseTwo({
+      runsDir: runs, stateDir: state, beatId: BEAT_ID, ask: refusingPurse, submit,
+      recordSpend: { ...SOUL, gasOf: gasOf(1_348_000n) },
+    });
+
+    const written = await readState(state);
+    expect(written.outcome).toBe('refused');
+    expect(written.spentMist).toBeUndefined();
+  });
+
+  it('books zero when the transaction was rebated more than it cost, and calls it no error', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const submit: SubmitPort = { submit: async () => 'OnChainDigest' };
+
+    await runPhaseTwo({
+      runsDir: runs, stateDir: state, beatId: BEAT_ID, ask: signingPurse, submit,
+      recordSpend: { ...SOUL, gasOf: gasOf(null) },
+    });
+
+    const written = await readState(state);
+    expect(written.spentMist).toBe('0');
+    expect(written.spendError).toBeUndefined();
+    expect(written.outcome).toBe('signed');
+  });
+
+  it('a chain read that fails leaves the beat signed and says so in spendError', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const submit: SubmitPort = { submit: async () => 'OnChainDigest' };
+
+    await runPhaseTwo({
+      runsDir: runs, stateDir: state, beatId: BEAT_ID, ask: signingPurse, submit,
+      recordSpend: {
+        ...SOUL,
+        gasOf: async () => ({ ok: false as const, refused: { reason: 'the node did not answer.' } }),
+      },
+    });
+
+    const written = await readState(state);
+    expect(written.outcome).toBe('signed');
+    expect(written.submittedDigest).toBe('OnChainDigest');
+    expect(written.spentMist).toBeUndefined();
+    expect(written.spendError).toContain('did not answer');
+  });
+
+  it('a purse that refuses the spend leaves the beat signed and says so', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const submit: SubmitPort = { submit: async () => 'OnChainDigest' };
+    let call = 0;
+    const ask: AskPort = {
+      ask: async () => {
+        call += 1;
+        return call === 1
+          ? { ok: true, value: { ok: true, digest: 'DiGeSt', txBytesB64: 'AAAA', signature: 'AQID' } }
+          : { ok: true, value: { ok: false, refused: { ruleId: 'move-call-target', reason: 'record_spend is not allowed.' } } };
+      },
+    };
+
+    await runPhaseTwo({
+      runsDir: runs, stateDir: state, beatId: BEAT_ID, ask, submit,
+      recordSpend: { ...SOUL, gasOf: gasOf(1_348_000n) },
+    });
+
+    const written = await readState(state);
+    expect(written.outcome).toBe('signed');
+    expect(written.spendError).toContain('not allowed');
+  });
+
+  it('a deployment with no soul configured behaves exactly as before', async () => {
+    const { runs, state } = await stage(priceIntentFor());
+    const asked: unknown[] = [];
+    const ask: AskPort = {
+      ask: async (intent) => {
+        asked.push(intent);
+        return { ok: true, value: { ok: true, digest: 'DiGeSt', txBytesB64: 'AAAA', signature: 'AQID' } };
+      },
+    };
+    const submit: SubmitPort = { submit: async () => 'OnChainDigest' };
+
+    await runPhaseTwo({ runsDir: runs, stateDir: state, beatId: BEAT_ID, ask, submit });
+
+    expect(asked).toHaveLength(1);
+    const written = await readState(state);
+    expect(written.outcome).toBe('signed');
+    expect(written.spentMist).toBeUndefined();
+    expect(written.spendError).toBeUndefined();
+  });
+});

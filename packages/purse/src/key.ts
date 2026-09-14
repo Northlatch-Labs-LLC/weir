@@ -7,12 +7,27 @@ import { allow, refuse, type Outcome } from './outcome.js';
 
 const SECRET_PREFIX = 'suipriv' + 'key1';
 
+/**
+ * The credential name the unit declares, and the file systemd writes it to — Heron's, which is the
+ * default everywhere a name is not given. A second citizen names its own (`wren-hot`) through
+ * `--agent` on the purse, and every rule below is evaluated for that name instead: the path under
+ * $CREDENTIALS_DIRECTORY and the forbidden environment names alike.
+ */
 export const CREDENTIAL_NAME = 'heron-hot';
 
+/** `wren-hot` -> `WREN`: the prefix the forbidden environment names are built from. */
 function envPrefixOf(credentialName: string): string {
   return credentialName.split('-')[0]!.toUpperCase().replace(/[^A-Z0-9]/g, '_');
 }
 
+/**
+ * Environment names that must not be set at all, for a given credential name.
+ *
+ * Not a blocklist of every possible name — that is unwinnable — but of the names somebody reaching
+ * for the wrong door would actually use. The value scan below is the general check; this is the
+ * specific one that catches the mistake before it becomes a habit. For `heron-hot` this is exactly
+ * the list the purse has always refused; for another agent it is the same shapes under its prefix.
+ */
 export function forbiddenEnvNames(credentialName: string = CREDENTIAL_NAME): readonly string[] {
   const prefix = envPrefixOf(credentialName);
   return [
@@ -28,7 +43,9 @@ export function forbiddenEnvNames(credentialName: string = CREDENTIAL_NAME): rea
 
 export interface KeySource {
   readonly keyFile?: string | undefined;
+  /** The credential name under $CREDENTIALS_DIRECTORY; {@link CREDENTIAL_NAME} when not given. */
   readonly credentialName?: string | undefined;
+  /** `$CREDENTIALS_DIRECTORY`, when systemd set it. */
   readonly credentialsDirectory?: string | undefined;
   readonly argv: readonly string[];
   readonly env: Readonly<Record<string, string | undefined>>;

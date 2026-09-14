@@ -19,10 +19,11 @@ interface Seen {
   readonly asked: unknown[];
   readonly requests: { method: string; url: string; body?: unknown; headers?: Record<string, string> }[];
   submitted: number;
+  priceReads: number;
 }
 
-function ports(options: { named?: boolean; stage?: string; refuse?: string; postStatus?: number } = {}): { ports: PublishPorts; seen: Seen } {
-  const seen: Seen = { asked: [], requests: [], submitted: 0 };
+function ports(options: { named?: boolean; stage?: string; refuse?: string; postStatus?: number; alreadyPriced?: string | null; submitThrows?: boolean } = {}): { ports: PublishPorts; seen: Seen } {
+  const seen: Seen = { asked: [], requests: [], submitted: 0, priceReads: 0 };
   const p: PublishPorts = {
     ask: async (intent) => {
       seen.asked.push(intent);
@@ -49,8 +50,14 @@ function ports(options: { named?: boolean; stage?: string; refuse?: string; post
     chain: {
       sharedRef: async (objectId) => ({ objectId, initialSharedVersion: '3', mutable: true }),
       ownedRef: async (objectId) => ({ objectId, version: '7', digest: '11111111111111111111111111111111' }),
+      // Not priced, unless a test says otherwise: the ordinary case is a new body nobody has priced.
+      priceOf: async () => { seen.priceReads += 1; return options.alreadyPriced ?? null; },
     },
-    submit: async () => { seen.submitted += 1; return 'OnChainDigest'; },
+    submit: async () => {
+      seen.submitted += 1;
+      if (options.submitThrows === true) throw new Error('the node hung up');
+      return 'OnChainDigest';
+    },
     now: () => 1_788_000_000_000,
   };
   return { ports: p, seen };
@@ -229,5 +236,91 @@ describe('phase two with a plan', () => {
     const result = await runPhaseTwo({ runsDir: runs, stateDir: state, beatId: 'B7', ask: { ask: p.ask } });
     expect(result.state).toMatchObject({ outcome: 'refused', ruleId: 'intent-invalid-locally' });
     expect(seen.asked).toEqual([]);
+  });
+});
+
+/*
+  A paid post is two systems and the first half is permanent.
+
+  The API refuses a paid post whose key is not already priced on chain
+  (`packages/web/app/api/posts/route.ts:50`), so the irreversible half must go first and cannot be
+  reordered. What makes the gap survivable is that the content key is the sha256 of the body: the
+  same plan always produces the same key, so a second attempt at the same post costs no second
+  transaction. These tests pin that property, because without it the failure below orphans a price
+  on chain for ever.
+*/
+describe('a paid post survives a failure between pricing and publishing', () => {
+  const paid = () => {
+    const parsed = parsePublishPlan(plan({ access: 'paid', priceMist: '50000000' }));
+    if (!parsed.ok) throw new Error(parsed.reason);
+    return parsed.plan;
+  };
+  const free = () => {
+    const parsed = parsePublishPlan(plan());
+    if (!parsed.ok) throw new Error(parsed.reason);
+    return parsed.plan;
+  };
+  const PROFILE = { name: 'Wren', bio: 'bio' };
+
+  it('prices the key when it is not priced yet', async () => {
+    const { ports: p, seen } = ports();
+    const result = await runPublishPlan({ plan: paid(), address: ADDRESS, origin: ORIGIN, beatId: 'PAID', ports: p, profile: PROFILE });
+
+    expect(result.outcome).toBe('published');
+    expect(seen.priceReads).toBe(1);
+    expect(seen.submitted).toBe(1);
+    expect(result.outcome === 'published' && result.resumedPrice).toBe(false);
+  });
+
+  it('prices NOTHING when the key already carries this exact price, and publishes anyway', async () => {
+    // The resume. This is the state a beat is left in when the submit threw after the price landed.
+    const { ports: p, seen } = ports({ alreadyPriced: '50000000' });
+    const result = await runPublishPlan({ plan: paid(), address: ADDRESS, origin: ORIGIN, beatId: 'PAID', ports: p, profile: PROFILE });
+
+    expect(result.outcome).toBe('published');
+    expect(seen.submitted).toBe(0);
+    expect(result.outcome === 'published' && result.resumedPrice).toBe(true);
+    // No `post` intent was ever asked for: the chain half was already done.
+    expect((seen.asked as { kind?: string }[]).some((a) => a.kind === 'post')).toBe(false);
+  });
+
+  it('re-prices when the key is priced at a DIFFERENT price', async () => {
+    const { ports: p, seen } = ports({ alreadyPriced: '10000000' });
+    const result = await runPublishPlan({ plan: paid(), address: ADDRESS, origin: ORIGIN, beatId: 'PAID', ports: p, profile: PROFILE });
+
+    expect(result.outcome).toBe('published');
+    expect(seen.submitted).toBe(1);
+    expect(result.outcome === 'published' && result.resumedPrice).toBe(false);
+  });
+
+  it('a submit that throws returns an error instead of taking the whole beat down', async () => {
+    // The exact defect: on 2026-09-06 the submit threw, publish.ts died with it, step 4 never ran,
+    // and the price stayed on chain with no post behind it.
+    const { ports: p } = ports({ submitThrows: true });
+    const result = await runPublishPlan({ plan: paid(), address: ADDRESS, origin: ORIGIN, beatId: 'PAID', ports: p, profile: PROFILE });
+
+    expect(result.outcome).toBe('error');
+    expect(result.outcome === 'error' && result.error).toContain('may have landed');
+  });
+
+  it('and the next attempt at that same body finds the price and completes it', async () => {
+    const first = ports({ submitThrows: true });
+    const failed = await runPublishPlan({ plan: paid(), address: ADDRESS, origin: ORIGIN, beatId: 'PAID', ports: first.ports, profile: PROFILE });
+    expect(failed.outcome).toBe('error');
+
+    // The price DID land, as the error says it might have. The retry sees it and publishes.
+    const second = ports({ alreadyPriced: '50000000' });
+    const result = await runPublishPlan({ plan: paid(), address: ADDRESS, origin: ORIGIN, beatId: 'PAID', ports: second.ports, profile: PROFILE });
+
+    expect(result.outcome).toBe('published');
+    expect(second.seen.submitted).toBe(0);
+  });
+
+  it('a free post never reads a price and never submits', async () => {
+    const { ports: p, seen } = ports();
+    await runPublishPlan({ plan: free(), address: ADDRESS, origin: ORIGIN, beatId: 'FREE', ports: p, profile: PROFILE });
+
+    expect(seen.priceReads).toBe(0);
+    expect(seen.submitted).toBe(0);
   });
 });

@@ -29,6 +29,23 @@ export interface PhaseTwoOptions {
   readonly publish?:
     | { readonly origin: string; readonly address: string; readonly profile: { name: string; bio: string }; readonly ports: Omit<PublishPorts, 'ask' | 'now'> }
     | undefined;
+  /**
+   * Book what this beat actually cost against the soul's allowance.
+   *
+   * Absent, nothing is recorded and the beat behaves exactly as before — a deployment without a
+   * soul is a real deployment, not a broken one.
+   *
+   * `gasOf` reads the cost off the chain AFTER submission. It is not estimated and not configured:
+   * an allowance is a bound on real spending, and a figure the operator cannot check against a
+   * transaction digest is not a measurement of anything.
+   */
+  readonly recordSpend?:
+    | {
+        readonly packageId: string;
+        readonly soul: { readonly objectId: string; readonly initialSharedVersion: string };
+        readonly gasOf: (digest: string) => Promise<{ ok: true; value: bigint | null } | { ok: false; refused: { reason: string } }>;
+      }
+    | undefined;
 }
 
 export interface PhaseTwoResult {
@@ -51,6 +68,9 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
   let postId: string | undefined;
   let handle: string | undefined;
   let named: boolean | undefined;
+  let spentMist: string | undefined;
+  let spendDigest: string | undefined;
+  let spendError: string | undefined;
 
   const attempt = async (): Promise<void> => {
     let text: string;
@@ -173,6 +193,53 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
     error = thrown instanceof Error ? thrown.message : String(thrown);
   }
 
+  /*
+    Book the spend, after the work and outside its try.
+
+    Deliberately after `attempt` rather than inside it: a failure to record what a beat cost must
+    never turn a beat that published into a beat that reports an error. The publish already
+    happened and the post is on the network; the soul's books being one beat behind is a smaller,
+    recoverable fact, and `spendError` says so in the state file rather than hiding it.
+
+    Recorded only for a transaction that was actually submitted. A dry run and a refusal spend
+    nothing, and booking a spend for either would put a number on the chain that no transaction
+    backs.
+  */
+  if (options.recordSpend !== undefined && submittedDigest !== undefined) {
+    try {
+      const gas = await options.recordSpend.gasOf(submittedDigest);
+      if (!gas.ok) {
+        spendError = gas.refused.reason;
+      } else if (gas.value === null) {
+        // The transaction was rebated more than it cost. Nothing to book, and that is not an error.
+        spentMist = '0';
+      } else {
+        const answered = await options.ask.ask({
+          kind: 'record_spend',
+          packageId: options.recordSpend.packageId,
+          soul: { ...options.recordSpend.soul, mutable: true },
+          amountMist: gas.value.toString(),
+        });
+        if (!answered.ok) {
+          spendError = answered.refused.reason;
+        } else if (!answered.value.ok) {
+          spendError = answered.value.refused.reason;
+        } else if ('digest' in answered.value) {
+          spentMist = gas.value.toString();
+          spendDigest = answered.value.digest;
+          if (options.submit !== undefined) {
+            await options.submit.submit({
+              txBytesB64: answered.value.txBytesB64,
+              signature: answered.value.signature,
+            });
+          }
+        }
+      }
+    } catch (thrown) {
+      spendError = thrown instanceof Error ? thrown.message : String(thrown);
+    }
+  }
+
   const state: BeatState = {
     beatId: options.beatId,
     startedAt,
@@ -185,6 +252,9 @@ export async function runPhaseTwo(options: PhaseTwoOptions): Promise<PhaseTwoRes
     ...(postId === undefined ? {} : { postId }),
     ...(handle === undefined ? {} : { handle }),
     ...(named === undefined ? {} : { named }),
+    ...(spentMist === undefined ? {} : { spentMist }),
+    ...(spendDigest === undefined ? {} : { spendDigest }),
+    ...(spendError === undefined ? {} : { spendError }),
   };
   const statePath = await writeState(options.stateDir, state);
   return { state, statePath };
