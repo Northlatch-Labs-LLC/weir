@@ -2554,6 +2554,17 @@
   .w-wallet__state { margin-left: auto; font-family: var(--w-sans); font-size: 12px; color: var(--w-ink-7); text-align: right; }
   .w-wallet[disabled] { opacity: 0.55; cursor: not-allowed; }
   .w-wallet[disabled]:hover { background: var(--w-raised); }
+  .w-wallet-error {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--w-line-strong);
+    border-left: 3px solid var(--w-mint-dim);
+    border-radius: var(--w-r-sm, 6px);
+    background: var(--w-raised);
+    font-family: var(--w-sans);
+    font-size: 14px;
+    color: var(--w-ink-10);
+  }
   .w-wallet-none__lead { margin: 0 0 6px; }
   .w-wallet-none__how { margin: 0 0 6px; }
   .w-wallets { display: flex; flex-direction: column; gap: 8px; }
@@ -2581,6 +2592,74 @@
 
   /* The operator's offer-by-address form. An offer made to an agent that never listed itself:
      the fields are typed rather than read off a listing, so they need their own input styling. */
+  /* The three steps of joining, with the ones behind the reader settled. The mark is a disc
+     because a disc reads as a place in a sequence at a glance; the rule between two of them is
+     drawn by the step on its left. */
+  .w-stepper {
+    display: flex;
+    align-items: flex-start;
+    margin: 0 0 20px;
+    padding: 0;
+    list-style: none;
+  }
+  .w-stepper__step {
+    position: relative;
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .w-stepper__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--w-line-strong);
+    background: var(--w-raised);
+    color: var(--w-ink-7);
+    font-family: var(--w-mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .w-stepper__label {
+    font-family: var(--w-sans);
+    font-size: 12.5px;
+    color: var(--w-ink-7);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+  /* Drawn from the middle of this step's mark to the middle of the next one. */
+  .w-stepper__rule {
+    position: absolute;
+    top: 14px;
+    left: calc(50% + 18px);
+    right: calc(-50% + 18px);
+    height: 1px;
+    background: var(--w-line-strong);
+  }
+  .w-stepper__step--done .w-stepper__mark {
+    border-color: var(--w-mint-dim);
+    background: var(--w-mint-dim);
+    color: var(--w-ink-0, #07120f);
+  }
+  .w-stepper__step--done .w-stepper__label { color: var(--w-ink-10); }
+  .w-stepper__step--done .w-stepper__rule { background: var(--w-mint-dim); }
+  .w-stepper__step--current .w-stepper__mark {
+    border-color: var(--w-mint);
+    background: var(--w-raised);
+    color: var(--w-mint);
+    box-shadow: 0 0 0 3px rgba(var(--crest-rgb), 0.16);
+  }
+  .w-stepper__step--current .w-stepper__label {
+    color: var(--w-ink-10);
+    font-weight: 600;
+  }
+
   .w-offer-direct__block { margin-top: 24px; }
   .w-offer-direct__card {
     background: linear-gradient(180deg, rgba(var(--pa, 20, 52, 62), 0.78), rgba(var(--pb, 9, 32, 42), 0.88));

@@ -3,6 +3,7 @@
 export { Icon, ICON_NAMES, ICON_PATHS, type IconName } from './base/Icon';
 export { Avatar, AgentBadge, type AvatarSize } from './base/Avatar';
 export { Loading, EmptyState, ErrorState, Unmeasured } from './base/StateView';
+export { Stepper, type Step } from './base/Stepper';
 export {
   AppShell,
   LeftRail,

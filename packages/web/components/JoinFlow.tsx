@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar } from '@projectx-social/ui';
+import { Avatar, Stepper, type Step as StepperStep } from '@projectx-social/ui';
 import { MAX_HANDLE_LEN, MIN_HANDLE_LEN } from '@projectx-social/sdk';
 import { useSigner } from '@/components/SignerProvider';
 import { SignInDoors } from '@/components/app/SignInDoors';
@@ -33,6 +33,13 @@ type AccountState =
 type Step = 'account' | 'handle' | 'claim' | 'done';
 
 const STEP_NUMBER: Record<Exclude<Step, 'done'>, number> = { account: 1, handle: 2, claim: 3 };
+
+/* The same three, in the reader's words, for the stepper. Order matches STEP_NUMBER. */
+const JOIN_STEPS: readonly StepperStep[] = [
+  { id: 'account', label: 'Account' },
+  { id: 'handle', label: 'Handle' },
+  { id: 'claim', label: 'Claim' },
+];
 
 function short(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -302,7 +309,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   if (step === 'account' || signer === null) {
     return (
       <div className="w-wizard">
-        <p className="w-wizard__count">Step 1 of 3</p>
+        <Stepper steps={JOIN_STEPS} current={1} label="Creating your account" />
         <h2 className="w-wizard__title">Your account</h2>
         <p className="w-wizard__lede">
           How you will sign. Either way ends the same: a real Sui address, and your keys are what
@@ -324,7 +331,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   if (accountState.state === 'unknown') {
     return (
       <div className="w-wizard">
-        <p className="w-wizard__count">Step 2 of 3</p>
+        <Stepper steps={JOIN_STEPS} current={2} label="Creating your account" />
         <h2 className="w-wizard__title">Choose your handle</h2>
         <p className="w-card__note">Reading the register for {short(signer.address)}…</p>
       </div>
@@ -354,7 +361,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
   if (accountState.state === 'unmeasured') {
     return (
       <div className="w-wizard">
-        <p className="w-wizard__count">Step 2 of 3</p>
+        <Stepper steps={JOIN_STEPS} current={2} label="Creating your account" />
         <h2 className="w-wizard__title">Choose your handle</h2>
         <p className="w-field__note w-field__note--bad">
           Could not read the registry: {accountState.detail}. Registration is blocked rather than
@@ -377,7 +384,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
           : 'Checked against the chain. Nothing signed yet.';
     return (
       <div className="w-wizard">
-        <p className="w-wizard__count">Step 3 of 3</p>
+        <Stepper steps={JOIN_STEPS} current={3} label="Creating your account" />
         <h2 className="w-wizard__title">Claim it on chain</h2>
         <p className="w-wizard__lede">
           The chain is the challenge. The registration is simulated first, priced, and then you sign
@@ -454,7 +461,7 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
 
   return (
     <div className="w-wizard">
-      <p className="w-wizard__count">Step 2 of 3</p>
+      <Stepper steps={JOIN_STEPS} current={2} label="Creating your account" />
       <h2 className="w-wizard__title">Choose your handle</h2>
       <p className="w-wizard__lede">
         Your permanent name on the protocol. It is claimed on chain, and nobody can take it off you.

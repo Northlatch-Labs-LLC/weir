@@ -18,6 +18,7 @@ import {
   type UiWalletAccount,
 } from '@mysten/dapp-kit-core';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { readWalletFailure } from '@/lib/wallet-failure';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   generateNonce,
@@ -151,6 +152,8 @@ function SignerBridge({
   const [zkSession, setZkSession] = useState<ActiveSession | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* The wallet whose extension we are waiting on, so its own button can say so. */
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [proof, setProof] = useState<SessionProof>('unknown');
   const [provenAddress, setProvenAddress] = useState<string | null>(null);
@@ -206,7 +209,9 @@ function SignerBridge({
         setZkSigner(signerFromSession(stored));
         setZkSession(stored);
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+        if (cancelled) return;
+        const restoreFailure = readWalletFailure(cause);
+        if (restoreFailure.say !== null) setError(restoreFailure.say);
       }
     })();
     return () => {
@@ -222,11 +227,17 @@ function SignerBridge({
         setError('this deployment has not been told which network it is on, so nothing can be signed here');
         return;
       }
+      setConnecting(wallet.name);
       try {
         const result = await kit.connectWallet({ wallet });
         if (result.accounts.length > 1) setChoiceOpen(true);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        // Closing the wallet popup is a decision, not a fault: the screen returns to rest and says
+        // nothing. Everything else is said in words that name the reader's next move.
+        const failure = readWalletFailure(cause);
+        if (failure.say !== null) setError(failure.say);
+      } finally {
+        setConnecting(null);
       }
     },
     [kit, network],
@@ -305,7 +316,8 @@ function SignerBridge({
           }),
         );
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        const failure = readWalletFailure(cause);
+        setError(failure.say ?? 'Sign-in did not start. Try again.');
       }
     },
     [session],
@@ -338,9 +350,16 @@ function SignerBridge({
       const statement =
         `Weir\naddress: ${address}\nissued: ${timestampMs}\norigin: ${window.location.origin}` +
         `\naction: read content`;
-      const signature = await signer?.signPersonalMessage(new TextEncoder().encode(statement));
+      let signature: string | undefined;
+      try {
+        signature = await signer?.signPersonalMessage(new TextEncoder().encode(statement));
+      } catch (cause) {
+        // The one place a decline is real: the reader was asked and said no.
+        setProof(readWalletFailure(cause).kind === 'dismissed' ? 'declined' : 'failed');
+        return;
+      }
       if (signature === undefined) {
-        setProof('unproved');
+        setProof('failed');
         return;
       }
 
@@ -350,14 +369,15 @@ function SignerBridge({
         body: JSON.stringify({ address, signature, timestampMs }),
       });
       if (!response.ok) {
-        setProof('unproved');
+        // A signature that stands and a server that refused it are not the reader's doing.
+        setProof('failed');
         return;
       }
       setProvenAddress(address);
       setProof('proved');
       router.refresh();
     } catch {
-      setProof('declined');
+      setProof('failed');
     }
   }, [signer, router]);
 
@@ -432,6 +452,7 @@ function SignerBridge({
       signOut,
       exportRecovery,
       error,
+      connecting,
     }),
     [
       signer,
@@ -453,6 +474,7 @@ function SignerBridge({
       signOut,
       exportRecovery,
       error,
+      connecting,
     ],
   );
 

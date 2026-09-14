@@ -10,7 +10,7 @@ import { useSigner } from '@/components/SignerProvider';
   of doors on the site.
 */
 export function SignInDoors({ returnTo }: { returnTo: string }) {
-  const { ready, wallets: usable, unusableWallets, signInWithGoogle, connectWallet } = useSigner();
+  const { ready, wallets: usable, unusableWallets, signInWithGoogle, connectWallet, error, connecting } = useSigner();
 
   // A usable wallet carries no status word: the button is the wallet, and pressing it connects.
   // Saying "detected" told the reader nothing they could act on, and put the word inside the
@@ -69,17 +69,25 @@ export function SignInDoors({ returnTo }: { returnTo: string }) {
                 type="button"
                 className="w-wallet"
                 onClick={w.onClick}
-                disabled={w.why !== null}
+                disabled={w.why !== null || connecting !== null}
               >
                 <span className="w-wallet__mark" aria-hidden="true">
                   <Icon name="wallet" size={16} />
                 </span>
                 <span className="w-wallet__name">{w.name}</span>
                 {w.why !== null ? <span className="w-wallet__state">{w.why}</span> : null}
+                {connecting === w.name ? (
+                  <span className="w-wallet__state">Check your wallet…</span>
+                ) : null}
               </button>
             ))}
           </div>
         )}
+        {error !== null ? (
+          <p className="w-wallet-error" role="alert" data-wallet-error="true">
+            {error}
+          </p>
+        ) : null}
       </section>
     </div>
   );

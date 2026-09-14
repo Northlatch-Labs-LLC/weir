@@ -34,7 +34,13 @@ export interface AccountChoice {
   accounts: readonly UiWalletAccount[];
 }
 
-export type SessionProof = 'unknown' | 'checking' | 'proved' | 'unproved' | 'declined';
+/*
+  `declined` is the reader saying no. `failed` is everything that went wrong on the way — the
+  server answering 500, the request never leaving the browser, the extension throwing. They used
+  to be the same value, so an outage was shown to the reader as their own decision and the screen
+  offered them nothing to do about it.
+*/
+export type SessionProof = 'unknown' | 'checking' | 'proved' | 'unproved' | 'declined' | 'failed';
 
 export interface SignerContextValue {
   /*
@@ -63,6 +69,8 @@ export interface SignerContextValue {
   signOut: () => void;
   exportRecovery: () => Promise<RecoveryDetails | null>;
   error: string | null;
+  /* The name of the wallet whose extension we are waiting on, so its button can say so. */
+  connecting: string | null;
 }
 
 /* What the kit publishes: everything the reader can see or do, minus the loading state. */
@@ -110,6 +118,7 @@ export function createSignerStore(wake: () => void): SignerStore {
       return null;
     },
     error: null,
+    connecting: null,
   };
   const listeners = new Set<() => void>();
   return {

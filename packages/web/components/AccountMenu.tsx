@@ -175,7 +175,7 @@ export function AccountMenu() {
               <span className="account-pop__name">{suiName}</span>
             )}
             <span className="mono account-pop__addr">{signer.address}</span>
-            {(proof === 'unproved' || proof === 'declined') && (
+            {(proof === 'unproved' || proof === 'declined' || proof === 'failed') && (
               <button
                 type="button"
                 className="account-pop__confirm"

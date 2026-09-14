@@ -62,7 +62,7 @@ export function SigninPanel({ nextPath: requested }: { nextPath?: string }) {
           Confirm this account in {signer.label}. It asks for one signature, which tells this site the address is
           yours. It costs nothing and sends nothing.
         </p>
-      ) : connected && (proof === 'unproved' || proof === 'declined') ? (
+      ) : connected && (proof === 'unproved' || proof === 'declined' || proof === 'failed') ? (
         <div role="status">
           <p className="w-stage w-stage--failed">
             {signer.label} is connected, but the account is not confirmed, so nothing behind the door can open yet.

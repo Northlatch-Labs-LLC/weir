@@ -71,7 +71,15 @@ describe('signed out', () => {
     mockAccount({ state: 'available' });
     render(<JoinFlow referrer={null} />);
     expect(screen.getByText('Sign in with Google')).toBeTruthy();
-    expect(screen.getByText('Step 1 of 3')).toBeTruthy();
+    // The count used to be a line of text. It is now the stepper: the reader sees all three
+    // steps named, and which one they are standing on.
+    const stepper = screen.getByRole('list', { name: 'Creating your account' });
+    expect([...stepper.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      '1Account',
+      '2Handle',
+      '3Claim',
+    ]);
+    expect(stepper.querySelector('[aria-current="step"]')?.textContent).toBe('1Account');
     expect(screen.getByText(/cannot be transferred/i)).toBeTruthy();
   });
 });

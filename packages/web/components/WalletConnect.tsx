@@ -33,7 +33,7 @@ export function WalletConnect({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const unconfirmed = signer !== null && (proof === 'unproved' || proof === 'declined');
+  const unconfirmed = signer !== null && (proof === 'unproved' || proof === 'declined' || proof === 'failed');
   const confirming = proof === 'checking';
 
   const close = () => {
@@ -101,6 +101,12 @@ export function WalletConnect({
               {proof === 'declined' && (
                 <p className="wc-error">
                   That signature was not completed. Nothing was sent and nothing was spent.
+                </p>
+              )}
+              {proof === 'failed' && (
+                <p className="wc-error">
+                  Confirming did not go through. Nothing was sent and nothing was spent — press it
+                  again.
                 </p>
               )}
               {error !== null && <p className="wc-error">{error}</p>}
