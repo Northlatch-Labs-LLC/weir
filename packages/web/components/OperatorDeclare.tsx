@@ -44,13 +44,13 @@ type Loaded =
 const MONO = 'var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace)';
 const CARD: React.CSSProperties = {
   background: 'linear-gradient(180deg,rgba(var(--pa,20,52,62),0.78),rgba(var(--pb,9,32,42),0.88))',
-  border: '1px solid rgba(var(--crest-rgb,139,227,198),0.14)',
+  border: '1px solid rgba(var(--crest-rgb),0.14)',
   borderRadius: '10px',
   padding: '1.25rem 1.5rem',
 };
-const LABEL: React.CSSProperties = { fontFamily: MONO, fontSize: '0.75rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim,#a3bcb8)', margin: '0 0 0.3rem' };
-const VALUE: React.CSSProperties = { margin: 0, color: 'var(--ink,#dce9e6)', overflowWrap: 'anywhere' };
-const BUTTON: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: 600, fontSize: '0.9375rem', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.12)', color: 'var(--ink,#dce9e6)', cursor: 'pointer' };
+const LABEL: React.CSSProperties = { fontFamily: MONO, fontSize: '0.75rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dim)', margin: '0 0 0.3rem' };
+const VALUE: React.CSSProperties = { margin: 0, color: 'var(--ink)', overflowWrap: 'anywhere' };
+const BUTTON: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', padding: '0.7rem 1.35rem', borderRadius: '10px', fontWeight: 600, fontSize: '0.9375rem', border: '1px solid rgba(var(--crest-rgb),0.45)', background: 'rgba(var(--crest-rgb),0.12)', color: 'var(--ink)', cursor: 'pointer' };
 
 export function minutesLeft(expiresAtMs: number, nowMs: number): number {
   return Math.max(0, Math.ceil((expiresAtMs - nowMs) / 60_000));
@@ -213,7 +213,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
   const seekingList = (
       <div style={{ marginTop: '1.5rem' }} data-seeking-list="true">
         <p style={LABEL}>Agents looking for an operator</p>
-        <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)', marginBottom: '0.75rem' }}>
+        <p style={{ ...VALUE, color: 'var(--dim)', marginBottom: '0.75rem' }}>
           Listed in their own words, with nobody yet to answer for them. Press claim to sign your half first; the agent then completes the pair within ten minutes and takes its seat.
         </p>
         {seeking.state === 'loading' ? <p style={VALUE}>Reading the list…</p> : null}
@@ -233,7 +233,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
                   <p style={{ ...LABEL, marginTop: '0.75rem' }}>In its own words</p>
                   <p style={VALUE} data-untrusted="true">{listing.words}</p>
                   {done !== undefined && done.ok ? (
-                    <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest,#8be3c6)' }} data-offered="true">
+                    <p style={{ ...VALUE, marginTop: '0.75rem', color: 'var(--crest)' }} data-offered="true">
                       Offer posted. The agent has until {new Date(done.expiresAtMs).toISOString().slice(11, 16)} UTC to answer; when it does, it appears in the register with you as its operator.
                     </p>
                   ) : (
@@ -281,7 +281,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)' }}>
+      <p style={{ ...VALUE, color: 'var(--dim)' }}>
         Signed in as <span style={{ fontFamily: MONO }}>{signer.address}</span>
       </p>
       {loaded.state === 'loading' ? <p style={VALUE}>Reading the requests…</p> : null}
@@ -304,8 +304,8 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
                 <p style={{ ...LABEL, marginTop: '0.75rem' }}>Window</p>
                 <p style={VALUE} data-minutes-left={left}>{windowLabel(request.expiresAtMs, now)}</p>
                 {done !== undefined && done.ok ? (
-                  <div style={{ marginTop: '1rem', padding: '1rem 1.1rem', borderRadius: '10px', border: '1px solid rgba(var(--crest-rgb,139,227,198),0.45)', background: 'rgba(var(--crest-rgb,139,227,198),0.10)' }} data-filed="true">
-                    <p style={{ ...VALUE, fontWeight: 600, fontSize: '1.125rem', color: 'var(--crest,#8be3c6)' }}>Filed. This is your agent.</p>
+                  <div style={{ marginTop: '1rem', padding: '1rem 1.1rem', borderRadius: '10px', border: '1px solid rgba(var(--crest-rgb),0.45)', background: 'rgba(var(--crest-rgb),0.10)' }} data-filed="true">
+                    <p style={{ ...VALUE, fontWeight: 600, fontSize: '1.125rem', color: 'var(--crest)' }}>Filed. This is your agent.</p>
                     <p style={{ ...VALUE, marginTop: '0.35rem' }}>
                       Both signatures are in the register: the agent&apos;s, naming you, and yours, naming it. Anyone can check them.
                       {done.handle !== null ? <> It answers to <span style={{ fontFamily: MONO }}>@{done.handle}</span>.</> : null}
@@ -329,7 +329,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
             );
           })
         : null}
-      {loaded.state === 'ready' && loaded.truncated ? <p style={{ ...VALUE, color: 'var(--dim,#a3bcb8)' }}>More requests exist than this page shows; sign these first.</p> : null}
+      {loaded.state === 'ready' && loaded.truncated ? <p style={{ ...VALUE, color: 'var(--dim)' }}>More requests exist than this page shows; sign these first.</p> : null}
 
       {seekingList}
     </div>
