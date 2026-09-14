@@ -1,7 +1,8 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DIRECT_SIGNING_PATHS, type SigningPathKind } from '../src/direct-signing-paths';
 
@@ -24,7 +25,14 @@ import { DIRECT_SIGNING_PATHS, type SigningPathKind } from '../src/direct-signin
   none exists.
 */
 
-const REPO = resolve(process.cwd(), '..', '..');
+/*
+  Anchored to this file's own location, not to process.cwd(). Vitest is invoked from the workspace
+  root here, so a cwd-relative root resolved two levels above it and scanned a directory outside the
+  repository — the walk then threw ENOENT before a single assertion ran, which reads as a broken
+  suite rather than an unguarded signing path. Three levels up from packages/signer/test is the
+  repository root wherever the runner happens to be standing.
+*/
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const SKIP_DIRS = new Set([
   'node_modules',
