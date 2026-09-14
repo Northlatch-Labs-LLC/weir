@@ -35,16 +35,35 @@ if [ "$GIT_PUSH_ANYWAY" != "1" ]; then
     printf '\n  PUSH REFUSED — HEAD is detached; commits here belong to no branch\n\n' >&2
     exit 1
   fi
-  # Force-pushes only. Git already refuses a non-fast-forward; this catches the --force that
-  # overrules it, which is the only thing here that destroys somebody else's commits for good.
-  printf '%s\n' "$refs" | while read -r _l local_sha _r remote_sha; do
+  # Force-pushes and deletions: the two ways a push destroys commits that are already on the
+  # remote. Git already refuses a plain non-fast-forward, so what is left is the --force that
+  # overrules it and the --delete that removes the ref outright.
+  #
+  # A deletion arrives with an all-zero LOCAL sha. It needs its own branch here: sent through the
+  # ancestry test below it becomes `merge-base --is-ancestor <tip> 000…`, which cannot succeed, so
+  # every deletion was refused as a history rewrite — and refused mutely, because `set -e` killed
+  # the script on the failing pipeline before the message below could print. `|| rc=$?` is what
+  # keeps the exit status readable instead of fatal.
+  rc=0
+  printf '%s\n' "$refs" | while read -r _l local_sha remote_ref remote_sha; do
     [ -z "$local_sha" ] && continue
+    case "$local_sha" in
+      *[!0]*) ;;
+      *)
+        printf '\n  PUSH REFUSED — this deletes %s on the remote\n\n' "${remote_ref#refs/heads/}" >&2
+        printf '  Its commits go with it; GitHub keeps them for roughly 90 days.\n' >&2
+        printf '  GIT_PUSH_ANYWAY=1 overrides this when the deletion is the intent.\n\n' >&2
+        exit 8 ;;
+    esac
     case "$remote_sha" in
       *[!0]*) git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null || exit 9 ;;
     esac
-  done
-  if [ $? -eq 9 ]; then
+  done || rc=$?
+  if [ "$rc" -eq 9 ]; then
     printf '\n  PUSH REFUSED — this would rewrite history already on the remote\n\n' >&2
+    exit 1
+  fi
+  if [ "$rc" -eq 8 ]; then
     exit 1
   fi
 fi
