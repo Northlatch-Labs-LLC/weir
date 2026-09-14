@@ -50,9 +50,8 @@ is a user, on whatever channel they can find, at whatever hour it happens.
    `instrumentation.ts`, `instrumentation-client.ts` and `sentry.server.config.ts`. This is the
    only place a client-side reporter can be installed, because `packages/web/app/layout.tsx:60`
    sets `export const dynamic = 'force-dynamic'` on every route and there is no other client entry.
-4. Add `SENTRY_DSN` to Vercel production and preview through the API path already used for the
-   on-ramp keys — copy the three-line loop in `.github/workflows/set-vercel-env.yml:43-56` and add
-   `SENTRY_DSN` to the `for name in` list on line 43, with a matching repository secret.
+4. Add `SENTRY_DSN` to Vercel production and preview with
+   `vercel env add SENTRY_DSN production` and again for `preview`.
 5. Route `opaqueDetail` into it. In `packages/web/lib/opaque.ts:47-54`, after the `console.error`,
    add `Sentry.captureException(error, { tags: { source } })` guarded by a dynamic import so the
    module stays importable from the browser — that constraint is stated at
@@ -227,10 +226,10 @@ at all: `PROJECTX_SOCIAL_ZKLOGIN_SEED` (`.env.example:67-78`) — "Lose it and e
 accounts becomes unreachable … Change it and every existing user silently lands on a different,
 empty address." The custody that is documented is the on-chain half: `CUSTODY.md:88` records the
 `PlatformCap` and the upgrade capability in a 2-of-3 multisig, and `CUSTODY.md:86` records that the
-daemon key can only call a permissionless function. The Vercel values are write-only
-(`.github/workflows/set-vercel-env.yml:7-8`), and only three of them — the Transak trio — are ever
-written from a recorded source (`set-vercel-env.yml:43`). `packages/web/scripts/env-report.mjs`
-fingerprints a local `.env` file and cannot see Vercel's copy.
+daemon key can only call a permissionless function. The Vercel values are write-only: the dashboard and the CLI both return them masked once set,
+and `packages/web/scripts/env-report.mjs` fingerprints a local `.env` file and cannot see Vercel's
+copy. Reading what production actually holds means `vercel env ls production`, which lists names
+and not values.
 
 **Risk.** Nobody can answer "which secrets does production hold, and which of them would we have to
 rotate if this laptop were stolen" without opening the Vercel dashboard and reading a list that
@@ -257,7 +256,7 @@ rest.
    `python3 scripts/scan-secrets.py --selftest` and fails the install if the scanner is not
    trustworthy (`scripts/install-hooks.sh:33-37`).
 5. Record each secret's rotation cost in the inventory: rotatable with no user impact
-   (`RESEND_API_KEY`, `TRANSAK_API_SECRET`, `PROJECTX_SOCIAL_EDGE_SECRET`), rotatable with a
+   (`RESEND_API_KEY`, `PROJECTX_SOCIAL_EDGE_SECRET`), rotatable with a
    funded-address migration (`PROJECTX_SOCIAL_SPONSOR_KEY`, `PROJECTX_DAEMON_SIGNER_SECRET`),
    rotatable with an on-chain ceremony (`PROJECTX_SOCIAL_AGENT_MANIFEST_KEY`), not rotatable
    (`PROJECTX_SOCIAL_ZKLOGIN_SEED`).
@@ -303,8 +302,8 @@ the exact bypass `rate-limit.ts:224-240` describes.
    `creator/vault`, `stake/vault`, `stake/yield`, `stake/settings`, `studio/price`) in the shape
    `packages/web/app/api/deployment/route.ts:40-41` uses.
 3. Set the edge secret on both sides. Generate `openssl rand -hex 32`; add it as
-   `PROJECTX_SOCIAL_EDGE_SECRET` to Vercel production and preview through the
-   `set-vercel-env.yml:43` loop; then in Cloudflare → weir.social → Rules → Transform Rules →
+   `PROJECTX_SOCIAL_EDGE_SECRET` to Vercel production and preview with `vercel env add`;
+   then in Cloudflare → weir.social → Rules → Transform Rules →
    Modify Request Header → Create rule, "All incoming requests", Set static `x-edge-secret` to the
    same value. Set the secret at the edge **first**, then in Vercel — the reverse order sends every
    genuine visitor down the `unattributed` path (`packages/web/lib/rate-limit.ts:237-240`).
@@ -514,9 +513,6 @@ only.
 |---|---|---|---|
 | `RESEND_API_KEY` | V-prod | no waiting-list mail is sent (`packages/web/lib/email-sender.ts:32,248`) — **NOT IN `.env.example`** | **yes** |
 | `WEIR_EMAIL_TOKEN_SECRET` | V-prod | unsubscribe links cannot be minted or read; must be ≥ the minimum length (`packages/web/lib/email-token.ts:58,80`) — **NOT IN `.env.example`** | **yes** |
-| `TRANSAK_API_KEY` | V-prod, V-prev via `set-vercel-env.yml:36,43` | the card on-ramp is unavailable | **yes** |
-| `TRANSAK_API_SECRET` | V-prod, V-prev via `set-vercel-env.yml:37,43` | as above | **yes** |
-| `TRANSAK_ENVIRONMENT` | V-prod, V-prev via `set-vercel-env.yml:38,43` | as above; the workflow refuses a blank value (`set-vercel-env.yml:45`) | no |
 
 ### Build, deploy and local-only
 
@@ -659,17 +655,14 @@ answered by inference, and inference is how a migration is applied twice.
 
 Decide first which of the three classes the value is in, from the inventory above.
 
-Rotatable with no user impact — `RESEND_API_KEY`, `TRANSAK_API_KEY`, `TRANSAK_API_SECRET`,
-`PROJECTX_SOCIAL_EDGE_SECRET`, `PROJECTX_SOCIAL_SEAL_API_KEY`,
+Rotatable with no user impact — `RESEND_API_KEY`, `PROJECTX_SOCIAL_EDGE_SECRET`, `PROJECTX_SOCIAL_SEAL_API_KEY`,
 `PROJECTX_WALRUS_PUBLISHER_JWT_SECRET`, `WEIR_EMAIL_TOKEN_SECRET`:
 
-1. Revoke the old value at its issuer (Resend → API Keys → Revoke; Transak dashboard → Keys;
+1. Revoke the old value at its issuer (Resend → API Keys → Revoke;
    for a generated secret there is nothing to revoke).
 2. Generate the replacement: `openssl rand -hex 32` for the generated ones.
-3. GitHub → Settings → Secrets and variables → Actions → update the repository secret.
-4. Actions → "Set Vercel env" → Run workflow → target `production`, then again → `preview`
-   (`.github/workflows/set-vercel-env.yml:14-22`). For a name not in that workflow's list, add it
-   to the `for name in` loop at `set-vercel-env.yml:43` first.
+3. `vercel env rm <NAME> production --yes`, then `vercel env add <NAME> production`, and again
+   for `preview`. The value is typed in, never committed.
 5. Redeploy: R-1 from step 8. Vercel environment changes do not reach a running deployment.
 6. `node packages/web/scripts/env-report.mjs packages/web/.env.local` — the fingerprint of the local
    copy must have changed (`packages/web/scripts/env-report.mjs:11-19`).
@@ -939,9 +932,9 @@ before it is relied upon.
   weir.social is fronted by Cloudflare and that "the edge may add to these or override them. Prove
   it on the live response, not on this file." Every header claim in this document describes what
   the origin emits. Checklist item 28 is the measurement.
-- **Which environment variables are present in Vercel production.** The values are write-only
-  (`.github/workflows/set-vercel-env.yml:7-8`) and `packages/web/scripts/env-report.mjs` reads a
-  local file. The "Where set" column is what the code requires, not an observation of the
+- **Which environment variables are present in Vercel production.** The values are write-only and
+  `packages/web/scripts/env-report.mjs` reads a local file; `vercel env ls production` names them
+  without showing them. The "Where set" column is what the code requires, not an observation of the
   dashboard. Checklist item 13 is the measurement.
 - **Whether `packages/daemon/db/002_audit_anchor.sql` has been applied.** `UPDATE.md:243` records
   it as outstanding on 2026-09-02 against Cloud SQL `projectx-pg` / `social_harvest`, with the note
