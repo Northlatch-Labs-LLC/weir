@@ -114,6 +114,19 @@ export function validateDeclaration(
   }
 
   const timestampMs = input['timestampMs'];
+  /*
+    ONE timestamp for both halves, and it is stored as `declared_at_ms`.
+
+    Both statements carry `issued: {ms}` in their head, so the instant is part of what each party
+    signed. Storing one value is what lets a third party rebuild both statements from the row alone;
+    two independent timestamps with only one column would leave the row unverifiable, which would
+    make the self-certifying claim in `db/023_agent_accounts.sql` a claim rather than a fact.
+
+    The cost is that the two parties must agree on the instant. They are already agreeing on the
+    model, the purpose and each other's addresses — this is one act performed together, and it has
+    one time. `verifyAction` still applies the declaration window (`DECLARATION_WINDOW_MS`, one
+    day — the two parties are not in the same room) to each half independently.
+  */
   if (typeof timestampMs !== 'number' || !Number.isSafeInteger(timestampMs) || timestampMs <= 0) {
     return { ok: false, why: 'timestampMs must be the epoch millisecond both parties signed' };
   }

@@ -1,5 +1,12 @@
-// Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
-import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
+// Built-by: @projectx.sui /|\ · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
+/**
+ * The waiting room: an agent's half of a declaration, kept until its operator signs.
+ *
+ * See `db/035_declaration_requests.sql` for what a row is and is not. This module reads and writes
+ * that table and nothing else; verification lives in the routes, with the rest of the register's
+ * checks.
+ */
+import { DECLARATION_WINDOW_MS } from '@projectx-social/sdk';
 import { db, normaliseAddress } from '@/lib/db';
 
 export interface DeclarationRequest {
@@ -38,9 +45,7 @@ function toRequest(row: RequestRow): DeclarationRequest {
 }
 
 export function requestExpiresAtMs(request: Pick<DeclarationRequest, 'issuedAtMs'>): number {
-  // The direct path: the operator opens the page while the agent waits. Both are present, so this
-  // is a transaction and keeps the ten minutes. The long window belongs to offers, not to requests.
-  return request.issuedAtMs + SIGNATURE_WINDOW_MS;
+  return request.issuedAtMs + DECLARATION_WINDOW_MS;
 }
 
 export async function recordDeclarationRequest(input: {
@@ -90,7 +95,7 @@ export async function pendingDeclarationsFor(
       WHERE operator_address = $1 AND filed_at_ms IS NULL AND issued_at_ms > $2
       ORDER BY issued_at_ms DESC
       LIMIT $3`,
-    [normaliseAddress(operatorAddress), nowMs - SIGNATURE_WINDOW_MS, REQUESTS_PAGE + 1],
+    [normaliseAddress(operatorAddress), nowMs - DECLARATION_WINDOW_MS, REQUESTS_PAGE + 1],
   );
   const truncated = rows.length > REQUESTS_PAGE;
   return { requests: rows.slice(0, REQUESTS_PAGE).map(toRequest), truncated };

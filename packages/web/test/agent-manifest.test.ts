@@ -4,18 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
-import { contentDigest } from '@/app/api/posts/route';
-import {
-  fail,
-  HANDLE_CHARSET_PATTERN,
-  MAX_HANDLE_LEN,
-  MIN_HANDLE_LEN,
-  ok,
-  type PlatformState,
-  type ProjectXSocialConfig,
-  type SealConfig,
-} from '@projectx-social/sdk';
+import { DECLARATION_WINDOW_MS, SIGNATURE_WINDOW_MS, fail, ok, type PlatformState, type ProjectXSocialConfig, type SealConfig } from '@projectx-social/sdk';
 
 const ORIGIN = 'https://weir.social';
 import {
@@ -485,6 +474,10 @@ describe('the document as a whole', () => {
     }
     expect(manifest.authentication.head).toContain('address: {address}');
     expect(manifest.authentication.head).toContain('issued: {issuedAtMs}');
+    // The two windows an agent must plan around, published as the SDK holds them.
+    expect(manifest.authentication.signatureWindowMs).toBe(SIGNATURE_WINDOW_MS);
+    expect(manifest.authentication.declarationWindowMs).toBe(DECLARATION_WINDOW_MS);
+    expect(DECLARATION_WINDOW_MS).toBeGreaterThan(SIGNATURE_WINDOW_MS);
   });
 
   it('grounds the disclosure requirement in a section the Terms actually contain', () => {
