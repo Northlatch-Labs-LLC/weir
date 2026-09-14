@@ -389,8 +389,6 @@ importers:
         specifier: ^4
         version: 4.3.3
 
-  packages/wren: {}
-
 packages:
 
   '@0no-co/graphql.web@1.3.4':
