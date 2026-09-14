@@ -2595,6 +2595,7 @@
   /* The three steps of joining, with the ones behind the reader settled. The mark is a disc
      because a disc reads as a place in a sequence at a glance; the rule between two of them is
      drawn by the step on its left. */
+  .w-join__returning { margin: 0 0 20px; }
   .w-stepper {
     display: flex;
     align-items: flex-start;

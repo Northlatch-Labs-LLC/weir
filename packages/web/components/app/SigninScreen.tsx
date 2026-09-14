@@ -8,9 +8,9 @@ export function SigninScreen({ nextPath }: { nextPath: string }) {
   return (
     <div className="w-doc">
       <PageHead
-        title="Sign in, and the"
-        accent="address is yours."
-        lede="Either path ends the same way: a real Sui address, and your keys are what sign for it. Nothing to remember, nothing to reset."
+        title="Welcome"
+        accent="back."
+        lede="Sign in with Google or connect your wallet — whichever you used before. Nothing to remember, nothing to reset."
       />
       <SigninPanel nextPath={nextPath} />
     </div>

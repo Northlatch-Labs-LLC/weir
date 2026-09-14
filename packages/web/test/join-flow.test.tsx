@@ -227,3 +227,13 @@ describe('the way in is never absent', () => {
     expect(branch).toContain("pathname === '/signin' || pathname === '/join' ? null :");
   });
 });
+
+describe('the two doors are not the same page', () => {
+  it('join offers the way to sign-in, for someone who already has an account', async () => {
+    signer = null;
+    mockAccount({ state: 'available' });
+    render(<JoinFlow referrer={null} />);
+    const back = screen.getByRole('link', { name: /sign in instead/i });
+    expect(back.getAttribute('href')).toBe('/signin');
+  });
+});

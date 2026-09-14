@@ -310,6 +310,11 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
     return (
       <div className="w-wizard">
         <Stepper steps={JOIN_STEPS} current={1} label="Creating your account" />
+        {/* The only step where someone can be on the wrong page: they have an account already
+            and came here by habit. Every later step has a handle in progress to lose. */}
+        <p className="w-card__note w-join__returning">
+          Been here before? <a href="/signin">Sign in instead</a>.
+        </p>
         <h2 className="w-wizard__title">Your account</h2>
         <p className="w-wizard__lede">
           How you will sign. Either way ends the same: a real Sui address, and your keys are what
