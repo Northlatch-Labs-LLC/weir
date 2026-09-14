@@ -66,7 +66,7 @@ refuse() { log "refused - $*"; exit 1; }
 
 # --- preconditions: nothing below runs unless every one of these holds -----------------------
 [ -n "${CREDENTIALS_DIRECTORY:-}" ] || refuse "CREDENTIALS_DIRECTORY is unset; this runs under wren-beat.service and nowhere else"
-[ -r "$CREDENTIALS_DIRECTORY/openrouter" ] || refuse "no model credential at $CREDENTIALS_DIRECTORY/openrouter"
+[ -r "$CREDENTIALS_DIRECTORY/weir-gateway" ] || refuse "no model credential at $CREDENTIALS_DIRECTORY/weir-gateway"
 [ -d "$CFG_ROOT" ] || refuse "$CFG_ROOT is not there; the unit's RuntimeDirectory=wren-beat creates it"
 [ "$(findmnt -n -o FSTYPE --target "$CFG_ROOT")" = "tmpfs" ] || refuse "$CFG_ROOT is not on tmpfs; the model credential would touch the disk in the clear"
 [ -f "$PHASE2" ] || refuse "$PHASE2 is missing; --install-beat ships it"
@@ -126,16 +126,30 @@ cfg["agents"]["defaults"]["model_name"] = "route-normal"
 # steps ran out before the report on three of the first five beats (2026-09-05). Twenty is the
 # budget HEARTBEAT.md names (about twelve, with room), and the beat still has the unit's timeout.
 cfg["agents"]["defaults"]["max_tool_iterations"] = 20
+# Wren's own reply budget, set here and not inherited: the shared template is read by every
+# agent built from agent-runtime and its value moved 8192 -> 4096 after this host was built.
+# A post plus its tool calls has run past 4096; stating it here means a template edit for some
+# other agent can never shorten Wren's posts without this line changing too.
+cfg["agents"]["defaults"]["max_tokens"] = 8192
 # One route: the company model key over OpenRouter. The local route needs an Ollama this host
 # does not run, and a route nothing can answer is not a fallback.
 cfg["model_list"] = [m for m in cfg["model_list"] if m.get("model_name") == "route-normal"]
 if not cfg["model_list"]:
     sys.exit("wren-beat: the template carries no route-normal entry")
+# The company gateway, not the provider direct. It holds the paid upstream keys, so this agent
+# spends a budget the desk can see and revoke instead of carrying a provider key of its own.
+# `provider` stays "openrouter" because that names PicoClaw's API DIALECT, not the destination;
+# api_base is the destination. The model id is the bare string "auto" and must stay bare: the
+# gateway balances across what is actually up, and PicoClaw ships a stock route whose id is
+# "openrouter/auto" -- naming openrouter twice, once as dialect and once inside the id, resolves
+# to that stock route and silently leaves the gateway. "auto" collides with nothing.
+cfg["model_list"][0]["api_base"] = "https://api.weir.social/v1"
+cfg["model_list"][0]["model"] = "auto"
 with open(out, "w") as f:
     f.write(json.dumps(cfg, indent=2) + "\n")
 PY
-printf 'model_list:\n  route-normal:\n    api_keys:\n      - "file://openrouter.token"\n' > "$CFG/.security.yml"
-install -m 0400 -o "$CONTAINER_UID" -g "$CONTAINER_GID" "$CREDENTIALS_DIRECTORY/openrouter" "$CFG/openrouter.token"
+printf 'model_list:\n  route-normal:\n    api_keys:\n      - "file://weir-gateway.token"\n' > "$CFG/.security.yml"
+install -m 0400 -o "$CONTAINER_UID" -g "$CONTAINER_GID" "$CREDENTIALS_DIRECTORY/weir-gateway" "$CFG/weir-gateway.token"
 chown "$CONTAINER_UID:$CONTAINER_GID" "$CFG/config.json" "$CFG/.security.yml"
 chmod 0400 "$CFG/config.json" "$CFG/.security.yml"
 chown "$CONTAINER_UID:$CONTAINER_GID" "$CFG"

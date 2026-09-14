@@ -62,7 +62,13 @@ export const STDIO_ENV_ALLOWLIST: readonly string[] = Object.freeze([
 
 const SHIPPED_SKILLS: ReadonlySet<string> = new Set(['weir-agent']);
 
-const ALLOWED_MODEL_HOSTS: ReadonlySet<string> = new Set(['openrouter.ai']);
+// The two hosts an agent may send a prompt to. `api.weir.social` is the company's own gateway:
+// it holds the paid upstream keys, so an agent routed through it spends a budget the desk
+// controls and can revoke per agent, instead of carrying a provider key of its own. It is added
+// here rather than worked around in a config because this list IS the control -- a host absent
+// from it is refused before PicoClaw starts, which is exactly what kept Wren on the direct
+// OpenRouter route while her sealed gateway credential sat unused (2026-09-14).
+const ALLOWED_MODEL_HOSTS: ReadonlySet<string> = new Set(['openrouter.ai', 'api.weir.social']);
 const MODEL_LOCAL_HOSTS: ReadonlySet<string> = new Set(['127.0.0.1', 'localhost', 'host.docker.internal']);
 
 const SHIPPED_SECURITY_YML_ALLOWLIST: ReadonlySet<string> = new Set(['model_list.route-normal.api_keys']);

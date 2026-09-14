@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
-import type { Transaction } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { fail, ok, simulate, type DecodedAbort, type Reading } from '@projectx-social/sdk';
 import {
   canonicalPolicyJson,
@@ -34,7 +34,7 @@ export interface SignedTransaction {
 
 export interface PolicySigner {
   readonly address: string;
-  readonly signTransaction: (transaction: Transaction) => Promise<Reading<SignedTransaction>>;
+  readonly signTransaction: (transaction: Transaction | Uint8Array) => Promise<Reading<SignedTransaction>>;
   readonly signPersonalMessage: (bytes: Uint8Array) => Promise<Reading<SerializedSignature>>;
   readonly audit: AuditLog;
   readonly policyHash: string;
@@ -76,12 +76,37 @@ export function policySigner(options: PolicySignerOptions): PolicySigner {
     }
   };
 
-  const attemptSign = async (transaction: Transaction): Promise<Reading<SignedTransaction>> => {
-    const built = await buildBytes(options.client, transaction, address);
-    if (!built.ok) {
-      return refuse('malformed', `refused before simulation: ${built.failure.detail}`, '');
+  /*
+    Bytes, or a Transaction to build into bytes.
+
+    The caller in @projectx-social/agent builds once, on purpose, so that the bytes it simulates are
+    the bytes it submits, and it checks afterwards that the signature came back over those same
+    bytes. It therefore hands this signer a Uint8Array. Taking only a Transaction meant
+    `setSenderIfNotSet` was called on an array, which is not a function on one: every write that
+    passes through a policy — pricing, buying, subscribing — failed with that message before a
+    single byte was simulated.
+
+    Given bytes there is nothing to build, so the build step is skipped rather than re-done. The SDK
+    gate below still needs a Transaction, and it gets one reconstructed from these exact bytes: the
+    sender and gas budget are already in them, so building it again reproduces them rather than
+    inventing a second transaction to simulate.
+  */
+  const attemptSign = async (
+    transaction: Transaction | Uint8Array,
+  ): Promise<Reading<SignedTransaction>> => {
+    let bytes: Uint8Array;
+    let forGate: Transaction;
+    if (transaction instanceof Uint8Array) {
+      bytes = transaction;
+      forGate = Transaction.from(bytes);
+    } else {
+      const built = await buildBytes(options.client, transaction, address);
+      if (!built.ok) {
+        return refuse('malformed', `refused before simulation: ${built.failure.detail}`, '');
+      }
+      bytes = built.value;
+      forGate = transaction;
     }
-    const bytes = built.value;
 
     const observed = await simulation.observe({ transactionBytes: bytes, sender: address });
     if (!observed.ok) {
@@ -101,7 +126,7 @@ export function policySigner(options: PolicySignerOptions): PolicySigner {
       );
     }
 
-    const verdict = await simulate(options.client, transaction, address);
+    const verdict = await simulate(options.client, forGate, address);
     if (!verdict.ok) {
       return refuse(
         verdict.failure.kind,

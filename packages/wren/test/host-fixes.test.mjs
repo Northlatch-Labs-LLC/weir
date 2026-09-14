@@ -292,7 +292,7 @@ test('B3: the beat unit and the purse unit load their credentials from the same 
   const beat = readFileSync(path.join(PURSE_SYSTEMD, 'wren-beat.service'), 'utf8');
   const purse = readFileSync(path.join(PURSE_SYSTEMD, 'wren-purse.service'), 'utf8');
   const alert = readFileSync(path.join(DO_DIR, 'systemd', 'wren-alert@.service'), 'utf8');
-  assert.match(beat, /LoadCredentialEncrypted=openrouter:\/etc\/wren\/creds\/openrouter\.cred/);
+  assert.match(beat, /LoadCredentialEncrypted=weir-gateway:\/etc\/wren\/creds\/weir-gateway\.cred/);
   assert.match(purse, /LoadCredentialEncrypted=wren-hot:\/etc\/wren\/creds\/wren-hot\.cred/);
   assert.match(alert, /LoadCredentialEncrypted=mail-key:\/etc\/wren\/creds\/mail-key\.cred/);
 });
@@ -912,7 +912,7 @@ test('A2: --seal refuses a name that is not ^[a-z][a-z0-9-]{0,31}$, before it re
 });
 
 test('A2: --seal accepts the names the ledger actually uses', () => {
-  for (const name of ['mail-key', 'openrouter', 'wren-hot', 'wren-policy']) {
+  for (const name of ['mail-key', 'openrouter', 'weir-gateway', 'wren-hot', 'wren-policy']) {
     const result = spawnSync('bash', [DEPLOY_SCRIPT, '--seal', name, '--dry-run'], { encoding: 'utf8' });
     assert.equal(result.status, 0, `--seal refused the legitimate name "${name}": ${result.stderr}`);
     assert.match(result.stdout, new RegExp(`--name=${name} - /etc/wren/creds/${name}\\.cred`));
@@ -1763,7 +1763,7 @@ test('the launcher: runs the image by its pinned id, refuses a tag mismatch, kee
   assert.match(launcher, /docker image inspect --format '\{\{\.Id\}\}' wren:local/);
   assert.match(launcher, /"\$ACTUAL_ID" = "\$IMAGE_ID" \] \|\| refuse/);
   assert.match(launcher, /findmnt -n -o FSTYPE --target "\$CFG_ROOT"\)" = "tmpfs" \]/);
-  assert.match(launcher, /install -m 0400 -o "\$CONTAINER_UID" -g "\$CONTAINER_GID" "\$CREDENTIALS_DIRECTORY\/openrouter"/);
+  assert.match(launcher, /install -m 0400 -o "\$CONTAINER_UID" -g "\$CONTAINER_GID" "\$CREDENTIALS_DIRECTORY\/weir-gateway"/);
   assert.match(launcher, /rm -rf "\$CFG"\n\n# --- phase two/, 'the credential copy must go before phase two runs');
   assert.match(launcher, />> "\$STATE\/beats\.jsonl"/);
   assert.match(launcher, /--mount "type=bind,source=\$CFG,target=\/app\/config,readonly=true"/);
