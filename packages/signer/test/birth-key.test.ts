@@ -576,15 +576,20 @@ describe('the pinned programs', () => {
     expect(plaintext.startsWith(BECH32_SECRET_PREFIX)).toBe(true);
   });
 
-  it('does not call a shadowing security when reading the keychain', async () => {
-    const item = `heron-birth-key-absent-${String(process.pid)}-${String(Date.now())}`;
-    const result = await keychainPassphrase(item)();
+  // The keychain is macOS's; on any other platform /usr/bin/security does not exist and
+  // keychainPassphrase correctly refuses with 'program-missing' before it ever runs the checked case.
+  it.skipIf(process.platform !== 'darwin')(
+    'does not call a shadowing security when reading the keychain',
+    async () => {
+      const item = `heron-birth-key-absent-${String(process.pid)}-${String(Date.now())}`;
+      const result = await keychainPassphrase(item)();
 
-    expect(result.refused).toBe(true);
-    if (result.refused) {
-      expect(result.rule).toBe('keychain');
-      expect(result.detail).toContain('could not be read');
-    }
-    await expect(stat(marker)).rejects.toThrow();
-  });
+      expect(result.refused).toBe(true);
+      if (result.refused) {
+        expect(result.rule).toBe('keychain');
+        expect(result.detail).toContain('could not be read');
+      }
+      await expect(stat(marker)).rejects.toThrow();
+    },
+  );
 });

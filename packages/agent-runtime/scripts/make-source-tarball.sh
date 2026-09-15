@@ -38,7 +38,15 @@ OUT_TGZ="$PKG_DIR/agent-runtime-src.tgz"
 OUT_SHA="$PKG_DIR/agent-runtime-src.sha"
 
 WORKDIR="$(mktemp -d)"
-trap 'rm -rf "$WORKDIR"' EXIT
+# The two temp files below live next to OUT_TGZ/OUT_SHA (same directory, so the same filesystem)
+# and are published with `mv -f`, which is a rename(2) -- atomic. Every test that shells out to
+# this script shares the one output path, and node --test runs test files as concurrent
+# processes: two builds racing on a plain `gzip ... > "$OUT_TGZ"` let a reader's `tar -tf` land
+# between one build's truncating open and its finished write, seeing a 0-byte-so-far file
+# ("gzip: stdin: unexpected end of file"). A rename can only ever swap in a complete file.
+TMP_TGZ=""
+TMP_SHA=""
+trap 'rm -rf "$WORKDIR" "$TMP_TGZ" "$TMP_SHA"' EXIT
 TAR_PATH="$WORKDIR/agent-runtime-src.tar"
 SOURCE_COMMIT_FILE="$WORKDIR/SOURCE_COMMIT"
 
@@ -71,8 +79,12 @@ PY
 
 # gzip -n drops the original filename and mtime from the gzip header (both otherwise vary run to
 # run), so the .tgz is byte-identical across builds of the same commit, same as the tar beneath it.
-gzip -n -9 -c "$TAR_PATH" > "$OUT_TGZ"
-printf '%s\n' "$SHA" > "$OUT_SHA"
+TMP_TGZ="$(mktemp "$PKG_DIR/.agent-runtime-src.tgz.XXXXXX")"
+TMP_SHA="$(mktemp "$PKG_DIR/.agent-runtime-src.sha.XXXXXX")"
+gzip -n -9 -c "$TAR_PATH" > "$TMP_TGZ"
+printf '%s\n' "$SHA" > "$TMP_SHA"
+mv -f "$TMP_TGZ" "$OUT_TGZ"
+mv -f "$TMP_SHA" "$OUT_SHA"
 
 BYTES="$(wc -c < "$OUT_TGZ" | tr -d ' ')"
 echo "make-source-tarball.sh: $SHA ($BYTES bytes) -> $OUT_TGZ"

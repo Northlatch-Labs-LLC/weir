@@ -15,28 +15,18 @@
 
 name: CI
 
-# WHAT RUNS HERE, AND WHY IT IS NOT EVERYTHING
+# WHAT RUNS HERE
 #
-# Tests run on the laptop this is built on. That is the gate, and it is deliberate: Postgres 16,
-# the prover and the chain are all there, the run is measured in seconds rather than minutes, and a
-# failure is read by the person who caused it while the change is still in their head.
+# Every check runs on a clean machine, on every pull request: secret scan, digest guard, the web
+# suite (typecheck, tests, build) and the Move suite. That machine has never seen the project
+# before — no incremental cache, no dev server sharing a directory with the build — which is the
+# property the header above names, and a red result is read by the person who caused it while the
+# change is still in their head, on the commit that caused it.
 #
-# So this file keeps only the two checks a laptop cannot honestly make about itself:
+# The Sunday schedule and manual dispatch stay as the drift check: a dependency can go stale, or an
+# external service the suite calls against can change, with no pull request to catch either.
 #
-#   Secret scan   — a local pre-commit hook is per-checkout and will always be missing somewhere.
-#                   This is the copy that cannot be skipped, and the repository is on a publication
-#                   path, so a secret that lands here is public whatever we do afterwards.
-#   Digest guard  — the deployed contract's build digest. It guards the half that holds the money,
-#                   and it is checked against what is on chain rather than against this tree.
-#
-# The application and Move suites still exist below and still run on a clean machine — but on
-# request and on a weekly schedule, not on every commit. They are not deleted, because the header
-# comment they carry names two real failures that were invisible locally: a stale incremental
-# typecheck cache, and a production build poisoned by a dev server sharing its directory. Those are
-# clean-machine failures and a laptop cannot rule them out. They are simply not worth a full run
-# per commit when every one of those tests has already passed locally.
-#
-# Run them by hand at any time: Actions -> CI -> Run workflow.
+# Run any job by hand at any time: Actions -> CI -> Run workflow.
 
 on:
   push:
@@ -81,7 +71,6 @@ jobs:
         run: python3 scripts/scan-secrets.py --all
 
   web:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Typecheck, tests, build
     runs-on: ubuntu-latest
 
@@ -196,6 +185,37 @@ jobs:
       # NOT covered, and this step must not be read as claiming otherwise: `packages/room` defines
       # no `test` script at all, so `-r` skips it silently. Six packages are newly gated here
       # (sdk, agent, daemon, policy, signer, mcp); room has no tests for any gate to run.
+
+      # heron-purse.service starts /opt/node22/bin/node by that exact path -- Debian 13 on the
+      # droplet ships node 20, and @mysten/sui requires 22 -- and
+      # packages/purse/test/client-smoke.test.ts exists to measure a crash specific to node 22's
+      # WebAssembly HTTP parser under the unit's own --jitless flag. The test refuses to report a
+      # pass for any other runtime; it reports NOT MEASURED instead. `setup-node` above already
+      # installed node 22 into the hosted toolcache under a version-numbered path, so this step
+      # only needs to make it answer to the name the unit uses. The download branch is the same
+      # thing a human follows by hand (nodejs.org, checked against its own SHASUMS256.txt) and
+      # exists only in case setup-node's pin above ever stops meaning what it says.
+      - name: Put a node 22 at /opt/node22/bin/node, the path heron-purse.service names
+        run: |
+          set -euo pipefail
+          if [[ "$(node --version)" == v22.* ]]; then
+            sudo mkdir -p /opt/node22/bin
+            sudo ln -sf "$(command -v node)" /opt/node22/bin/node
+          else
+            echo "setup-node did not leave node 22 active ($(node --version)); fetching it directly" >&2
+            BASE="https://nodejs.org/dist/latest-v22.x"
+            WORKDIR="$(mktemp -d)"
+            curl -fsSL -o "$WORKDIR/SHASUMS256.txt" "$BASE/SHASUMS256.txt"
+            TARBALL="$(awk '$2 ~ /^node-v22\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz$/ { print $2; exit }' "$WORKDIR/SHASUMS256.txt")"
+            [ -n "$TARBALL" ] || { echo "no linux-x64 tarball listed in $BASE/SHASUMS256.txt" >&2; exit 1; }
+            curl -fsSL -o "$WORKDIR/$TARBALL" "$BASE/$TARBALL"
+            ( cd "$WORKDIR" && sha256sum --ignore-missing -c SHASUMS256.txt )
+            sudo mkdir -p /opt/node22
+            sudo tar -xJf "$WORKDIR/$TARBALL" -C /opt/node22 --strip-components=1
+            rm -rf "$WORKDIR"
+          fi
+          /opt/node22/bin/node --version
+
       - name: Tests
         run: pnpm test
 
@@ -215,7 +235,6 @@ jobs:
         run: pnpm build
 
   contracts:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Move tests
     runs-on: ubuntu-latest
     steps:
