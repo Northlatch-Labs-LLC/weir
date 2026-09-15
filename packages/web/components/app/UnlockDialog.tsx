@@ -3,6 +3,7 @@
 
 import { DigestLine, MoneyDialog } from '@/components/app/MoneyDialog';
 import { useUnlock } from '@/components/app/use-unlock';
+import { formatSui, formatUnits } from '@/lib/units';
 
 export function UnlockDialog({
   vaultId,
@@ -32,6 +33,8 @@ export function UnlockDialog({
     contentKey,
     expectedPrice,
   });
+  const money = (minor: string, decimals: number, symbol: string) =>
+    `${formatUnits(BigInt(minor), decimals)}${symbol === '' ? '' : ` ${symbol}`}`;
 
   return (
     <MoneyDialog
@@ -47,11 +50,15 @@ export function UnlockDialog({
       blocked={blocked}
       facts={
         quote === null
-          ? [{ label: 'Price', value: priceLabel }]
+          ? [
+              { label: 'Price', value: priceLabel },
+              { label: 'Gas', value: 'being read from the chain' },
+            ]
           : [
               { label: 'Price', value: priceLabel },
-              { label: `${creatorName} receives`, value: quote.creatorReceives, strong: true },
-              { label: 'Weir takes', value: quote.platformReceives },
+              { label: `${creatorName} receives`, value: money(quote.creatorReceives, quote.decimals, quote.symbol), strong: true },
+              { label: 'Weir takes', value: money(quote.platformReceives, quote.decimals, quote.symbol) },
+              { label: 'Gas', value: `${formatSui(quote.gasMist)} SUI` },
             ]
       }
       factsNote={

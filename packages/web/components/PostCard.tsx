@@ -1,7 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { VisiblePost } from '@/lib/content';
 
-import { UnlockButton } from '@/components/UnlockButton';
 import { PostBody } from '@/components/PostBody';
 import { Comments } from './Comments';
 import { PostActions } from '@/components/PostActions';
@@ -152,12 +151,9 @@ export function PostCard({
                 See tiers
               </a>
             ) : (
-              <UnlockButton
-                vaultId={post.vaultId}
-                contentKey={post.access.contentKey}
-                expectedPrice={post.access.price}
-                priceLabel={price ?? 'the listed price'}
-              />
+              <a className="btn" href={`/p/${post.id}`}>
+                Unlock{price === undefined ? '' : ` · ${price}`}
+              </a>
             )}
           </div>
         </div>

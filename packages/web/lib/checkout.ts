@@ -15,6 +15,7 @@ import {
   handleProblem,
   readContentPrice,
   readCreatorVault,
+  readDecimals,
   tx as txBuilders,
   type DecodedAbort,
   type Reading,
@@ -57,13 +58,7 @@ async function quote(
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') +
-          BigInt(gas.storageCost ?? '0') -
-          BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -306,13 +301,7 @@ export async function prepareDeposit(input: {
     const delta = result?.balanceChanges?.find(
       (change) => change.coinType === SUI_TYPE && change.address === input.sender,
     );
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') +
-          BigInt(gas.storageCost ?? '0') -
-          BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -420,11 +409,60 @@ export async function submitSigned(input: {
           'Check the chain before retrying — it may have succeeded.',
       );
     }
+    const checkpointed = await awaitCheckpoint(client, digest);
+    if (!checkpointed) {
+      return fail(
+        'transport',
+        source,
+        `the payment was sent as ${digest} and the chain has not yet placed it in a checkpoint. ` +
+          'Give it a moment and reload — the page reads what your wallet holds. Do not send it again.',
+      );
+    }
     return ok(digest);
   } catch (error) {
     const detail = opaqueDetail(source, error);
     return fail('transport', source, describeAbort(detail));
   }
+}
+
+/*
+  executeTransaction returns once the transaction has executed; it is final on Sui only once a
+  checkpoint contains it, and the fullnode's owned-object index — what the post page reads on
+  reload — moves with checkpoints. So the digest is not handed back until the checkpoint is known.
+  Mainnet checkpoints land every few hundred milliseconds; the wait is bounded so a stalled node
+  cannot hold the request open past the platform's own limit.
+*/
+const CHECKPOINT_WAIT_MS = 20_000;
+const CHECKPOINT_POLL_MS = 400;
+
+async function awaitCheckpoint(
+  client: ReturnType<typeof createClient>,
+  digest: string,
+): Promise<boolean> {
+  const deadline = Date.now() + CHECKPOINT_WAIT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const found = await client.getTransaction({ digest });
+      const checkpoint = (found as { Transaction?: { checkpoint?: unknown } }).Transaction?.checkpoint;
+      if (typeof checkpoint === 'string' && checkpoint !== '') return true;
+    } catch {
+      /* not yet visible to this node; poll again */
+    }
+    await new Promise((resolve) => setTimeout(resolve, CHECKPOINT_POLL_MS));
+  }
+  return false;
+}
+
+/*
+  What the sender pays: computation plus storage, less the rebate for storage freed. The rebate
+  can exceed the rest when a transaction deletes more than it creates; the chain then refunds the
+  difference, and the fee row shows a fee, so the net is clamped at zero.
+*/
+function netGas(gas: NonNullable<SimulatedTransaction['effects']>['gasUsed']): bigint {
+  if (gas === undefined) return 0n;
+  const net =
+    BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+  return net < 0n ? 0n : net;
 }
 
 function describeAbort(raw: string): string {
@@ -448,7 +486,7 @@ interface SimulatedTransaction {
 export interface SubscribeQuote extends CheckoutQuote {
   tierName: string;
   pricePerPeriod: string;
-  periodDays: number;
+  periodMs: string;
   creatorReceives: string;
   platformReceives: string;
 }
@@ -535,13 +573,7 @@ export async function prepareSubscribe(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') +
-          BigInt(gas.storageCost ?? '0') -
-          BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
     const suiDelta = result?.balanceChanges?.find(
       (c) => c.coinType === SUI_TYPE && c.address === input.sender,
     );
@@ -560,7 +592,7 @@ export async function prepareSubscribe(input: {
       amountMist: tier.price.toString(),
       tierName: tier.name,
       pricePerPeriod: tier.price.toString(),
-      periodDays: Number(tier.periodMs / 86_400_000n),
+      periodMs: tier.periodMs.toString(),
       creatorReceives: split.creator.toString(),
       platformReceives: split.platform.toString(),
     });
@@ -658,11 +690,7 @@ export async function prepareTip(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
     const split = computeSplit(
       amount,
       vault.value.feeBpsSnapshot,
@@ -689,6 +717,8 @@ export interface UnlockQuote extends CheckoutQuote {
   contentKey: string;
   creatorReceives: string;
   platformReceives: string;
+  decimals: number;
+  symbol: string;
 }
 
 export async function prepareUnlock(input: {
@@ -712,6 +742,8 @@ export async function prepareUnlock(input: {
   const account = await findAccount(input.sender);
   if (!account.ok) return account;
   if (account.value === null) return ok({ blocked: { kind: 'no-account' } });
+  const decimals = await readDecimals(client, input.coinType);
+  if (!decimals.ok) return decimals;
 
   const keyBytes = Array.from(new TextEncoder().encode(input.contentKey));
 
@@ -766,11 +798,7 @@ export async function prepareUnlock(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
     const split = computeSplit(
       price,
       vault.value.feeBpsSnapshot,
@@ -788,6 +816,8 @@ export async function prepareUnlock(input: {
       contentKey: input.contentKey,
       creatorReceives: split.creator.toString(),
       platformReceives: split.platform.toString(),
+      decimals: decimals.value,
+      symbol: input.coinType.split('::').pop() ?? '',
     });
   } catch (error) {
     return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
@@ -839,11 +869,7 @@ export async function prepareSetContentPrice(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -928,11 +954,7 @@ export async function prepareKeyPublish(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -1002,11 +1024,7 @@ export async function prepareOpenVault(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -1103,11 +1121,7 @@ export async function prepareAddTier(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -1165,11 +1179,7 @@ export async function prepareClaimEarnings(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),

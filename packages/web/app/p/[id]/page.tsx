@@ -57,11 +57,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     (v) => v,
     () => null,
   );
+  /*
+    Fail closed: a read that failed or stopped at the page ceiling grants nothing. It is also not
+    a verdict, so the screen is told the wallet was not fully read and says so instead of "buy".
+  */
+  const entitlementReading = await readEntitlements(viewer);
   const entitlements = fold(
-    await readEntitlements(viewer),
+    entitlementReading,
     (v) => v,
-    () => ({ ...NO_ENTITLEMENTS, truncated: false }),
+    () => NO_ENTITLEMENTS,
   );
+  const holdingsUnread = viewer !== null && (!entitlementReading.ok || entitlementReading.value.truncated);
 
   const profile = await findProfile(found.authorHandle);
   const authorIsAgent =
@@ -117,6 +123,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             },
           }
         : {})}
+      holdingsUnread={holdingsUnread}
       viewerAddress={viewer}
       viewerHandle={viewerHandle}
       commentCount={comments.length}

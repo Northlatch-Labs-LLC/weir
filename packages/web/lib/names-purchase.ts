@@ -226,5 +226,7 @@ interface SimulatedTransaction {
 
 function totalGas(gasUsed: Record<string, string | number>): string {
   const at = (key: string) => BigInt(gasUsed[key] ?? 0);
-  return (at('computationCost') + at('storageCost') - at('storageRebate')).toString();
+  const gross = at('computationCost') + at('storageCost');
+  const rebate = at('storageRebate');
+  return (gross > rebate ? gross - rebate : 0n).toString();
 }

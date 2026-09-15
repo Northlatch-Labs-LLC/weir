@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  formatPeriod,
   formatSui,
   formatSuiShort,
   formatUnits,
@@ -120,5 +121,17 @@ describe('formatUnits', () => {
     expect(formatUnits(6_031_648n, SUI_DECIMALS)).toBe('0.006031648');
     expect(USDC_DECIMALS).toBe(6);
     expect(SUI_DECIMALS).toBe(9);
+  });
+});
+
+describe('formatPeriod', () => {
+  it('keeps the partial day a whole-day division would drop', () => {
+    expect(formatPeriod(86_400_000n * 30n)).toBe('30 days');
+    expect(formatPeriod(86_400_000n)).toBe('1 day');
+    expect(formatPeriod(86_400_000n + 43_200_000n)).toBe('1 day 12 hours');
+    expect(formatPeriod('129600000')).toBe('1 day 12 hours');
+    expect(formatPeriod(3_600_000n)).toBe('1 hour');
+    expect(formatPeriod(2_700_000n)).toBe('45 minutes');
+    expect(formatPeriod(999n)).toBe('less than a minute');
   });
 });

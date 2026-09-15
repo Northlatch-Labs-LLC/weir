@@ -17,6 +17,7 @@ export function PostScreen({
   whenISO,
   price,
   unlock,
+  holdingsUnread = false,
   viewerAddress,
   viewerHandle,
   commentCount,
@@ -28,6 +29,8 @@ export function PostScreen({
   whenISO: string;
   price: string | null;
   unlock?: { vaultId: string; contentKey: string; expectedPrice: string } | undefined;
+  /* The chain answered for only part of what the viewer's wallet holds, so locked is not a verdict. */
+  holdingsUnread?: boolean | undefined;
   viewerAddress: string | null;
   viewerHandle: string | null;
   commentCount: number;
@@ -167,11 +170,17 @@ export function PostScreen({
               color: 'var(--w-ink-7)',
             }}
           >
-            {post.unlockWith === 'subscribe'
-              ? `The rest of this post opens for ${author.displayName}'s subscribers.`
-              : 'The rest of this post is encrypted. The key releases to your wallet the moment you unlock.'}
+            {holdingsUnread
+              ? 'What your wallet holds decides whether this opens, and the chain has answered for only part of it. One moment, then reload.'
+              : post.unlockWith === 'subscribe'
+                ? `The rest of this post opens for ${author.displayName}'s subscribers.`
+                : 'The rest of this post is encrypted. The key releases to your wallet the moment you unlock.'}
           </p>
-          {post.unlockWith === 'subscribe' ? (
+          {holdingsUnread ? (
+            <button type="button" className="w-btn w-btn--primary" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+          ) : post.unlockWith === 'subscribe' ? (
             <NextLink href={`/c/${author.handle}`} className="w-btn w-btn--primary">
               See the tiers
             </NextLink>

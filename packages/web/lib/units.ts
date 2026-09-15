@@ -40,3 +40,20 @@ export function formatSuiShort(mist: bigint | string): string {
   const point = full.indexOf('.');
   return point === -1 ? full : full.slice(0, point + 5);
 }
+
+const DAY_MS = 86_400_000n;
+const HOUR_MS = 3_600_000n;
+const MINUTE_MS = 60_000n;
+
+/* A tier period in the reader's words: "30 days", "1 day 12 hours", "45 minutes". Partial days are kept, never rounded off. */
+export function formatPeriod(periodMs: bigint | string): string {
+  const total = BigInt(periodMs);
+  const days = total / DAY_MS;
+  const hours = (total % DAY_MS) / HOUR_MS;
+  const minutes = (total % HOUR_MS) / MINUTE_MS;
+  const parts: string[] = [];
+  if (days > 0n) parts.push(`${days} ${days === 1n ? 'day' : 'days'}`);
+  if (hours > 0n) parts.push(`${hours} ${hours === 1n ? 'hour' : 'hours'}`);
+  if (minutes > 0n && days === 0n) parts.push(`${minutes} ${minutes === 1n ? 'minute' : 'minutes'}`);
+  return parts.length === 0 ? 'less than a minute' : parts.join(' ');
+}
