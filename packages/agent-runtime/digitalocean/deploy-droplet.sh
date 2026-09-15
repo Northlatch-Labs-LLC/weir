@@ -573,7 +573,11 @@ check_do_token_file() {
     return 1
   fi
   local mode
-  mode="$(stat -f %Lp "$DO_TOKEN_FILE" 2>/dev/null || stat -c %a "$DO_TOKEN_FILE")"
+  # GNU stat's -f means "filesystem, not file" (a different flag from BSD's), so a single
+  # `stat -f ... || stat -c ...` command substitution let the GNU branch's own stdout (a
+  # filesystem report, not a mode) leak into $mode before the fallback ever ran. Each attempt
+  # gets its own command substitution so a wrong-platform branch cannot contaminate the other's.
+  mode="$(stat -c %a "$DO_TOKEN_FILE" 2>/dev/null)" || mode="$(stat -f %Lp "$DO_TOKEN_FILE" 2>/dev/null)"
   if [ "$mode" != "600" ]; then
     echo "deploy-droplet.sh: refused - DO_TOKEN_FILE ($DO_TOKEN_FILE) is mode $mode, not 0600" >&2
     return 1
@@ -1000,7 +1004,9 @@ cmd_seal() {
     return 1
   fi
   local pile_mode
-  pile_mode="$(stat -f %Lp "$pile_path" 2>/dev/null || stat -c %a "$pile_path")"
+  # Same fix as check_do_token_file(): two independent command substitutions, not one shared
+  # by `||`, so GNU stat's -f (filesystem, not file) cannot leak its own stdout into pile_mode.
+  pile_mode="$(stat -c %a "$pile_path" 2>/dev/null)" || pile_mode="$(stat -f %Lp "$pile_path" 2>/dev/null)"
   if [ "$pile_mode" != "600" ] && [ "$pile_mode" != "400" ]; then
     echo "deploy-droplet.sh --seal: refused - $pile_path is mode $pile_mode; a credential in the pile is 0600 or 0400" >&2
     return 1
