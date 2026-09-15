@@ -101,18 +101,18 @@ export function CreatorsScreen({
   const shareNote =
     share === 0
       ? 'You keep all of it. Perfectly normal, and the number is public, so say why if you like.'
-      : `You give your members back ${share}% of the yield their deposit generates for you; you keep ${100 - share}% as your own. The share is written on the vault object itself.`;
+      : `You give your members back ${share}% of the yield their deposit generates for you; you keep ${100 - share}% as your own. The share is written on the stake vault, which is a second vault with its own capability — subscriptions do not need it, and it is opened separately when you want one.`;
 
   const summary: ReadonlyArray<{ label: string; value: string; unread: boolean }> = [
     { label: 'Handle', value: clean === '' ? 'not set' : `@${clean}`, unread: false },
     {
       label: 'Monthly tier',
-      value: Number.isFinite(tier) ? `${tier} USDC` : 'not a number',
+      value: Number.isFinite(tier) ? String(tier) : 'not a number',
       unread: !Number.isFinite(tier),
     },
     { label: 'You keep', value: `${keeps} (${feeLabel} at settlement)`, unread: keepsUnread },
     { label: 'Yield shared back', value: `${share}%`, unread: false },
-    { label: 'Objects created', value: '1 tier object, 1 creator vault', unread: false },
+    { label: 'Signed separately', value: 'handle, then vault, then tier', unread: false },
   ];
 
   const aside: ReactNode = (
@@ -244,7 +244,7 @@ export function CreatorsScreen({
                 style={{ ...FIELD, width: '9rem', fontVariantNumeric: 'tabular-nums' }}
               />
               <span style={{ fontFamily: 'var(--w-mono)', fontSize: 13, color: 'var(--w-ink-7)' }}>
-                USDC · every 30 days
+                every 30 days
               </span>
             </div>
             <p style={NOTE}>
@@ -259,7 +259,8 @@ export function CreatorsScreen({
                 </span>
               )}{' '}
               of every payment. The {feeLabel} is taken at settlement, in the same transaction,
-              computed here with the integer maths the contract uses.
+              computed here with the integer maths the contract uses. Which coin that is in is the
+              vault&rsquo;s denomination, chosen when you open it and fixed to it for good.
             </p>
           </div>
 
@@ -300,11 +301,15 @@ export function CreatorsScreen({
             }}
           >
             <p style={{ margin: 0, maxWidth: '36ch', fontFamily: 'var(--w-mono)', fontSize: 13, color: 'var(--w-ink-7)' }}>
-              Creates a tier object and a vault owned by your address. One transaction, signed on the
-              next screen.
+              The handle is claimed first, on its own. The vault and the tier are signed after it,
+              from your creator section — a vault is shared the moment it is created, so a tier
+              cannot be added in the transaction that opens it.
             </p>
-            <NextLink href="/join" className="w-btn w-btn--primary">
-              Review and sign
+            <NextLink
+              href={clean === '' ? '/join' : `/join?handle=${encodeURIComponent(clean)}`}
+              className="w-btn w-btn--primary"
+            >
+              {clean === '' ? 'Create your account' : `Claim @${clean}`}
             </NextLink>
           </div>
         </>

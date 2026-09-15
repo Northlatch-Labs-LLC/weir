@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSigner } from '@/components/SignerProvider';
 import { WalletConnect } from '@/components/WalletConnect';
-import { CREATOR, MINE } from '@/lib/site-map';
+import { creatorDestinations, MINE } from '@/lib/site-map';
 
 export function AccountMenu() {
   const pathname = usePathname();
@@ -204,7 +204,7 @@ export function AccountMenu() {
               );
             })()}
 
-          {[...MINE, ...(stage === 'ready' ? CREATOR : [])].map((item) => {
+          {[...MINE, ...creatorDestinations(stage)].map((item) => {
             const index = nextIndex();
             return (
               <Link

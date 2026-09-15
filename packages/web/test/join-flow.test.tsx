@@ -286,3 +286,24 @@ describe('the address that pays is on the screen that spends', () => {
     expect(screen.queryByText("The reason is in this deployment's logs")).toBeNull();
   });
 });
+
+describe('a handle chosen on the way in is not asked for twice', () => {
+  it('opens the handle step already filled in, and checks it', async () => {
+    mockAccount({ state: 'available' });
+    render(<JoinFlow referrer={null} handle="stderr" />);
+
+    await waitFor(() => expect(screen.getByLabelText('Handle')).toBeTruthy());
+    expect((screen.getByLabelText('Handle') as HTMLInputElement).value).toBe('stderr');
+    await waitFor(() => expect(screen.getByText(/@stderr is available/i)).toBeTruthy(), {
+      timeout: 3000,
+    });
+  });
+
+  it('still opens empty when nobody chose one', async () => {
+    mockAccount({ state: 'available' });
+    render(<JoinFlow referrer={null} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Handle')).toBeTruthy());
+    expect((screen.getByLabelText('Handle') as HTMLInputElement).value).toBe('');
+  });
+});

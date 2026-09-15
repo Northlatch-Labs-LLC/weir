@@ -16,14 +16,20 @@ export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
 
+/* The registry's own shape. A value that cannot be a handle is dropped rather than prefilled. */
+const HANDLE_SHAPE = /^[a-zA-Z0-9_]{1,32}$/;
+
 export default async function Join({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string }>;
+  searchParams: Promise<{ ref?: string; handle?: string }>;
 }) {
-  const { ref } = await searchParams;
+  const { ref, handle } = await searchParams;
 
   const referrer = ref !== undefined && SUI_ADDRESS.test(ref) ? ref : null;
+
+  /* Somebody who typed a handle on the way in should not be asked to type it a second time. */
+  const wanted = typeof handle === 'string' && HANDLE_SHAPE.test(handle) ? handle.toLowerCase() : null;
 
   const protocol = await readProtocol();
 
@@ -35,7 +41,7 @@ export default async function Join({
           lede="Three steps: how you sign, your handle, and the claim on chain. No password, no email, and it is free."
         />
 
-        <JoinFlow referrer={referrer} />
+        <JoinFlow referrer={referrer} handle={wanted} />
 
         {fold(
           protocol,

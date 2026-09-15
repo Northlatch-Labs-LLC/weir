@@ -98,6 +98,21 @@ export const CREATOR: readonly Destination[] = [
   at('/earnings', 'What your creator vault holds, and withdrawing it'),
 ];
 
+/*
+  Which creator destinations an account is offered, by what it actually owns.
+
+  Without a vault the only one that can do anything is the one that opens it: Studio prices
+  content against a vault and Earnings reads one, so both are empty rooms until a vault exists.
+  Hiding all three until then is what leaves a registered creator with no route to opening one.
+*/
+export function creatorDestinations(
+  stage: 'no-account' | 'no-vault' | 'ready' | undefined,
+): readonly Destination[] {
+  if (stage === 'ready') return CREATOR;
+  if (stage === 'no-vault') return CREATOR.filter((destination) => destination.href === '/creator');
+  return [];
+}
+
 /* The account menu: what is theirs. The creator pages follow once a vault exists. */
 export const MINE: readonly Destination[] = [at('/vault'), at('/purchases'), at('/names'), at('/referrals')];
 

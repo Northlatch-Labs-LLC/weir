@@ -47,11 +47,18 @@ function short(a: string): string {
 
 const sui = formatSui;
 
-export function JoinFlow({ referrer }: { referrer: string | null }) {
+export function JoinFlow({
+  referrer,
+  handle: wanted = null,
+}: {
+  referrer: string | null;
+  /** A handle already chosen on the way here, so step two opens with it filled in. */
+  handle?: string | null;
+}) {
   const { signer } = useSigner();
   const router = useRouter();
   const [step, setStep] = useState<Step>(signer === null ? 'account' : 'handle');
-  const [handle, setHandle] = useState('');
+  const [handle, setHandle] = useState(wanted ?? '');
   const [displayName, setDisplayName] = useState('');
   const [handleState, setHandleState] = useState<HandleState>({ state: 'idle' });
   const [accountState, setAccountState] = useState<AccountState>({ state: 'unknown' });

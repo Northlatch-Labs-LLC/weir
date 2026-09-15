@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { titleFor } from '@/lib/site-map';
 import { createClient, fold, readPlatform } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
@@ -28,6 +29,15 @@ export default async function CreatorsPage() {
           (value) => value,
           () => null,
         );
+
+  /*
+    Earn is two different screens wearing one name. To somebody who has no account it is the case
+    for having one. To somebody who holds a handle it is their creator section, and that already
+    exists at /creator: opening the vault, the tiers, opening and closing the page, each simulated
+    and signed. Sending them to the page that sells the idea instead is how a creator ends up with
+    a handle, a page, and no way to be paid for it.
+  */
+  if (handle !== null) redirect('/creator');
 
   const config = siteConfig();
   const client = config.ok ? createClient(config.value) : null;
