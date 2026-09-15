@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
+import { isSuiId } from '@/lib/db';
 import { fold } from '@projectx-social/sdk';
 import { findProfileByVault } from '@/lib/content';
 import { prepareUnlock, type SubscribeBlocker, type UnlockQuote } from '@/lib/checkout';
@@ -18,6 +19,12 @@ export async function POST(request: Request) {
   if (!b.sender || !b.vaultId || !b.contentKey || !b.expectedPrice) {
     return NextResponse.json(
       { error: 'sender, vaultId, contentKey and expectedPrice are required' },
+      { status: 400 },
+    );
+  }
+  if (!isSuiId(b.sender) || !isSuiId(b.vaultId)) {
+    return NextResponse.json(
+      { error: 'sender and vaultId must be 0x followed by hex digits' },
       { status: 400 },
     );
   }

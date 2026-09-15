@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
+import { isSuiId } from '@/lib/db';
 import { fold } from '@projectx-social/sdk';
 import { findProfileByVault } from '@/lib/content';
 import { prepareTip, type SubscribeBlocker, type TipQuote } from '@/lib/checkout';
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
   if (!b.sender || !b.vaultId || !b.amount) {
     return NextResponse.json(
       { error: 'sender, vaultId and amount are required' },
+      { status: 400 },
+    );
+  }
+  if (!isSuiId(b.sender) || !isSuiId(b.vaultId)) {
+    return NextResponse.json(
+      { error: 'sender and vaultId must be 0x followed by hex digits' },
       { status: 400 },
     );
   }
