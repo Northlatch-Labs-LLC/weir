@@ -5,14 +5,14 @@ import { useState } from 'react';
 import { SignIn } from '@/components/SignIn';
 import { DigestLine, MoneyDialog } from '@/components/app/MoneyDialog';
 import { useCheckout } from '@/components/app/use-checkout';
-import { formatUnits, SUI_DECIMALS } from '@/lib/units';
+import { formatPeriod, formatUnits, SUI_DECIMALS } from '@/lib/units';
 
 interface Quote {
   bytes: string;
   gasMist: string;
   tierName: string;
   pricePerPeriod: string;
-  periodDays: number;
+  periodMs: string;
   creatorReceives: string;
   platformReceives: string;
 }
@@ -79,7 +79,7 @@ export function SubscribeButton({
               ? []
               : [
                   { label: 'Tier', value: quote.tierName },
-                  { label: `Every ${quote.periodDays} days`, value: amount(quote.pricePerPeriod), strong: true },
+                  { label: `Every ${formatPeriod(quote.periodMs)}`, value: amount(quote.pricePerPeriod), strong: true },
                   { label: 'The creator receives', value: amount(quote.creatorReceives) },
                   { label: 'Weir takes', value: amount(quote.platformReceives) },
                   { label: 'Gas', value: `${formatUnits(BigInt(quote.gasMist), SUI_DECIMALS)} SUI` },

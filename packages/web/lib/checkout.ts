@@ -449,7 +449,7 @@ interface SimulatedTransaction {
 export interface SubscribeQuote extends CheckoutQuote {
   tierName: string;
   pricePerPeriod: string;
-  periodDays: number;
+  periodMs: string;
   creatorReceives: string;
   platformReceives: string;
 }
@@ -561,7 +561,7 @@ export async function prepareSubscribe(input: {
       amountMist: tier.price.toString(),
       tierName: tier.name,
       pricePerPeriod: tier.price.toString(),
-      periodDays: Number(tier.periodMs / 86_400_000n),
+      periodMs: tier.periodMs.toString(),
       creatorReceives: split.creator.toString(),
       platformReceives: split.platform.toString(),
     });
