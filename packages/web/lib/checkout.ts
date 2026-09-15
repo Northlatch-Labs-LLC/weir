@@ -409,11 +409,48 @@ export async function submitSigned(input: {
           'Check the chain before retrying — it may have succeeded.',
       );
     }
+    const checkpointed = await awaitCheckpoint(client, digest);
+    if (!checkpointed) {
+      return fail(
+        'transport',
+        source,
+        `the payment was sent as ${digest} and the chain has not yet placed it in a checkpoint. ` +
+          'Give it a moment and reload — the page reads what your wallet holds. Do not send it again.',
+      );
+    }
     return ok(digest);
   } catch (error) {
     const detail = opaqueDetail(source, error);
     return fail('transport', source, describeAbort(detail));
   }
+}
+
+/*
+  executeTransaction returns once the transaction has executed; it is final on Sui only once a
+  checkpoint contains it, and the fullnode's owned-object index — what the post page reads on
+  reload — moves with checkpoints. So the digest is not handed back until the checkpoint is known.
+  Mainnet checkpoints land every few hundred milliseconds; the wait is bounded so a stalled node
+  cannot hold the request open past the platform's own limit.
+*/
+const CHECKPOINT_WAIT_MS = 20_000;
+const CHECKPOINT_POLL_MS = 400;
+
+async function awaitCheckpoint(
+  client: ReturnType<typeof createClient>,
+  digest: string,
+): Promise<boolean> {
+  const deadline = Date.now() + CHECKPOINT_WAIT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const found = await client.getTransaction({ digest });
+      const checkpoint = (found as { Transaction?: { checkpoint?: unknown } }).Transaction?.checkpoint;
+      if (typeof checkpoint === 'string' && checkpoint !== '') return true;
+    } catch {
+      /* not yet visible to this node; poll again */
+    }
+    await new Promise((resolve) => setTimeout(resolve, CHECKPOINT_POLL_MS));
+  }
+  return false;
 }
 
 /*
