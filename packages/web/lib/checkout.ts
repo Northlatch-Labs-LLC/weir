@@ -41,8 +41,8 @@ async function quote(
   const config = siteConfig();
   if (!config.ok) return config;
 
+  const client = createClient(config.value);
   try {
-    const client = createClient(config.value);
     tx.setSender(sender);
 
     const bytes = await tx.build({ client });
@@ -74,8 +74,34 @@ async function quote(
       amountMist,
     });
   } catch (error) {
+    const unfunded = await emptyPurseNote(client, sender);
+    if (unfunded !== null) return fail('precondition', source, unfunded);
     return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
   }
+}
+
+/*
+  Gas selection fails inside `build`, before there is a transaction to simulate, and the node
+  reports it in prose. The balance is read instead of the prose being parsed: an empty purse is a
+  fact about the sender, and it is the state every address is in the minute it is created.
+
+  Only zero is named. A purse holding too little for this particular transaction needs a different
+  number in the sentence, and a balance alone does not carry it.
+*/
+async function emptyPurseNote(
+  client: ReturnType<typeof createClient>,
+  sender: string,
+): Promise<string | null> {
+  try {
+    const { balance } = await client.core.getBalance({ owner: sender, coinType: SUI_TYPE });
+    if (BigInt(balance.balance) !== 0n) return null;
+  } catch {
+    return null;
+  }
+  return (
+    'This address holds no SUI. Sui charges gas in SUI for every transaction — about 0.006 for ' +
+    'this one. Send some to this address, then try again.'
+  );
 }
 
 export async function prepareOpenStakeVault(input: {
@@ -858,43 +884,13 @@ export async function prepareOpenAccount(input: {
     return fail('malformed', source, 'you cannot refer yourself');
   }
 
-  try {
-    const client = createClient(config.value);
-    const tx = openAccount(
-      { config: config.value },
-      { handle: input.handle, referrer: input.referrer },
-    );
-    tx.setSender(input.sender);
-
-    const bytes = await tx.build({ client });
-    const sim = await client.simulateTransaction({
-      transaction: bytes,
-      include: { effects: true, balanceChanges: true },
-    });
-    const { grpc } = simulationEnvelope(sim);
-    const result = grpc as SimulatedTransaction | undefined;
-    const status = simulationStatus(sim);
-    if (status?.success !== true) {
-      return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
-    }
-
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
-
-    return ok({
-      bytes: await rememberQuote(toBase64(bytes)),
-      suiDeltaMist:
-        result?.balanceChanges?.find((c) => c.coinType === SUI_TYPE && c.address === input.sender)
-          ?.amount ?? '0',
-      gasMist: gasMist.toString(),
-      amountMist: '0',
-    });
-  } catch (error) {
-    return fail('malformed', source, describeAbort(opaqueDetail(source, error)));
-  }
+  // The handle costs nothing, so `amountMist` is zero and gas is the whole of it.
+  return quote(
+    source,
+    openAccount({ config: config.value }, { handle: input.handle, referrer: input.referrer }),
+    input.sender,
+    '0',
+  );
 }
 
 export async function prepareKeyPublish(input: {

@@ -16,6 +16,18 @@ vi.mock('@/lib/rate-limit', () => ({
 vi.mock('@/lib/checkout', () => ({
   submitSigned: async () => ({ ok: true, value: 'DIGEST', observedAtMs: 0 }),
 }));
+/*
+  The deployment's own configuration, which a test process does not have. Every signature below is
+  a real one over real bytes and is verified by the real verifier; what is supplied here is only
+  the network it is verified against.
+*/
+vi.mock('@/lib/chain', () => ({
+  siteConfig: () => ({
+    ok: true,
+    value: { network: 'mainnet', grpcUrl: 'https://fullnode.example.invalid:443' },
+    observedAtMs: 0,
+  }),
+}));
 
 const { POST } = await import('../app/api/checkout/submit/route');
 

@@ -4,7 +4,9 @@ import { opaqueDetail } from './opaque';
 
 import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
-import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+import { isValidTransactionSignature, verifyPersonalMessageSignature } from '@mysten/sui/verify';
+import { Transaction } from '@mysten/sui/transactions';
+import { fromBase64 } from '@mysten/sui/utils';
 import {
   createClient,
   fail,
@@ -97,6 +99,59 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
     // signature replayable, which is the property single-use exists to hold.
     expiresAtMs: input.timestampMs + windowMs,
   });
+}
+
+/*
+  Both doors are proved here so that no caller has to know which one its reader came through.
+
+  A wallet signature verifies offline. A zkLogin signature does not: the proof is checked against
+  the JSON Web Keys of the epoch it was made in, which only a node holds. Without a client the
+  verifier throws instead of answering, and every Google signature reads as a forgery.
+*/
+export async function proveTransaction(input: {
+  bytes: string;
+  signature: string;
+}): Promise<Reading<string>> {
+  const source = 'signature';
+
+  let sender: string | null;
+  try {
+    sender = (Transaction.from(input.bytes).getData() as { sender?: string | null }).sender ?? null;
+  } catch (error) {
+    return fail('malformed', source, `these are not transaction bytes: ${opaqueDetail(source, error)}`);
+  }
+  if (sender === null || sender === '') {
+    return fail('malformed', source, 'these bytes name no sender, so there is nobody for a signature to prove');
+  }
+
+
+  const config = siteConfig();
+  if (!config.ok) return config;
+
+  let proved: boolean;
+  try {
+    proved = await isValidTransactionSignature(fromBase64(input.bytes), input.signature, {
+      client: createClient(config.value),
+      address: sender,
+    });
+  } catch (error) {
+    // `isValidTransactionSignature` returns false for a signature that does not stand, and throws
+    // only when it could not reach an answer. Keeping them apart is what stops an unreachable node
+    // being reported to a reader as their own bad signature.
+    opaqueDetail(source, error);
+    return fail('transport', source, 'The network did not answer. Nothing was submitted — try again.');
+  }
+
+  // `denied`, not `malformed`: understood, and the answer was no. `retryAdvice` says stop.
+  if (!proved) {
+    return fail(
+      'denied',
+      source,
+      'This signature does not match these bytes, or was not made by the address that sends them.',
+    );
+  }
+
+  return ok(sender);
 }
 
 export interface PendingSpend {

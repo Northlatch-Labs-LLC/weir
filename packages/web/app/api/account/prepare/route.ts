@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { isSuiId } from '@/lib/db';
-import { fold } from '@projectx-social/sdk';
+import { fold, type FailureKind } from '@projectx-social/sdk';
 import { prepareOpenAccount, type CheckoutQuote } from '@/lib/checkout';
 
 export const dynamic = 'force-dynamic';
@@ -43,10 +43,21 @@ export async function POST(request: Request) {
   return fold<CheckoutQuote, NextResponse>(
     quote,
     (value) => NextResponse.json({ quote: value }),
-    (failure) =>
-      NextResponse.json(
-        { error: failure.detail, kind: failure.kind },
-        { status: failure.kind === 'unconfigured' ? 503 : 400 },
-      ),
+    (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: statusFor(failure.kind) }),
   );
+}
+
+// 409 carries the conditions the sender has to change first — an empty purse, a handle taken
+// since they typed it — which are neither our fault (503) nor a bad request (400).
+function statusFor(kind: FailureKind): number {
+  switch (kind) {
+    case 'unconfigured':
+    case 'transport':
+    case 'timeout':
+      return 503;
+    case 'precondition':
+      return 409;
+    default:
+      return 400;
+  }
 }

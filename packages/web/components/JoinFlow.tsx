@@ -411,6 +411,12 @@ export function JoinFlow({ referrer }: { referrer: string | null }) {
                 <dd className="w-mono">{short(referrer)}</dd>
               </div>
             )}
+            {/* In full, not shortened: gas is paid from here, and an address nobody can copy is
+                an address nobody can send to. */}
+            <div>
+              <dt>Paid from</dt>
+              <dd className="w-join__payer">{signer.address}</dd>
+            </div>
             <div>
               <dt>Price</dt>
               <dd>Free</dd>

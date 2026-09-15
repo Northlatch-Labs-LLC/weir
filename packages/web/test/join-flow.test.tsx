@@ -237,3 +237,52 @@ describe('the two doors are not the same page', () => {
     expect(back.getAttribute('href')).toBe('/signin');
   });
 });
+
+describe('the address that pays is on the screen that spends', () => {
+  const GOOGLE_ADDRESS = `0x${'7c'.repeat(32)}`;
+
+  async function claimStepFor(prepare: unknown) {
+    mockAccount({ state: 'available' }, { prepare });
+    signer = {
+      address: GOOGLE_ADDRESS,
+      kind: 'zklogin',
+      label: 'Google',
+      signTransaction: vi.fn(async () => 'sig'),
+    };
+    const view = render(<JoinFlow referrer={null} />);
+    await waitFor(() => expect(view.container.querySelector('input')).not.toBeNull());
+    fireEvent.change(view.container.querySelector('input') as HTMLInputElement, {
+      target: { value: 'disposable' },
+    });
+    await waitFor(() => expect(screen.getByText(/available/i)).toBeTruthy(), { timeout: 3000 });
+    fireEvent.click(screen.getByText('Next'));
+    return view;
+  }
+
+  it('shows the whole address, not a shortened one nobody can send to', async () => {
+    await claimStepFor({ quote: { bytes: 'AAAAquote', gasMist: '6087508' } });
+
+    await waitFor(() => expect(screen.queryByText(/Nothing signed yet/)).not.toBeNull());
+    expect(screen.getByText('Paid from')).toBeTruthy();
+    expect(screen.getByText(GOOGLE_ADDRESS)).toBeTruthy();
+    expect(screen.queryByText(`${GOOGLE_ADDRESS.slice(0, 6)}…${GOOGLE_ADDRESS.slice(-4)}`)).toBeNull();
+  });
+
+  /*
+    An address minted at the Google door a minute ago holds nothing, so this is the commonest
+    ending the join screen has. The reader is told the condition, the cost, and where to send it.
+  */
+  it('carries an empty purse through to the reader, with the address to fund', async () => {
+    await claimStepFor({
+      error:
+        'This address holds no SUI. Sui charges gas in SUI for every transaction — about 0.006 ' +
+        'for this one. Send some to this address, then try again.',
+      kind: 'precondition',
+    });
+
+    await waitFor(() => expect(screen.queryByText(/holds no SUI/)).not.toBeNull());
+    expect(screen.getByText(GOOGLE_ADDRESS)).toBeTruthy();
+    expect(screen.getByText('Check again')).toBeTruthy();
+    expect(screen.queryByText("The reason is in this deployment's logs")).toBeNull();
+  });
+});

@@ -2,8 +2,8 @@
 import { NextResponse } from 'next/server';
 import { quotaLimit, simulateLimit } from '@/lib/rate-limit';
 import { isPurchase, moveTargets } from '@/lib/tx-shape';
-import { verifyTransactionSignature } from '@mysten/sui/verify';
-import { fold } from '@projectx-social/sdk';
+import { fold, type FailureKind } from '@projectx-social/sdk';
+import { proveTransaction } from '@/lib/identity';
 import { submitSigned } from '@/lib/checkout';
 import { idempotently } from '@/lib/idempotent-route';
 import { Transaction } from '@mysten/sui/transactions';
@@ -21,6 +21,21 @@ function senderOf(body: unknown): string | null {
   }
 }
 
+// 401 is the reader's to act on and 503 is ours, so a client retrying on 503 is right to, and a
+// client retrying a refused signature is not.
+function statusFor(kind: FailureKind): number {
+  switch (kind) {
+    case 'transport':
+    case 'timeout':
+    case 'unconfigured':
+      return 503;
+    case 'denied':
+      return 401;
+    default:
+      return 400;
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   return idempotently(request, '/api/checkout/submit', senderOf, submitOnce);
 }
@@ -34,17 +49,15 @@ async function submitOnce(request: Request) {
     return NextResponse.json({ error: 'bytes and signature are required' }, { status: 400 });
   }
 
-  let signer: string;
-  try {
-    const key = await verifyTransactionSignature(Buffer.from(body.bytes, 'base64'), body.signature);
-    signer = key.toSuiAddress();
-  } catch {
-    return NextResponse.json({ error: 'the signature does not verify against these bytes' }, { status: 401 });
+  const proved = await proveTransaction({ bytes: body.bytes, signature: body.signature });
+  if (!proved.ok) {
+    return NextResponse.json(
+      { error: proved.failure.detail, kind: proved.failure.kind },
+      { status: statusFor(proved.failure.kind) },
+    );
   }
-  const sender = (Transaction.from(body.bytes).getData() as { sender?: string | null }).sender ?? null;
-  if (sender === null || sender.toLowerCase() !== signer.toLowerCase()) {
-    return NextResponse.json({ error: 'the signature was made by an address other than the sender' }, { status: 401 });
-  }
+  const signer = proved.value;
+
   const quota = await quotaLimit(signer, isPurchase(moveTargets(body.bytes)) ? 'purchase' : 'write');
   if (quota !== null) return quota;
 

@@ -2596,6 +2596,9 @@
      because a disc reads as a place in a sequence at a glance; the rule between two of them is
      drawn by the step on its left. */
   .w-join__returning { margin: 0 0 20px; }
+  /* An address is one unbroken token, and a flex row will carry it past the edge of the card
+     rather than break it. Both properties are needed: the min-width lets the item shrink at all. */
+  .w-join__payer { min-width: 0; overflow-wrap: anywhere; }
   .w-stepper {
     display: flex;
     align-items: flex-start;
