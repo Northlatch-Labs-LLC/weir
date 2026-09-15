@@ -304,7 +304,10 @@ export async function prepareAdminAction(input: {
     return ok(
       {
         bytes: await rememberQuote(Buffer.from(bytes).toString('base64')),
-        gasMist: (at('computationCost') + at('storageCost') - at('storageRebate')).toString(),
+        gasMist: (at('computationCost') + at('storageCost') > at('storageRebate')
+          ? at('computationCost') + at('storageCost') - at('storageRebate')
+          : 0n
+        ).toString(),
         summary: describe(input.action),
       },
       Date.now(),

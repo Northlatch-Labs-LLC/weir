@@ -58,13 +58,7 @@ async function quote(
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') +
-          BigInt(gas.storageCost ?? '0') -
-          BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -307,13 +301,7 @@ export async function prepareDeposit(input: {
     const delta = result?.balanceChanges?.find(
       (change) => change.coinType === SUI_TYPE && change.address === input.sender,
     );
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') +
-          BigInt(gas.storageCost ?? '0') -
-          BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -428,6 +416,18 @@ export async function submitSigned(input: {
   }
 }
 
+/*
+  What the sender pays: computation plus storage, less the rebate for storage freed. The rebate
+  can exceed the rest when a transaction deletes more than it creates; the chain then refunds the
+  difference, and the fee row shows a fee, so the net is clamped at zero.
+*/
+function netGas(gas: NonNullable<SimulatedTransaction['effects']>['gasUsed']): bigint {
+  if (gas === undefined) return 0n;
+  const net =
+    BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+  return net < 0n ? 0n : net;
+}
+
 function describeAbort(raw: string): string {
   const decoded = decodeAbort(raw);
   return decoded.explanation === null ? raw : `${decoded.explanation} (${raw})`;
@@ -536,13 +536,7 @@ export async function prepareSubscribe(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') +
-          BigInt(gas.storageCost ?? '0') -
-          BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
     const suiDelta = result?.balanceChanges?.find(
       (c) => c.coinType === SUI_TYPE && c.address === input.sender,
     );
@@ -659,11 +653,7 @@ export async function prepareTip(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
     const split = computeSplit(
       amount,
       vault.value.feeBpsSnapshot,
@@ -771,11 +761,7 @@ export async function prepareUnlock(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
     const split = computeSplit(
       price,
       vault.value.feeBpsSnapshot,
@@ -846,11 +832,7 @@ export async function prepareSetContentPrice(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -935,11 +917,7 @@ export async function prepareKeyPublish(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -1009,11 +987,7 @@ export async function prepareOpenVault(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -1110,11 +1084,7 @@ export async function prepareAddTier(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
@@ -1172,11 +1142,7 @@ export async function prepareClaimEarnings(input: {
       return fail('malformed', source, describeAbort(status?.error ?? 'no status returned'));
     }
 
-    const gas = result?.effects?.gasUsed;
-    const gasMist =
-      gas === undefined
-        ? 0n
-        : BigInt(gas.computationCost ?? '0') + BigInt(gas.storageCost ?? '0') - BigInt(gas.storageRebate ?? '0');
+    const gasMist = netGas(result?.effects?.gasUsed);
 
     return ok({
       bytes: await rememberQuote(toBase64(bytes)),
