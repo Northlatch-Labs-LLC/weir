@@ -3,6 +3,7 @@
 
 import { useUnlock } from '@/components/app/use-unlock';
 import { SignIn } from '@/components/SignIn';
+import { formatUnits } from '@/lib/units';
 
 export function UnlockButton({
   vaultId,
@@ -76,8 +77,8 @@ export function UnlockButton({
         <span className="lbl">Checked against the chain. Nothing signed yet</span>
         <p>
           {priceLabel} for this post, permanently. The creator receives{' '}
-          <strong>{quote.creatorReceives}</strong> and the platform{' '}
-          <strong>{quote.platformReceives}</strong>.
+          <strong>{formatUnits(BigInt(quote.creatorReceives), quote.decimals)} {quote.symbol}</strong> and the platform{' '}
+          <strong>{formatUnits(BigInt(quote.platformReceives), quote.decimals)} {quote.symbol}</strong>.
         </p>
         <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-12)' }}>
           <button className="btn" type="button" disabled={busy} onClick={() => void signAndSubmit()}>

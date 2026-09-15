@@ -15,6 +15,7 @@ import {
   handleProblem,
   readContentPrice,
   readCreatorVault,
+  readDecimals,
   tx as txBuilders,
   type DecodedAbort,
   type Reading,
@@ -689,6 +690,8 @@ export interface UnlockQuote extends CheckoutQuote {
   contentKey: string;
   creatorReceives: string;
   platformReceives: string;
+  decimals: number;
+  symbol: string;
 }
 
 export async function prepareUnlock(input: {
@@ -712,6 +715,8 @@ export async function prepareUnlock(input: {
   const account = await findAccount(input.sender);
   if (!account.ok) return account;
   if (account.value === null) return ok({ blocked: { kind: 'no-account' } });
+  const decimals = await readDecimals(client, input.coinType);
+  if (!decimals.ok) return decimals;
 
   const keyBytes = Array.from(new TextEncoder().encode(input.contentKey));
 
@@ -788,6 +793,8 @@ export async function prepareUnlock(input: {
       contentKey: input.contentKey,
       creatorReceives: split.creator.toString(),
       platformReceives: split.platform.toString(),
+      decimals: decimals.value,
+      symbol: input.coinType.split('::').pop() ?? '',
     });
   } catch (error) {
     return fail('malformed', source, describeAbort(opaqueDetail(source, error)));

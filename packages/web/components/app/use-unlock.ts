@@ -18,6 +18,8 @@ export interface Quote {
   contentKey: string;
   creatorReceives: string;
   platformReceives: string;
+  decimals: number;
+  symbol: string;
 }
 
 export type UnlockStage =
