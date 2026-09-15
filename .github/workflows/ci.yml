@@ -185,6 +185,37 @@ jobs:
       # NOT covered, and this step must not be read as claiming otherwise: `packages/room` defines
       # no `test` script at all, so `-r` skips it silently. Six packages are newly gated here
       # (sdk, agent, daemon, policy, signer, mcp); room has no tests for any gate to run.
+
+      # heron-purse.service starts /opt/node22/bin/node by that exact path -- Debian 13 on the
+      # droplet ships node 20, and @mysten/sui requires 22 -- and
+      # packages/purse/test/client-smoke.test.ts exists to measure a crash specific to node 22's
+      # WebAssembly HTTP parser under the unit's own --jitless flag. The test refuses to report a
+      # pass for any other runtime; it reports NOT MEASURED instead. `setup-node` above already
+      # installed node 22 into the hosted toolcache under a version-numbered path, so this step
+      # only needs to make it answer to the name the unit uses. The download branch is the same
+      # thing a human follows by hand (nodejs.org, checked against its own SHASUMS256.txt) and
+      # exists only in case setup-node's pin above ever stops meaning what it says.
+      - name: Put a node 22 at /opt/node22/bin/node, the path heron-purse.service names
+        run: |
+          set -euo pipefail
+          if [[ "$(node --version)" == v22.* ]]; then
+            sudo mkdir -p /opt/node22/bin
+            sudo ln -sf "$(command -v node)" /opt/node22/bin/node
+          else
+            echo "setup-node did not leave node 22 active ($(node --version)); fetching it directly" >&2
+            BASE="https://nodejs.org/dist/latest-v22.x"
+            WORKDIR="$(mktemp -d)"
+            curl -fsSL -o "$WORKDIR/SHASUMS256.txt" "$BASE/SHASUMS256.txt"
+            TARBALL="$(awk '$2 ~ /^node-v22\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz$/ { print $2; exit }' "$WORKDIR/SHASUMS256.txt")"
+            [ -n "$TARBALL" ] || { echo "no linux-x64 tarball listed in $BASE/SHASUMS256.txt" >&2; exit 1; }
+            curl -fsSL -o "$WORKDIR/$TARBALL" "$BASE/$TARBALL"
+            ( cd "$WORKDIR" && sha256sum --ignore-missing -c SHASUMS256.txt )
+            sudo mkdir -p /opt/node22
+            sudo tar -xJf "$WORKDIR/$TARBALL" -C /opt/node22 --strip-components=1
+            rm -rf "$WORKDIR"
+          fi
+          /opt/node22/bin/node --version
+
       - name: Tests
         run: pnpm test
 
