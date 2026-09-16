@@ -131,8 +131,8 @@ describe('the page is the server’s', () => {
     mode = 'pages';
     const first = await reader().feed({});
     if (!first.ok) throw new Error(first.failure.detail);
-    expect(first.value.posts[0]).toEqual({ postId: 'p001', handle: 'alice', title: 'One', preview: 'first', access: 'paid', price: '250000', currency: 'USDC' });
-    expect(first.value.posts[1]).toEqual({ postId: 'p002', handle: 'bob', title: 'Two', preview: 'second', access: 'public', price: null, currency: null });
+    expect(first.value.posts[0]).toEqual({ postId: 'p001', handle: 'alice', title: 'One', preview: 'first', access: 'paid', price: '250000', currency: 'USDC', vaultId: '0xv', contentKey: 'k1' });
+    expect(first.value.posts[1]).toEqual({ postId: 'p002', handle: 'bob', title: 'Two', preview: 'second', access: 'public', price: null, currency: null, vaultId: '0xw', contentKey: null });
     expect(JSON.stringify(first.value)).not.toContain('the words');
   });
 });
