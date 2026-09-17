@@ -146,8 +146,17 @@ export function canRead(post: Post, entitlements: Entitlements): boolean {
   switch (post.access.kind) {
     case 'public':
       return true;
-    case 'subscribers':
-      return entitlements.subscribedVaults.has(normalise(post.vaultId));
+    case 'subscribers': {
+      // A subscription opens the tier it paid for and the periods it paid for, never the vault as
+      // a whole: a 0.2 SUI membership beside a 1 SUI one must not read the dearer tier's posts.
+      // The tier and period are sealed into the post; a post that carries neither predates tiered
+      // sealing and opens to any live subscription, which is what it was published under.
+      const sealed = post.sealedBody;
+      if (sealed?.tier === undefined || sealed.period === undefined) {
+        return entitlements.subscribedVaults.has(normalise(post.vaultId));
+      }
+      return subscriptionForPeriod(entitlements, post.vaultId, BigInt(sealed.tier), BigInt(sealed.period)) !== null;
+    }
     case 'paid': {
       const human = unlockKey(post.vaultId, post.access.contentKey);
       if (entitlements.unlocked.has(human)) return true;
@@ -206,6 +215,11 @@ export function subscriptionForPeriod(
       .filter((s) => s.tier >= tier && s.startedAtMs <= periodStart && periodStart < s.expiresAtMs)
       .sort((a, b) => (a.startedAtMs < b.startedAtMs ? -1 : a.startedAtMs > b.startedAtMs ? 1 : 0))[0] ?? null
   );
+}
+
+/** Every live-or-expired subscription this reader holds against one vault, ids normalised. */
+export function subscriptionsForVault(entitlements: Entitlements, vaultId: string): readonly HeldSubscription[] {
+  return entitlements.subscriptions?.get(normalise(vaultId)) ?? [];
 }
 
 export function unlockKey(vaultId: string, contentKey: string): string {

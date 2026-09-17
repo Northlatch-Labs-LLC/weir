@@ -14,7 +14,7 @@ import { checkHandle } from '@/lib/accounts';
 import { agentAccountOrUnread } from '@/lib/agents';
 import { agentIdentityFor, authorIsAgentFrom } from '@/lib/agent-identity';
 import { reverseName } from '@/lib/names';
-import { canRead, sealApprover, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
+import { canRead, sealApprover, subscriptionsForVault, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
 import { siteConfig, explorerUrl, shortId, readVaults } from '@/lib/chain';
 import { readVault } from '@/lib/stake';
@@ -194,9 +194,24 @@ export default async function CreatorPage({
             measured('Unclaimed earnings', money(v.earnings), 'held by the contract, not by us'),
           ];
 
-  const holdsSubscription = profile.vaultId !== null && entitlements.subscribedVaults.has(profile.vaultId);
+  /*
+    What a membership opens is ranked by the price it paid, exactly as `creator::seal_approve_subscription`
+    ranks it on chain. Holding any membership used to mark EVERY tier "Held" and promise that its
+    subscriber posts were open, so a 0.2 SUI member was told the 1 SUI tier was theirs — and the
+    chain refused the keys. Each tier is now answered on its own, and the dearer ones stay for sale.
+  */
+  const heldTiers = profile.vaultId === null ? [] : subscriptionsForVault(entitlements, profile.vaultId);
+  const liveAtMs = BigInt(Date.now());
+  const paidFor = heldTiers.reduce((most: bigint | null, s) => {
+    if (s.expiresAtMs <= liveAtMs) return most;
+    const index = Number(s.tier);
+    const tier = v === null ? undefined : v.tiers[index];
+    if (tier === undefined) return most;
+    return most === null || tier.price > most ? tier.price : most;
+  }, null);
 
   const tiers: CreatorTier[] = activeTiers.map((t) => {
+    const held = paidFor !== null && paidFor >= t.price;
     const days = Number(t.periodMs / 86_400_000n);
     const net =
       v === null || coinDecimals === null
@@ -208,8 +223,8 @@ export default async function CreatorPage({
       net: coinDecimals === null
         ? "the coin scale is being read from the chain"
         : `Creator keeps ${net}`,
-      held: holdsSubscription,
-      action: holdsSubscription ? (
+      held,
+      action: held ? (
         <p style={{ margin: 0, color: CREST, fontSize: '0.9375rem', fontWeight: 600 }}>
           You hold this membership. Subscriber posts are open to you.
         </p>
