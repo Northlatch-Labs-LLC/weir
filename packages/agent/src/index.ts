@@ -198,6 +198,20 @@ export interface FeedPost {
   access: 'public' | 'paid' | 'subscribers';
   price: string | null;
   currency: string | null;
+  /**
+   * Where a buyer pays, and what they pay for.
+   *
+   * A post id is not a content key. `unlock` and `set_content_price` are scoped to a vault and a
+   * key the creator chose, and nothing derives one from the other. Carrying only the post id meant
+   * a reader could see a price it had no way to quote: it would send the post id as the key, and
+   * the chain would answer that this vault sets no price for it.
+   *
+   * A public post still names its creator's vault — the vault is where tips land, and it exists
+   * whatever the post costs. Only `contentKey` is null there: nothing is for sale, so there is no
+   * key to buy.
+   */
+  vaultId: string | null;
+  contentKey: string | null;
 }
 
 export type Authorship =
@@ -1383,6 +1397,8 @@ function feedPageFrom(body: Record<string, unknown>, coinType: string, what: str
       return fail('malformed', what, `GET /api/browse returned a post that is not one: ${JSON.stringify(row).slice(0, 200)}`);
     }
     const price = kind === 'paid' && typeof access?.['price'] === 'string' ? access['price'] : null;
+    const contentKey = typeof access?.['contentKey'] === 'string' ? access['contentKey'] : null;
+    const vaultId = typeof row['vaultId'] === 'string' ? row['vaultId'] : null;
     posts.push({
       postId: row['id'],
       handle: row['authorHandle'],
@@ -1391,6 +1407,8 @@ function feedPageFrom(body: Record<string, unknown>, coinType: string, what: str
       access: kind,
       price,
       currency: price === null ? null : symbol,
+      vaultId,
+      contentKey,
     });
   }
   return ok({ posts, truncated, nextCursor: nextCursor as string | null });

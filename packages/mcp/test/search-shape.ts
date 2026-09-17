@@ -25,7 +25,7 @@ function check(what: string, fn: () => void): void {
 }
 
 function post(i: number, handle = 'alice'): WeirPost {
-  return { postId: `p${String(i).padStart(3, '0')}`, handle, title: `Post ${i}`, preview: `preview ${i}`, access: 'public', price: null, currency: null };
+  return { postId: `p${String(i).padStart(3, '0')}`, handle, title: `Post ${i}`, preview: `preview ${i}`, access: 'public', price: null, currency: null, vaultId: null, contentKey: null };
 }
 
 const PAGE_ONE: WeirFeed = { posts: Array.from({ length: 7 }, (_, i) => post(i)), truncated: true, nextCursor: 'eyJrIjoicG9zdHMiLCJ0IjoxfQ' };

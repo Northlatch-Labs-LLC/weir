@@ -40,6 +40,16 @@ export interface WeirPost {
   access: 'public' | 'paid' | 'subscribers';
   price: string | null;
   currency: Currency | null;
+  /**
+   * Where a buyer pays, and what they pay for.
+   *
+   * A post id is not a content key: `unlock` is scoped to a vault and a key the creator chose, and
+   * nothing derives one from the other. Without these two, a feed could show a price nobody could
+   * quote — the reader would send the post id as the key and the chain would answer that this vault
+   * sets no price for it.
+   */
+  vaultId: string | null;
+  contentKey: string | null;
 }
 
 export interface WeirQuote {
