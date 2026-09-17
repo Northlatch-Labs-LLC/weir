@@ -56,7 +56,9 @@ function buildServer(binding: WeirBinding): McpServer {
 
   const names = registerTools(server, binding);
   log(`registered ${names.length} tools: ${names.length === 0 ? '(none)' : names.join(', ')}`);
-  registeredTools = names;
+  if (registeredTools.length === 0) {
+    registeredTools = Object.freeze([...names]);
+  }
   return server;
 }
 
