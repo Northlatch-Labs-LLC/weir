@@ -47,6 +47,15 @@ interface Entry {
   settled: boolean;
 }
 
+/**
+ * In-process idempotency ledger (M-08). Entries survive the request lifetime but NOT
+ * a process restart — a supervisor bounce between a buy dispatch and its response allows
+ * the same request to be resubmitted and charged twice. Replacing this with a durable
+ * store (Redis / DB with TTL) is required before this server handles high-value spend
+ * in a supervised environment.
+ *
+ * TODO(M-08): persist to durable store with TTL=RESULT_TTL_MS.
+ */
 export class CallLedger {
   private readonly entries = new Map<string, Entry>();
 

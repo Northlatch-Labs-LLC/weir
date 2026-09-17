@@ -526,11 +526,40 @@ export function loadPolicyDoc(text: string, signerAddress: string): { ok: true; 
   const doc = parsed as Record<string, unknown>;
   if (doc['version'] !== 1) return { ok: false, reason: `the policy file has version ${JSON.stringify(doc['version'])}; this server reads version 1` };
   const address = doc['agentAddress'];
-  if (typeof address !== 'string' || address.toLowerCase() !== signerAddress.toLowerCase()) {
+  if (typeof address !== 'string' || address !== signerAddress) {
     return { ok: false, reason: 'the policy file names a different agentAddress than the bound signer; refusing to apply another agent\'s policy' };
   }
   for (const field of ['outflowCeilings', 'allowedTargets', 'allowedTypeArguments', 'allowedRecipients', 'allowedObjects']) {
     if (!Array.isArray(doc[field])) return { ok: false, reason: `the policy file lacks the ${field} list` };
+  }
+  const ceilings = doc['outflowCeilings'] as unknown[];
+  if (ceilings.length === 0) {
+    return { ok: false, reason: 'the policy file has an empty outflowCeilings list; at least one bounded ceiling is required' };
+  }
+  for (let i = 0; i < ceilings.length; i++) {
+    const c = ceilings[i];
+    if (c === null || typeof c !== 'object') {
+      return { ok: false, reason: `outflowCeilings[${i}] is not an object` };
+    }
+    const entry = c as Record<string, unknown>;
+    if (typeof entry['coinType'] !== 'string' || entry['coinType'].length === 0) {
+      return { ok: false, reason: `outflowCeilings[${i}] has an invalid or missing coinType` };
+    }
+    if (typeof entry['maxPerPeriod'] !== 'string') {
+      return { ok: false, reason: `outflowCeilings[${i}] has a missing maxPerPeriod; expected a numeric string` };
+    }
+    let maxPerPeriod: bigint;
+    try {
+      maxPerPeriod = BigInt(entry['maxPerPeriod']);
+    } catch {
+      return { ok: false, reason: `outflowCeilings[${i}].maxPerPeriod ${JSON.stringify(entry['maxPerPeriod'])} is not a valid integer` };
+    }
+    if (maxPerPeriod <= 0n) {
+      return { ok: false, reason: `outflowCeilings[${i}].maxPerPeriod must be a positive integer, got ${entry['maxPerPeriod']}` };
+    }
+    if (typeof entry['periodMs'] !== 'number' || !Number.isFinite(entry['periodMs']) || entry['periodMs'] < 0) {
+      return { ok: false, reason: `outflowCeilings[${i}].periodMs must be a non-negative finite number` };
+    }
   }
   return { ok: true, policy: doc };
 }

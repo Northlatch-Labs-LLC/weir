@@ -23,7 +23,7 @@ const SERVER_INFO = {
 } as const;
 
 function buildServer(binding: WeirBinding): McpServer {
-  const server = new McpServer(SERVER_INFO, {
+  const server = new McpServer(SERVER_INFO, { // L-03: see registeredTools freeze below
     instructions:
       'weir.social is a paid social network on Sui. Content is free, sold one post at a time, or ' +
       'gated behind a creator subscription.\n\n' +
@@ -56,11 +56,15 @@ function buildServer(binding: WeirBinding): McpServer {
 
   const names = registerTools(server, binding);
   log(`registered ${names.length} tools: ${names.length === 0 ? '(none)' : names.join(', ')}`);
-  registeredTools = names;
+  // L-03: freeze after first assignment; HTTP mode calls buildServer per-request but
+  // the tool list is deterministic — subsequent calls must not overwrite the frozen ref.
+  if (registeredTools.length === 0) {
+    registeredTools = Object.freeze(names);
+  }
   return server;
 }
 
-let registeredTools: readonly string[] = [];
+let registeredTools: readonly string[] = Object.freeze([]);
 
 function announce(binding: WeirBinding, options: ServerOptions): void {
   const capabilities = [...capabilitiesOf(binding)];

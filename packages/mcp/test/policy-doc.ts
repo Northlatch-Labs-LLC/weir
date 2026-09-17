@@ -17,11 +17,12 @@ function check(what: string, fn: () => void): void {
 }
 
 const ME = `0x${'f'.repeat(64)}`;
+const VALID_CEILING = { coinType: '0x2::sui::SUI', maxPerPeriod: '10000000', periodMs: 86_400_000 };
 const doc = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
     version: 1,
     agentAddress: ME,
-    outflowCeilings: [],
+    outflowCeilings: [VALID_CEILING],
     allowedTargets: [],
     allowedTypeArguments: [],
     allowedRecipients: [],
@@ -35,16 +36,54 @@ function main(): void {
     const r = loadPolicyDoc(doc(), ME);
     assert.equal(r.ok, true, JSON.stringify(r));
   });
-  check("another agent's policy is refused, case-insensitively on the address", () => {
+  check("another agent's policy is refused with exact address comparison", () => {
     const r = loadPolicyDoc(doc({ agentAddress: `0x${'e'.repeat(64)}` }), ME);
     assert.equal(r.ok, false);
     if (!r.ok) assert.match(r.reason, /different agentAddress/);
-    assert.equal(loadPolicyDoc(doc({ agentAddress: ME.toUpperCase() }), ME).ok, true);
+    // Sui addresses are case-sensitive; a differently-cased version of the same
+    // bytes is a distinct value and must be rejected (M-02).
+    const upper = loadPolicyDoc(doc({ agentAddress: ME.toUpperCase() }), ME);
+    assert.equal(upper.ok, false, 'uppercase variant of signer address must be rejected');
+    if (!upper.ok) assert.match(upper.reason, /different agentAddress/);
   });
   check('a document of another version, or missing a list, or not JSON, is refused with the reason', () => {
     assert.match((loadPolicyDoc(doc({ version: 2 }), ME) as { reason: string }).reason, /version/);
     assert.match((loadPolicyDoc(doc({ allowedObjects: undefined }), ME) as { reason: string }).reason, /allowedObjects/);
     assert.match((loadPolicyDoc('not json', ME) as { reason: string }).reason, /not JSON/);
+  });
+  check('a document with an empty outflowCeilings list is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /empty outflowCeilings/);
+  });
+  check('a ceiling entry missing coinType is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ maxPerPeriod: '100', periodMs: 1000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /coinType/);
+  });
+  check('a ceiling entry with non-string maxPerPeriod is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: 100, periodMs: 1000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /maxPerPeriod/);
+  });
+  check('a ceiling entry with non-numeric maxPerPeriod string is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: 'unlimited', periodMs: 1000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /maxPerPeriod/);
+  });
+  check('a ceiling entry with maxPerPeriod of zero is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: '0', periodMs: 1000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /maxPerPeriod/);
+  });
+  check('a ceiling entry with negative periodMs is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: '100', periodMs: -1 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /periodMs/);
+  });
+  check('a well-formed ceiling entry with a positive bounded maxPerPeriod is accepted', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: '800000000', periodMs: 604_800_000 }] }), ME);
+    assert.equal(r.ok, true, JSON.stringify(r));
   });
   check('WEIR_AGENT_POLICY is read only in stdio mode with a key, never under --http', () => {
     const base = { WEIR_BASE_URL: 'https://weir.social', PROJECTX_SOCIAL_NETWORK: 'mainnet' } as Record<string, string>;
