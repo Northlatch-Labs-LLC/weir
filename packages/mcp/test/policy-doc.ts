@@ -46,6 +46,35 @@ function main(): void {
     assert.match((loadPolicyDoc(doc({ allowedObjects: undefined }), ME) as { reason: string }).reason, /allowedObjects/);
     assert.match((loadPolicyDoc('not json', ME) as { reason: string }).reason, /not JSON/);
   });
+  check('outflowCeilings entry with wildcard coinType is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '*', maxPerPeriod: '1000000', periodMs: 86400000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /coinType/);
+  });
+  check('outflowCeilings entry with empty coinType is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '', maxPerPeriod: '1000000', periodMs: 86400000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /coinType/);
+  });
+  check('outflowCeilings entry missing maxPerPeriod is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', periodMs: 86400000 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /maxPerPeriod/);
+  });
+  check('outflowCeilings entry with non-integer periodMs is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: '1000000', periodMs: -1 }] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /periodMs/);
+  });
+  check('outflowCeilings entry that is not an object is refused', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: ['not-an-object'] }), ME);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /not an object/);
+  });
+  check('well-formed outflowCeilings entry is accepted', () => {
+    const r = loadPolicyDoc(doc({ outflowCeilings: [{ coinType: '0x2::sui::SUI', maxPerPeriod: '10000000', periodMs: 86400000 }] }), ME);
+    assert.equal(r.ok, true, JSON.stringify(r));
+  });
   check('WEIR_AGENT_POLICY is read only in stdio mode with a key, never under --http', () => {
     const base = { WEIR_BASE_URL: 'https://weir.social', PROJECTX_SOCIAL_NETWORK: 'mainnet' } as Record<string, string>;
     const http = resolveOptions(['--http'], { ...base, [ENV.policy]: '/tmp/policy.json' });

@@ -542,6 +542,23 @@ export function loadPolicyDoc(text: string, signerAddress: string): { ok: true; 
   for (const field of ['outflowCeilings', 'allowedTargets', 'allowedTypeArguments', 'allowedRecipients', 'allowedObjects']) {
     if (!Array.isArray(doc[field])) return { ok: false, reason: `the policy file lacks the ${field} list` };
   }
+  const ceilings = doc['outflowCeilings'] as unknown[];
+  for (let i = 0; i < ceilings.length; i++) {
+    const entry = ceilings[i];
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      return { ok: false, reason: `outflowCeilings[${i}] is not an object` };
+    }
+    const ceil = entry as Record<string, unknown>;
+    if (typeof ceil['coinType'] !== 'string' || !ceil['coinType'].includes('::')) {
+      return { ok: false, reason: `outflowCeilings[${i}].coinType is not a valid Sui type (got ${JSON.stringify(ceil['coinType'])}); wildcard or empty coinType entries are silently ignored by the policy engine` };
+    }
+    if (typeof ceil['maxPerPeriod'] !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(ceil['maxPerPeriod'])) {
+      return { ok: false, reason: `outflowCeilings[${i}].maxPerPeriod must be a decimal u64 string` };
+    }
+    if (typeof ceil['periodMs'] !== 'number' || !Number.isInteger(ceil['periodMs']) || ceil['periodMs'] <= 0) {
+      return { ok: false, reason: `outflowCeilings[${i}].periodMs must be a positive integer` };
+    }
+  }
   return { ok: true, policy: doc };
 }
 
