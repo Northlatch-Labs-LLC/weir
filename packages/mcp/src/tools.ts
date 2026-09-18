@@ -966,6 +966,9 @@ function registerPrice(
         }
       }
       return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
+        const untethered = await requireLiveTether(weir, principal, name);
+        if (untethered !== null) return untethered;
+
         try {
           const priced = await weir.priceContent!({
             vaultId: args.vaultId,

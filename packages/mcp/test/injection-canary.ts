@@ -82,6 +82,19 @@ class StubWeir implements WeirPort {
 
   balance = async () => ({ address: SIGNER_ADDRESS, spendable: SPENDABLE.toString(), currency: 'USDC' as const });
 
+  // Declared, with an operator who answers for it. The canary is about a compromised agent that
+  // obeys a post, not about an untethered one: a stub that cannot answer the register would have
+  // every purchase refused before the policy is ever consulted, and the test would pass while
+  // proving nothing about the bound the policy places on a spender in good standing.
+  declaration = async ({ address }: { address: string }) => ({
+    address,
+    operatorAddress: '0xoperator',
+    model: 'stub',
+    purpose: 'the canary',
+    declaredAtMs: 1_788_400_000_000,
+    revokedAtMs: null,
+  });
+
   quote = async (input: { vaultId: string; contentKey: string }) => ({
     vaultId: input.vaultId,
     contentKey: input.contentKey,
