@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SEAL_PERIOD_MS, periodIdentity, periodOf, unlockIdentity } from '@projectx-social/sdk';
 
 import {
+  canRead,
   NO_ENTITLEMENTS,
   sealApprover,
   subscriptionForPeriod,
@@ -153,5 +154,35 @@ describe('the two identities cannot collide', () => {
     expect(periodOf(START)).toBe(P);
     expect(periodOf(START + SEAL_PERIOD_MS - 1n)).toBe(P);
     expect(periodOf(START + SEAL_PERIOD_MS)).toBe(P + 1n);
+  });
+});
+
+describe('what a subscription lets you read', () => {
+  // As readEntitlements builds it: a live subscription also sets the vault-level flag.
+  const cheap: Entitlements = {
+    ...entitlements([held({ tier: 0n })]),
+    subscribedVaults: new Set([VAULT]),
+  };
+
+  it('opens the tier it paid for', () => {
+    expect(canRead(subscriberPost({ tier: '0', period: String(P) }), cheap)).toBe(true);
+  });
+
+  it('refuses a dearer tier on the same vault', () => {
+    // The 0.2 SUI member reading the 1 SUI tier: the page used to answer "held" for every tier on
+    // a vault it held anything on, while the chain refused the key.
+    expect(canRead(subscriberPost({ tier: '1', period: String(P) }), cheap)).toBe(false);
+  });
+
+  it('refuses a period the subscription did not pay for', () => {
+    expect(canRead(subscriberPost({ tier: '0', period: String(P + 1n) }), cheap)).toBe(false);
+  });
+
+  it('opens a post published before tiers were sealed in, to any live subscription', () => {
+    expect(canRead(subscriberPost(null), cheap)).toBe(true);
+  });
+
+  it('refuses a subscriber post to someone holding nothing', () => {
+    expect(canRead(subscriberPost({ tier: '0', period: String(P) }), NO_ENTITLEMENTS)).toBe(false);
   });
 });
