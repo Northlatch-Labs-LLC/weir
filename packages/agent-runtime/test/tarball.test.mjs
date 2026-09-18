@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,16 +89,38 @@ test('SOURCE_COMMIT inside the tarball names the shipped commit', () => {
 });
 
 test('the refusal fires on a dirty tree, before anything is built', () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'tarball-dirty-'));
-  const scratchFile = path.join(REPO_ROOT, 'packages', 'agent-runtime', '.tarball-test-scratch');
+  /*
+    In its own repository, not this one. The refusal is proved by making a tree dirty, and this
+    package's other test files run as concurrent processes that shell out to the same script: a
+    scratch file dropped in the real tree for the length of one spawn is enough to refuse a build
+    those tests are in the middle of, which is how B6 in host-fixes.test.mjs failed in CI for a
+    reason that had nothing to do with it. The script reads its repository from its own location,
+    so a scratch repository holding a copy of it refuses for exactly the same reason, and nothing
+    outside the temporary directory is touched.
+  */
+  const root = mkdtempSync(path.join(os.tmpdir(), 'tarball-dirty-'));
   try {
-    execFileSync('sh', ['-c', `echo scratch > ${JSON.stringify(scratchFile)}`]);
-    const result = spawnSync(SCRIPT, [], { encoding: 'utf8', cwd: PKG_DIR });
+    const scripts = path.join(root, 'packages', 'agent-runtime', 'scripts');
+    mkdirSync(scripts, { recursive: true });
+    const script = path.join(scripts, 'make-source-tarball.sh');
+    copyFileSync(SCRIPT, script);
+    chmodSync(script, 0o755);
+
+    const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    git('add', '-A');
+    git('commit', '-qm', 'the script, committed');
+
+    writeFileSync(path.join(root, 'packages', 'agent-runtime', 'uncommitted.txt'), 'scratch\n');
+    const result = spawnSync(script, [], { encoding: 'utf8', cwd: path.dirname(scripts) });
+
     assert.notEqual(result.status, 0, 'a dirty tree under packages/agent-runtime must refuse the build');
     assert.match(result.stderr, /refused/);
+    assert.match(result.stderr, /uncommitted.txt/, 'the refusal names what made the tree dirty');
   } finally {
-    rmSync(scratchFile, { force: true });
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
