@@ -700,9 +700,6 @@ function registerBuy(
       if (isRefusal(ceiling)) return ceiling;
 
       return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
-        const untethered = await requireLiveTether(weir, principal, name);
-        if (untethered !== null) return untethered;
-
         try {
           const receipt = await weir.unlock!({
             vaultId: args.vaultId,
@@ -766,9 +763,6 @@ function registerSubscribe(
       if (isRefusal(ceiling)) return ceiling;
 
       return once(ledger, { requestId: extra.requestId, tool: name, args, principal }, async (key) => {
-        const untethered = await requireLiveTether(weir, principal, name);
-        if (untethered !== null) return untethered;
-
         try {
           const receipt = await weir.subscribe!({
             vaultId: args.vaultId,
