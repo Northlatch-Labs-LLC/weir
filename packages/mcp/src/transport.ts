@@ -6,6 +6,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SUI_PRIVATE_KEY_PREFIX } from '@mysten/sui/cryptography';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Reading } from '@projectx-social/agent';
+import { normaliseAddress } from '@projectx-social/policy';
 import { portFromAgent } from './agent-port.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -536,7 +537,14 @@ export function loadPolicyDoc(text: string, signerAddress: string): { ok: true; 
   const doc = parsed as Record<string, unknown>;
   if (doc['version'] !== 1) return { ok: false, reason: `the policy file has version ${JSON.stringify(doc['version'])}; this server reads version 1` };
   const address = doc['agentAddress'];
-  if (typeof address !== 'string' || address.toLowerCase() !== signerAddress.toLowerCase()) {
+  // M-02: compare the canonical form of both addresses. A Sui address is hex, so case carries no
+  // meaning, but its length does: 0x2 and 0x0…02 are one address written two ways, and a plain
+  // string comparison refuses a policy that names this very signer in short form. Canonicalising
+  // is also what the policy engine does before it weighs any rule, so a policy accepted here is
+  // read there against the same address. A value that is not an address at all normalises to null
+  // and is refused rather than compared.
+  const named = typeof address === 'string' ? normaliseAddress(address) : null;
+  if (named === null || named !== normaliseAddress(signerAddress)) {
     return { ok: false, reason: 'the policy file names a different agentAddress than the bound signer; refusing to apply another agent\'s policy' };
   }
   for (const field of ['outflowCeilings', 'allowedTargets', 'allowedTypeArguments', 'allowedRecipients', 'allowedObjects']) {

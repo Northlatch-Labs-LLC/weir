@@ -35,11 +35,23 @@ function main(): void {
     const r = loadPolicyDoc(doc(), ME);
     assert.equal(r.ok, true, JSON.stringify(r));
   });
-  check("another agent's policy is refused, case-insensitively on the address", () => {
+  check("another agent's policy is refused, however the address is written", () => {
     const r = loadPolicyDoc(doc({ agentAddress: `0x${'e'.repeat(64)}` }), ME);
     assert.equal(r.ok, false);
     if (!r.ok) assert.match(r.reason, /different agentAddress/);
-    assert.equal(loadPolicyDoc(doc({ agentAddress: ME.toUpperCase() }), ME).ok, true);
+    // The same address in another hand. Case carries no meaning in the hex, and leading zeroes are
+    // written or left out at will, so both of these name this signer and its own policy is not
+    // refused for the spelling.
+    assert.equal(loadPolicyDoc(doc({ agentAddress: `0x${'F'.repeat(64)}` }), ME).ok, true);
+    const short = '0x2f8e7e447d69d9fff9e38f91b05927212f990c8588f46386e795d8c42cfb9d8c';
+    assert.equal(loadPolicyDoc(doc({ agentAddress: short }), `0x${short.slice(2).padStart(64, '0')}`).ok, true);
+    // Different bytes stay different, however they are padded.
+    assert.equal(loadPolicyDoc(doc({ agentAddress: `0x02f8${short.slice(4)}` }), short).ok, false);
+    // The 0x is the prefix, not a digit: 0X… is not an address, and a value that is not an address
+    // at all is refused rather than compared.
+    assert.equal(loadPolicyDoc(doc({ agentAddress: ME.toUpperCase() }), ME).ok, false);
+    assert.equal(loadPolicyDoc(doc({ agentAddress: 'not-an-address' }), ME).ok, false);
+    assert.equal(loadPolicyDoc(doc({ agentAddress: 42 }), ME).ok, false);
   });
   check('a document of another version, or missing a list, or not JSON, is refused with the reason', () => {
     assert.match((loadPolicyDoc(doc({ version: 2 }), ME) as { reason: string }).reason, /version/);
