@@ -110,8 +110,8 @@ importers:
   .:
     dependencies:
       '@types/node':
-        specifier: 26.4.0
-        version: 26.4.0
+        specifier: 26.6.1
+        version: 26.6.1
       tsx:
         specifier: 4.23.13
         version: 4.23.13
@@ -119,17 +119,17 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
       vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@types/node@26.4.0)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.1)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/agent:
     dependencies:
       '@mysten/seal':
-        specifier: 1.4.10
-        version: 1.4.10(@mysten/sui@2.30.0(typescript@7.0.2))
+        specifier: 1.4.12
+        version: 1.4.12(@mysten/sui@2.31.2(typescript@7.0.2))
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@projectx-social/sdk':
         specifier: 1.0.2
         version: link:../sdk
@@ -138,8 +138,8 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
       vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@types/node@26.4.0)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.1)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/agent-runtime:
     devDependencies:
@@ -150,8 +150,8 @@ importers:
   packages/daemon:
     dependencies:
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@projectx-social/policy':
         specifier: 1.0.2
         version: link:../policy
@@ -173,10 +173,10 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0
-        version: 1.30.0(zod@4.6.2)
+        version: 1.30.0(zod@4.6.5)
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@projectx-social/agent':
         specifier: 1.0.2
         version: link:../agent
@@ -187,8 +187,8 @@ importers:
         specifier: 1.0.2
         version: link:../signer
       zod:
-        specifier: 4.6.2
-        version: 4.6.2
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
       typescript:
         specifier: 7.0.2
@@ -200,14 +200,14 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
       vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@types/node@26.4.0)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.1)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/purse:
     dependencies:
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@projectx-social/policy':
         specifier: workspace:*
         version: link:../policy
@@ -218,8 +218,8 @@ importers:
         specifier: workspace:*
         version: link:../signer
       zod:
-        specifier: 4.6.2
-        version: 4.6.2
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
       '@projectx-social/agent':
         specifier: workspace:^
@@ -234,8 +234,8 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
       vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@types/node@26.4.0)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.1)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/room:
     dependencies:
@@ -256,8 +256,8 @@ importers:
   packages/sdk:
     dependencies:
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@noble/ciphers':
         specifier: 2.4.0
         version: 2.4.0
@@ -275,8 +275,8 @@ importers:
   packages/signer:
     dependencies:
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@projectx-social/policy':
         specifier: 1.0.2
         version: link:../policy
@@ -285,14 +285,14 @@ importers:
         version: link:../sdk
     devDependencies:
       '@mysten/seal':
-        specifier: 1.4.10
-        version: 1.4.10(@mysten/sui@2.30.0(typescript@7.0.2))
+        specifier: 1.4.12
+        version: 1.4.12(@mysten/sui@2.31.2(typescript@7.0.2))
       typescript:
         specifier: 7.0.2
         version: 7.0.2
       vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@types/node@26.4.0)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.1)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/ui:
     dependencies:
@@ -302,7 +302,7 @@ importers:
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.3
-        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -322,20 +322,20 @@ importers:
   packages/web:
     dependencies:
       '@mysten/dapp-kit-core':
-        specifier: 1.6.27
-        version: 1.6.27(@mysten/sui@2.30.0(typescript@7.0.2))(typescript@7.0.2)
+        specifier: 1.6.29
+        version: 1.6.29(@mysten/sui@2.31.2(typescript@7.0.2))(typescript@7.0.2)
       '@mysten/dapp-kit-react':
-        specifier: 2.1.29
-        version: 2.1.29(@mysten/sui@2.30.0(typescript@7.0.2))(@types/react@19.3.0)(react@19.3.0)(typescript@7.0.2)
+        specifier: 2.1.31
+        version: 2.1.31(@mysten/sui@2.31.2(typescript@7.0.2))(@types/react@19.3.0)(react@19.3.0)(typescript@7.0.2)
       '@mysten/seal':
-        specifier: 1.4.10
-        version: 1.4.10(@mysten/sui@2.30.0(typescript@7.0.2))
+        specifier: 1.4.12
+        version: 1.4.12(@mysten/sui@2.31.2(typescript@7.0.2))
       '@mysten/sui':
-        specifier: 2.30.0
-        version: 2.30.0(typescript@7.0.2)
+        specifier: 2.31.2
+        version: 2.31.2(typescript@7.0.2)
       '@mysten/suins':
         specifier: 2.0.6
-        version: 2.0.6(@mysten/sui@2.30.0(typescript@7.0.2))(debug@4.4.3)
+        version: 2.0.6(@mysten/sui@2.31.2(typescript@7.0.2))(debug@4.4.3)
       '@noble/hashes':
         specifier: 2.4.0
         version: 2.4.0
@@ -350,7 +350,7 @@ importers:
         version: 6.2.12
       next:
         specifier: 16.3.5
-        version: 16.3.5(@types/node@26.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 16.3.5(@types/node@26.6.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       pg:
         specifier: 8.23.0
         version: 8.23.0
@@ -368,11 +368,11 @@ importers:
         specifier: ^4
         version: 4.3.3
       '@testing-library/dom':
-        specifier: ^10.4.1
-        version: 10.4.1
+        specifier: ^10.4.2
+        version: 10.4.2
       '@testing-library/react':
         specifier: ^16.3.3
-        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
@@ -828,29 +828,29 @@ packages:
   '@mysten/bcs@2.1.1':
     resolution: {integrity: sha512-IDYomoQ6+yvOIClBHmNdScttv+h/HbGGHLEdUmGQptR3YdqqLM5vJD28wf2QP/UXCEBkCoG7TOT6pFNw8ExYmA==}
 
-  '@mysten/dapp-kit-core@1.6.27':
-    resolution: {integrity: sha512-KmVX+mjyw9l79WSk49zs/i7hE0T463QimYI3tm6oOSUa9nY3XoIdUVl1tSDJrWoIGQJjIJ5/RJPSN1ZNHsCf5Q==}
+  '@mysten/dapp-kit-core@1.6.29':
+    resolution: {integrity: sha512-YMXAXQOY9/i4c5G4cmCEF2xYl72632RQPygRN/v42BUp/uY7D/+dSfOkA4taU771bUxqlHVmLCTnyqmlwNVqHA==}
     peerDependencies:
-      '@mysten/sui': ^2.31.0
+      '@mysten/sui': ^2.31.2
 
-  '@mysten/dapp-kit-react@2.1.29':
-    resolution: {integrity: sha512-3kx4NdiU0BeMVuUMrugCTvObnn4jn07/Jl08clTMnJ5upor9Vcs0LgQ+EvrzKHfPq5s783F2mSTxfx3H5O6Ekw==}
+  '@mysten/dapp-kit-react@2.1.31':
+    resolution: {integrity: sha512-0cErpawbSBRrw+VR/d1M3nRAtfeVtcdrN73SZnwpPIixdERHgNlA+D8Tvi/leiIxDVXw/nqvl/ZuSrajpHuseQ==}
     peerDependencies:
       '@types/react': '>=17.0.0'
       react: '>=17.0.0'
 
-  '@mysten/seal@1.4.10':
-    resolution: {integrity: sha512-JGCc08zs752Y4/o939VKI9j13old1LQVafS+B3XepXXg9svHNuP0dfT3UvMAF+wLCmHCDicbfBF5eOroUDmQJw==}
+  '@mysten/seal@1.4.12':
+    resolution: {integrity: sha512-/b+nVOfX2qZQ7p5lQN0w8zY3uXHmUp0WBgAG0vIB5nbHV9EPWvPMmEGm8QH3SPiBxZu4D7cPYAi4aV/7k4CMVQ==}
     peerDependencies:
-      '@mysten/sui': ^2.31.0
+      '@mysten/sui': ^2.31.2
 
-  '@mysten/slush-wallet@1.2.2':
-    resolution: {integrity: sha512-57RqCMMDns6KvOoLXdVCQlsDVkwGjA5s7T+U75/zlAyC9wqurv2m9sbkBF6ren0zGSVgGmdnBI7uzCKuX8n9Zw==}
+  '@mysten/slush-wallet@1.2.5':
+    resolution: {integrity: sha512-4gs3rT80l1dnL/vTn4Z6uV3vQAFnQJHXAwTg///9RYobuW0PnFJqfSeUYYEGP+rTLjd4YNkdlwy9qARL7YHU4A==}
     peerDependencies:
-      '@mysten/sui': ^2.31.0
+      '@mysten/sui': ^2.31.3
 
-  '@mysten/sui@2.30.0':
-    resolution: {integrity: sha512-qGpcE1jy7n9Ra9y8QQup2Ia2TLPZckrg1gJxJvszqOCp8jIPyAAvgvfhQxx7lI944625MIvasb7LRZiuGb0Z2Q==}
+  '@mysten/sui@2.31.2':
+    resolution: {integrity: sha512-AarMaFrTlRUZyhHNRh/hrAIaxgrYXupbXypJq0TbGmgouJspwzg+fsk0aH4/67kkCeUC23idueQ2lc7BMyTlMg==}
     engines: {node: '>=22'}
 
   '@mysten/suins@2.0.6':
@@ -862,10 +862,10 @@ packages:
   '@mysten/utils@0.4.1':
     resolution: {integrity: sha512-gffLJ84CbqG/CcOPuVlwXIRu37tFn0BtUx7CQtbLwJzWjUE7FU2Gq8BXWjzxImnvufcyLTaNWtCPG6wq22Zhog==}
 
-  '@mysten/wallet-standard@0.21.24':
-    resolution: {integrity: sha512-inQJhr2REtTKdemlPQyFbdJ+6Rg6+qTKZoqyawhbOZNlAi1YXs9JVB+DjhRiWS9Ee30l0K/GoueyABZrJkGXfg==}
+  '@mysten/wallet-standard@0.21.27':
+    resolution: {integrity: sha512-K2XxTd1VpDDPaXndLhH/NlGDLTI63WXbq4wQLLRnPLoiICY6G2x2yR0f5mafsA5vT6tjfJTf5kwVDRnB8hGzdA==}
     peerDependencies:
-      '@mysten/sui': ^2.31.0
+      '@mysten/sui': ^2.31.3
 
   '@mysten/window-wallet-core@0.3.0':
     resolution: {integrity: sha512-RTtdNHL1ywN13RYXChSTcXDYB6l3IBckMNoWi+FU9hvPJXUT51fhBLreN/tgQhosrcEAd+6r25/qBYRY/coMqQ==}
@@ -1327,8 +1327,8 @@ packages:
   '@tailwindcss/postcss@4.3.3':
     resolution: {integrity: sha512-JTSZZGQi1AyKirbLN3azmjVzef92tcX7h+iSqPdaeStyFpGpDlKvvpxeOE8njhbUanbRwr3z8DyzhICWnMtQeg==}
 
-  '@testing-library/dom@10.4.1':
-    resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
+  '@testing-library/dom@10.4.2':
+    resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
     engines: {node: '>=18'}
 
   '@testing-library/react@16.3.3':
@@ -1358,8 +1358,8 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/node@26.4.0':
-    resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
+  '@types/node@26.6.1':
+    resolution: {integrity: sha512-VqGJBMCtdhqkBUCcBLvywI0NJ+KLuVzgNnlBUNFOQjqVxzo2lxLUNg1DSey8+u2u6ktswSAxg+s68QLzWHNOuA==}
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
@@ -1501,8 +1501,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@vitest/mocker@5.0.0':
-    resolution: {integrity: sha512-66PGTMIiVJP3t4a5yxU9qPtf7MdTBs8jmToMvy+HVflB3Yy13WJZTtPePdvU+wjRV02SKK5doLbSA6o9pwOmiA==}
+  '@vitest/mocker@5.0.1':
+    resolution: {integrity: sha512-6K1DoBNAPGvuOcSsGA4D6x+5zEEff/KmOOP3uetT2TrGpVfI+HRHRnJJfKi5ib/g1vx8IYHQD8s0pbJz8WQI7Q==}
     peerDependencies:
       msw: ^2.4.9
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
@@ -1512,8 +1512,8 @@ packages:
       vite:
         optional: true
 
-  '@vitest/spy@5.0.0':
-    resolution: {integrity: sha512-uy+luWBAPw9XfthoHi5AkfHUnuPYEESjl0p/r+meoBnU8bxg5GDQ3Ey8MjcJ6sqahkL4PFyrvfMJJBw7LbU06g==}
+  '@vitest/spy@5.0.1':
+    resolution: {integrity: sha512-rbto/mF/SGERxEgYOek7Xm6B9b+y+mVoo+f4b2LymYO8zM1b7uB5nHuhVMTP2hxdzgxvGiZYGxGIaMvL5y180Q==}
 
   '@wallet-standard/app@1.1.1':
     resolution: {integrity: sha512-WDGwoByhP5gwHH01r5EaLgQdLVkACPCdOMQhmhn8rsm10h/siSgTorShzBxrn0ExSPof+Lu+C3TfgqBrPa1xoQ==}
@@ -2491,8 +2491,8 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
-  undici-types@8.3.0:
-    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+  undici-types@8.9.0:
+    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -2573,20 +2573,20 @@ packages:
       yaml:
         optional: true
 
-  vitest@5.0.0:
-    resolution: {integrity: sha512-gpsMNoRhMjMktVxPtstOH4/PJuPyovVaMDr4oDilXaGH1EcqM2OE96SoHT2VIQ6fTGtTjqmHDrEu2X9RQiXf8Q==}
+  vitest@5.0.1:
+    resolution: {integrity: sha512-iA95lQbKEkvrtTkdAgnWbXfbipWiiWe/hDl2P5tMi6WFwD76G0NxXAGp/M9EOcYupeGJRr6wppMc7CoA41TQjg==}
     engines: {node: ^22.12.0 || ^24.0.0 || >=26.0.0}
     hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
       '@types/node': ^22.0.0 || >=24.0.0
-      '@vitest/browser-playwright': 5.0.0
-      '@vitest/browser-preview': 5.0.0
+      '@vitest/browser-playwright': 5.0.1
+      '@vitest/browser-preview': 5.0.1
       '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
-      '@vitest/coverage-istanbul': 5.0.0
-      '@vitest/coverage-v8': 5.0.0
-      '@vitest/ui': 5.0.0
+      '@vitest/coverage-istanbul': 5.0.1
+      '@vitest/coverage-v8': 5.0.1
+      '@vitest/ui': 5.0.1
       happy-dom: '*'
       jsdom: '*'
       vite: ^6.4.0 || ^7.0.0 || ^8.0.0
@@ -2652,8 +2652,8 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@4.6.2:
-    resolution: {integrity: sha512-lh5RCAGFa1Cm2hjtNwLQhSs/AsqdWnTQaBER9fEwN/88pSh7KOtJavtBx/0VlkN/uFd61SwYmljLMDAsHlvzBQ==}
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
 
@@ -2939,7 +2939,7 @@ snapshots:
     dependencies:
       '@lit/reactive-element': 2.1.2
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@4.6.2)':
+  '@modelcontextprotocol/sdk@1.30.0(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.7)
       ajv: 8.20.0
@@ -2956,8 +2956,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.6.2
-      zod-to-json-schema: 3.25.2(zod@4.6.2)
+      zod: 4.6.5
+      zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
 
@@ -2966,15 +2966,15 @@ snapshots:
       '@mysten/utils': 0.4.1
       '@scure/base': 2.4.0
 
-  '@mysten/dapp-kit-core@1.6.27(@mysten/sui@2.30.0(typescript@7.0.2))(typescript@7.0.2)':
+  '@mysten/dapp-kit-core@1.6.29(@mysten/sui@2.31.2(typescript@7.0.2))(typescript@7.0.2)':
     dependencies:
       '@floating-ui/dom': 1.8.0
       '@lit-labs/scoped-registry-mixin': 1.0.4
       '@lit/task': 1.0.3
-      '@mysten/slush-wallet': 1.2.2(@mysten/sui@2.30.0(typescript@7.0.2))(typescript@7.0.2)
-      '@mysten/sui': 2.30.0(typescript@7.0.2)
+      '@mysten/slush-wallet': 1.2.5(@mysten/sui@2.31.2(typescript@7.0.2))(typescript@7.0.2)
+      '@mysten/sui': 2.31.2(typescript@7.0.2)
       '@mysten/utils': 0.4.1
-      '@mysten/wallet-standard': 0.21.24(@mysten/sui@2.30.0(typescript@7.0.2))
+      '@mysten/wallet-standard': 0.21.27(@mysten/sui@2.31.2(typescript@7.0.2))
       '@nanostores/lit': 0.2.3(lit@3.3.3)(nanostores@1.5.3)
       '@wallet-standard/ui': 1.0.3
       '@wallet-standard/ui-registry': 1.1.1
@@ -2984,10 +2984,10 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@mysten/dapp-kit-react@2.1.29(@mysten/sui@2.30.0(typescript@7.0.2))(@types/react@19.3.0)(react@19.3.0)(typescript@7.0.2)':
+  '@mysten/dapp-kit-react@2.1.31(@mysten/sui@2.31.2(typescript@7.0.2))(@types/react@19.3.0)(react@19.3.0)(typescript@7.0.2)':
     dependencies:
       '@lit/react': 1.0.8(@types/react@19.3.0)
-      '@mysten/dapp-kit-core': 1.6.27(@mysten/sui@2.30.0(typescript@7.0.2))(typescript@7.0.2)
+      '@mysten/dapp-kit-core': 1.6.29(@mysten/sui@2.31.2(typescript@7.0.2))(typescript@7.0.2)
       '@nanostores/react': 1.1.0(nanostores@1.5.3)(react@19.3.0)
       '@types/react': 19.3.0
       nanostores: 1.5.3
@@ -2996,24 +2996,24 @@ snapshots:
       - '@mysten/sui'
       - typescript
 
-  '@mysten/seal@1.4.10(@mysten/sui@2.30.0(typescript@7.0.2))':
+  '@mysten/seal@1.4.12(@mysten/sui@2.31.2(typescript@7.0.2))':
     dependencies:
       '@mysten/bcs': 2.1.1
-      '@mysten/sui': 2.30.0(typescript@7.0.2)
+      '@mysten/sui': 2.31.2(typescript@7.0.2)
       '@noble/curves': 2.4.0
       '@noble/hashes': 2.4.0
 
-  '@mysten/slush-wallet@1.2.2(@mysten/sui@2.30.0(typescript@7.0.2))(typescript@7.0.2)':
+  '@mysten/slush-wallet@1.2.5(@mysten/sui@2.31.2(typescript@7.0.2))(typescript@7.0.2)':
     dependencies:
-      '@mysten/sui': 2.30.0(typescript@7.0.2)
+      '@mysten/sui': 2.31.2(typescript@7.0.2)
       '@mysten/utils': 0.4.1
-      '@mysten/wallet-standard': 0.21.24(@mysten/sui@2.30.0(typescript@7.0.2))
+      '@mysten/wallet-standard': 0.21.27(@mysten/sui@2.31.2(typescript@7.0.2))
       '@mysten/window-wallet-core': 0.3.0(typescript@7.0.2)
       valibot: 1.5.0(typescript@7.0.2)
     transitivePeerDependencies:
       - typescript
 
-  '@mysten/sui@2.30.0(typescript@7.0.2)':
+  '@mysten/sui@2.31.2(typescript@7.0.2)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@17.0.2)
       '@mysten/bcs': 2.1.1
@@ -3035,9 +3035,9 @@ snapshots:
       - '@gql.tada/vue-support'
       - typescript
 
-  '@mysten/suins@2.0.6(@mysten/sui@2.30.0(typescript@7.0.2))(debug@4.4.3)':
+  '@mysten/suins@2.0.6(@mysten/sui@2.31.2(typescript@7.0.2))(debug@4.4.3)':
     dependencies:
-      '@mysten/sui': 2.30.0(typescript@7.0.2)
+      '@mysten/sui': 2.31.2(typescript@7.0.2)
       axios: 1.20.0(debug@4.4.3)
       axios-retry: 4.5.0(axios@1.20.0(debug@4.4.3))
     transitivePeerDependencies:
@@ -3048,9 +3048,9 @@ snapshots:
     dependencies:
       '@scure/base': 2.4.0
 
-  '@mysten/wallet-standard@0.21.24(@mysten/sui@2.30.0(typescript@7.0.2))':
+  '@mysten/wallet-standard@0.21.27(@mysten/sui@2.31.2(typescript@7.0.2))':
     dependencies:
-      '@mysten/sui': 2.30.0(typescript@7.0.2)
+      '@mysten/sui': 2.31.2(typescript@7.0.2)
       '@wallet-standard/core': 1.1.2
 
   '@mysten/window-wallet-core@0.3.0(typescript@7.0.2)':
@@ -3387,7 +3387,7 @@ snapshots:
       postcss: 8.5.28
       tailwindcss: 4.3.3
 
-  '@testing-library/dom@10.4.1':
+  '@testing-library/dom@10.4.2':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/runtime': 7.29.7
@@ -3398,10 +3398,10 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/react@16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@testing-library/react@16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@babel/runtime': 7.29.7
-      '@testing-library/dom': 10.4.1
+      '@testing-library/dom': 10.4.2
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
     optionalDependencies:
@@ -3419,13 +3419,13 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/node@26.4.0':
+  '@types/node@26.6.1':
     dependencies:
-      undici-types: 8.3.0
+      undici-types: 8.9.0
 
   '@types/pg@8.23.1':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
       pg-protocol: 1.16.0
       pg-types: 2.2.0
 
@@ -3443,7 +3443,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
@@ -3505,16 +3505,16 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@vitest/mocker@5.0.0(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))':
+  '@vitest/mocker@5.0.1(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
-      '@vitest/spy': 5.0.0
+      '@vitest/spy': 5.0.1
       estree-walker: 3.0.3
       magic-string: 1.3.1
     optionalDependencies:
-      vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
+      vite: 8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
 
-  '@vitest/spy@5.0.0': {}
+  '@vitest/spy@5.0.1': {}
 
   '@wallet-standard/app@1.1.1':
     dependencies:
@@ -3645,7 +3645,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
 
   bytes@3.1.2: {}
 
@@ -3912,7 +3912,7 @@ snapshots:
 
   happy-dom@20.14.3:
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       buffer-image-size: 0.6.4
@@ -3926,7 +3926,7 @@ snapshots:
 
   happy-dom@20.14.5:
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       buffer-image-size: 0.6.4
@@ -4142,7 +4142,7 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
-  next@16.3.5(@types/node@26.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+  next@16.3.5(@types/node@26.6.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       '@next/env': 16.3.5
       '@swc/helpers': 0.5.23
@@ -4161,7 +4161,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 16.3.5
       '@next/swc-win32-arm64-msvc': 16.3.5
       '@next/swc-win32-x64-msvc': 16.3.5
-      sharp: 0.35.4(@types/node@26.4.0)
+      sharp: 0.35.4(@types/node@26.6.1)
     transitivePeerDependencies:
       - '@babel/core'
       - '@types/node'
@@ -4384,7 +4384,7 @@ snapshots:
 
   setprototypeof@1.2.0: {}
 
-  sharp@0.35.4(@types/node@26.4.0):
+  sharp@0.35.4(@types/node@26.6.1):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -4415,7 +4415,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.4
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
     optional: true
 
   shebang-command@2.0.0:
@@ -4521,7 +4521,7 @@ snapshots:
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
 
-  undici-types@8.3.0: {}
+  undici-types@8.9.0: {}
 
   unpipe@1.0.0: {}
 
@@ -4546,7 +4546,7 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13):
+  vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -4554,16 +4554,16 @@ snapshots:
       rolldown: 1.2.8
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
       esbuild: 0.28.2
       fsevents: 2.3.3
       jiti: 2.7.0
       tsx: 4.23.13
 
-  vitest@5.0.0(@types/node@26.4.0)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)):
+  vitest@5.0.1(@types/node@26.6.1)(happy-dom@20.14.3)(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.0(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+      '@vitest/mocker': 5.0.1(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -4574,10 +4574,10 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
+      vite: 8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.1
       happy-dom: 20.14.3
     transitivePeerDependencies:
       - msw
@@ -4599,8 +4599,8 @@ snapshots:
 
   xtend@4.0.2: {}
 
-  zod-to-json-schema@3.25.2(zod@4.6.2):
+  zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
-      zod: 4.6.2
+      zod: 4.6.5
 
-  zod@4.6.2: {}
+  zod@4.6.5: {}
