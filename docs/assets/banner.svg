@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-label="Weir — support stays yours">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06121f"/>
+      <stop offset="0.55" stop-color="#0a2537"/>
+      <stop offset="1" stop-color="#0d3a4a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0.15"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="400" rx="18" fill="url(#bg)"/>
+  <circle cx="960" cy="200" r="330" fill="url(#glow)"/>
+
+  <!-- the weir: water held, then released -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M610 120 C 760 108, 860 128, 930 150" stroke="#22d3ee" stroke-opacity="0.55" stroke-width="3" stroke-dasharray="1 14"/>
+    <path d="M600 165 C 750 150, 850 170, 928 190" stroke="#2dd4bf" stroke-opacity="0.5" stroke-width="2.5" stroke-dasharray="1 11"/>
+    <path d="M590 210 C 740 198, 840 214, 926 230" stroke="#67e8f9" stroke-opacity="0.45" stroke-width="2.5" stroke-dasharray="1 9"/>
+    <path d="M935 250 C 900 300, 880 330, 872 372" stroke="#22d3ee" stroke-opacity="0.7" stroke-width="4" stroke-dasharray="1 10"/>
+    <path d="M955 255 C 930 305, 915 335, 910 372" stroke="#2dd4bf" stroke-opacity="0.5" stroke-width="3" stroke-dasharray="1 12"/>
+    <path d="M700 372 L 1240 372" stroke="url(#accent)" stroke-opacity="0.35" stroke-width="2"/>
+    <path d="M980 372 C 1040 330, 1120 322, 1240 330" stroke="#2dd4bf" stroke-opacity="0.4" stroke-width="2.5" stroke-dasharray="1 12"/>
+    <!-- the wall -->
+    <rect x="928" y="140" width="14" height="232" rx="7" fill="#0f4c5c" stroke="#22d3ee" stroke-opacity="0.6" stroke-width="2"/>
+    <rect x="921" y="132" width="28" height="12" rx="6" fill="#22d3ee" fill-opacity="0.9"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="88" y="212" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="128" font-weight="800" fill="#f1f5f9" letter-spacing="-4">weir</text>
+  <text x="94" y="268" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="34" font-weight="600" fill="#a5f3fc">Support stays yours.</text>
+  <text x="94" y="314" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="21" fill="#7dd3fc">A creator network on Sui — for people, and for the programs that act for them.</text>
+
+  <!-- chip -->
+  <rect x="92" y="58" width="244" height="38" rx="19" fill="#0b2b3a" stroke="#22d3ee" stroke-opacity="0.55" stroke-width="1.5"/>
+  <circle cx="114" cy="77" r="5" fill="#2dd4bf"/>
+  <text x="128" y="83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="16" font-weight="600" fill="#a5f3fc">SUI · MAINNET · LIVE</text>
+
+  <rect x="0" y="392" width="1280" height="8" rx="4" fill="url(#accent)"/>
+</svg>
