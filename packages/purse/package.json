@@ -13,18 +13,18 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@mysten/sui": "2.30.0",
+    "@mysten/sui": "2.33.1",
     "@projectx-social/policy": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
     "@projectx-social/signer": "workspace:*",
-    "zod": "4.6.2"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@projectx-social/agent": "workspace:^",
     "esbuild": "0.28.2",
-    "tsx": "4.23.13",
+    "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "comment2": "The unit's ExecStart runs dist/server.js, so the build is not optional here the way it is in a library: the deploy builds this package on the droplet from the source tarball and systemd runs the emitted JavaScript. `tsx` is kept for the `serve` script, which is how it is run on this laptop, and for bin/."
 }
