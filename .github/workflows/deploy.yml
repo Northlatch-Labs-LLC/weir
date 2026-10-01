@@ -1,35 +1,51 @@
 name: Deploy to Vercel
 
-# Vercel's Hobby plan cannot connect to a private repository owned by an
-# organisation, so pushes no longer reach Vercel on their own. This workflow
-# does what that connection used to do: build with the Vercel CLI and ship the
-# prebuilt output to production.
+# Production deploys for weir.social.
+#
+# History, because the header of an older version of this file gets quoted:
+#
+#   - This workflow originally ran on every push to main. CI was a separate workflow
+#     with no relationship to it, so a red tree shipped to production exactly as fast
+#     as a green one, and the suite everybody quoted had never gated a single deploy.
+#
+#   - 2026-09-02: the automatic path was removed on the belief that Vercel's Hobby plan
+#     cannot connect to a repository owned by an organisation, and that branch
+#     protection is unavailable on this plan. Both beliefs were wrong. The repository
+#     is public; branch protection, rulesets and environment protection are free for
+#     public repositories on every plan. Removing the path did not strengthen the gate —
+#     it moved production onto human memory, where forgetting the button left the site
+#     running old code with nothing to say so.
+#
+#   - Now the automatic path is back, gated on the real thing. CI runs the full suite
+#     (secret scan, digest guard, the web suite, the Move suite) on every push to main.
+#     This workflow fires only when that run concluded green, and only on the exact
+#     commit CI tested — never on whatever main has drifted to by the time the run ends.
+#
+# The `production` environment (Settings -> Environments) can additionally require a
+# named reviewer before the job is allowed to start. That is free on public repositories
+# and is the strongest gate in the chain; branch protection on main remains worth
+# enabling for the merge itself.
+#
+# What a successful run leaves behind:
+#
+#   - A deployment record on the commit (Repositories -> Environments -> production), so
+#     "what is live" is a query, not a memory.
+#   - `prod-build-<sha>`: the exact prebuilt output that was shipped, kept 30 days.
+#     Rolling back is downloading it and `vercel deploy --prebuilt --prod` — no rebuild,
+#     no gap between what was tested and what is restored.
+#   - drift-alarm.yml diffs the record against main every night and files an issue when
+#     the two part ways.
 
-# A merge to main is a production deployment, so what gates the merge gates the users.
-#
-# This ran `on: push` with no `needs:` and no tests of its own, and CI is a separate workflow with
-# no relationship to it — so a red tree shipped to production exactly as fast as a green one, and
-# the suite everybody quoted had never gated a single deploy.
-#
-# `workflow_run` waits for CI to actually finish and reports its conclusion, which is the free
-# control: no paid plan, no duplicated suite (CI applies migrations and installs the Sui CLI, and
-# running that twice per merge would buy nothing). Branch protection would ALSO stop a red merge
-# reaching main in the first place, and is not available on this plan — so this stops the deploy
-# rather than the merge. That is the weaker of the two and it is the one available.
-#
-# 2026-09-02: CI no longer runs the application and Move suites on every commit — they run on
-# request and weekly, and the tests are run on the developer's own machine before anything is
-# pushed. A green CI therefore means the secret scan and the digest guard passed, and nothing more.
-#
-# So the automatic path is REMOVED rather than left pointing at a thinner gate. Production is not
-# deployed by a signal that no longer proves what it used to prove. A deployment is now a
-# deliberate act by somebody who has run the suite and can say so — which is a stronger gate than
-# the automatic one ever was, not a weaker one.
-#
-# Restoring the automatic path means restoring what it waits for: gate it on a CI run that actually
-# includes the suites, not on the trimmed one.
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -37,9 +53,11 @@ concurrency:
 
 jobs:
   deploy:
-    # Every run is now a deliberate dispatch by someone who can read the tree and has run the
-    # suite. There is no automatic path to gate.
+    # A cancelled or failed CI run must never deploy, and a manual dispatch has no CI
+    # event to read — both cases are spelled out rather than implied.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    environment: production
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -52,9 +70,15 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
+      - name: Pin the commit being deployed
+        id: pinned
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Say what is being deployed, and why it was allowed
         run: |
-          echo "commit:    ${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "commit:    ${{ steps.pinned.outputs.sha }}"
           echo "trigger:   ${{ github.event_name }}"
           echo "CI result: ${{ github.event.workflow_run.conclusion || 'n/a (manual dispatch)' }}"
 
@@ -78,4 +102,50 @@ jobs:
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to production
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -o pipefail
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} | tee deploy-output.txt
+
+      # The first *.vercel.app URL in the output is the new production deployment; the
+      # alias to weir.social is printed after it and does not match the pattern.
+      - name: Remember the production URL
+        run: |
+          echo "prod_url=$(grep -Eo 'https://[^ ]+\.vercel\.app' deploy-output.txt | head -1)" >> "$GITHUB_ENV"
+
+      - name: Keep the exact bits that shipped
+        uses: actions/upload-artifact@v7
+        with:
+          name: prod-build-${{ steps.pinned.outputs.short }}
+          path: .vercel/output
+          retention-days: 30
+
+      # The deployment record is what drift-alarm.yml reads. It is created only here,
+      # after the alias succeeded, so the newest record is the live truth.
+      - name: Record the deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DEPLOY_ID=$(gh api repos/Northlatch-Labs-LLC/weir/deployments \
+            -f ref=${{ steps.pinned.outputs.sha }} \
+            -f environment=production \
+            -f task=deploy \
+            -F auto_merge=false \
+            -f 'required_contexts[]=' \
+            --jq '.id')
+          echo "deploy_id=$DEPLOY_ID" >> "$GITHUB_ENV"
+
+      - name: Mark the deployment live
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/Northlatch-Labs-LLC/weir/deployments/${{ env.deploy_id }}/statuses \
+            -f state=success \
+            -f environment_url=${{ env.prod_url }}
+
+      - name: Mark the deployment failed
+        if: failure() && env.deploy_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/Northlatch-Labs-LLC/weir/deployments/${{ env.deploy_id }}/statuses \
+            -f state=failure
