@@ -7,6 +7,29 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-10-01 (PDT) · walrus.weir.social and seal.weir.social are healthy behind GridFrames; their bare 404s and 400s are contract, not incidents
+
+**The check.** Both storage subdomains were read live through the Cloudflare edge today, after the mcp
+cutover below. Both answer, and both refuse unauthenticated or headerless probes by design — which is the
+health a desk should expect, not a fault to file.
+
+**Read live after the cutover.**
+
+- `walrus.weir.social` `GET /v1/blobs/<43-char base64url id>` for a nonexistent blob — 404, empty body:
+  the aggregator's correct answer for a blob no aggregator holds, not a routing outage.
+- `walrus.weir.social` `PUT /v1/blobs?epochs=1&permanent=true&send_object_to=0x0…0` — 400, `text/plain`,
+  "Header of type `authorization` was missing": the publisher is up and enforcing its upload-token
+  (Bearer) gate. There is no unauthenticated write path by design; `packages/web/lib/walrus.ts` says so
+  where it checks the publisher URL — the upload token it takes authorises spending the storage wallet.
+- `seal.weir.social` asked bare — 400 `MissingRequiredHeader`: the key server refusing a request that
+  lacks its required headers, which is healthy rejection, not an error.
+
+**For future desks.** A bare 404 or 400 from walrus or seal is contract behaviour, not an outage. Probe
+with the protocol's required headers and auth before declaring an incident. This is written because older
+status docs outside this repository still list a "walrus 404 routing issue" as a problem.
+
+---
+
 ## 2026-10-01 (PDT) · The MCP host is GridFrames now; the Cloudflare door that pointed at the retired Cloud Run is deleted
 
 **The cutover.** `mcp.weir.social` now serves from GridFrames (`gf-weir`) directly. The Cloudflare
