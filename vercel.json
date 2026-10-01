@@ -4,5 +4,7 @@
     "deploymentEnabled": {
       "main": false
     }
-  }
+  },
+  "installCommand": "npx --yes pnpm@12.3.4 install --frozen-lockfile",
+  "buildCommand": "npx --yes pnpm@12.3.4 -r build"
 }
