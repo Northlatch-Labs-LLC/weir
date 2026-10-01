@@ -4,5 +4,7 @@
     "deploymentEnabled": {
       "main": false
     }
-  }
+  },
+  "installCommand": "npm i -g pnpm@12.3.4 && pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm run build"
 }

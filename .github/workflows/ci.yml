@@ -251,7 +251,9 @@ jobs:
           SUI_VERSION="mainnet-v$(sed -n 's/^[[:space:]]*toolchain-version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' sui-contracts/Published.toml | head -1)"
           [ "$SUI_VERSION" != "mainnet-v" ] || { echo "no toolchain-version in Published.toml"; exit 1; }
           echo "installing $SUI_VERSION"
-          curl -sSL -o sui.tgz \
+          # --fail so an HTML error page can never masquerade as the tarball;
+          # retries absorb CDN blips (one on 2026-10-01 turned green code CI-red).
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o sui.tgz \
             "https://github.com/MystenLabs/sui/releases/download/${SUI_VERSION}/sui-${SUI_VERSION}-ubuntu-x86_64.tgz"
           mkdir -p "$HOME/.local/bin"
           tar -xzf sui.tgz -C "$HOME/.local/bin" --strip-components=1 || tar -xzf sui.tgz -C "$HOME/.local/bin"
@@ -312,7 +314,9 @@ jobs:
           SUI_VERSION="mainnet-v$(sed -n 's/^[[:space:]]*toolchain-version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' sui-contracts/Published.toml | head -1)"
           [ "$SUI_VERSION" != "mainnet-v" ] || { echo "no toolchain-version in Published.toml"; exit 1; }
           echo "installing $SUI_VERSION"
-          curl -sSL -o sui.tgz \
+          # --fail so an HTML error page can never masquerade as the tarball;
+          # retries absorb CDN blips (one on 2026-10-01 turned green code CI-red).
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o sui.tgz \
             "https://github.com/MystenLabs/sui/releases/download/${SUI_VERSION}/sui-${SUI_VERSION}-ubuntu-x86_64.tgz"
           mkdir -p "$HOME/.local/bin"
           tar -xzf sui.tgz -C "$HOME/.local/bin" --strip-components=1 || tar -xzf sui.tgz -C "$HOME/.local/bin"
