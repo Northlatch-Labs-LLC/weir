@@ -1,0 +1,102 @@
+name: Drift alarm
+
+# Production is whatever the newest deployment record says it is, not whatever main
+# says it ought to be. The two can part ways legitimately — an operator may hold a
+# deploy on purpose — but a parting should be loud, written down, and closed by a
+# person rather than discovered by one. This workflow diffs the two every night and
+# files an issue when main is ahead of production.
+#
+# Holding a deploy is a legitimate state. The issue is how it is recorded, not
+# whether it is allowed to happen.
+
+on:
+  schedule:
+    # Nightly, in the quiet hours the deploy workflow's own history already chose to
+    # avoid: 13:23 UTC is early morning for the operators, end of day for the site.
+    - cron: '23 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      # Full history, not the tip: the gap log spans from the deployed commit to main,
+      # and the deployed commit can sit far behind anything a shallow fetch carries.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Compare main against the deployment record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MAIN_SHA=$(git rev-parse HEAD)
+          echo "main=$MAIN_SHA" >> "$GITHUB_ENV"
+
+          # The deploy workflow creates the record only after the production alias
+          # succeeded, so the newest record is the live truth. If that ever stops
+          # holding, tighten here first.
+          DEPLOYED=$(gh api 'repos/Northlatch-Labs-LLC/weir/deployments?environment=production&per_page=1' \
+            --jq '.[0].sha // "none"')
+          echo "deployed=$DEPLOYED" >> "$GITHUB_ENV"
+
+          if [ "$DEPLOYED" = "$MAIN_SHA" ]; then
+            echo "in_drift=false" >> "$GITHUB_ENV"
+            echo "production matches main at $MAIN_SHA"
+            exit 0
+          fi
+
+          echo "in_drift=true" >> "$GITHUB_ENV"
+          git log --oneline "$DEPLOYED".."$MAIN_SHA" > gap.txt \
+            || echo "(deployed commit is not reachable from main — a force-push or rebase happened)" > gap.txt
+          cat gap.txt
+          # Drift fails the run: the issue-filing step below is conditioned on failure(),
+          # so exiting 0 here would file nothing and the alarm would stay silent.
+          exit 1
+
+      - name: File or update the drift issue
+        if: failure() && env.in_drift == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "deployed: \`${{ env.deployed }}\`"
+            echo "main tip: \`${{ env.main }}\`"
+            echo "detected: $(date -u '+%Y-%m-%d %H:%MZ')"
+            echo
+            echo "The gap:"
+            echo
+            echo '```'
+            cat gap.txt
+            echo '```'
+            echo
+            echo 'Merging to main does not deploy by itself. Either dispatch'
+            echo '"Deploy to Vercel" on the commit that should ship, or bring main back to'
+            echo 'what production runs — then close this issue.'
+          } > body.md
+
+          TITLE='PROD DRIFT: main is ahead of production'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -z "$NUMBER" ]; then
+            gh issue create --title "$TITLE" --body-file body.md
+          else
+            gh issue comment "$NUMBER" --body-file body.md
+          fi
+
+      - name: Close the drift issue when production has caught up
+        if: success() && env.in_drift == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE='PROD DRIFT: main is ahead of production'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$NUMBER" ]; then
+            gh issue close "$NUMBER" --comment "Production matches main again (checked $(date -u '+%Y-%m-%d %H:%MZ'))."
+          fi

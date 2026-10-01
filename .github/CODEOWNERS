@@ -1,0 +1,4 @@
+# Ownership is singular and explicit: the repository's primary maintainer reviews
+# everything by default. Refine into path-scoped owners when the contributor base
+# grows past the point where one name is still the honest answer.
+* @0xda7
