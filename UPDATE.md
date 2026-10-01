@@ -7,6 +7,27 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-10-01 (PDT) · The MCP host is GridFrames now; the Cloudflare door that pointed at the retired Cloud Run is deleted
+
+**The cutover.** `mcp.weir.social` now serves from GridFrames (`gf-weir`) directly. The Cloudflare
+Worker route that sat in front of it — script `weir-mcp-door`, built 2026-09-02, proxying to the
+retired Cloud Run (`weir-mcp-k5aija3d6q-ew.a.run.app`) — was deleted once the flip made it dead
+weight: it was answering every public client with a GFE 404.
+
+**Read live after the flip.**
+
+- `GET /` — 200, JSON, service `weir-mcp`.
+- `GET /.well-known/mcp.json` — 200.
+- `GET /mcp` bare — 406 Not Acceptable, which is correct: the endpoint requires `text/event-stream`.
+- `POST /mcp` initialize — 200, `protocolVersion 2025-03-26`.
+- `tools/list` — the read-only tool set (`weir_search` and the rest).
+
+**Rollback.** No redeploy is needed; nothing was changed that has to go back out. If the old
+behaviour is ever wanted again, re-binding the Worker route pattern `mcp.weir.social/*` to the
+script `weir-mcp-door` restores it instantly — the script remains deployed in Cloudflare.
+
+---
+
 ## 2026-09-13 (early, PDT) · Deployed at fdb1ae3, on the owner's word
 
 `main` fast-forwarded to `one-design-system` (fdb1ae3) and pushed; the `Deploy to Vercel` workflow
