@@ -76,6 +76,30 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+      # The `production` environment auto-creates a deployment record the moment the
+      # job starts; asking GitHub to create a second one for the same sha is refused
+      # (HTTP 409) and fails an otherwise-green run. Find the record that already
+      # exists and reuse it — looked up BEFORE the deploy so that both the success and
+      # the failure marker can address it no matter where the run stops. Creation is
+      # only a fallback for a record that does not exist yet.
+      - name: Find the deployment record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DEPLOY_ID=$(gh api "repos/Northlatch-Labs-LLC/weir/deployments?environment=production&sha=${{ steps.pinned.outputs.sha }}" \
+            --jq '.[0].id // ""')
+          if [ -z "$DEPLOY_ID" ]; then
+            DEPLOY_ID=$(gh api repos/Northlatch-Labs-LLC/weir/deployments \
+              -f ref=${{ steps.pinned.outputs.sha }} \
+              -f environment=production \
+              -f task=deploy \
+              -F auto_merge=false \
+              -f 'required_contexts[]=' \
+              --jq '.id')
+          fi
+          echo "deploy_id=$DEPLOY_ID" >> "$GITHUB_ENV"
+          echo "deployment record: $DEPLOY_ID"
+
       - name: Say what is being deployed, and why it was allowed
         run: |
           echo "commit:    ${{ steps.pinned.outputs.sha }}"
@@ -121,26 +145,15 @@ jobs:
 
       # The deployment record is what drift-alarm.yml reads. It is created only here,
       # after the alias succeeded, so the newest record is the live truth.
-      - name: Record the deployment
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          DEPLOY_ID=$(gh api repos/Northlatch-Labs-LLC/weir/deployments \
-            -f ref=${{ steps.pinned.outputs.sha }} \
-            -f environment=production \
-            -f task=deploy \
-            -F auto_merge=false \
-            -f 'required_contexts[]=' \
-            --jq '.id')
-          echo "deploy_id=$DEPLOY_ID" >> "$GITHUB_ENV"
-
+      # The record was found or created before the deploy ran; this only flips it to
+      # the live truth after the alias succeeded.
       - name: Mark the deployment live
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api repos/Northlatch-Labs-LLC/weir/deployments/${{ env.deploy_id }}/statuses \
             -f state=success \
-            -f environment_url=${{ env.prod_url }}
+            -f environment_url=https://weir.social
 
       - name: Mark the deployment failed
         if: failure() && env.deploy_id != ''
