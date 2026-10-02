@@ -1,7 +1,7 @@
 name: Drift alarm
 
-# Production is whatever the newest deployment record says it is, not whatever main
-# says it ought to be. The two can part ways legitimately — an operator may hold a
+# Production is whatever the newest *successful* deployment record says, not whatever
+# main says it ought to be. The two can part ways legitimately — an operator may hold a
 # deploy on purpose — but a parting should be loud, written down, and closed by a
 # person rather than discovered by one. This workflow diffs the two every night and
 # files an issue when main is ahead of production.
@@ -38,11 +38,20 @@ jobs:
           MAIN_SHA=$(git rev-parse HEAD)
           echo "main=$MAIN_SHA" >> "$GITHUB_ENV"
 
-          # The deploy workflow creates the record only after the production alias
-          # succeeded, so the newest record is the live truth. If that ever stops
-          # holding, tighten here first.
-          DEPLOYED=$(gh api 'repos/Northlatch-Labs-LLC/weir/deployments?environment=production&per_page=1' \
-            --jq '.[0].sha // "none"')
+          # GitHub creates the deployment record BEFORE the environment gate resolves,
+          # so a held deploy leaves a `waiting` record that shadows the live one.
+          # Proven 2026-10-02: run 36909910454 sat at the gate with a waiting record
+          # at main's own sha, and newest-record-regardless-of-status compared main
+          # against itself → false PASS on real drift. Walk newest-first and take the
+          # first record whose latest status is success — that is production.
+          DEPLOYED=none
+          for LINE in $(gh api 'repos/Northlatch-Labs-LLC/weir/deployments?environment=production&per_page=10' \
+            --jq '.[] | "\(.id)|\(.sha)"'); do
+            ID=${LINE%%|*}; SHA=${LINE##*|}
+            LATEST=$(gh api "repos/Northlatch-Labs-LLC/weir/deployments/$ID/statuses" \
+              --jq '.[0].state // "unknown"' 2>/dev/null || echo unknown)
+            if [ "$LATEST" = "success" ]; then DEPLOYED=$SHA; break; fi
+          done
           echo "deployed=$DEPLOYED" >> "$GITHUB_ENV"
 
           if [ "$DEPLOYED" = "$MAIN_SHA" ]; then
