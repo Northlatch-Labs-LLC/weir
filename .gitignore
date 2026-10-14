@@ -163,3 +163,6 @@ graphify-out/
 
 # Screenshots the desktop app drops here when Claude sends a file.
 Claude outputs/
+
+# do not track local plan pdfs in public repo
+*.pdf
