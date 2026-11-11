@@ -46,6 +46,11 @@ export default async function AdminPage() {
         title="Admin"
         lede="Read from the shared object on chain. Administering it means holding the PlatformCap — every function that changes anything below takes it by reference, so the contract refuses anyone else regardless of what this page shows."
       />
+
+      <p className="unmeasured">
+        Is the product working? <a href="/admin/errors">Health</a> — the database, the chain
+        configuration, and every failure this deployment has recorded.
+      </p>
       {siteAdmin && <SiteModeSwitch initial={mode} />}
       {siteAdmin && <AccessCodesPanel initial={codes} />}
       {siteAdmin && <WaitlistInsightPanel insight={insight} />}

@@ -47,6 +47,7 @@ const NAMES: readonly Destination[] = [
   { href: '/studio', label: 'Studio', icon: 'doc', section: CREATING },
   { href: '/earnings', label: 'Earnings', icon: 'coin', section: CREATING },
   { href: '/admin', label: 'Platform', icon: 'shield', section: 'Platform' },
+  { href: '/admin/errors', label: 'Health', icon: 'shield', section: 'Platform' },
   { href: '/join', label: 'Create account', icon: 'key' },
   { href: '/signin', label: 'Sign in', icon: 'key' },
   { href: '/auth/callback', label: 'Signing in', icon: 'key', parent: '/signin' },

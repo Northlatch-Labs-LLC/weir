@@ -19,3 +19,9 @@ CREATE INDEX IF NOT EXISTS error_events_source_idx ON error_events (source, at_m
 -- Nothing here is meant to be permanent. A year of detail is plenty and the table must not grow
 -- without a bound.
 COMMENT ON TABLE error_events IS 'Application failures. Prune rows older than 365 days.';
+
+-- Closed the same way 029 closes every other table. The application connects as the owner, so it
+-- still writes; nothing anonymous reads this, and there is no policy that would admit it.
+ALTER TABLE public.error_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.error_events FROM anon;
+REVOKE ALL ON public.error_events FROM authenticated;
