@@ -234,6 +234,64 @@ jobs:
           PROJECTX_SOCIAL_VAULT_COIN_TYPES: ${{ vars.PROJECTX_SOCIAL_VAULT_COIN_TYPES }}
         run: pnpm build
 
+  relock:
+    name: Regenerate pnpm lockfile on Dependabot PRs
+    runs-on: ubuntu-latest
+    # Dependabot bumps package.json but does not regenerate pnpm-lock.yaml for
+    # pnpm workspaces (dependabot/dependabot-core#11135), so the web job's
+    # `pnpm install --frozen-lockfile` fails before any code runs. This job
+    # relocks against the bumped manifest and pushes the lockfile back to the
+    # PR branch so CI proceeds on the Dependabot branch itself.
+    # The --frozen-lockfile policy in the web job is deliberately untouched.
+    #
+    # Gated behind a repository variable because the checkout needs a token that can push to a
+    # Dependabot branch, and a Dependabot-triggered run gets a read-only GITHUB_TOKEN. Without the
+    # secret this job cannot work, and a job that cannot work should not report red on every
+    # dependency PR — that is how a queue becomes noise and then becomes ignored. Set the variable
+    # to true only once DEPENDABOT_LOCKFILE_TOKEN exists.
+    if: github.actor == 'dependabot[bot]' && vars.DEPENDABOT_LOCKFILE_ENABLED == 'true'
+    permissions:
+      contents: write   # push the regenerated lockfile back to the PR branch
+    steps:
+      - name: Refuse quietly when the push token is absent
+        env:
+          RELOCK_TOKEN: ${{ secrets.DEPENDABOT_LOCKFILE_TOKEN }}
+        run: |
+          if [ -z "$RELOCK_TOKEN" ]; then
+            echo "::error::DEPENDABOT_LOCKFILE_ENABLED is true but DEPENDABOT_LOCKFILE_TOKEN is empty."
+            echo "Create a fine-grained token with contents:write on this repository, store it as"
+            echo "DEPENDABOT_LOCKFILE_TOKEN, and re-run. Until then, set the repository variable"
+            echo "DEPENDABOT_LOCKFILE_ENABLED to false so this job does not report red on every bump."
+            exit 1
+          fi
+
+      - name: Checkout PR head branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.DEPENDABOT_LOCKFILE_TOKEN }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Regenerate pnpm-lock.yaml
+        run: pnpm install --lockfile-only --ignore-scripts
+      - name: Commit and push lockfile if it changed
+        run: |
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile already in sync — nothing to do."
+            exit 0
+          fi
+          git config user.name "dependabot[bot]"
+          git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "chore(deps): regenerate pnpm-lock.yaml"
+          git push
+
   contracts:
     name: Move tests
     runs-on: ubuntu-latest
