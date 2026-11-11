@@ -23,7 +23,16 @@ const config: NextConfig = {
         headers: [
           {
             key: 'x-projectx-commit',
-            value: process.env['VERCEL_GIT_COMMIT_SHA'] ?? 'local',
+            /*
+              || and not ??
+
+              On a build where the variable exists but is empty, ?? keeps the empty string, and a
+              header with an empty value is dropped entirely rather than sent as blank. That is how
+              this provenance header silently vanished from production between commit 859d659 and
+              the Next 16.4.1 build: the only header that says which build is live disappeared while
+              every other security header kept working, so nothing looked wrong.
+            */
+            value: process.env['VERCEL_GIT_COMMIT_SHA'] || 'local',
           },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
