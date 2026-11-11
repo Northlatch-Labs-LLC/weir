@@ -82,7 +82,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rpcUrl={fold(siteConfig(), (config) => config.grpcUrl, () => null)}
         >
           <AppShell>{children}</AppShell>
-                  </SignerProvider>
+        </SignerProvider>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'if ("serviceWorker" in navigator) {' +
+              '  window.addEventListener("load", function () {' +
+              '    navigator.serviceWorker.register("/sw.js").catch(function () {});' +
+              '  });' +
+              '}',
+          }}
+        />
       </body>
     </html>
   );

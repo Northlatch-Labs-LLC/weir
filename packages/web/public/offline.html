@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Weir</title>
+  <style>
+    body { font-family: system-ui, sans-serif; text-align: center; padding: 4rem 2rem; background: #03050a; color: #e8e8e8; margin: 0; }
+    h1 { font-size: 2rem; margin-bottom: 1rem; }
+    p { font-size: 1.1rem; opacity: 0.8; max-width: 400px; margin: 0 auto 2rem; }
+    button { background: #1a73e8; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; }
+    button:hover { background: #1557b0; }
+  </style>
+</head>
+<body>
+  <h1>You're offline</h1>
+  <p>Weir needs an internet connection to load. Please check your connection and try again.</p>
+  <button onclick="window.location.reload()">Try again</button>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+    }
+  </script>
+</body>
+</html>

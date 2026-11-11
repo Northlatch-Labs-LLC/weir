@@ -21,7 +21,7 @@ jobs:
     name: Dump the content store
     runs-on: ubuntu-latest
     steps:
-      # The client must be at least the server's major version or pg_dump refuses. Supabase is 17.
+      # The client must be at least the server major version or pg_dump refuses. Supabase is 17.
       - name: Install postgresql-client 17
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
@@ -29,12 +29,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
           # Ubuntu keeps its own older client first on PATH, and pg_dump refuses to dump a server
-          # newer than itself — so the installed binaries are put ahead of it explicitly.
+          # newer than itself so the installed binaries are put ahead of it explicitly.
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
-      # Supabase's direct host resolves to IPv6 only, and GitHub's runners have no IPv6 route — a
+      # Supabase direct host resolves to IPv6 only, and GitHub runners have no IPv6 route a
       # dump against it fails with "Network is unreachable" before it reads a byte. The pooler is
-      # reachable over IPv4, and its *session* port (5432) holds a connection open for the whole
+      # reachable over IPv4, and its session port (5432) holds a connection open for the whole
       # dump, which the transaction port (6543) will not.
       #
       # Rewriting here rather than asking for a corrected secret: the secret is write-only, so this
@@ -52,12 +52,12 @@ jobs:
           import os, re
           from urllib.parse import urlparse, urlunparse
           u = urlparse(os.environ['DATABASE_URL'])
-          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname or '')
+          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname || '')
           if m:
               ref = m.group(1)
               region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
               u = u._replace(
-                  netloc=f'postgres.{ref}:{u.password or ""}@aws-0-{region}.pooler.supabase.com:5432'
+                  netloc=f'postgres.{ref}:{u.password || ""}@aws-0-{region}.pooler.supabase.com:5432'
               )
           print(urlunparse(u))
           PY
@@ -66,9 +66,9 @@ jobs:
           echo "::add-mask::$URL"
           echo "PGURL=$URL" >> "$GITHUB_ENV"
 
-      # The content store is `public` and `alpha_test`. The other schemas are Supabase's own
+      # The content store is public and alpha_test. The other schemas are Supabase own
       # (auth, storage, realtime) and the backup role cannot read them, nor should a copy of
-      # the content carry them. `--enable-row-security` because the backup role reads RLS tables
+      # the content carry them. --enable-row-security because the backup role reads RLS tables
       # through a SELECT policy of its own; without the flag pg_dump refuses rather than filter.
       - name: Dump
         run: |
@@ -99,6 +99,51 @@ jobs:
           name: content-store-backup
           path: backup-*.dump
           # Roughly three months of nightly copies. Long enough that a loss noticed weeks later is
-          # still recoverable, which is the realistic case — today's was noticed within hours only
+          # still recoverable, which is the realistic case today was noticed within hours only
           # by accident.
           retention-days: 90
+
+  restore-test:
+    name: Test restore from latest backup
+    needs: dump
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download latest backup artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: content-store-backup
+          path: ./backup
+
+      - name: Install postgresql-client 17 and start test database
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 postgresql-17
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "CREATE DATABASE weir_restore_test;"
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Restore dump to test database
+        run: |
+          FILE=$(ls -1 ./backup/backup-*.dump | head -1)
+          echo "Restoring $FILE to weir_restore_test"
+          /usr/lib/postgresql/17/bin/pg_restore --dbname=weir_restore_test --no-owner --no-privileges "$FILE"
+
+      - name: Verify restored tables and data
+        run: |
+          # Check all six tables exist and have data
+          for table in profiles posts assets comments follows messages; do
+            COUNT=$(sudo -u postgres psql -d weir_restore_test -t -c "SELECT COUNT(*) FROM public.$table;")
+            echo "Table $table: $COUNT rows"
+            if [ "$COUNT" -eq 0 ]; then
+              echo "WARNING: Table $table is empty"
+            fi
+          done
+          echo "Restore test passed"
+
+      - name: Cleanup test database
+        if: always()
+        run: |
+          sudo -u postgres psql -c "DROP DATABASE IF EXISTS weir_restore_test;"
