@@ -277,6 +277,21 @@ export function StakeVaultSetup({ accountId }: { accountId: string }) {
           </span>
         </div>
 
+        {/*
+          The state was only ever a pill. A creator who had opened a pool, then closed it, had no
+          button here and no statement of what closing means for the people already inside — so the
+          only thing to click was the vault id. The control lives on the vault page; this is the
+          door to it, and it says which state you are in and what it costs others.
+        */}
+        <p className="unmeasured">
+          {vault?.accepting
+            ? 'Open. Anyone reading your pages can deposit and back you, and every one of them can withdraw in full whenever they want.'
+            : 'Closed. Nobody can back you right now. Everyone who already deposited can still withdraw their principal in full, and the yield keeps going to you.'}
+        </p>
+        <a className="w-btn w-btn--primary" href={'/vault/' + cap.vaultId}>
+          {vault?.accepting ? 'See who is backing you' : 'Open this pool to deposits'}
+        </a>
+
         {health.kind === 'full' ? null : health.kind === 'idle' ? (
           <div className="note warn">
             <span className="lbl">Nothing here is earning yet</span>
