@@ -5,10 +5,11 @@ import { isSuiId } from '@/lib/db';
 import { fold } from '@projectx-social/sdk';
 import { findProfileByVault } from '@/lib/content';
 import { prepareUnlock, type SubscribeBlocker, type UnlockQuote } from '@/lib/checkout';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -46,4 +47,11 @@ export async function POST(request: Request) {
     (v) => ('blocked' in v ? NextResponse.json({ blocked: v.blocked }) : NextResponse.json({ quote: v })),
     (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 422 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/checkout/unlock',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

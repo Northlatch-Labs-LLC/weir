@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import type { StakePosition } from '@projectx-social/sdk';
 import { findStakeCaps, readPosition, readVault, type StakeVaultView } from '@/lib/stake';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ function serialise(v: StakeVaultView): Record<string, unknown> {
   );
 }
 
-export async function GET(request: Request): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -65,4 +66,11 @@ export async function GET(request: Request): Promise<Response> {
     (v) => NextResponse.json({ vault: serialise(v) }),
     (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 424 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/stake',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

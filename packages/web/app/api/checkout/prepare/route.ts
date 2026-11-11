@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { findAccount, prepareDeposit, type CheckoutQuote } from '@/lib/checkout';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -40,4 +41,11 @@ export async function POST(request: Request) {
     (value) => NextResponse.json({ quote: value }),
     (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 422 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/checkout/prepare',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

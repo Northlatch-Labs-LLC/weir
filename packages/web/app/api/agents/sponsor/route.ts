@@ -20,6 +20,7 @@ import {
   sponsorVaultOpen,
 } from '@/lib/sponsor';
 import { createClient, readPlatform } from '@projectx-social/sdk';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,7 @@ function agentHalfProblem(value: unknown): string | null {
   return null;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -248,9 +249,16 @@ export async function POST(request: Request) {
     },
     { status: 200, headers: { 'cache-control': 'no-store' } },
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/agents/sponsor',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -273,4 +281,11 @@ export async function GET(request: Request) {
       ),
     (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 503 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/agents/sponsor',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

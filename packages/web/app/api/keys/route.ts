@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold, type PublishedKey, type Reading } from '@projectx-social/sdk';
 import { readKeysOf, toBase64 } from '@/lib/keys';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
 const MAX_ADDRESSES = 20;
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -58,4 +59,11 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ keys });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/keys',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

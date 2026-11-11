@@ -5,6 +5,7 @@ import { isProfileImage } from '@/lib/content';
 import { detectType } from '@/lib/media';
 import { isBlobId, readBlob } from '@/lib/walrus';
 import { AVATAR_TYPES } from '@/lib/avatar';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export const dynamic = 'force-dynamic';
   id never changes its bytes, so the answer may be cached for as long as a browser likes.
 */
 export async function GET(request: Request, context: { params: Promise<{ blobId: string }> }) {
+  try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -44,4 +46,12 @@ export async function GET(request: Request, context: { params: Promise<{ blobId:
       'x-content-type-options': 'nosniff',
     },
   });
+  } catch (error) {
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/avatar/[blobId]',
+    });
+    return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+  }
 }

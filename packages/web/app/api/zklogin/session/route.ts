@@ -5,10 +5,11 @@ import { createClient, readCurrentEpoch } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { maxEpochFrom } from '@/lib/zklogin';
 import { proverReachable, zkLoginConfig } from '@/lib/zklogin-server';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -65,4 +66,11 @@ export async function GET(request: Request) {
     currentEpoch: epoch.value.toString(),
     maxEpoch: maxEpoch.value,
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/zklogin/session',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

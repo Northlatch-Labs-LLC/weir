@@ -7,13 +7,14 @@ import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
 import { verifyAction } from '@/lib/identity';
 import { coinTypeOf } from '@/lib/creator-setup';
+import { recordFailure } from '@/lib/error-log';
 
 export const MAX_DISPLAY_NAME_LENGTH = 60;
 export const MAX_BIO_LENGTH = 280;
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -124,7 +125,14 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ handle: slug });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/creator/profile',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
 function normaliseCoinType(coinType: string): string {
   const [pkg, ...rest] = coinType.trim().split('::');

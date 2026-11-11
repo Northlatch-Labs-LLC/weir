@@ -8,6 +8,7 @@ import { normaliseAddress } from '@/lib/db';
 import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { verifyAction } from '@/lib/identity';
 import { provenReaderFor } from '@/lib/read-session';
+import { recordFailure } from '@/lib/error-log';
 
 async function ownsPost(address: string | null, post: { authorHandle: string }): Promise<boolean> {
   if (address === null) return false;
@@ -17,7 +18,7 @@ async function ownsPost(address: string | null, post: { authorHandle: string }):
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -51,9 +52,16 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ comments: await listComments(postId) });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/comments',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -126,4 +134,11 @@ export async function POST(request: Request) {
   };
   await addComment(comment);
   return NextResponse.json({ comment });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/comments',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

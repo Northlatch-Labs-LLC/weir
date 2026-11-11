@@ -5,10 +5,11 @@ import { fold } from '@projectx-social/sdk';
 import { verifyAction } from '@/lib/identity';
 import { accountHandle } from '@/lib/accounts';
 import { findProfile, upsertProfile } from '@/lib/content';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -78,4 +79,11 @@ export async function POST(request: Request) {
         { status: failure.kind === 'unconfigured' ? 503 : 502 },
       ),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/account/profile',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

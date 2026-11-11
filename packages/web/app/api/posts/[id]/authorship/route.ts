@@ -5,10 +5,12 @@ import { findPost } from '@/lib/content';
 import { findProfile } from '@/lib/content';
 import { statementFor } from '@/lib/identity';
 import { accessStatement } from '@projectx-social/sdk';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -69,4 +71,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     },
     { headers: { 'cache-control': 'public, max-age=60', 'access-control-allow-origin': '*' } },
   );
+  } catch (error) {
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/posts/[id]/authorship',
+    });
+    return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+  }
 }

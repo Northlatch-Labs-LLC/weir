@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { prepareSetStakeAccepting, type CheckoutQuote } from '@/lib/checkout';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
   Open or close a stake vault to new deposits. The creator's cap is the only key, so this asks for
   one and simulates against it; nothing here decides who may call set_accepting, the contract does.
 */
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -38,4 +39,11 @@ export async function POST(request: Request) {
     (quote) => NextResponse.json({ quote }),
     (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 400 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/stake/accepting',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
