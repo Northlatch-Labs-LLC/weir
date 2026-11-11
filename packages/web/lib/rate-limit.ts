@@ -16,22 +16,79 @@ export const BUDGETS = {
 
 export type BudgetName = keyof typeof BUDGETS;
 
-export function clientKey(request: Request): string {
-  if ((process.env['PROJECTX_SOCIAL_BEHIND_CLOUDFLARE'] ?? '') === 'true') {
+export type IdentitySource = 'cf-connecting-ip' | 'x-real-ip' | 'none';
+
+export interface Identity {
+  /** What the limiter counts against. Two requests with the same key share a budget. */
+  key: string;
+  /** Which header named the caller, or 'none' when nothing did and everybody shares one bucket. */
+  source: IdentitySource;
+  /** True only when an edge secret was configured and matched. 'none' is never verified. */
+  verifiedBySecret: boolean;
+}
+
+let warnedAboutIdentity = false;
+
+function warnOnce(message: string): void {
+  if (warnedAboutIdentity) return;
+  warnedAboutIdentity = true;
+  console.error(JSON.stringify({ rateLimitIdentity: message }));
+}
+
+/**
+ * Resolve who is calling. Separated from clientKey so the answer can be reported: a limiter that
+ * cannot say whether its identifier is trustworthy is a limiter that quietly stops applying.
+ *
+ * The trust model is declared, never guessed:
+ *   - PROJECTX_SOCIAL_BEHIND_CLOUDFLARE=true -> cf-connecting-ip. If an edge secret is configured
+ *     it must match. With no edge secret the header is trusted by declaration alone, which is why
+ *     verifiedBySecret exists and why production logs a warning.
+ *   - otherwise -> x-real-ip, which the platform sets on Vercel. Self-hosted behind no proxy that
+ *     header is client-settable, so production says so out loud instead of failing silently.
+ */
+export function identify(request: Request): Identity {
+  const behindCloudflare = (process.env['PROJECTX_SOCIAL_BEHIND_CLOUDFLARE'] ?? '') === 'true';
+
+  if (behindCloudflare) {
     const expected = (process.env['PROJECTX_SOCIAL_EDGE_SECRET'] ?? '').trim();
-    if (expected !== '' && (request.headers.get('x-edge-secret') ?? '').trim() !== expected) {
-      return 'unattributed';
+    const presented = (request.headers.get('x-edge-secret') ?? '').trim();
+    const verifiedBySecret = expected !== '';
+
+    if (verifiedBySecret && presented !== expected) {
+      return { key: 'unattributed', source: 'none', verifiedBySecret: false };
     }
 
-    const visitor = request.headers.get('cf-connecting-ip');
-    if (visitor !== null && visitor.trim() !== '') return visitor.trim();
-    return 'unattributed';
+    const visitor = (request.headers.get('cf-connecting-ip') ?? '').trim();
+    if (visitor !== '') {
+      return { key: visitor, source: 'cf-connecting-ip', verifiedBySecret };
+    }
+
+    return { key: 'unattributed', source: 'none', verifiedBySecret: false };
   }
 
-  const real = request.headers.get('x-real-ip');
-  if (real !== null && real.trim() !== '') return real.trim();
+  const real = (request.headers.get('x-real-ip') ?? '').trim();
+  if (real !== '') {
+    if (process.env['VERCEL'] !== '1' && process.env['NODE_ENV'] === 'production') {
+      warnOnce(
+        'PROJECTX_SOCIAL_BEHIND_CLOUDFLARE is not "true" and this is not Vercel, so x-real-ip is ' +
+          'read from a header a client can set. Every caller then gets a fresh budget by rotating ' +
+          'it. Put a proxy in front that overwrites x-real-ip, or set the Cloudflare flag and the ' +
+          'edge secret.',
+      );
+    }
+    return { key: real, source: 'x-real-ip', verifiedBySecret: false };
+  }
 
-  return 'unattributed';
+  warnOnce(
+    'No header identifies the caller, so every request shares one rate-limit bucket. That is safe ' +
+      'against abuse but it also means one noisy caller can spend the budget of everybody. Check ' +
+      'that the proxy sets x-real-ip (Vercel does) or that the Cloudflare flag and secret are set.',
+  );
+  return { key: 'unattributed', source: 'none', verifiedBySecret: false };
+}
+
+export function clientKey(request: Request): string {
+  return identify(request).key;
 }
 
 const hits = new Map<string, number[]>();
