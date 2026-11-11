@@ -393,9 +393,14 @@ export function CreatorSetup() {
         </div>
       ))}
 
-      <div className="feed-head">
+      <div className="feed-head" id="pool">
         <h2>Support without spending</h2>
       </div>
+      <p className="unmeasured" style={{ marginTop: 0 }}>
+        Until you open this, nobody can back you — and backing is the only support on Weir that costs a
+        reader nothing, because they can withdraw it in full. It is one transaction, and the validator
+        you choose is permanent.
+      </p>
       <StakeVaultSetup accountId={setup.accountId} />
 
       {error !== null && <p className="unmeasured">{error}</p>}

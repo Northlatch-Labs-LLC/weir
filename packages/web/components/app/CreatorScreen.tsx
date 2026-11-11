@@ -106,9 +106,7 @@ export function CreatorScreen({
           <div className="w-member__head">
             {stakeVaultId === undefined ? null : <VaultSigil vaultId={stakeVaultId} size={40} />}
             <h3 style={{ color: 'var(--w-mint)' }}>Back this account</h3>
-            <p className="w-money__kicker" style={{ margin: '2px 0 0' }}>
-              Not a payment — withdrawable in full, any time
-            </p>
+            <p className="w-money__kicker">Not a payment — withdrawable in full, any time</p>
           </div>
           {accountName === undefined ? null : (
             <p className="w-mono" style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--w-ink-7)' }}>

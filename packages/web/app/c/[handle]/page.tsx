@@ -286,7 +286,7 @@ export default async function CreatorPage({
         <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
           You have not opened a pool, so nobody can back you yet — and backing is the support that
           costs a reader nothing.{' '}
-          <a href="/creator">Open your pool</a>, and this becomes a deposit box they can use.
+          <a href="/creator#pool">Open your pool</a>, and this becomes a deposit box they can use.
         </p>
       ) : (
         <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
