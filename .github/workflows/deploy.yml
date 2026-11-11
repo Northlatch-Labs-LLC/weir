@@ -48,8 +48,14 @@ permissions:
   deployments: write
 
 concurrency:
+  # A deploy waiting at the `environment: production` approval gate must not be
+  # cancelled by the next deploy that CI completion fires. Otherwise no deploy
+  # ever reaches completion, no `success` deployment record is written, and
+  # drift-alarm.yml (which reads the newest SUCCESSFUL record) has nothing to
+  # compare against and files false red every night. Approval is still required
+  # to start production, and the CI-success `if` gate still filters CI runs.
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
