@@ -114,7 +114,11 @@ export function TipButton({
           factsNote="What the creator receives is read from the vault when the tip is checked, not assumed here."
           stageNote={{ simulating: 'Checking the tip against the vault.' }}
           refusals={{
-            'insufficient-balance': `Not enough ${symbol} for that.`,
+            'insufficient-balance': (
+              <>
+                Not enough {symbol} for that. <a href="/add-funds">How to get some</a>.
+              </>
+            ),
             'tier-inactive': 'This vault is not accepting payments.',
           }}
           primaryLabel={checkout.stage === 'submitting' ? 'Sending…' : 'Confirm and send'}
