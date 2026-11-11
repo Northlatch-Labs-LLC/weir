@@ -123,6 +123,11 @@ jobs:
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
+        # VERCEL_GIT_COMMIT_SHA is populated for Vercel's own git builds, not for `vercel build`
+        # run in Actions, which is why the provenance header shipped as "local". Pass the commit the
+        # workflow already pinned, so the header reports the build that is actually serving.
+        env:
+          PROJECTX_BUILD_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to production
