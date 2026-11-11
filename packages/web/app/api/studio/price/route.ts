@@ -6,10 +6,11 @@ import { findCreatorCaps, prepareSetContentPrice, type CheckoutQuote } from '@/l
 import { normaliseAddress } from '@/lib/db';
 import { machineBodyState } from '@/lib/content';
 import { NO_MACHINE_BODY, humanContentKey, isMachineContentKey } from '@/lib/machine-pricing';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -54,4 +55,11 @@ export async function POST(request: Request) {
     (v) => NextResponse.json({ quote: v }),
     (f) => NextResponse.json({ error: f.detail, kind: f.kind }, { status: 422 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/studio/price',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

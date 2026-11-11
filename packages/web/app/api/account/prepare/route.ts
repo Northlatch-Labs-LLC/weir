@@ -4,10 +4,11 @@ import { simulateLimit } from '@/lib/rate-limit';
 import { isSuiId } from '@/lib/db';
 import { fold, type FailureKind } from '@projectx-social/sdk';
 import { prepareOpenAccount, type CheckoutQuote } from '@/lib/checkout';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -45,7 +46,14 @@ export async function POST(request: Request) {
     (value) => NextResponse.json({ quote: value }),
     (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: statusFor(failure.kind) }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/account/prepare',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
 // 409 carries the conditions the sender has to change first — an empty purse, a handle taken
 // since they typed it — which are neither our fault (503) nor a bad request (400).

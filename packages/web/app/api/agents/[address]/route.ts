@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { statementFor } from '@/lib/identity';
 import { agentAccount } from '@/lib/agents';
 import { recoveryOf } from '@/lib/agent-recovery';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ address: string }> },
 ) {
+  try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -50,4 +52,12 @@ export async function GET(
       ),
     },
   });
+  } catch (error) {
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/agents/[address]',
+    });
+    return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+  }
 }

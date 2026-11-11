@@ -2,10 +2,11 @@
 import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { deriveUserSalt, verifyGoogleIdToken, zkLoginConfig } from '@/lib/zklogin-server';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -61,4 +62,11 @@ export async function POST(request: Request) {
     legacyAddress: false,
     note: 'Keep all five values together. With them, a Google sign-in and any zkLogin proving service reconstruct this address and sign from it without this platform.',
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/zklogin/export',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

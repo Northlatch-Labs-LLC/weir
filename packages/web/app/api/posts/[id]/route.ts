@@ -5,10 +5,12 @@ import { rateLimit } from '@/lib/rate-limit';
 import { findPost, findProfile, visiblePost } from '@/lib/content';
 import { canRead, readEntitlements, sealApprover } from '@/lib/entitlement';
 import { provenReaderFor } from '@/lib/read-session';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -79,4 +81,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     ...(shown.edition === undefined ? {} : { edition: shown.edition }),
     sealed: { blobId: ref.blobId, sealWrappedKey: ref.sealWrappedKey, nonce: ref.nonce, sha256: ref.sha256, approval },
   });
+  } catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/posts/[id]',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+  }
 }

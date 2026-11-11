@@ -5,12 +5,13 @@ import { createClient, readDecimals } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { findProfileByVault } from '@/lib/content';
 import { readReferrals } from '@/lib/referrals';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -68,4 +69,11 @@ export async function GET(request: Request) {
     payments: r.payments,
     truncated: r.truncated,
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/referrals',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

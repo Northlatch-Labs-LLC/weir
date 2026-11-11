@@ -4,12 +4,13 @@ import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { readCreatorSetup, type CreatorSetup } from '@/lib/creator-setup';
 import { vaultCoinTypes } from '@/lib/chain';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
 const SUI_ADDRESS = /^(0x)?[0-9a-fA-F]{1,64}$/;
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -35,4 +36,11 @@ export async function GET(request: Request) {
       ),
     (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 424 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/creator',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

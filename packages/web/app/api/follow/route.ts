@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { countFollowers, findProfile, setFollow } from '@/lib/content';
 import { verifyAction } from '@/lib/identity';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -41,4 +42,11 @@ export async function POST(request: Request) {
 
   const state = await setFollow(follower, handle, following);
   return NextResponse.json({ following: state, followers: await countFollowers(handle) });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/follow',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

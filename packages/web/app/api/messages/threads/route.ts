@@ -5,10 +5,11 @@ import { fold } from '@projectx-social/sdk';
 import { listThreads, findProfileByOwner } from '@/lib/content';
 import { readSupporters } from '@/lib/supporters';
 import { verifyAction } from '@/lib/identity';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -54,4 +55,11 @@ export async function POST(request: Request) {
         : { ...thread, supporterUnits: given.toString() };
     }),
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/messages/threads',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

@@ -12,6 +12,7 @@ import { provenReaderFor } from '@/lib/read-session';
 import { findAsset, findPost, findProfile } from '@/lib/content';
 import { createClient, fold, readVaultCoinType } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ postId: string; assetId: string }> },
 ) {
+  try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -149,4 +151,15 @@ export async function GET(
       'x-content-type-options': 'nosniff',
     },
   });
+  } catch (error) {
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/media/[postId]/[assetId]',
+    });
+    return new Response(JSON.stringify({ error: 'this failed; the cause is recorded' }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
 }

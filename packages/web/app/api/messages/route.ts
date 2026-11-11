@@ -15,19 +15,27 @@ import { idempotently } from '@/lib/idempotent-route';
 import { ciphertextDigest } from '@/lib/e2e';
 import { createClient, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_CIPHERTEXT_CHARS = 16_384;
 
-export async function POST(request: Request): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {try {
   return idempotently(
     request,
     '/api/messages',
     (body) => (typeof (body as { from?: unknown })?.from === 'string' ? (body as { from: string }).from : null),
     sendOnce,
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/messages',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
 async function sendOnce(request: Request) {
   const limited = rateLimit(request, 'write');

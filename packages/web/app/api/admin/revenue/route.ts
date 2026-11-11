@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { readPlatformRevenue, readRevenueSince, startOfUtcDay, type PlatformRevenue } from '@/lib/revenue';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -54,4 +55,11 @@ export async function GET(request: Request) {
         { status: failure.kind === 'unconfigured' ? 503 : 502 },
       ),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/admin/revenue',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

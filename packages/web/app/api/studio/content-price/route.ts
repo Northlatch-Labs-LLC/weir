@@ -6,10 +6,11 @@ import { createClient, readContentPrice, readCreatorVault } from '@projectx-soci
 import { siteConfig } from '@/lib/chain';
 import { machineContentKey } from '@/lib/machine-pricing';
 import { machineBodyState } from '@/lib/content';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -76,4 +77,11 @@ export async function GET(request: Request) {
     machine,
     machineBody,
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/studio/content-price',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

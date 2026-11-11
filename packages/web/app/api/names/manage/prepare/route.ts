@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { fold } from '@projectx-social/sdk';
 import { simulateLimit } from '@/lib/rate-limit';
 import { prepareNameAction, type NameAction, type PreparedNameAction } from '@/lib/names-manage';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -48,4 +49,11 @@ export async function POST(request: Request) {
         { status: failure.kind === 'unconfigured' ? 503 : 400 },
       ),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/names/manage/prepare',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

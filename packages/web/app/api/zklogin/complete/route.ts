@@ -4,10 +4,11 @@ import { simulateLimit } from '@/lib/rate-limit';
 import { computeZkLoginAddressFromSeed, genAddressSeed } from '@mysten/sui/zklogin';
 import { checkProveResponse, KEY_CLAIM_NAME, type ProveRequest } from '@/lib/zklogin';
 import { deriveUserSalt, requestProof, verifyGoogleIdToken, zkLoginConfig } from '@/lib/zklogin-server';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -93,4 +94,11 @@ export async function POST(request: Request) {
     issBase64Details: checked.value.issBase64Details,
     headerBase64: checked.value.headerBase64,
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/zklogin/complete',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

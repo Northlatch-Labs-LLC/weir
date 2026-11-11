@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { prepareClaimCreatorYield, type CheckoutQuote } from '@/lib/checkout';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -25,4 +26,11 @@ export async function POST(request: Request) {
     (failure) =>
       NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 400 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/stake/yield',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

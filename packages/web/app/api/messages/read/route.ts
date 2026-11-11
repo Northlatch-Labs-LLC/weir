@@ -6,10 +6,11 @@ import { findProfileByVault, listThread, visibleMessage } from '@/lib/content';
 import { NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { verifyAction } from '@/lib/identity';
 import { readScales, UNKNOWN_SCALE } from '@/lib/scale';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -70,4 +71,11 @@ export async function POST(request: Request) {
       return { ...visible, access: { ...visible.access, ...scale } };
     }),
   });
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/messages/read',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

@@ -5,10 +5,11 @@ import { isSuiId } from '@/lib/db';
 import { findProfileByVault } from '@/lib/content';
 import { fold } from '@projectx-social/sdk';
 import { prepareSubscribe, type SubscribeBlocker, type SubscribeQuote } from '@/lib/checkout';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
@@ -66,4 +67,11 @@ export async function POST(request: Request) {
         : NextResponse.json({ quote: value }),
     (failure) => NextResponse.json({ error: failure.detail, kind: failure.kind }, { status: 422 }),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/checkout/subscribe',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

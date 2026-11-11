@@ -4,10 +4,11 @@ import { fold } from '@projectx-social/sdk';
 import { rateLimit } from '@/lib/rate-limit';
 import { isSuiId } from '@/lib/db';
 import { readOwnedNames, type OwnedNames } from '@/lib/names-owned';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -31,4 +32,11 @@ export async function GET(request: Request) {
         { status: failure.kind === 'unconfigured' ? 503 : 502 },
       ),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/names/owned',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}

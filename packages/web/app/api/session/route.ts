@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { fold } from '@projectx-social/sdk';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyAction } from '@/lib/identity';
+import { recordFailure } from '@/lib/error-log';
 import {
   clearedReadSessionCookie,
   mintReadSession,
@@ -13,7 +14,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -63,9 +64,16 @@ export async function POST(request: Request) {
       },
     },
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/session',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
-export async function GET(request: Request) {
+export async function GET(request: Request) {try {
   const limited = rateLimit(request, 'read');
   if (limited !== null) return limited;
 
@@ -81,9 +89,16 @@ export async function GET(request: Request) {
         { status: 503, headers: { 'cache-control': 'no-store' } },
       ),
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/session',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
@@ -103,7 +118,14 @@ export async function DELETE(request: Request) {
       },
     },
   );
-}
+} catch (error) {
+  await recordFailure({
+    source: 'api route',
+    detail: error instanceof Error ? error.message : String(error),
+    route: '/api/session',
+  });
+  return NextResponse.json({ error: 'this failed; the cause is recorded' }, { status: 500 });
+}}
 
 function isSecure(request: Request): boolean {
   const forwarded = request.headers.get('x-forwarded-proto');
