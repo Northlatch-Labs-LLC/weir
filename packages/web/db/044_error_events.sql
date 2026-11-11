@@ -29,7 +29,7 @@ COMMENT ON TABLE error_events IS 'Application failures. Prune rows older than 36
 -- exist" — which is exactly how this landed red the first time.
 ALTER TABLE public.error_events ENABLE ROW LEVEL SECURITY;
 
-do $
+do $guard$
 begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
     execute 'revoke all on public.error_events from anon';
@@ -37,4 +37,4 @@ begin
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
     execute 'revoke all on public.error_events from authenticated';
   end if;
-end $;
+end $guard$;
