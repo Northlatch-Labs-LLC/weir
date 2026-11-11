@@ -139,21 +139,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
               </div>
 
               <div style={{ marginTop: 'var(--space-24)' }}>
-                {fold(
-                  known,
-                  ({ vaults: list }) => (
-                    <VaultActions vaultId={id} known={list.some((k) => k.vaultId === id)} />
-                  ),
-                  (failure) => (
-                    <div data-reveal className="note crit">
-                      <span className="lbl">This did not load</span>
-                      <p>
-                        The vault list is being read from the chain, so this page has not yet confirmed the object was
-                        created here. No deposit form is offered on an unverified vault.
-                      </p>
-                    </div>
-                  ),
-                )}
+                <VaultActions vaultId={id} exists accepting={v.accepting} />
               </div>
 
             </>
