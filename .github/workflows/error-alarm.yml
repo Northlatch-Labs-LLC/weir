@@ -1,0 +1,182 @@
+name: Error alarm
+
+# error_events is written by production and read by almost nobody: the only view of it
+# today is /admin/errors, so a burst of failures stays invisible until an admin happens
+# to look. This workflow counts the trailing hour every hour, and when the count crosses
+# the threshold it files an issue — the same file-or-update / close-on-green pattern the
+# drift alarm uses, so an incident becomes a thread that closes itself when it ends and
+# cannot pile up duplicate issues while it runs.
+#
+# A database that cannot be probed is an alarm too. If the connection fails, the same
+# issue is filed with the connection error as the detail: the alarm exists to notice
+# when the platform is failing loudly, and an unreachable database is failing louder
+# than most. Silence from this workflow should mean nothing went wrong, never that
+# nobody checked.
+
+on:
+  schedule:
+    # Hourly, off the hour deliberately — scheduled jobs pile up on the hour and get
+    # delayed (the backup workflow chose 03:17 for the same reason). Minute 42 keeps
+    # this clear of the backup and the drift alarm.
+    - cron: '42 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alarm:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout gives gh the repo context it needs to list and file issues without a
+      # -R flag scattered through every call.
+      - uses: actions/checkout@v7
+
+      # The client must be at least the server major version or psql is unhappy against
+      # newer servers. Supabase is 17. Copied from backup.yml, which solved this already.
+      - name: Install postgresql-client 17
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          # Ubuntu keeps its own older client first on PATH, so the installed binaries
+          # are put ahead of it explicitly.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      # Supabase direct host resolves to IPv6 only, and GitHub runners have no IPv6 route,
+      # so a connection against it fails with "Network is unreachable" before it reads a
+      # byte. The pooler is reachable over IPv4, and its session port (5432) holds a
+      # connection open for the whole query, which the transaction port (6543) will not.
+      #
+      # Rewriting here rather than asking for a corrected secret: the secret is write-only,
+      # so this is the only place the value can be repaired, and it keeps a direct URL
+      # working if one is ever set deliberately. Copied exactly from backup.yml.
+      - name: Resolve an IPv4 session-mode connection
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "BACKUP_DATABASE_URL is not set. Refusing to report a successful check of nothing."
+            exit 1
+          fi
+          URL=$(python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse, urlunparse
+          u = urlparse(os.environ['DATABASE_URL'])
+          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname || '')
+          if m:
+              ref = m.group(1)
+              region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
+              u = u._replace(
+                  netloc=f'postgres.{ref}:{u.password || ""}@aws-0-{region}.pooler.supabase.com:5432'
+              )
+          print(urlunparse(u))
+          PY
+          )
+          # Masked before it is used anywhere, so a failing command cannot print credentials.
+          echo "::add-mask::$URL"
+          echo "PGURL=$URL" >> "$GITHUB_ENV"
+
+      - name: Count error_events in the trailing window
+        run: |
+          # The two tuning knobs live here so retuning the alarm is a one-place change:
+          # alert when at least THRESHOLD rows were recorded in the trailing window.
+          # 25/h is far above the noise floor of a healthy platform; lower it only once
+          # a real quiet-week baseline says the lower number means something.
+          THRESHOLD=25
+          echo "THRESHOLD=$THRESHOLD" >> "$GITHUB_ENV"
+
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          WHERE="(at_ms > (extract(epoch from now() - interval '1 hour') * 1000))"
+
+          # Connection errors and query errors land in the same bucket on purpose: a
+          # database whose state cannot be read is exactly what this alarm exists to
+          # catch. The error text is kept for the issue body; the URL is masked above,
+          # so a connect string that leaks into it cannot print credentials.
+          if ! COUNT=$("$PSQL" "$PGURL" -t -A -c "SELECT count(*) FROM error_events WHERE $WHERE;" 2>conn-error.txt) \
+             || ! echo "$COUNT" | grep -qE '^[0-9]+$'; then
+            echo "alarm=unreachable" >> "$GITHUB_ENV"
+            echo "Could not read error_events:"; cat conn-error.txt
+            exit 0
+          fi
+
+          echo "count=$COUNT" >> "$GITHUB_ENV"
+          echo "error_events rows in the trailing hour: $COUNT (threshold $THRESHOLD)"
+
+          if [ "$COUNT" -ge "$THRESHOLD" ]; then
+            echo "alarm=over" >> "$GITHUB_ENV"
+            # Top offenders first: the sources column says WHERE the failures come from,
+            # which is the first thing whoever picks this issue up needs to know.
+            "$PSQL" "$PGURL" -t -A -F ' | ' -c \
+              "SELECT source, count(*) FROM error_events WHERE $WHERE GROUP BY source ORDER BY count(*) DESC, source LIMIT 5;" \
+              > top-sources.txt
+            # The three most recent details, truncated to 200 chars each: enough to
+            # recognise the failure, not enough to paste a whole stack trace into an issue.
+            "$PSQL" "$PGURL" -t -A -c \
+              "SELECT to_char(to_timestamp(at_ms/1000.0), 'YYYY-MM-DD HH24:MI') || ' ' || coalesce(route,'') || ' — ' || coalesce(left(detail, 200), '(no detail)') FROM error_events WHERE $WHERE ORDER BY at_ms DESC, id DESC LIMIT 3;" \
+              > recent-details.txt
+            exit 0
+          fi
+
+          echo "alarm=quiet" >> "$GITHUB_ENV"
+
+      - name: File or update the error alarm issue
+        if: env.alarm == 'over' || env.alarm == 'unreachable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            if [ "${{ env.alarm }}" = "unreachable" ]; then
+              echo "The production database could not be probed at $(date -u '+%Y-%m-%d %H:%MZ')."
+              echo
+              echo '```'
+              cat conn-error.txt
+              echo '```'
+              echo
+              echo 'A database that cannot be read is what this alarm exists to catch —'
+              echo 'treat it as at least as serious as a high error count.'
+            else
+              echo "error_events rows in the trailing hour: **${{ env.count }}** (threshold ${{ env.THRESHOLD }})"
+              echo
+              echo 'Top sources in the trailing hour:'
+              echo
+              echo '```'
+              cat top-sources.txt
+              echo '```'
+              echo
+              echo 'Most recent details (truncated to 200 chars):'
+              echo
+              echo '```'
+              cat recent-details.txt
+              echo '```'
+            fi
+            echo
+            echo 'Full view: https://weir.social/admin/errors'
+            echo
+            echo 'This issue closes itself when the next hourly check is under the threshold.'
+          } > body.md
+
+          # Stable exact title so repeat alarms comment on one thread instead of filing
+          # a new issue every hour of the incident.
+          TITLE='ERROR ALARM: error_events is growing'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -z "$NUMBER" ]; then
+            gh issue create --title "$TITLE" --body-file body.md
+          else
+            gh issue comment "$NUMBER" --body-file body.md
+          fi
+
+      - name: Close the alarm issue when the error rate is back under threshold
+        if: success() && env.alarm == 'quiet'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE='ERROR ALARM: error_events is growing'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$NUMBER" ]; then
+            gh issue close "$NUMBER" --comment "Under threshold again (checked $(date -u '+%Y-%m-%d %H:%MZ')): ${{ env.count }} error_events rows in the trailing hour, threshold ${{ env.THRESHOLD }}."
+          fi
