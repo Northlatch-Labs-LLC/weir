@@ -35,7 +35,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 async function quoted() {
   const view = render(<DepositCheckout vaultId="0xv" />);
-  fireEvent.click(screen.getByText('Check the deposit'));
+  fireEvent.click(screen.getByRole('button', { name: /deposit/i }));
   await waitFor(() => expect(screen.getByText(/What will happen/i)).toBeTruthy());
   return view;
 }
@@ -60,7 +60,7 @@ describe('before anything is signed', () => {
     render(<DepositCheckout vaultId="0xv" />);
     const input = document.querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'one sui' } });
-    fireEvent.click(screen.getByText('Check the deposit'));
+    fireEvent.click(screen.getByRole('button', { name: /deposit/i }));
     await waitFor(() => expect(screen.getByText(/Enter an amount in SUI/i)).toBeTruthy());
     expect(fetchMock.mock.calls.length).toBe(0);
   });
@@ -82,14 +82,14 @@ describe('the quote', () => {
   it('says the account object is required rather than failing at signing time', async () => {
     mockRoutes({ prepare: { needsAccount: true } });
     render(<DepositCheckout vaultId="0xv" />);
-    fireEvent.click(screen.getByText('Check the deposit'));
+    fireEvent.click(screen.getByRole('button', { name: /deposit/i }));
     await waitFor(() => expect(screen.getByText(/Account required/i)).toBeTruthy());
   });
 
   it('reports a refused simulation as nothing signed', async () => {
     mockRoutes({ prepare: { error: 'insufficient balance' } });
     render(<DepositCheckout vaultId="0xv" />);
-    fireEvent.click(screen.getByText('Check the deposit'));
+    fireEvent.click(screen.getByRole('button', { name: /deposit/i }));
     await waitFor(() => expect(screen.getByText(/Nothing was signed/i)).toBeTruthy());
   });
 });

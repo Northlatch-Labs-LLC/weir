@@ -105,7 +105,8 @@ export function CreatorScreen({
           */}
           <div className="w-member__head">
             {stakeVaultId === undefined ? null : <VaultSigil vaultId={stakeVaultId} size={40} />}
-            <h3 style={{ color: 'var(--w-mint)' }}>Become a member</h3>
+            <h3 style={{ color: 'var(--w-mint)' }}>Back this account</h3>
+            <p className="w-money__kicker">Not a payment — withdrawable in full, any time</p>
           </div>
           {accountName === undefined ? null : (
             <p className="w-mono" style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--w-ink-7)' }}>
@@ -114,7 +115,7 @@ export function CreatorScreen({
           )}
           <p style={{ color: 'var(--w-ink-9)' }}>
             {depositLine ??
-              'Your SUI stays yours and comes back whenever you ask. It earns while it sits there and the earnings go to the account behind this page. The vault belongs to that account rather than to this page, so it backs every page they publish.'}
+              'Put SUI behind this account and it does not leave your name. You can withdraw the whole amount whenever you want, and until then it earns for the account behind this page. This is the only support on Weir that costs you nothing to give.'}
           </p>
           {depositSlot}
         </section>
