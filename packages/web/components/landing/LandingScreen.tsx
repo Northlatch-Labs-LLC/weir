@@ -35,7 +35,7 @@ export function LandingScreen({
         Skip to content
       </a>
 
-      <div className="w-land__wrap" style={{ width: '100%' }}>
+      <div className="w-land__wrap">
         <PublicHeader />
 
         <main id="w-main">
