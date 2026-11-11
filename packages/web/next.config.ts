@@ -32,7 +32,10 @@ const config: NextConfig = {
               the Next 16.4.1 build: the only header that says which build is live disappeared while
               every other security header kept working, so nothing looked wrong.
             */
-            value: process.env['VERCEL_GIT_COMMIT_SHA'] || 'local',
+            value:
+              process.env['PROJECTX_BUILD_COMMIT'] ||
+              process.env['VERCEL_GIT_COMMIT_SHA'] ||
+              'local',
           },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
