@@ -79,6 +79,7 @@ describe('the site map knows every page', () => {
     '/creators': 'reached from the public header sections',
     '/p/[id]': 'reached from any card in the feed, a creator page or a shared link, by post',
     '/agents/reference': 'the technical guide, reached from /agents/build; a person does not navigate to it',
+    '/admin/errors': 'reached from /admin, the platform panel; an operator opens it from there, not from a menu',
   };
   const inAMenu = new Set(
     [
