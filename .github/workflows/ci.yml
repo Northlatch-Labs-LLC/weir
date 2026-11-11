@@ -243,10 +243,28 @@ jobs:
     # relocks against the bumped manifest and pushes the lockfile back to the
     # PR branch so CI proceeds on the Dependabot branch itself.
     # The --frozen-lockfile policy in the web job is deliberately untouched.
-    if: github.actor == 'dependabot[bot]'
+    #
+    # Gated behind a repository variable because the checkout needs a token that can push to a
+    # Dependabot branch, and a Dependabot-triggered run gets a read-only GITHUB_TOKEN. Without the
+    # secret this job cannot work, and a job that cannot work should not report red on every
+    # dependency PR — that is how a queue becomes noise and then becomes ignored. Set the variable
+    # to true only once DEPENDABOT_LOCKFILE_TOKEN exists.
+    if: github.actor == 'dependabot[bot]' && vars.DEPENDABOT_LOCKFILE_ENABLED == 'true'
     permissions:
       contents: write   # push the regenerated lockfile back to the PR branch
     steps:
+      - name: Refuse quietly when the push token is absent
+        env:
+          RELOCK_TOKEN: ${{ secrets.DEPENDABOT_LOCKFILE_TOKEN }}
+        run: |
+          if [ -z "$RELOCK_TOKEN" ]; then
+            echo "::error::DEPENDABOT_LOCKFILE_ENABLED is true but DEPENDABOT_LOCKFILE_TOKEN is empty."
+            echo "Create a fine-grained token with contents:write on this repository, store it as"
+            echo "DEPENDABOT_LOCKFILE_TOKEN, and re-run. Until then, set the repository variable"
+            echo "DEPENDABOT_LOCKFILE_ENABLED to false so this job does not report red on every bump."
+            exit 1
+          fi
+
       - name: Checkout PR head branch
         uses: actions/checkout@v7
         with:
