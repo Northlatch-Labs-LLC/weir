@@ -20,8 +20,21 @@ CREATE INDEX IF NOT EXISTS error_events_source_idx ON error_events (source, at_m
 -- without a bound.
 COMMENT ON TABLE error_events IS 'Application failures. Prune rows older than 365 days.';
 
--- Closed the same way 029 closes every other table. The application connects as the owner, so it
--- still writes; nothing anonymous reads this, and there is no policy that would admit it.
+-- Closed the same way 029 closes every other table: RLS on, and the grants removed where the roles
+-- exist. The application connects as the owner, so it still writes; nothing anonymous reads this, and
+-- there is no policy that would admit it.
+--
+-- The role check is not decoration. Supabase has anon and authenticated; the Postgres that CI starts
+-- has neither, and an unguarded REVOKE there fails the migration outright with "role anon does not
+-- exist" — which is exactly how this landed red the first time.
 ALTER TABLE public.error_events ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.error_events FROM anon;
-REVOKE ALL ON public.error_events FROM authenticated;
+
+do $
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on public.error_events from anon';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    execute 'revoke all on public.error_events from authenticated';
+  end if;
+end $;
