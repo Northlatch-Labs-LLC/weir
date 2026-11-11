@@ -30,7 +30,7 @@ import { isValidatorAddress } from './stake';
 
 const {
   publishEncryptionKey, openAccount, claimEarnings, openCreatorVault, addTier, setAccepting,
-  openStakeVault, withdrawStake, claimRebate, claimCreatorYield, setRebateBps,
+  openStakeVault, withdrawStake, claimRebate, claimCreatorYield, setRebateBps, setAcceptingStake,
 } = txBuilders;
 
 async function quote(
@@ -1065,6 +1065,25 @@ export async function prepareSetAccepting(input: {
   );
 }
 
+export async function prepareSetStakeAccepting(input: {
+  sender: string;
+  vaultId: string;
+  capId: string;
+  accepting: boolean;
+}): Promise<Reading<CheckoutQuote>> {
+  const config = siteConfig();
+  if (!config.ok) return config;
+
+  return quote(
+    'stake_vault::set_accepting simulation',
+    setAcceptingStake(
+      { config: config.value },
+      { vaultId: input.vaultId, capId: input.capId, accepting: input.accepting },
+    ),
+    input.sender,
+    '0',
+  );
+}
 export async function prepareAddTier(input: {
   sender: string;
   vaultId: string;

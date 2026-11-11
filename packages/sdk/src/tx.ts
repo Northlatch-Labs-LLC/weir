@@ -204,6 +204,23 @@ export function setAccepting(
   return tx;
 }
 
+/**
+ * Open or close a stake vault to new deposits. The creator holds the cap; nobody else can call this.
+ *
+ * StakeVault carries no type parameter, so this move call takes no type arguments — unlike
+ * creator::set_accepting, which is generic over the vault coin.
+ */
+export function setAcceptingStake(
+  ctx: BuilderContext,
+  args: { vaultId: string; capId: string; accepting: boolean },
+): Transaction {
+  const tx = begin(ctx);
+  tx.moveCall({
+    target: `${ctx.config.latestPackageId}::stake_vault::set_accepting`,
+    arguments: [tx.object(args.vaultId), tx.object(args.capId), tx.pure.bool(args.accepting)],
+  });
+  return tx;
+}
 export function claimPlatformFees(
   ctx: BuilderContext,
   args: { coinType: string; vaultId: string; capId: string; amount: bigint; recipient: string },
