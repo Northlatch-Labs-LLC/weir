@@ -87,12 +87,14 @@ export function DepositCheckout({ vaultId }: { vaultId: string }) {
             }}
           />
           <button type="button" className="w-btn w-btn--primary" onClick={start}>
-            Check the deposit
+            Deposit — withdrawable any time
           </button>
         </div>
         {shape === null ? null : <p className="w-field__note w-field__note--bad">{shape}</p>}
       </div>
-      <p className="w-money__kicker">Minimum 1 SUI · checked on chain before anything is signed</p>
+      <p className="w-money__kicker">
+        Minimum 1 SUI · checked on chain before anything is signed · comes back in full when you ask
+      </p>
 
       {open ? (
         <MoneyDialog

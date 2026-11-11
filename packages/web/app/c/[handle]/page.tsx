@@ -275,11 +275,25 @@ export default async function CreatorPage({
 
   const depositSlot =
     viewer === null ? (
-      <Wall why="Becoming a member needs an account." />
+      <Wall why="Backing an account needs an account." />
     ) : onChainStakeVault === undefined ? (
-      <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
-        This account has not opened a pool yet, so there is nowhere to deposit.
-      </p>
+      viewer === profile.owner ? (
+        /*
+          The creator is looking at their own page and the pool does not exist yet, so everybody who
+          arrives to back them finds a sentence and no door. Point the one person who can fix it at
+          the place that fixes it.
+        */
+        <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
+          You have not opened a pool, so nobody can back you yet — and backing is the support that
+          costs a reader nothing.{' '}
+          <a href="/creator">Open your pool</a>, and this becomes a deposit box they can use.
+        </p>
+      ) : (
+        <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
+          This account has not opened a pool yet, so there is nowhere to deposit. Subscribe or tip
+          above in the meantime.
+        </p>
+      )
     ) : (
       <DepositCheckout vaultId={onChainStakeVault} />
     );
