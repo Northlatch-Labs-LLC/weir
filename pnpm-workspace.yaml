@@ -32,3 +32,27 @@ minimumReleaseAgeExclude:
   - '@projectx-social/policy@1.0.2'
   - '@projectx-social/sdk@1.0.2'
   - '@projectx-social/signer@1.0.2'
+
+# Security floors for packages no direct dependency can reach.
+#
+# These are transitive: proxy-addr arrives through express inside the MCP server, follow-redirects
+# through the Sui SDK, vite through vitest. A pnpm audit against this lockfile reported 35
+# advisories, one critical (proxy-addr, IP spoofing via IPv4-mapped IPv6) and thirteen high.
+#
+# A floor rather than a pin: any version at or above the patched release is acceptable, so a later
+# dependency can still move them forward. They live here and not in package.json because pnpm 10
+# moved workspace configuration into this file and ignores the old location silently — which is
+# exactly how the first attempt at this failed.
+overrides:
+  proxy-addr: ">=2.0.8"
+  body-parser: ">=2.4.0"
+  follow-redirects: ">=1.16.3"
+  fast-uri: ">=3.1.9"
+  qs: ">=6.17.1"
+  source-map-js: ">=1.2.2"
+  ip-address: ">=10.7.4"
+  vite: ">=8.2.4"
+  hono: ">=4.13.11"
+  "@hono/node-server": ">=2.1.3"
+  "@vitest/mocker": ">=5.0.3"
+  happy-dom: ">=21.0.4"
