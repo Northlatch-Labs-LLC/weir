@@ -111,18 +111,32 @@
     what "the bar is under the content" means in the first place.
   */
   .w-app {
+    /* 100vh first for engines without dvh, then dvh so mobile browser chrome does not clip. */
+    min-height: 100vh;
     min-height: 100dvh;
     background: var(--w-ground);
     display: flex;
     flex-direction: column;
-    align-items: center;
+    /*
+      stretch, not center.
+
+      A column flex container centres its children on the cross axis, which here is horizontal:
+      every page lost its width and hugged its own content instead. On a 2560px display the whole
+      site rendered as a narrow column floating in the middle of the screen, and below 1280px the
+      inner container fell back to width:auto with no basis left to fill the window. Centring is
+      the job of each container's own margin-inline, not of the shell.
+    */
+    align-items: stretch;
   }
   .w-app__inner {
     display: flex;
     width: var(--w-app);
     max-width: 100%;
+    margin-inline: auto;
     align-items: stretch;
     flex: 1;
+    /* Flex children default to min-width:auto, which lets a wide table push the shell sideways. */
+    min-width: 0;
   }
   .w-column {
     width: var(--w-column);
@@ -1137,7 +1151,18 @@
      starts the moment they have an account.
      ====================================================================== */
   .w-land { background: var(--w-ground); color: var(--w-ink-10); }
-  .w-land__wrap { max-width: 1240px; margin: 0 auto; padding: 0 40px; }
+  /*
+     Fluid, with a ceiling.
+
+     1240px fixed is correct on a laptop and reads as a narrow strip on a 2560px display: 660px of
+     dead black either side. The gutter scales, and the measure stays capped so body text never runs
+     to an unreadable line length at any size.
+  */
+  .w-land__wrap {
+    max-width: 1680px;
+    margin-inline: auto;
+    padding-inline: clamp(20px, 3.2vw, 56px);
+  }
 
   .w-land__bar {
     display: flex;
@@ -1171,6 +1196,16 @@
     padding: 76px 0 68px;
   }
   .w-land__pitch { flex: 1 1 600px; min-width: 0; }
+
+  /*
+    Above 1600px the container has room it was not spending. The pair widens and the gap grows with
+    the viewport, so the extra width lands between the two columns instead of piling into the
+    margins. Capped so the gap never becomes a hole.
+  */
+  @media (min-width: 1601px) {
+    .w-land__hero { gap: clamp(40px, 4vw, 88px); }
+    .w-land__pitch { flex: 1 1 760px; }
+  }
   .w-land__flag {
     display: inline-flex;
     align-items: center;
@@ -1938,7 +1973,8 @@
      ====================================================================== */
   @media (max-width: 1279px) {
     .w-aside { display: none; }
-    .w-app__inner { width: auto; }
+    /* width:auto in a stretched column collapses to content width. Fill instead. */
+    .w-app__inner { width: 100%; }
     /* The aside took the search field with it. See `.w-column__search`. */
     .w-column__search {
       display: block;
