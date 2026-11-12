@@ -1,11 +1,21 @@
 # 07 — The gate: what "done" means, mechanically
 
-The repository has 173 web test files and no way to tell whether a screen is finished. Correctness is
-tested; *the product* is not. This file replaces judgement with a command.
+> **Status: not implemented.** This document is a design for a gate ladder, not a description of one
+> that exists. As of `943c2e5` there is no root `verify` script in `package.json`, no `scripts/gates/`
+> directory, and no `scripts/fixture-seed.mjs`. Running `pnpm verify` at the repository root fails with
+> "Missing script". Do not cite this document as evidence that a release was gated.
+>
+> What actually gates a deploy today: CI on every push to `main` and every pull request
+> (`.github/workflows/ci.yml`), which runs the secret scan, the digest guard, the web suite and the
+> Move suite. Production deploys are `workflow_run`-triggered from that CI run and stop at the
+> `Production` environment approval gate (`.github/workflows/deploy.yml`). That is a real gate; the
+> seven below are a proposal.
+>
+> Building these gates is tracked separately. Until then, treat the ladder below as the target.
 
-```bash
-pnpm verify
-```
+The repository has 173 web test files and no way to tell whether a screen is finished. Correctness is
+tested; *the product* is not. This file specifies the command that would replace judgement with a
+command.
 
 Seven gates, in order, exiting on the first failure, naming the file, the route, the width, the
 theme and the assertion. A work package is complete when this passes on a **deployed preview**, not

@@ -13,6 +13,8 @@ const config: NextConfig = {
       { source: '/treasuries', destination: '/treasury', permanent: true },
       { source: '/notifications', destination: '/alerts', permanent: true },
       { source: '/legal', destination: '/legal/terms', permanent: true },
+      { source: '/terms', destination: '/legal/terms', permanent: true },
+      { source: '/privacy', destination: '/legal/privacy', permanent: true },
     ];
   },
 
