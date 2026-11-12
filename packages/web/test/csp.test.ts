@@ -47,10 +47,51 @@ describe('what is enforced now, and what is only observed', () => {
     expect(headers).toContain('Content-Security-Policy-Report-Only');
   });
 
-  it('names no report endpoint, because nothing collects reports', () => {
+  it('reports to an endpoint that exists, so the policy is actually evaluated', () => {
     const code = headers.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-    expect(code).not.toContain('report-uri');
-    expect(code).not.toContain('report-to');
+    // This assertion used to require that NO report endpoint was named, because none existed and
+    // a header pointing at a 404 is a lie. It now requires the opposite: the policy names
+    // /api/csp-report and the route is checked below, so the header and the code agree.
+    expect(code).toContain('report-uri /api/csp-report');
+    expect(code).toContain('Reporting-Endpoints');
+  });
+});
+
+describe('the CSP report endpoint', () => {
+  const route = read('app/api/csp-report/route.ts');
+  const code = route.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+  it('exists where the header points', () => {
+    expect(read('next.config.ts')).toContain('/api/csp-report');
+    expect(code).toContain('export async function POST');
+  });
+
+  it('records into the same table as every other failure', () => {
+    expect(code).toContain('recordFailure');
+    expect(code).toContain("source: 'csp.violation'");
+  });
+
+  it('drops the query string, so a token in a URL is never stored', () => {
+    // `/feed?token=...` is the realistic way a credential reaches a document-uri.
+    expect(code).toContain('url.pathname');
+    expect(code).not.toMatch(/url\.search|url\.href/);
+  });
+
+  it('refuses content types it does not understand', () => {
+    // A public endpoint that parses arbitrary bodies is a way to fill a database from the
+    // internet. Only the two report formats are read.
+    expect(code).toContain('application/csp-report');
+    expect(code).toContain('application/reports+json');
+    expect(code).toContain('415');
+  });
+
+  it('caps how much one request can write', () => {
+    expect(code).toContain('MAX_REPORTS_PER_REQUEST');
+    expect(code).toContain('slice(0, MAX_REPORTS_PER_REQUEST)');
+  });
+
+  it('is reachable while the waitlist is up, or reports vanish behind a redirect', () => {
+    expect(read('lib/front-door.ts')).toContain('/api/');
   });
 });
 

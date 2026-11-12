@@ -68,7 +68,21 @@ const config: NextConfig = {
               "base-uri 'none'",
               "form-action 'self'",
               "frame-ancestors 'none'",
+              // Without this the policy was Report-Only and reported to nobody, so it was never
+              // evaluated by anyone. A policy nobody reads cannot tell you whether enforcing it
+              // is safe, which is why it stayed Report-Only for months — not because enforcement
+              // was risky, but because there was no evidence either way. Reports now land in
+              // error_events, where the hourly alarm already counts them.
+              'report-uri /api/csp-report',
+              'report-to csp-endpoint',
             ].join('; '),
+          },
+          {
+            // The modern spelling of the same thing. `report-uri` is deprecated but still the
+            // only one Chrome, Safari and Firefox all honour today, so both are sent and the
+            // endpoint accepts both payload shapes.
+            key: 'Reporting-Endpoints',
+            value: 'csp-endpoint="/api/csp-report"',
           },
         ],
       },
