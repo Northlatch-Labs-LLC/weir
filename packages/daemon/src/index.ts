@@ -99,6 +99,25 @@ export async function runOnce(
   );
 }
 
+async function pingHeartbeat(env: NodeJS.ProcessEnv): Promise<void> {
+  const url = (env['PROJECTX_DAEMON_HEARTBEAT_URL'] ?? '').trim();
+  if (url === '') return;
+  /*
+    A heartbeat is only worth anything if it means "the daemon is running and working". It is sent on
+    the clean-tick path and nowhere else: exit 1 (misconfigured), 2 (another instance holds the lock)
+    and 3 (a tick failed) must all look the same to the monitor as a daemon that is dead, which is
+    the state they are. Failure to send is logged and ignored — an unreachable monitor must not fail
+    a harvest that already succeeded.
+  */
+  try {
+    await fetch(url, { method: 'POST', signal: AbortSignal.timeout(5_000) });
+  } catch (error) {
+    console.error(
+      JSON.stringify({ heartbeatFailed: error instanceof Error ? error.message : String(error) }),
+    );
+  }
+}
+
 function report(result: TickResult & { discoveryTruncated: boolean }): void {
   const line = {
     epoch: result.epoch.toString(),
@@ -285,6 +304,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
       if (result.ok) {
         backoff.succeed();
         report(result.value);
+        await pingHeartbeat(env);
         if (run !== null && journal !== null) {
           fold(
             await journal.finish(run, result.value),

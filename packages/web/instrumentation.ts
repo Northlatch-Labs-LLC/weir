@@ -33,3 +33,39 @@ export async function register(): Promise<void> {
       });
   };
 }
+
+/*
+  The second hole, and the one the per-route try/catch sweep cannot close: an error thrown before a
+  route handler is entered, or from React while a server component streams, never passes through any
+  handler's catch. Next calls this hook for exactly those, once per failed request.
+
+  The route is recorded as its path template (`/api/posts/[id]`) rather than the concrete URL, so a
+  thousand hits on a thousand ids aggregate into one row instead of a thousand.
+*/
+export async function onRequestError(
+  error: unknown,
+  request: Readonly<{ path: string; method: string }>,
+  context: Readonly<{ routePath: string; routerKind: string; routeType: string }>,
+): Promise<void> {
+  if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
+  if ((process.env['PROJECTX_DATABASE_URL'] ?? '') === '') return;
+
+  const detail = error instanceof Error ? error.message : String(error);
+  const route = context.routePath || request.path;
+
+  /*
+    No console line here: register() has already replaced the console with a recorder, so writing one
+    would store the same failure twice. recordFailure logs to the console itself when the database
+    write fails, which is the fallback this needs.
+  */
+  try {
+    const m = await import("./lib/error-log");
+    await m.recordFailure({
+      source: `uncaught ${context.routerKind} ${context.routeType}`,
+      detail,
+      route,
+    });
+  } catch {
+    // Recording must never become a second failure.
+  }
+}

@@ -166,3 +166,9 @@ Claude outputs/
 
 # do not track local plan pdfs in public repo
 *.pdf
+
+# Mission worktrees
+.missions/
+
+# Local pnpm store and mission scratch
+.pnpm-store/
