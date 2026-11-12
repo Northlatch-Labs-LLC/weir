@@ -172,3 +172,4 @@ Claude outputs/
 
 # Local pnpm store and mission scratch
 .pnpm-store/
+.agents/
