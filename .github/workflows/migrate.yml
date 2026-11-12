@@ -1,0 +1,167 @@
+name: Migrate
+
+# Nothing applied migrations. The deploy workflow ships code, the backup workflow copies a
+# database, and neither one touches the schema — so a migration merged to main reached production
+# only if a person remembered to run it by hand, against the live database, from a laptop.
+#
+# The cost of that is not hypothetical. `044_error_events.sql` merged and never ran, so
+# `error_events` did not exist in production while `lib/error-log.ts` wrote to it. Every insert
+# failed into a catch that logged and returned, which is what that catch is for — so the product
+# had no error record at all and the hourly alarm correctly reported the table missing. A whole
+# feature was dead on arrival and the only reason anyone found out is that a separate alarm
+# happened to query the same table.
+#
+# This workflow exists so a merged migration is an applied migration. It runs on a schedule and on
+# demand, never automatically on push: a schema change to the production database is exactly the
+# kind of thing that should be visible in the Actions list before it happens, not a side effect of
+# merging a pull request.
+
+on:
+  schedule:
+    # Ten past four, after the 03:17 backup. A failed migration discovered here is discovered with
+    # a fresh backup from the same morning sitting in the artifacts.
+    - cron: '10 4 * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Run pending migrations for real (otherwise a dry run)'
+        type: boolean
+        default: false
+      baseline_through:
+        description: 'Record every migration up to and including this number as already applied (e.g. 043). Required once on a database that predates the ledger.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # One migration run at a time. Two runs racing the same ledger is how a migration gets applied
+  # twice, and `schema_migrations` is a plain table with no advisory lock around it.
+  group: migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Supabase direct host resolves to IPv6 only and GitHub runners have no IPv6 route, so the
+      # pooler rewrite below is copied verbatim from backup.yml and error-alarm.yml. Session mode
+      # (5432) rather than transaction mode (6543): a migration holds one connection across many
+      # statements and a transaction-mode pooler will move it between backends mid-file.
+      - name: Resolve an IPv4 session-mode connection
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::BACKUP_DATABASE_URL is not set, so there is no database to migrate."
+            exit 1
+          fi
+          URL=$(python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse, urlunparse
+          u = urlparse(os.environ['DATABASE_URL'])
+          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname or '')
+          if m:
+              ref = m.group(1)
+              region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
+              u = u._replace(
+                  netloc=f'postgres.{ref}:{u.password or ""}@aws-0-{region}.pooler.supabase.com:5432'
+              )
+          print(urlunparse(u))
+          PY
+          )
+          echo "::add-mask::$URL"
+          echo "PROJECTX_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # The runner imports `pg`, which is a dependency of packages/web and is installed here. The
+      # install is the whole cost of this job and it is why the job is not worth doing more often.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @projectx-social/web
+
+      # Always print the ledger, and make a scheduled run fail when anything is pending. A dry run
+      # that finds work and exits 0 is a report nobody reads; the alarm has to be the exit code.
+      - name: Report the schema ledger
+        run: |
+          node packages/web/scripts/migrate.mjs | tee ledger.txt
+          if [ "${{ github.event_name }}" = "schedule" ] && grep -q 'pending' ledger.txt; then
+            echo "::error::Production has migrations main has not applied. This is how error_events was dead for a week."
+            exit 1
+          fi
+
+      # The production database predates this ledger: it has 28 tables and an empty
+      # `schema_migrations`, because migrations used to be applied by hand. Running `--apply`
+      # against it would start at 001 and fail on `CREATE TABLE profiles` — the schema is there,
+      # the record of it is not.
+      #
+      # `--baseline --through=NNN` records everything up to NNN as applied *without running it*,
+      # then leaves the rest pending. That is only honest if the schema really does reflect those
+      # files, which is why the baseline is an explicit input rather than a guess, and why the
+      # default run is a dry run that shows exactly what it would adopt.
+      - name: Baseline the ledger
+        if: inputs.baseline_through != ''
+        run: |
+          node packages/web/scripts/migrate.mjs --baseline --through=${{ inputs.baseline_through }} --apply
+
+      - name: Apply pending migrations
+        if: inputs.apply
+        run: |
+          node packages/web/scripts/migrate.mjs --apply
+
+      # A dry run proves nothing on its own. This reads the ledger back so the run summary says
+      # what the database actually believes, and fails if anything is still pending after an
+      # `--apply` that claimed success.
+      - name: Verify nothing is left pending
+        if: inputs.apply
+        run: |
+          node packages/web/scripts/migrate.mjs | tee after.txt
+          if grep -q 'pending' after.txt; then
+            echo "::error::Migrations remain pending after --apply; the run did not converge."
+            exit 1
+          fi
+
+      - name: File an issue when the run does not report a clean ledger
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE='MIGRATE: production schema is behind main'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          {
+            echo "The migration check at $(date -u '+%Y-%m-%d %H:%MZ') did not report a clean ledger."
+            echo
+            echo "Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            echo 'Re-run it from Actions -> Migrate with `apply` checked. If the ledger has never'
+            echo 'been seeded on this database, set `baseline_through` to the last migration the'
+            echo 'schema already reflects and run that first.'
+            echo
+            echo 'This issue closes itself when a run reports no pending migrations.'
+          } > body.md
+          if [ -z "$NUMBER" ]; then
+            gh issue create --title "$TITLE" --body-file body.md
+          else
+            gh issue comment "$NUMBER" --body-file body.md
+          fi
+
+      - name: Close the issue when the ledger is clean
+        if: success() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE='MIGRATE: production schema is behind main'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$NUMBER" ]; then
+            gh issue close "$NUMBER" --comment "Ledger is clean as of $(date -u '+%Y-%m-%d %H:%MZ')."
+          fi
