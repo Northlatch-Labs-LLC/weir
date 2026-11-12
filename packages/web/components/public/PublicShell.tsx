@@ -2,7 +2,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
 import NextLink from 'next/link';
 import { SOCIAL } from '@/lib/social-links';
 import { FOOTER, PUBLIC_NAV } from '@/lib/site-map';
@@ -15,7 +14,6 @@ import { useSigner } from '@/components/SignerProvider';
 export function PublicHeader() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const t = useTranslations('common');
 
   return (
     <>
@@ -32,18 +30,18 @@ export function PublicHeader() {
         <div className="w-land__nav">
           {PUBLIC_NAV.map((item) => (
             <NextLink key={item.href} href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>
-              {item.navKey ? t(item.navKey) : item.label}
+              {item.label}
             </NextLink>
           ))}
           <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             {pathname === '/signin' ? null : (
               <NextLink href="/signin" className="w-btn w-btn--quiet">
-                {t('signIn')}
+                Sign in
               </NextLink>
             )}
             {pathname === '/join' ? null : (
               <NextLink href="/join" className="w-btn w-btn--primary">
-                {t('join')}
+                Create account
               </NextLink>
             )}
           </span>
@@ -52,7 +50,7 @@ export function PublicHeader() {
             className="w-land__menu"
             aria-expanded={open}
             aria-controls="w-public-menu"
-            aria-label={open ? t('close') : t('menu')}
+            aria-label={open ? 'Close the menu' : 'Open the menu'}
             onClick={() => setOpen((was) => !was)}
           >
             <Icon name={open ? 'close' : 'menu'} size={20} strokeWidth={1.9} />
@@ -74,12 +72,12 @@ export function PublicHeader() {
       >
         {PUBLIC_NAV.map((item) => (
           <NextLink key={item.href} href={item.href} onClick={() => setOpen(false)}>
-            {item.navKey ? t(item.navKey) : item.label}
+            {item.label}
           </NextLink>
         ))}
         {pathname === '/signin' ? null : (
           <NextLink href="/signin" className="w-btn w-btn--quiet" onClick={() => setOpen(false)}>
-            {t('signIn')}
+            Sign in
           </NextLink>
         )}
       </nav>
@@ -88,8 +86,6 @@ export function PublicHeader() {
 }
 
 export function PublicFooter() {
-  const t = useTranslations('common');
-
   return (
     <footer className="w-land__foot">
       <nav>
@@ -114,7 +110,7 @@ export function PublicFooter() {
       </nav>
       <span className="w-land__mark">
         <WeirMark size={17} />
-        {t('english')} · on Sui · {t('romanian')}
+        Weir · on Sui · Your favorite notification
       </span>
     </footer>
   );
@@ -128,27 +124,24 @@ export function PublicFooter() {
 export function PublicDock() {
   const pathname = usePathname();
   const { signer } = useSigner();
-  const t = useTranslations('common');
   if (signer !== null || pathname === '/signin' || pathname === '/join' || pathname === '/welcome') return null;
   return (
     <nav className="w-dock" aria-label="Join or sign in">
       <NextLink href="/join" className="w-btn w-btn--primary">
-        {t('join')}
+        Create account
       </NextLink>
       <NextLink href="/signin" className="w-btn w-btn--quiet">
-        {t('signIn')}
+        Sign in
       </NextLink>
     </nav>
   );
 }
 
 export function PublicShell({ children }: { children: ReactNode }) {
-  const t = useTranslations('common');
-
   return (
     <div className="w-app w-land">
       <a className="w-skip" href="#w-main">
-        {t('skipToContent', { defaultValue: 'Skip to content' })}
+        Skip to content
       </a>
       <div className="w-land__wrap" style={{ width: '100%' }}>
         <PublicHeader />

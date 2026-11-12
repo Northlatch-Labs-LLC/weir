@@ -2,7 +2,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSigner } from '@/components/SignerProvider';
@@ -11,7 +10,6 @@ import { creatorDestinations, MINE } from '@/lib/site-map';
 
 export function AccountMenu() {
   const pathname = usePathname();
-  const t = useTranslations('common');
   const { signer, signOut, reopenAccountChoice, reauthorizeWallet, proof, proveSession } =
     useSigner();
   const [open, setOpen] = useState(false);
@@ -162,7 +160,7 @@ export function AccountMenu() {
         <div
           className="account-pop"
           role="menu"
-          aria-label={t('accountMenu')}
+          aria-label="Account menu"
           onKeyDown={onMenuKeyDown}
         >
           <div className="account-pop__head">
@@ -201,8 +199,8 @@ export function AccountMenu() {
                   }}
                   onClick={() => close(false)}
                 >
-                    {t('myPage', { handle })}
-                  </Link>
+                  My page — @{handle}
+                </Link>
               );
             })()}
 
@@ -220,7 +218,7 @@ export function AccountMenu() {
                 }}
                 onClick={() => close(false)}
               >
-                {item.navKey ? t(item.navKey) : item.label}
+                {item.label}
               </Link>
             );
           })}
@@ -238,7 +236,7 @@ export function AccountMenu() {
                   }}
                   onClick={() => close(false)}
                 >
-                  {t('recoveryDetails')}
+                  Recovery details
                 </Link>
               );
             })()}
@@ -258,7 +256,7 @@ export function AccountMenu() {
                   close(true);
                 }}
               >
-                {t('useDifferentAddress')}
+                Use a different address
               </button>
             );
           })()}
@@ -278,7 +276,7 @@ export function AccountMenu() {
                   close(true);
                 }}
               >
-                {t('reconnectWallet')}
+                Reconnect wallet
               </button>
             );
           })()}
@@ -298,7 +296,7 @@ export function AccountMenu() {
                   close(true);
                 }}
               >
-                {t('signOut')}
+                Sign out
               </button>
             );
           })()}
