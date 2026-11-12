@@ -52,12 +52,12 @@ jobs:
           import os, re
           from urllib.parse import urlparse, urlunparse
           u = urlparse(os.environ['DATABASE_URL'])
-          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname || '')
+          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname or '')
           if m:
               ref = m.group(1)
               region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
               u = u._replace(
-                  netloc=f'postgres.{ref}:{u.password || ""}@aws-0-{region}.pooler.supabase.com:5432'
+                  netloc=f'postgres.{ref}:{u.password or ""}@aws-0-{region}.pooler.supabase.com:5432'
               )
           print(urlunparse(u))
           PY
