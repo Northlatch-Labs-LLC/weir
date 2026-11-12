@@ -121,13 +121,20 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17 postgresql-17
-          # The runner image ships PostgreSQL 16, and `systemctl start postgresql` starts *that*
-          # cluster on 5432. Restoring a PG17 dump into a PG16 server fails on
-          # `unrecognized configuration parameter "transaction_timeout"`, which reads like a
-          # corrupt backup and is really the wrong server. Stop 16, start 17, and prove which one
-          # answered before the restore runs.
-          sudo systemctl stop postgresql || true
-          sudo pg_ctlcluster 17 main start || sudo systemctl start postgresql@17-main
+          # The runner image ships a PostgreSQL 16 *cluster* on port 5432, and installing the 17
+          # package only drops binaries on disk — it does not create a cluster, so
+          # `pg_ctlcluster 17 main start` fails with "cluster '17 main' does not exist" and
+          # `systemctl start postgresql` keeps serving 16. A PG17 dump restored into a PG16 server
+          # dies on `unrecognized configuration parameter "transaction_timeout"`, which reads like
+          # a corrupt backup and is really the wrong server.
+          #
+          # Drop the 16 cluster to free 5432, then create and start a 17 cluster in its place, and
+          # read SHOW server_version before the restore so a wrong-server run fails with a sentence
+          # that says so instead of a pg_restore error that blames the data.
+          sudo pg_lsclusters || true
+          sudo pg_dropcluster --stop 16 main || true
+          sudo pg_createcluster 17 main --start
+          sudo pg_lsclusters
           sudo -u postgres psql -t -A -c "SHOW server_version;" | tee server-version.txt
           if ! grep -q '^17\.' server-version.txt; then
             echo "::error::Expected a PostgreSQL 17 server on the local socket, got: $(cat server-version.txt)"
