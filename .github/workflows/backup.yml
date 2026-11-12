@@ -121,10 +121,21 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17 postgresql-17
-          sudo systemctl start postgresql
+          # The runner image ships PostgreSQL 16, and `systemctl start postgresql` starts *that*
+          # cluster on 5432. Restoring a PG17 dump into a PG16 server fails on
+          # `unrecognized configuration parameter "transaction_timeout"`, which reads like a
+          # corrupt backup and is really the wrong server. Stop 16, start 17, and prove which one
+          # answered before the restore runs.
+          sudo systemctl stop postgresql || true
+          sudo pg_ctlcluster 17 main start || sudo systemctl start postgresql@17-main
+          sudo -u postgres psql -t -A -c "SHOW server_version;" | tee server-version.txt
+          if ! grep -q '^17\.' server-version.txt; then
+            echo "::error::Expected a PostgreSQL 17 server on the local socket, got: $(cat server-version.txt)"
+            exit 1
+          fi
           # The dump carries row-level security policies granted to backup_reader. That role is
           # created by the production bootstrap and is not carried by pg_dump, so without it every
-          # CREATE POLICY fails and the restore exits non-zero on 18 errors that say nothing about
+          # CREATE POLICY fails and the restore exits non-zero on errors that say nothing about
           # the data. Create it first so a clean restore means a clean restore.
           sudo -u postgres psql -c "CREATE ROLE backup_reader NOLOGIN;" || true
           sudo -u postgres psql -c "CREATE DATABASE weir_restore_test;"
