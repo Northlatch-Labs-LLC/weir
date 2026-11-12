@@ -53,15 +53,36 @@ jobs:
       # pooler rewrite below is copied verbatim from backup.yml and error-alarm.yml. Session mode
       # (5432) rather than transaction mode (6543): a migration holds one connection across many
       # statements and a transaction-mode pooler will move it between backends mid-file.
-      - name: Resolve an IPv4 session-mode connection
+      # BACKUP_DATABASE_URL is deliberately read-only — it is the credential the backup and alarm
+      # workflows use, and a copy of the production database that can also write to production is
+      # one compromised runner away from being an outage. It reads the ledger fine and then fails
+      # the first write with `permission denied for schema public`, which is the credential
+      # working exactly as intended.
+      #
+      # The credential that can write is the one production itself runs as, and it already lives
+      # in Vercel's environment. `vercel pull` fetches it with the token the deploy workflow
+      # already uses, so this adds no new secret and no second copy of a write credential.
+      - name: Pull the production database credential
         env:
-          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::BACKUP_DATABASE_URL is not set, so there is no database to migrate."
+          # Installed globally rather than run through npx: this repo pins packageManager to pnpm,
+          # and `npx` refuses to run in a project whose devEngines disagree with it
+          # (EBADDEVENGINES). The deploy workflow installs it the same way for the same reason.
+          npm install --global vercel@latest >/dev/null
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} >/dev/null
+          # vercel writes .env.production.local; read the one variable rather than sourcing the
+          # file, so nothing else in it reaches this job's environment. Values are written both
+          # bare and quoted depending on the CLI version, so surrounding quotes are stripped.
+          URL=$(grep -E '^PROJECTX_DATABASE_URL=' .env.production.local | head -1 | cut -d= -f2-)
+          URL=${URL%\"}; URL=${URL#\"}
+          URL=${URL%\'}; URL=${URL#\'}
+          if [ -z "$URL" ]; then
+            echo "::error::PROJECTX_DATABASE_URL is not set in the Vercel production environment."
             exit 1
           fi
-          URL=$(python3 - <<'PY'
+          URL=$(DATABASE_URL="$URL" python3 - <<'PY'
           import os, re
           from urllib.parse import urlparse, urlunparse
           u = urlparse(os.environ['DATABASE_URL'])
@@ -77,6 +98,7 @@ jobs:
           )
           echo "::add-mask::$URL"
           echo "PROJECTX_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          rm -f .env.production.local
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
