@@ -6,6 +6,7 @@ import { isSiteAdmin } from '@/lib/site-admin';
 import { readSiteMode } from '@/lib/site-mode';
 import { passIsValid, passTokenFrom } from '@/lib/access-codes';
 import { isAlwaysOpen } from '@/lib/front-door';
+import { locales, defaultLocale, isValidLocale } from '@/lib/i18n/config';
 
 export const config = {
   matcher: [
@@ -23,10 +24,57 @@ function letThrough(request: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
+function getLocaleFromPath(pathname: string): string | null {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length > 0) {
+    const first = parts[0] as string;
+    if (isValidLocale(first)) return first;
+  }
+  return null;
+  return null;
+}
+
+function stripLocale(pathname: string): string {
+  const locale = getLocaleFromPath(pathname);
+  if (locale) {
+    return pathname.replace(new RegExp(`^/${locale}`), '') || '/';
+  }
+  return pathname;
+}
+
+function preferredLocale(request: NextRequest): string {
+  // 1. Locale cookie
+  const cookieLocale = request.cookies.get('NEXT_LOCALE')?.value ?? '';
+  if (cookieLocale && isValidLocale(cookieLocale)) return cookieLocale;
+
+  // 2. Accept-Language header
+  const acceptLang = request.headers.get('accept-language');
+  if (acceptLang) {
+    for (const entry of acceptLang.split(',')) {
+      const lang = entry.split(';')[0]?.trim().toLowerCase();
+      if (lang === 'ro' || lang === 'ro-ro') return 'ro';
+      if (lang === 'en' || lang === 'en-gb' || lang === 'en-us') return 'en';
+    }
+  }
+
+  return defaultLocale;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isAlwaysOpen(pathname)) return letThrough(request);
+  // Handle locale detection and redirect for root path
+  if (pathname === '/') {
+    const locale = preferredLocale(request);
+    const to = request.nextUrl.clone();
+    to.pathname = locale === defaultLocale ? `/en` : `/${locale}`;
+    return NextResponse.redirect(to, 307);
+  }
+
+  // Strip locale prefix for auth checks
+  const pathWithoutLocale = stripLocale(pathname);
+
+  if (isAlwaysOpen(pathWithoutLocale)) return letThrough(request);
 
   const mode = await readSiteMode();
   if (!mode.waitlistMode) return letThrough(request);
@@ -41,10 +89,11 @@ export async function proxy(request: NextRequest) {
   if (await passIsValid(passTokenFrom(request.headers.get('cookie')))) return letThrough(request);
 
   const to = request.nextUrl.clone();
-  to.pathname = '/waitlist';
+  const locale = getLocaleFromPath(pathname) || preferredLocale(request);
+  to.pathname = `/${locale}/waitlist`;
   to.search =
-    pathname.startsWith('/') && !pathname.startsWith('//')
-      ? `?from=${encodeURIComponent(pathname)}`
+    pathWithoutLocale.startsWith('/') && !pathWithoutLocale.startsWith('//')
+      ? `?from=${encodeURIComponent(pathWithoutLocale)}`
       : '';
 
   return NextResponse.redirect(to, 307);

@@ -2,6 +2,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSigner } from '@/components/SignerProvider';
@@ -10,6 +11,7 @@ import { creatorDestinations, MINE } from '@/lib/site-map';
 
 export function AccountMenu() {
   const pathname = usePathname();
+  const t = useTranslations('common');
   const { signer, signOut, reopenAccountChoice, reauthorizeWallet, proof, proveSession } =
     useSigner();
   const [open, setOpen] = useState(false);
@@ -160,7 +162,7 @@ export function AccountMenu() {
         <div
           className="account-pop"
           role="menu"
-          aria-label="Account menu"
+          aria-label={t('accountMenu')}
           onKeyDown={onMenuKeyDown}
         >
           <div className="account-pop__head">
@@ -199,8 +201,8 @@ export function AccountMenu() {
                   }}
                   onClick={() => close(false)}
                 >
-                  My page — @{handle}
-                </Link>
+                    {t('myPage', { handle })}
+                  </Link>
               );
             })()}
 
@@ -218,7 +220,7 @@ export function AccountMenu() {
                 }}
                 onClick={() => close(false)}
               >
-                {item.label}
+                {item.navKey ? t(item.navKey) : item.label}
               </Link>
             );
           })}
@@ -236,7 +238,7 @@ export function AccountMenu() {
                   }}
                   onClick={() => close(false)}
                 >
-                  Recovery details
+                  {t('recoveryDetails')}
                 </Link>
               );
             })()}
@@ -256,7 +258,7 @@ export function AccountMenu() {
                   close(true);
                 }}
               >
-                Use a different address
+                {t('useDifferentAddress')}
               </button>
             );
           })()}
@@ -276,7 +278,7 @@ export function AccountMenu() {
                   close(true);
                 }}
               >
-                Reconnect wallet
+                {t('reconnectWallet')}
               </button>
             );
           })()}
@@ -296,7 +298,7 @@ export function AccountMenu() {
                   close(true);
                 }}
               >
-                Sign out
+                {t('signOut')}
               </button>
             );
           })()}
