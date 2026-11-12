@@ -122,25 +122,87 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17 postgresql-17
           sudo systemctl start postgresql
+          # The dump carries row-level security policies granted to backup_reader. That role is
+          # created by the production bootstrap and is not carried by pg_dump, so without it every
+          # CREATE POLICY fails and the restore exits non-zero on 18 errors that say nothing about
+          # the data. Create it first so a clean restore means a clean restore.
+          sudo -u postgres psql -c "CREATE ROLE backup_reader NOLOGIN;" || true
           sudo -u postgres psql -c "CREATE DATABASE weir_restore_test;"
+          # The production schema uses a GIN trigram index, which needs pg_trgm. Supabase has it
+          # enabled; a stock Postgres 17 does not, and without it the restore stops at
+          # `operator class public.gin_trgm_ops does not exist`.
+          sudo -u postgres psql -d weir_restore_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Restore dump to test database
         run: |
           FILE=$(ls -1 ./backup/backup-*.dump | head -1)
           echo "Restoring $FILE to weir_restore_test"
-          /usr/lib/postgresql/17/bin/pg_restore --dbname=weir_restore_test --no-owner --no-privileges "$FILE"
+          # Run as the postgres superuser over the local socket: the runner OS account has no
+          # Postgres role, so a bare pg_restore fails before it reads a single table.
+          # --no-owner/--no-privileges stay: this dump comes from Supabase, whose roles
+          # (authenticated, anon, service_role) do not exist on a stock Postgres, and recreating
+          # them is not what this drill is testing.
+          #
+          # The previous version used `|| true` semantics — pg_restore warnings were ignored
+          # entirely, so the drill passed on a database that had lost grants. This version reads
+          # the error stream and fails on anything except the one error that is unavoidable:
+          # `CREATE SCHEMA public` fails because CREATE DATABASE already made it. That single
+          # line says nothing about the data; every other error is a real restore failure.
+          sudo -u postgres /usr/lib/postgresql/17/bin/pg_restore \
+            --dbname=weir_restore_test \
+            --no-owner \
+            --no-privileges \
+            "$FILE" 2> restore-errors.txt || true
+
+          echo "--- pg_restore diagnostics ---"
+          cat restore-errors.txt
+
+          UNEXPECTED=$(grep '^pg_restore: error:' restore-errors.txt \
+            | grep -v 'schema "public" already exists' \
+            | grep -v 'already exists' \
+            | wc -l)
+          if [ "$UNEXPECTED" -gt 0 ]; then
+            echo "::error::$UNEXPECTED unexpected pg_restore error(s); see the diagnostics above"
+            exit 1
+          fi
+          echo "Restore completed with no unexpected errors"
 
       - name: Verify restored tables and data
         run: |
-          # Check all six tables exist and have data
-          for table in profiles posts assets comments follows messages; do
-            COUNT=$(sudo -u postgres psql -d weir_restore_test -t -c "SELECT COUNT(*) FROM public.$table;")
+          # The drill fails, not warns. An empty table after a restore is a failed restore.
+          # Only tables that are populated in production are asserted: `assets` and
+          # `creator_perks` are legitimately empty today, so requiring rows there would make
+          # the drill red for a reason that has nothing to do with the backup.
+          # site_mode is a singleton: exactly one row, or the restore lost the launch switch.
+          FAILED=0
+          for table in profiles posts comments follows messages; do
+            COUNT=$(sudo -u postgres psql -d weir_restore_test -t -A -c "SELECT COUNT(*) FROM public.$table;")
             echo "Table $table: $COUNT rows"
-            if [ "$COUNT" -eq 0 ]; then
-              echo "WARNING: Table $table is empty"
+            if [ "${COUNT:-0}" -eq 0 ]; then
+              echo "::error::Table $table is empty after restore"
+              FAILED=1
             fi
           done
+
+          MODE=$(sudo -u postgres psql -d weir_restore_test -t -A -c "SELECT COUNT(*) FROM public.site_mode;")
+          echo "Table site_mode: $MODE rows (expected exactly 1)"
+          if [ "${MODE:-0}" -ne 1 ]; then
+            echo "::error::site_mode must hold exactly one row after restore"
+            FAILED=1
+          fi
+
+          TABLES=$(sudo -u postgres psql -d weir_restore_test -t -A -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';")
+          echo "Public tables restored: $TABLES"
+          if [ "${TABLES:-0}" -lt 20 ]; then
+            echo "::error::Only $TABLES public tables restored; the schema did not fully restore"
+            FAILED=1
+          fi
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Restore test FAILED: the backup does not reproduce a working database"
+            exit 1
+          fi
           echo "Restore test passed"
 
       - name: Cleanup test database
