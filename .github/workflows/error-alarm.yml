@@ -122,6 +122,99 @@ jobs:
 
           echo "alarm=quiet" >> "$GITHUB_ENV"
 
+      # The daemon is the other half of the product and nothing watches it. A harvest that is
+      # running and failing and a daemon that is not running at all look identical from outside,
+      # which is why the journal is the heartbeat: every tick writes daemon_runs, so the newest
+      # row is the last moment the daemon was alive. No external uptime monitor, no heartbeat URL,
+      # no second credential — the table is already in the database this workflow reads.
+      #
+      # Gated on DAEMON_EXPECTED because today nothing is harvesting: daemon_runs is empty, and a
+      # staleness alarm that is red from the day it ships is an alarm everybody learns to ignore.
+      # Set the repository variable to "true" when the daemon is actually deployed.
+      - name: Check the harvest daemon is alive
+        env:
+          DAEMON_EXPECTED: ${{ vars.DAEMON_EXPECTED }}
+        run: |
+          if [ "$DAEMON_EXPECTED" != "true" ]; then
+            echo "daemon=not-expected" >> "$GITHUB_ENV"
+            echo "DAEMON_EXPECTED is not 'true', so no daemon staleness check is made."
+            exit 0
+          fi
+          # Six hours. The harvest runs on a timer far more often than that, and a window wide
+          # enough to survive a laptop lid or a deploy is a window that misses a real outage.
+          STALE_SECONDS=21600
+          echo "daemon_stale_limit=$STALE_SECONDS" >> "$GITHUB_ENV"
+          # A missing table is not a stale daemon, it is an unmigrated database, and saying so
+          # separately stops the wrong person being woken.
+          if ! LAST=$("$PSQL" "$PGURL" -t -A -c \
+              "SELECT coalesce(max(started_at_ms), 0) FROM daemon_runs;" 2>daemon-error.txt) \
+             || ! echo "$LAST" | grep -qE '^[0-9]+$'; then
+            echo "daemon=unreadable" >> "$GITHUB_ENV"
+            cat daemon-error.txt
+            exit 0
+          fi
+          NOW_MS=$(($(date +%s) * 1000))
+          if [ "$LAST" = "0" ]; then
+            AGE_SECONDS=$((STALE_SECONDS + 1))
+            echo "The daemon journal has never recorded a run."
+          else
+            AGE_SECONDS=$(( (NOW_MS - LAST) / 1000 ))
+          fi
+          echo "daemon_age_seconds=$AGE_SECONDS" >> "$GITHUB_ENV"
+          if [ "$AGE_SECONDS" -gt "$STALE_SECONDS" ]; then
+            echo "daemon=stale" >> "$GITHUB_ENV"
+            echo "daemon_runs is stale: last run was ${AGE_SECONDS}s ago (limit ${STALE_SECONDS}s)."
+          else
+            echo "daemon=fresh" >> "$GITHUB_ENV"
+            echo "daemon_runs is fresh: last run was ${AGE_SECONDS}s ago."
+          fi
+
+      - name: File or update the daemon alarm issue
+        if: env.daemon == 'stale' || env.daemon == 'unreadable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            if [ "${{ env.daemon }}" = "unreadable" ]; then
+              echo "The daemon journal could not be read at $(date -u '+%Y-%m-%d %H:%MZ')."
+              echo
+              echo '```'
+              cat daemon-error.txt
+              echo '```'
+            else
+              echo "The harvest daemon has not recorded a run in **${{ env.daemon_age_seconds }} seconds**"
+              echo "(limit ${{ env.daemon_stale_limit }}, checked $(date -u '+%Y-%m-%d %H:%MZ'))."
+              echo
+              echo 'Either it is not running, or it is failing before it can write a run row.'
+              echo 'Both mean staking yield is not being harvested.'
+            fi
+            echo
+            echo 'The journal is the heartbeat: every tick writes `daemon_runs`, so the newest row'
+            echo 'is the last moment the daemon was alive.'
+            echo
+            echo 'This issue closes itself when the journal is fresh again.'
+          } > daemon-body.md
+          TITLE='DAEMON ALARM: harvest journal is stale'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -z "$NUMBER" ]; then
+            gh issue create --title "$TITLE" --body-file daemon-body.md
+          else
+            gh issue comment "$NUMBER" --body-file daemon-body.md
+          fi
+
+      - name: Close the daemon alarm issue when the journal is fresh
+        if: success() && env.daemon == 'fresh'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE='DAEMON ALARM: harvest journal is stale'
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$NUMBER" ]; then
+            gh issue close "$NUMBER" --comment "Journal is fresh again (checked $(date -u '+%Y-%m-%d %H:%MZ')): last run ${{ env.daemon_age_seconds }}s ago."
+          fi
+
       - name: File or update the error alarm issue
         if: env.alarm == 'over' || env.alarm == 'unreachable'
         env:

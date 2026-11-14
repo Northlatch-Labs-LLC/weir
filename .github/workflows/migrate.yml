@@ -66,22 +66,64 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
         run: |
+          # The explicit secret wins when it exists: it is the write credential stored for exactly
+          # this job, and it does not depend on Vercel agreeing to export anything.
+          if [ -n "$MIGRATE_DATABASE_URL" ]; then
+            URL=$(DATABASE_URL="$MIGRATE_DATABASE_URL" python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse, urlunparse
+          u = urlparse(os.environ['DATABASE_URL'])
+          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname or '')
+          if m:
+              ref = m.group(1)
+              region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
+              u = u._replace(
+                  netloc=f'postgres.{ref}:{u.password or ""}@aws-0-{region}.pooler.supabase.com:5432'
+              )
+          print(urlunparse(u))
+          PY
+          )
+            echo "::add-mask::$URL"
+            echo "PROJECTX_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+            exit 0
+          fi
           # Installed globally rather than run through npx: this repo pins packageManager to pnpm,
           # and `npx` refuses to run in a project whose devEngines disagree with it
           # (EBADDEVENGINES). The deploy workflow installs it the same way for the same reason.
           npm install --global vercel@latest >/dev/null
           vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} >/dev/null
-          # vercel writes .env.production.local; read the one variable rather than sourcing the
-          # file, so nothing else in it reaches this job's environment. Values are written both
-          # bare and quoted depending on the CLI version, so surrounding quotes are stripped.
-          URL=$(grep -E '^PROJECTX_DATABASE_URL=' .env.production.local | head -1 | cut -d= -f2-)
-          URL=${URL%\"}; URL=${URL#\"}
-          URL=${URL%\'}; URL=${URL#\'}
-          if [ -z "$URL" ]; then
-            echo "::error::PROJECTX_DATABASE_URL is not set in the Vercel production environment."
+          # vercel writes .vercel/.env.production.local (not the repo root).
+          FILE=.vercel/.env.production.local
+          if [ ! -f "$FILE" ]; then
+            echo "::error::vercel pull did not write $FILE"
             exit 1
           fi
+          # Vercel refuses to export values it stores as sensitive and writes the literal
+          # placeholder instead, so a successful pull can still carry no usable credential.
+          URL=$(grep -E '^PROJECTX_DATABASE_URL=' "$FILE" | head -1 | cut -d= -f2-)
+          URL=${URL%\"}; URL=${URL#\"}
+          URL=${URL%\'}; URL=${URL#\'}
+          case "$URL" in
+            ''|'[SENSITIVE]'*)
+              echo "::error::Vercel will not export PROJECTX_DATABASE_URL (sensitive). See the step summary."
+              {
+                echo "## A write credential is needed to apply migrations"
+                echo
+                echo "CI can read production with \`BACKUP_DATABASE_URL\` but that role is read-only by"
+                echo "design, and Vercel will not export the app's own write credential. Add one secret:"
+                echo
+                echo '```'
+                echo 'gh secret set MIGRATE_DATABASE_URL --repo Northlatch-Labs-LLC/weir'
+                echo '```'
+                echo
+                echo 'Use the Supabase connection string for a role that owns the schema (the same'
+                echo 'string the app runs as). The workflow prefers it over the Vercel path.'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+          esac
           URL=$(DATABASE_URL="$URL" python3 - <<'PY'
           import os, re
           from urllib.parse import urlparse, urlunparse
