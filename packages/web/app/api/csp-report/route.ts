@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
 import { recordFailure } from '@/lib/error-log';
 
 /*
@@ -58,6 +59,12 @@ function safePath(documentUri: string): string {
 }
 
 export async function POST(request: Request) {
+  // Public endpoint that writes to the database, so it limits like every other handler. The read
+  // budget is deliberately loose: a real violation burst comes from many browsers at once, and
+  // each browser reports a handful of times, not hundreds.
+  const limited = rateLimit(request, 'read');
+  if (limited !== null) return limited;
+
   // Browsers send CSP reports as application/csp-report or application/reports+json. Both are
   // read; anything else is refused rather than parsed, so this cannot be used as a text dump.
   const contentType = request.headers.get('content-type') ?? '';

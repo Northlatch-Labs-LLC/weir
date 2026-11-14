@@ -40,6 +40,14 @@ const UNREACHABLE_ROUTES: string[] = [
   */
 ];
 
+/*
+  Reached by the browser itself rather than by application source: `next.config.ts` names
+  /api/csp-report in the Report-Only header, and the browser POSTs violations there. No lib or
+  component fetches it, which is why the caller scan above will never see it — the exemption is
+  the caller, not a gap.
+*/
+const BROWSER_REACHED: string[] = ['csp-report'];
+
 describe('every API route has a caller', () => {
   const routes = walk('app/api')
     .filter((f) => f.endsWith('/route.ts'))
@@ -51,6 +59,7 @@ describe('every API route has a caller', () => {
 
   const unreachable = routes.filter((route) => {
     const stem = route.split('/[')[0] ?? route;
+    if (BROWSER_REACHED.includes(stem)) return false;
     const needle = `api/${stem}`;
     return !sources.some(
       ({ file, text }) => !file.startsWith('app/api/') && text.includes(needle),
