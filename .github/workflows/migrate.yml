@@ -1,45 +1,35 @@
 name: Migrate
 
-# Nothing applied migrations. The deploy workflow ships code, the backup workflow copies a
-# database, and neither one touches the schema — so a migration merged to main reached production
-# only if a person remembered to run it by hand, against the live database, from a laptop.
+# A merged migration must be an applied migration. Nothing used to guarantee that: deploys ship
+# code, backups copy data, and the schema moved only when a person remembered to run a file by
+# hand — which is how `044_error_events.sql` reached main and never reached production, leaving
+# the product without its error record while looking healthy.
 #
-# The cost of that is not hypothetical. `044_error_events.sql` merged and never ran, so
-# `error_events` did not exist in production while `lib/error-log.ts` wrote to it. Every insert
-# failed into a catch that logged and returned, which is what that catch is for — so the product
-# had no error record at all and the hourly alarm correctly reported the table missing. A whole
-# feature was dead on arrival and the only reason anyone found out is that a separate alarm
-# happened to query the same table.
+# What this workflow is now, after the operator ruled out CI holding any write credential to
+# production ("no secrets, no published private keys"):
 #
-# This workflow exists so a merged migration is an applied migration. It runs on a schedule and on
-# demand, never automatically on push: a schema change to the production database is exactly the
-# kind of thing that should be visible in the Actions list before it happens, not a side effect of
-# merging a pull request.
+#   A DRIFT WATCH, not an applier. With the read-only credential the repo already holds it reads
+#   the ledger and reports. Production stays writable only by the app itself and by the operator
+#   working directly — through the authenticated Supabase CLI session, as when the ledger was
+#   seeded and 044 applied on 2026-11-12. That is one credential in one place, and no runner can
+#   write to the database even if every GitHub secret leaks at once.
+#
+# Applying a migration is therefore deliberate work with the CLI, not a checkbox. The workflow's
+# job is to make forgetting it loud: a scheduled run that finds pending migrations fails, files
+# an issue, and closes it when the ledger is clean again.
 
 on:
   schedule:
-    # Ten past four, after the 03:17 backup. A failed migration discovered here is discovered with
-    # a fresh backup from the same morning sitting in the artifacts.
+    # Ten past four, after the 03:17 backup. A drift discovered here is discovered with a fresh
+    # backup from the same morning sitting in the artifacts.
     - cron: '10 4 * * *'
   workflow_dispatch:
-    inputs:
-      apply:
-        description: 'Run pending migrations for real (otherwise a dry run)'
-        type: boolean
-        default: false
-      baseline_through:
-        description: 'Record every migration up to and including this number as already applied (e.g. 043). Required once on a database that predates the ledger.'
-        type: string
-        required: false
-        default: ''
 
 permissions:
   contents: read
   issues: write
 
 concurrency:
-  # One migration run at a time. Two runs racing the same ledger is how a migration gets applied
-  # twice, and `schema_migrations` is a plain table with no advisory lock around it.
   group: migrate-production
   cancel-in-progress: false
 
@@ -51,80 +41,16 @@ jobs:
 
       # Supabase direct host resolves to IPv6 only and GitHub runners have no IPv6 route, so the
       # pooler rewrite below is copied verbatim from backup.yml and error-alarm.yml. Session mode
-      # (5432) rather than transaction mode (6543): a migration holds one connection across many
-      # statements and a transaction-mode pooler will move it between backends mid-file.
-      # BACKUP_DATABASE_URL is deliberately read-only — it is the credential the backup and alarm
-      # workflows use, and a copy of the production database that can also write to production is
-      # one compromised runner away from being an outage. It reads the ledger fine and then fails
-      # the first write with `permission denied for schema public`, which is the credential
-      # working exactly as intended.
-      #
-      # The credential that can write is the one production itself runs as, and it already lives
-      # in Vercel's environment. `vercel pull` fetches it with the token the deploy workflow
-      # already uses, so this adds no new secret and no second copy of a write credential.
-      - name: Pull the production database credential
+      # (5432): the ledger read is one query, and session mode is what the other readers use.
+      - name: Resolve an IPv4 session-mode connection
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
         run: |
-          # The explicit secret wins when it exists: it is the write credential stored for exactly
-          # this job, and it does not depend on Vercel agreeing to export anything.
-          if [ -n "$MIGRATE_DATABASE_URL" ]; then
-            URL=$(DATABASE_URL="$MIGRATE_DATABASE_URL" python3 - <<'PY'
-          import os, re
-          from urllib.parse import urlparse, urlunparse
-          u = urlparse(os.environ['DATABASE_URL'])
-          m = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', u.hostname or '')
-          if m:
-              ref = m.group(1)
-              region = os.environ.get('SUPABASE_REGION', 'eu-west-2')
-              u = u._replace(
-                  netloc=f'postgres.{ref}:{u.password or ""}@aws-0-{region}.pooler.supabase.com:5432'
-              )
-          print(urlunparse(u))
-          PY
-          )
-            echo "::add-mask::$URL"
-            echo "PROJECTX_DATABASE_URL=$URL" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          # Installed globally rather than run through npx: this repo pins packageManager to pnpm,
-          # and `npx` refuses to run in a project whose devEngines disagree with it
-          # (EBADDEVENGINES). The deploy workflow installs it the same way for the same reason.
-          npm install --global vercel@latest >/dev/null
-          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} >/dev/null
-          # vercel writes .vercel/.env.production.local (not the repo root).
-          FILE=.vercel/.env.production.local
-          if [ ! -f "$FILE" ]; then
-            echo "::error::vercel pull did not write $FILE"
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::BACKUP_DATABASE_URL is not set, so there is no ledger to read."
             exit 1
           fi
-          # Vercel refuses to export values it stores as sensitive and writes the literal
-          # placeholder instead, so a successful pull can still carry no usable credential.
-          URL=$(grep -E '^PROJECTX_DATABASE_URL=' "$FILE" | head -1 | cut -d= -f2-)
-          URL=${URL%\"}; URL=${URL#\"}
-          URL=${URL%\'}; URL=${URL#\'}
-          case "$URL" in
-            ''|'[SENSITIVE]'*)
-              echo "::error::Vercel will not export PROJECTX_DATABASE_URL (sensitive). See the step summary."
-              {
-                echo "## A write credential is needed to apply migrations"
-                echo
-                echo "CI can read production with \`BACKUP_DATABASE_URL\` but that role is read-only by"
-                echo "design, and Vercel will not export the app's own write credential. Add one secret:"
-                echo
-                echo '```'
-                echo 'gh secret set MIGRATE_DATABASE_URL --repo Northlatch-Labs-LLC/weir'
-                echo '```'
-                echo
-                echo 'Use the Supabase connection string for a role that owns the schema (the same'
-                echo 'string the app runs as). The workflow prefers it over the Vercel path.'
-              } >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-              ;;
-          esac
-          URL=$(DATABASE_URL="$URL" python3 - <<'PY'
+          URL=$(python3 - <<'PY'
           import os, re
           from urllib.parse import urlparse, urlunparse
           u = urlparse(os.environ['DATABASE_URL'])
@@ -140,61 +66,32 @@ jobs:
           )
           echo "::add-mask::$URL"
           echo "PROJECTX_DATABASE_URL=$URL" >> "$GITHUB_ENV"
-          rm -f .env.production.local
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
 
-      # The runner imports `pg`, which is a dependency of packages/web and is installed here. The
-      # install is the whole cost of this job and it is why the job is not worth doing more often.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter @projectx-social/web
 
-      # Always print the ledger, and make a scheduled run fail when anything is pending. A dry run
-      # that finds work and exits 0 is a report nobody reads; the alarm has to be the exit code.
+      # migrate.mjs runs read-only unless --apply or --baseline is passed, and neither flag is
+      # here. The read-only credential cannot write anyway, so the guard is doubled: the tool
+      # would refuse and the database would refuse.
       - name: Report the schema ledger
         run: |
           node packages/web/scripts/migrate.mjs | tee ledger.txt
-          if [ "${{ github.event_name }}" = "schedule" ] && grep -q 'pending' ledger.txt; then
-            echo "::error::Production has migrations main has not applied. This is how error_events was dead for a week."
-            exit 1
+          if grep -q 'pending' ledger.txt; then
+            echo "drift=found" >> "$GITHUB_ENV"
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "::error::Production has migrations main has not applied. This is how error_events was dead for a week."
+            fi
+          else
+            echo "drift=clean" >> "$GITHUB_ENV"
           fi
 
-      # The production database predates this ledger: it has 28 tables and an empty
-      # `schema_migrations`, because migrations used to be applied by hand. Running `--apply`
-      # against it would start at 001 and fail on `CREATE TABLE profiles` — the schema is there,
-      # the record of it is not.
-      #
-      # `--baseline --through=NNN` records everything up to NNN as applied *without running it*,
-      # then leaves the rest pending. That is only honest if the schema really does reflect those
-      # files, which is why the baseline is an explicit input rather than a guess, and why the
-      # default run is a dry run that shows exactly what it would adopt.
-      - name: Baseline the ledger
-        if: inputs.baseline_through != ''
-        run: |
-          node packages/web/scripts/migrate.mjs --baseline --through=${{ inputs.baseline_through }} --apply
-
-      - name: Apply pending migrations
-        if: inputs.apply
-        run: |
-          node packages/web/scripts/migrate.mjs --apply
-
-      # A dry run proves nothing on its own. This reads the ledger back so the run summary says
-      # what the database actually believes, and fails if anything is still pending after an
-      # `--apply` that claimed success.
-      - name: Verify nothing is left pending
-        if: inputs.apply
-        run: |
-          node packages/web/scripts/migrate.mjs | tee after.txt
-          if grep -q 'pending' after.txt; then
-            echo "::error::Migrations remain pending after --apply; the run did not converge."
-            exit 1
-          fi
-
-      - name: File an issue when the run does not report a clean ledger
-        if: failure()
+      - name: File an issue when production is behind main
+        if: env.drift == 'found'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -202,13 +99,20 @@ jobs:
           NUMBER=$(gh issue list --state open --limit 200 --json number,title \
             --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
           {
-            echo "The migration check at $(date -u '+%Y-%m-%d %H:%MZ') did not report a clean ledger."
+            echo "The migration check at $(date -u '+%Y-%m-%d %H:%MZ') found pending migrations:"
             echo
-            echo "Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo '```'
+            cat ledger.txt
+            echo '```'
             echo
-            echo 'Re-run it from Actions -> Migrate with `apply` checked. If the ledger has never'
-            echo 'been seeded on this database, set `baseline_through` to the last migration the'
-            echo 'schema already reflects and run that first.'
+            echo 'CI holds a read-only credential by design, so applying is deliberate work:'
+            echo
+            echo '```'
+            echo 'supabase db query --linked --file packages/web/db/<the-file>.sql'
+            echo 'echo + record the row in schema_migrations (see scripts/migrate.mjs for the checksum)'
+            echo '```'
+            echo
+            echo 'Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
             echo
             echo 'This issue closes itself when a run reports no pending migrations.'
           } > body.md
@@ -219,7 +123,7 @@ jobs:
           fi
 
       - name: Close the issue when the ledger is clean
-        if: success() && github.event_name == 'schedule'
+        if: success() && env.drift == 'clean'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
