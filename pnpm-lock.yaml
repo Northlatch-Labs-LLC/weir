@@ -145,7 +145,7 @@ importers:
         specifier: 2.39.1
         version: 2.39.1(typescript@7.0.2)
       '@projectx-social/sdk':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../sdk
     devDependencies:
       typescript:
@@ -167,13 +167,13 @@ importers:
         specifier: 2.39.1
         version: 2.39.1(typescript@7.0.2)
       '@projectx-social/policy':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../policy
       '@projectx-social/sdk':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../sdk
       '@projectx-social/signer':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../signer
       pg:
         specifier: 8.23.1
@@ -192,13 +192,13 @@ importers:
         specifier: 2.39.1
         version: 2.39.1(typescript@7.0.2)
       '@projectx-social/agent':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../agent
       '@projectx-social/policy':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../policy
       '@projectx-social/signer':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../signer
       zod:
         specifier: 4.6.7
@@ -292,10 +292,10 @@ importers:
         specifier: 2.39.1
         version: 2.39.1(typescript@7.0.2)
       '@projectx-social/policy':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../policy
       '@projectx-social/sdk':
-        specifier: 1.0.2
+        specifier: 1.0.3
         version: link:../sdk
     devDependencies:
       '@mysten/seal':

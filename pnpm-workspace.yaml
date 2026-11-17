@@ -29,13 +29,19 @@ allowBuilds:
 # refusal working even if a future pnpm moves the default.
 minimumReleaseAge: 1440
 # A package published in the last 24 hours is refused, because that is the window in which a
-# compromised publish is usually caught. The four below are ours: they are published from this
-# repository, so the quarantine would be refusing our own release.
+# compromised publish is usually caught. The six below are ours: all are published from this
+# repository, so the quarantine would refuse our own fresh publishes. Entries are pinned to the
+# exact version being released and REPLACED at each release — the previous release's entries
+# (agent/policy/sdk/signer @ 1.0.2) were dropped with this bump, because a quarantine exemption
+# only ever matters for a version younger than the 24-hour window and no older version can
+# trigger the refusal it exempts.
 minimumReleaseAgeExclude:
-  - '@projectx-social/agent@1.0.2'
-  - '@projectx-social/policy@1.0.2'
-  - '@projectx-social/sdk@1.0.2'
-  - '@projectx-social/signer@1.0.2'
+  - '@projectx-social/agent@1.0.3'
+  - '@projectx-social/daemon@1.0.3'
+  - '@projectx-social/mcp@1.0.5'
+  - '@projectx-social/policy@1.0.3'
+  - '@projectx-social/sdk@1.0.3'
+  - '@projectx-social/signer@1.0.3'
 
 # Security floors for packages no direct dependency can reach.
 #
