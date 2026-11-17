@@ -23,7 +23,18 @@ describe('attributing the support vault', () => {
     expect(CARD).not.toContain('profile.displayName');
   });
 
-  it('still finds the vault by owner, not by creator vault', () => {
-    expect(PAGE).toContain('v.creator.toLowerCase() === profile.owner.toLowerCase()');
+  it('finds the vault through the owner’s StakeCap, not an event walk', () => {
+    // The first source was a walk of StakeVaultOpened events filtered by creator. The mainnet
+    // gRPC endpoint serves event queries from a recent window only, so the walk succeeded with
+    // zero events and every creator’s public page said they had opened no pool. The StakeCap is
+    // an owned object read from current state: no window, no truncation.
+    expect(PAGE).toContain('findStakeCaps(profile.owner)');
+    expect(PAGE).not.toContain('readVaults(');
+  });
+
+  it('never renders a failed pool read as an answer', () => {
+    expect(PAGE).toContain('That is a failed read, not an');
+    expect(PAGE).toContain('not saying the account has no pool');
+    expect(PAGE).toContain('has not opened a pool yet');
   });
 });
