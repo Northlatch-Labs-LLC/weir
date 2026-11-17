@@ -16,8 +16,8 @@ import { agentIdentityFor, authorIsAgentFrom } from '@/lib/agent-identity';
 import { reverseName } from '@/lib/names';
 import { canRead, sealApprover, subscriptionsForVault, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
 import { provenReader } from '@/lib/read-session';
-import { siteConfig, explorerUrl, shortId, readVaults } from '@/lib/chain';
-import { readVault } from '@/lib/stake';
+import { siteConfig, explorerUrl, shortId } from '@/lib/chain';
+import { findStakeCaps, readVault } from '@/lib/stake';
 import { listPerks, readSupportersFirst } from '@/lib/perks';
 import { standingOf } from '@/lib/supporters';
 import { FollowButton } from '@/components/FollowButton';
@@ -136,14 +136,13 @@ export default async function CreatorPage({
   const ownerNameReading = await reverseName(profile.owner);
   const ownerName = ownerNameReading.ok ? ownerNameReading.value : null;
 
-  const onChainStakeVaults = await (async () => {
-    const walked = await readVaults();
-    if (!walked.ok) return undefined;
-    return walked.value.vaults.filter(
-      (v) => v.creator.toLowerCase() === profile.owner.toLowerCase(),
-    );
-  })();
-  const onChainStakeVault = onChainStakeVaults?.[0]?.vaultId;
+  // The pool is found through the creator's StakeCap — an owned object, read from current state.
+  // The earlier source was a walk of StakeVaultOpened events, which the mainnet gRPC endpoint
+  // serves from a recent window only: the walk succeeded with zero events and this page told
+  // creators who had opened a pool that they had opened nothing. A failed read is undefined and
+  // is never rendered as an answer; no pool is null.
+  const stakeCaps = await findStakeCaps(profile.owner);
+  const onChainStakeVault = !stakeCaps.ok ? undefined : stakeCaps.value[0]?.vaultId ?? null;
 
   const perks = await listPerks(profile.handle);
   const supportersFirst = perks.length === 0 ? false : await readSupportersFirst(profile.handle);
@@ -151,7 +150,7 @@ export default async function CreatorPage({
     perks.length === 0 || profile.vaultId === null ? null : await standingOf(profile.vaultId, viewer);
 
   const rebateBps =
-    onChainStakeVault === undefined
+    onChainStakeVault == null // undefined: the cap read failed; null: no pool. Neither has a rebate.
       ? null
       : fold(
           await readVault(onChainStakeVault),
@@ -276,9 +275,16 @@ export default async function CreatorPage({
   const depositSlot =
     viewer === null ? (
       <Wall why="Backing an account needs an account." />
-    ) : onChainStakeVault === undefined ? (
+    ) : onChainStakeVault == null ? (
+      // One style block serves both prose states — the token budget ratchets down, never up.
       <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
-        {viewer === profile.owner ? (
+        {onChainStakeVault === undefined ? (
+          <>
+            The backing pool could not be read from the chain just now. That is a failed read, not an
+            answer: this page is not saying the account has no pool, and it is not saying it has one.
+            Try again in a moment.
+          </>
+        ) : viewer === profile.owner ? (
           <>
             You have not opened a pool, so nobody can back you yet — and backing is the support that
             costs a reader nothing. <a href="/creator#pool">Open your pool</a>, and this becomes a
@@ -381,7 +387,7 @@ export default async function CreatorPage({
         tipNote={tipNote}
         figuresNote={noVaultNote}
         depositSlot={depositSlot}
-        {...(onChainStakeVault === undefined ? {} : { stakeVaultId: onChainStakeVault })}
+        {...(typeof onChainStakeVault === 'string' ? { stakeVaultId: onChainStakeVault } : {})}
         accountName={ownerName ?? shortId(profile.owner)}
         depositLine={
           rebateBps !== null && rebateBps > 0

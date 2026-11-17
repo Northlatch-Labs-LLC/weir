@@ -6,7 +6,7 @@ import { PageHead } from '@/components/app/PageHead';
 import { MIN_STAKE_MIST, RUNGS, ladderHealth } from '@/lib/ladder';
 import { VaultActions } from '@/components/VaultActions';
 import { VaultDisclosure } from '@/components/VaultDisclosure';
-import { explorerUrl, readVaults, shortId } from '@/lib/chain';
+import { explorerUrl, shortId } from '@/lib/chain';
 import { reverseName } from '@/lib/names';
 import { readVault } from '@/lib/stake';
 import { EntityType } from '@/components/EntityType';
@@ -25,7 +25,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function VaultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [known, vault] = await Promise.all([readVaults(), readVault(id)]);
+  // `known` used to come from the StakeVaultOpened event walk; it was never read, and the walk
+  // itself returns zero on the mainnet gRPC endpoint's recent-events window. The vault page
+  // answers from readVault(id) alone, which reads current state.
+  const vault = await readVault(id);
   const creatorName =
     vault.ok && vault.value.handle === null
       ? fold(
