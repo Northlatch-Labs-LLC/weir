@@ -1,0 +1,771 @@
+{
+  "meta": {
+    "generated": "2026-11-17",
+    "commit": "9a68895 (main)",
+    "scales": {
+      "likelihood": "unlikely | possible | likely | certain-under-conditions",
+      "impact": "low | medium | high | critical",
+      "severity": "critical | high | medium | low (likelihood x impact, judgement-ranked)"
+    },
+    "status_legend": {
+      "unmitigated": "No code or configuration currently prevents this; may be accepted/documented.",
+      "mitigated-but-untested": "Code exists (possibly with repo tests) but no mainnet drill, adversarial test, or production verification has confirmed the control works as deployed.",
+      "unknown-pending-audit": "Cannot be determined from the repository; depends on deployment configuration, key custody, or chain state that must be checked in the audit phase."
+    },
+    "ordering": "entries sorted by severity (high to low), then by id",
+    "component_source": "audit/inventory.json"
+  },
+  "threats": [
+    {
+      "id": "TR-01",
+      "threat": "Seal key-server committee compromise or threshold misconfiguration releases every sealed key without entitlement",
+      "category": "ecosystem",
+      "component": [
+        "external.seal-keyservers",
+        "move.entitlement",
+        "move.creator",
+        "web.lib.seal",
+        "sdk.seal"
+      ],
+      "likelihood": "unlikely",
+      "impact": "critical",
+      "severity": "high",
+      "attack_path": "The seal_approve* entry functions are the only thing standing between a reader and a key share; they are enforced by the committee executing them with the reader as sender. A committee that colludes, is compromised, or is configured with threshold >= committee size (or threshold 1) can derive any wrapped key for any identity without any on-chain entitlement — the chain never learns a key was released. Misconfiguration is the cheaper half: PROJECTX_SOCIAL_SEAL_KEY_SERVERS/THRESHOLD are deliberately absent from .env.example, so the deployed committee shape is unverifiable from the tree.",
+      "mitigations_to_verify": [
+        "Confirm deployed key-server object ids, weights, and threshold (t-of-n with n>=3, t>=2) against a trusted source; confirm verifyKeyServers:true is exercised on both server wrap path (lib/seal.ts) and client unwrap path (seal-open.ts)",
+        "Verify key servers run the approval in a context where aborting withholds shares (Seal contract behavior), and that no key server accepts an approval tx whose sender is not the requesting reader",
+        "Test: with a held Subscription below tier price, a direct key-server request for a higher-period identity must fail end-to-end"
+      ],
+      "status": "unknown-pending-audit"
+    },
+    {
+      "id": "TR-02",
+      "threat": "Compromise of the irrotatable zkLogin seed (PROJECTX_SOCIAL_ZKLOGIN_SEED) enables mass account takeover with no recovery path",
+      "category": "stride",
+      "component": [
+        "web.lib.zklogin-server",
+        "web.api.zklogin",
+        "external.google-oauth"
+      ],
+      "likelihood": "unlikely",
+      "impact": "critical",
+      "severity": "high",
+      "attack_path": "Every zkLogin address is derived from (OAuth credential, salt) where salt = HKDF(seed, user). The seed is documented 'BACKUP-CRITICAL, AND IT CAN NEVER BE ROTATED'. An attacker with the seed still needs each victim's Google JWT to forge a proof — but any phishing/token-replay window then becomes permanent account takeover, and rotating the seed would re-derive every address, orphaning every SocialAccount, vault, and balance simultaneously. The blast radius of one env-var leak is the entire zkLogin user base.",
+      "mitigations_to_verify": [
+        "Confirm where the seed is set (Vercel env) and who can read it; confirm host-level access controls and audit trail on that store",
+        "Confirm clockTolerance:0, aud/clientId pinning, and nonce==generateNonce(ephemeral,maxEpoch,randomness) hold in the deployed build (they hold in tree, zklogin-server.ts:105-163)",
+        "Rehearse: what is the documented recovery if the seed leaks? (Answer should name a migration path or accept the loss — verify one exists in runbooks)"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-03",
+      "threat": "Walrus publisher JWT secret theft authorises draining the publisher wallet's SUI and WAL",
+      "category": "ecosystem",
+      "component": [
+        "web.lib.publisher-token",
+        "web.lib.walrus",
+        "external.walrus-publisher"
+      ],
+      "likelihood": "unlikely",
+      "impact": "high",
+      "severity": "high",
+      "attack_path": "PROJECTX_WALRUS_PUBLISHER_JWT_SECRET 'alone authorises spending the publisher wallet's SUI and WAL' (.env.example:128). Anyone holding it mints valid HS256 tokens (epochs/size/send_object_to of their choosing) and stores arbitrary blobs at the deployment's expense until the wallet empties. The 60s lifetime and jti bound replay, not theft. There is no second factor on the publisher endpoint.",
+      "mitigations_to_verify": [
+        "Confirm wallet balance alarms / spending caps exist for the publisher wallet; confirm the secret is >=32 chars and unique per environment",
+        "Confirm a rotation drill exists (change secret + publisher-side if applicable) — B-05 claims procedures documented; verify against operations docs",
+        "Check whether send_object_to on attacker-minted tokens can redirect Blob objects to attacker addresses (blob theft is cheap; storage spend is the cost)"
+      ],
+      "status": "unknown-pending-audit"
+    },
+    {
+      "id": "TR-04",
+      "threat": "Pre-fix tier-index over-grant: mainnet vaults with non-ascending tier prices permanently leaked subscription Seal keys to cheap-tier subscribers",
+      "category": "move",
+      "component": [
+        "move.creator",
+        "move.entitlement"
+      ],
+      "likelihood": "certain-under-conditions",
+      "impact": "high",
+      "severity": "high",
+      "attack_path": "Before 2026-09-01, add_tier/update_tier did not enforce ascending prices, and entitlement::seal_approve_subscription ranked access by tier INDEX. A vault with a cheap tier above an expensive one let a 0.50 USDC subscriber derive 10 USDC-tier period keys — and a derived Seal key is permanent. The index-ranked approval now aborts unconditionally and creator::seal_approve_subscription ranks by price_paid, but keys derived through the old window remain valid forever, and the set of affected mainnet vaults (opened pre-fix, unordered tiers, subscribers who noticed) is not enumerated anywhere in the tree.",
+      "mitigations_to_verify": [
+        "Enumerate mainnet vaults whose tiers[i].price is not strictly ascending (chain query) — these are the exposed ones",
+        "For each, list period identities derived before the v5 upgrade (key-server logs or tx history) to bound the leak",
+        "Confirm add_tier_unordered_for_testing is #[test_only] in the published bytecode (verify-source per SECURITY.md)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-05",
+      "threat": "Rate-limit evasion and shared-bucket self-DoS: IP keying is spoofable or collapses to one bucket (B-06 operator-blocked)",
+      "category": "stride",
+      "component": [
+        "web.lib.rate-limit",
+        "web.proxy"
+      ],
+      "likelihood": "likely",
+      "impact": "medium",
+      "severity": "high",
+      "attack_path": "identify() trusts cf-connecting-ip only when behind Cloudflare AND the edge secret matches; otherwise x-real-ip (client-settable when self-hosted) or a single 'unattributed' bucket. With the edge secret unset (its .env.example default), either every request shares one bucket (legit users starve — availability) or, on misconfigured deployments, attackers pick per-request IPs and get a fresh budget each time (all in-process and shared DB limits evaporate; per-address quotaLimit is the surviving control, but only for actions carrying an address). This is the force-multiplier behind TR-07 and every spam/sybil surface.",
+      "mitigations_to_verify": [
+        "Operator: set PROJECTX_SOCIAL_EDGE_SECRET + WAF rule (B-06, blocked)",
+        "Verify in-process Map limiters are understood to be per-serverless-instance (N instances = N budgets) and that DB sharedLimit carries the real backstop",
+        "Red-team: replay a sponsor POST with rotating x-real-ip off-Vercel and confirm 429s still arrive via the shared bucket"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-06",
+      "threat": "CSP remains Report-Only for script-src; XSS payload executes if any injection point exists (B-07 operator-blocked)",
+      "category": "stride",
+      "component": [
+        "web.next-config",
+        "web.api.telemetry"
+      ],
+      "likelihood": "possible",
+      "impact": "high",
+      "severity": "high",
+      "attack_path": "The enforced CSP carries only object-src/base-uri/form-action/frame-ancestors. Until the operator flips the header, an injected inline script runs with full page origin: it can call wallet signPersonalMessage on a statement the attacker chose (the 10-min window and single-use spend do not stop first use), read DOM-held session material, and exfiltrate post bodies the user can read. Injection candidates: creator-controlled post/markdown rendering, agent purpose strings, handle display — all rendered untrusted but only CSP-reporting, not CSP-blocked.",
+      "mitigations_to_verify": [
+        "Operator: switch script-src from Report-Only to enforced (B-07); watch /api/csp-report → error_events for the fortnight before",
+        "Audit renderers for markdown/HTML injection independently of CSP (CSP is the backstop, not the fix)",
+        "Confirm no eval/remote scripts would break on enforcement (csp.test.ts:44-48 asserts Report-Only today)"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-07",
+      "threat": "Sponsored-vault slot exhaustion and sponsor-path handle squatting: 50 slots burnable with no signature, no expiry, no chain confirmation (as found 2026-11-17; hold + chain confirmation shipped same day — see mitigations)",
+      "category": "stride",
+      "component": [
+        "web.api.sponsor",
+        "web.lib.sponsor"
+      ],
+      "likelihood": "likely",
+      "impact": "medium",
+      "severity": "high",
+      "attack_path": "AS FOUND: the vault path required only {address, accountId, coinType} strings — unlike the account path it demanded no signature from the address. claimVaultSlot allocated from 50 slots with NO time expiry and NO chain reconciliation (nothing in the tree ever wrote vault_id, so migration 030's premise — “a row here means it happened” — was false: a row meant only that the sponsor had signed bytes the requester was free never to submit). An attacker scripting 50 requests for throwaway addresses permanently burned the entire sponsored-vault budget at ~zero cost: gas is spent only on execution, which requires the attacker's own signature — withheld, it costs the sponsor nothing but the signature. Handle squatting via the account path remains bounded by the 15-minute seat hold. Rate limiting was the only barrier, and it is IP-keyed (TR-05).",
+      "mitigations_to_verify": [
+        "FIXED in packages/web/lib/sponsor.ts (2026-11-17): unconfirmed slots now hold for VAULT_HOLD_MS (15 min) and free afterwards (ON CONFLICT takeover, mirroring 027's seat hold); confirmed rows never free",
+        "FIXED: confirmVaultClaimsFromChain walks VaultOpened events under both package-id prefixes and writes vault_id, making 030's 'a row means it happened' true for confirmed rows; called in the route before each claim, fail-safe (transport error confirms nothing)",
+        "FIXED: vaultSlotsLeft and the budget diagnostics count live rows only (confirmed OR hold unexpired)",
+        "VERIFY: run test/sponsor.test.ts + sponsor-gate.test.ts against PROJECTX_TEST_DATABASE_URL in CI (DB tests could not run in this environment)",
+        "VERIFY: one-per-address-ever still holds for recycled slots (fresh burn attempts need a fresh funded account with a SocialAccount)",
+        "RESIDUAL (accepted): an attacker who first burns the 50 account seats with throwaway addresses can still cycle vault slots at the cost of one funded account per slot per hold window — economically pointless; monitor agent_sponsored_vaults fill rate vs confirmed vaults"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-39",
+      "threat": "Stale LATEST package id in .env.example (two upgrades behind the deployment record): clients build PTBs and approve calls against an old package version whose guards predate the latest fixes",
+      "category": "ecosystem",
+      "component": [
+        "sdk.statements",
+        "sdk.seal",
+        "web.lib.checkout",
+        "external.sui-fullnode",
+        "move.creator"
+      ],
+      "likelihood": "likely",
+      "impact": "medium",
+      "severity": "high",
+      "attack_path": "01-architecture.md finding (High): latestPackageIdInEnvExample (0xfa7e…) != latestPackageIdOnChain (0xdc6d…). Anything that reads the package id from env to BUILD a transaction — checkout prepare, client approval PTBs for Seal (approveUnlock/approveSubscription), agent tx builders, sponsor shape-asserts (SPONSORABLE targets use c.latestPackageId) — targets the OLD package. On Sui old versions stay callable, so these PTBs still succeed, but they execute the OLD bytecode: any guard added in the last two upgrades (e.g. the price-ranked seal_approve_subscription, ETierPriceNotAscending enforcement) is absent on that path. The concrete money-adjacent case: a client whose approval PTB targets a pre-v5 package gets the RETIRED aborting approval (fail-closed, denial of service) or, for upgrades that fixed over-grants, a path that would have needed the fix. Conversely an attacker cannot exploit a stale id to ADD authority — old bytecode is weaker, not stronger — so the exposure is missed-protection + breakage, not privilege escalation, EXCEPT where a fix narrowed what users could derive and the old path still derives it (see TR-04/TR-28: the retired entitlement approval aborts, but any OTHER stale target re-enables pre-fix behavior on that call path).",
+      "mitigations_to_verify": [
+        "Pin the deployed latestPackageId in env/config at deploy time (automation, not hand-editing); fail startup when env id != chain id read from the deployment record",
+        "Sweep every latestPackageId consumer (sdk config, sponsor SPONSORABLE, seal identity/approval builders) and assert they read the SAME verified source",
+        "Re-derive: which of the last two upgrades changed security behavior, and does any live client path still call the old package for those functions (tx history by package id)"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-08",
+      "threat": "Legacy platform-scheme media keys sit in Postgres: the server can decrypt, and a DB compromise yields plaintext",
+      "category": "stride",
+      "component": [
+        "web.lib.media",
+        "web.db"
+      ],
+      "likelihood": "possible",
+      "impact": "high",
+      "severity": "medium",
+      "attack_path": "New uploads are Seal-wrapped and the server never sees the key, but legacy assets carry enc_key in the assets table and lib/media.ts:166-179 decrypts them server-side on every entitled read. Anyone with SQL read access (mis-scoped service role, leaked POSTGRES_PASSWORD, a future RLS regression — RLS is enabled but the app role bypasses it by design) reads every legacy paid post and DM-attachment without any chain entitlement. RLS/REVOKE (db/029, db/044) protect against anon/authenticated, not against the application role or a dump.",
+      "mitigations_to_verify": [
+        "Enumerate legacy platform-scheme rows (assets where seal_wrapped_key is null and enc_key is not null) — is the set bounded and shrinking?",
+        "Plan re-encryption migration to seal scheme or at minimum key-separation per asset",
+        "Verify backups (pg17 dumps) carry the same enc_key column and are encrypted at rest"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-09",
+      "threat": "Daemon discovery truncation silently stops harvesting the newest vaults past 1000 (20 pages x 50)",
+      "category": "ecosystem",
+      "component": [
+        "daemon.discovery",
+        "daemon.engine"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "Discovery paginates StakeVaultOpened events up to maxDiscoveryPages (default 20) and returns truncated:true past the cap; engine additionally caps at MAX_VAULTS_PER_TICK=200. The flag is recorded in the journal — but nothing in the tree alerts on it. Past 1000 vaults (or 200 actionable ones in a tick), the newest vaults' principal sits unstaked, earning nothing, with depositors unaware; yield leak, not principal loss. It fails exactly when the product succeeds.",
+      "mitigations_to_verify": [
+        "Confirm whether any monitor reads the journal truncated flag (heartbeat fires on 'clean' ticks — does a truncated tick count as clean?)",
+        "Load-test discovery pagination against a mainnet-scale event count; raise maxDiscoveryPages or switch to checkpoint reads",
+        "Verify supervisor backoff cannot skip ticks such that >200 vaults become actionable between ticks"
+      ],
+      "status": "unknown-pending-audit"
+    },
+    {
+      "id": "TR-10",
+      "threat": "Harvest daemon outage is invisible until an operator configures the heartbeat monitor (B-04) — and heartbeat failures are swallowed",
+      "category": "ecosystem",
+      "component": [
+        "daemon.supervisor",
+        "daemon.journal"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "The daemon is the liveness guarantee for yield (harvest is permissionless, but nobody else is paid to call it). Heartbeat POSTs only on a fully clean tick — correct — but send failures are logged and ignored, exit codes 1/2/3 must 'all look the same to the monitor as a daemon that is dead', and PROJECTX_DAEMON_HEARTBEAT_URL is operator-configured and currently unset per the blocker matrix. A daemon that dies leaves every vault's ladder frozen; depositors see flat yield and principal still withdrawable (withdraw unwinds tranches itself), so the failure is silent rather than spectacular.",
+      "mitigations_to_verify": [
+        "Operator: configure heartbeat URL + Betterstack monitor (B-04, blocked); confirm the monitor alerts on missing heartbeat, not on non-2xx",
+        "Confirm stuckRuns detection (index.ts:210-228) is logged where a human reads it",
+        "Consider an on-chain watchdog: alert when any vault's newest tranche age exceeds LADDER_DEPTH+2 epochs"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-11",
+      "threat": "Read-session token theft grants 2 hours of the victim's entitled reads, including server-decrypted legacy media",
+      "category": "stride",
+      "component": [
+        "web.lib.read-session",
+        "web.api.media"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "read_sessions tokens are Bearer/cookie, 32-byte random, sha256-stored — but there is no per-token revocation (only delete-all-for-address), no binding to IP/device, and sealed-scheme aside, the media route serves legacy platform-scheme content DECRYPTED to whoever presents the token. A stolen token (XSS fallout, shared machine, proxy logs) reads everything the victim unlocked until expiry. Sealed content stays safe (key derivation needs a fresh wallet signature), legacy does not.",
+      "mitigations_to_verify": [
+        "Add token listing/revocation UI in settings; shorten TTL for media routes",
+        "Confirm legacy plaintext serving is bounded by TR-08 migration",
+        "Test: stolen-token replay from a different UA/IP — currently indistinguishable?"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-12",
+      "threat": "Signatures on non-spending agent surfaces (seeking, declare/pending, seeking/offers) are verifiable but never spent — 10-minute replay window",
+      "category": "stride",
+      "component": [
+        "web.api.agents",
+        "sdk.statements"
+      ],
+      "likelihood": "likely",
+      "impact": "low",
+      "severity": "medium",
+      "attack_path": "proveActionWithoutSpending verifies then discards; the same signature replays for 10 minutes (24h for operator offers consumed via declare). A captured seek-operator statement can be re-POSTed to spam the seeking register under the victim's identity; a captured declare/pending half can pre-file declarations. No money moves and each write is idempotent-ish (recordSeeking), but the surfaces are forgeable-traffic amplifiers and pollute the operator market with ghost agents.",
+      "mitigations_to_verify": [
+        "Either spend these signatures too, or make the handlers idempotent per (address,timestampMs) so replay is a no-op",
+        "Confirm operator-offer 24h window (OPERATOR_OFFER_WINDOW_MS) is only granted when a real unfiled offer row exists (declare/route.ts:60-63) — otherwise it is a 24h replay window on a signature",
+        "Rate-limit recordSeeking per address (quotaLimit) rather than per IP"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-13",
+      "threat": "Decimal mismatch (SUI 9dp vs 6dp Coin<T>): contract is unit-agnostic, but any client path that assumes 9 decimals misprices by 1000x",
+      "category": "ecosystem",
+      "component": [
+        "sdk.money",
+        "sdk.client",
+        "move.creator",
+        "web.lib.checkout"
+      ],
+      "likelihood": "possible",
+      "impact": "high",
+      "severity": "medium",
+      "attack_path": "creator.move is deliberately unit-blind (minor units, proportional split exact at any scale — compute_split is u128 and settle joins remainders), so the chain cannot be confused about units. The exposure is every place humans type or read amounts: tier prices, tips, unlock prices, agent maxPrice, earnings display. sdk parseAmount refuses excess precision and client.ts:126-138 REFUSES to guess decimals when CoinMetadata is unpublished — the two known-good controls. The unaudited surface is every UI form and display path in packages/web and packages/ui: one hardcoded 1e9, one toFixed(2) on a 6-dec coin, or one Number() round-trip and a creator prices a tier at 0.001x intent (buyer wins) or 1000x (buyers vanish). Notably checkout.ts's MIST-only string checks cover SUI paths but the Coin<T> generic paths rely on each caller fetching metadata.",
+      "mitigations_to_verify": [
+        "Sweep packages/web + packages/ui for hardcoded 1e9/1e6/toFixed/Number(amount) near price/tip/tier fields; every amount input must route through parseAmount(input, metadata.decimals)",
+        "Verify the tier-price and min-tip setters read decimals per coin type at render time, not from a cached SUI assumption",
+        "Property-test: set a 6-dec price, read it back through every display path, assert identical string",
+        "Behavior on metadata-less coin: confirm refusal propagates to the form (disabled) rather than defaulting"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-14",
+      "threat": "Referrer sybil: self-referral through a second account routes the referral share of every future sale to the attacker, paid from the platform's cut",
+      "category": "move",
+      "component": [
+        "move.account",
+        "move.creator"
+      ],
+      "likelihood": "likely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "open() blocks naming yourself (ESelfReferral) and requires the referrer to be registered — then documents, honestly, that two addresses controlled by one person pass every check. An attacker running N account pairs earns the referral share (<=50% of the platform cut, snapshot at vault open) on all their own activity and, more usefully, can farm referral attribution if handle-sharing/invite flows ever credit real users' signups to attacker-named referrers. Cost: free accounts + gas. The module explicitly states sybil resistance is not a Move property — payout-time defenses are named but none exist in tree.",
+      "mitigations_to_verify": [
+        "If referral economics matter: enforce payout-time rules named in account.move (no referral on accounts whose referrer is younger; cap referral lifetime; KYC-lite at claim)",
+        "Monitor: referral_cut concentration by referrer address in PaymentSettled events",
+        "Confirm referral share is carved from platform_net only (compute_split) — creator earnings are structurally immune"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-15",
+      "threat": "Yield-suppression grief: deposit-then-withdraw cycles force emergency ladder unwinds, forfeiting the creator's yield and de-laddering the vault",
+      "category": "move",
+      "component": [
+        "move.stake_vault",
+        "move.stake_ladder"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "withdraw() unwinds tranches newest-first whenever liquid < amount, at the creator's cost (forfeited yield) — by design, to keep principal unconditionally available. A griefer with a large balance can deposit, wait one epoch, then withdraw an amount just over the liquid buffer every epoch: each withdrawal pops immature tranches (zero-yield unwinds), collapses the RUNGS=7 ladder, and suppresses the vault's capture from 85.7% toward 0%. Principal is never at risk (EStakeAccountingViolation asserts proceeds>=principal) and the depositor earns nothing by it — but a competitor's vault can be economically harassed for the price of gas and temporary capital. No per-address withdrawal frequency limit exists on-chain or in the API layer.",
+      "mitigations_to_verify": [
+        "Simulate: N cycles of deposit(max)/withdraw(all-but-rung) — quantify yield suppression and ladder re-convergence time",
+        "Consider off-chain rate friction (web.api.stake withdraw prepare quota per address) — on-chain change not required for the API-mediated path, though direct PTBs bypass it",
+        "Confirm ECannotRaiseLiquidity is truly unreachable given assert_solvent (tranches empty implies liquid >= total_principal)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-16",
+      "threat": "LedgerCap holder books invented economics: can lie earned/burned/vault_sui, halve allowances, force-retire souls via two critical epochs",
+      "category": "move",
+      "component": [
+        "move.soul"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "book_earned/book_burned take unverified u64s; settle_epoch believes them and derives allowance movement and tier from caller-supplied vault_sui/epoch_net_nonneg. A leaked LedgerCap (it has store — transferable, and issue_ledger_cap mints any number) can: suppress a soul (book huge burned -> allowance to MIN_ALLOWANCE, state DYING), or retire it outright (vault_sui=0 -> CRITICAL twice). Bounds that keep this medium: MAX_RAISE_FACTOR=2 per settlement, MAX_ALLOWANCE ceiling, one settlement per chain epoch (epoch_opened_at gate), and every lie published in EpochSettled for the finance read. The module documents all of this honestly.",
+      "mitigations_to_verify": [
+        "Confirm how many LedgerCaps exist on mainnet and where they live (LedgerCapIssued events); daemon holds one — verify it cannot reach book_*/settle_epoch through its policy (allowedTargets=[stake_vault::harvest] only)",
+        "Verify the 'weekly finance read' comparing EpochSettled.vault_sui against actual balances actually happens",
+        "Confirm retire_internal releases the operator seat without charging a renunciation (A1 fix) in the published bytecode"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-17",
+      "threat": "CreatorCap is transferable (has store): theft or sale moves earnings authority and vault configuration, permanently",
+      "category": "move",
+      "component": [
+        "move.creator"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "CreatorCap {key, store} — the module's own migrate_as_platform comment says it plainly: 'it can be transferred, sold, or simply lost'. A phished/sold cap lets the holder claim_earnings to themselves (ctx.sender()), reprice tiers, set min_tip=1, flip accepting, and accept_current_terms. What it does NOT grant: the owner field (self-payment ban, identity binding), depositors' stake principal, or the platform's fee balance. There is no cap rotation/revocation primitive, so a stolen cap is stolen forever — earnings continue accruing to the vault and only the thief can withdraw them.",
+      "mitigations_to_verify": [
+        "Consider an upgrade adding cap freeze/rotation under (cap + platform) or multisig-wrapping guidance for creators holding caps",
+        "Monitor EarningsClaimed recipients != vault.owner as a tripwire (legitimate but rare — transfers happen)",
+        "Creator education: caps belong in a wallet the creator controls cold; document in creator onboarding"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-18",
+      "threat": "PlatformCap / soul MasterCap custody: fee ceilings bound damage but the caps set fees, pause creation, sweep treasury, migrate, mint souls",
+      "category": "move",
+      "component": [
+        "move.platform",
+        "move.soul",
+        "signer.adapters"
+      ],
+      "likelihood": "unlikely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "PlatformCap: set_fees up to 30%/100 SUI on NEW vaults only (snapshots protect existing ones), set_payments_paused (blocks revenue, cannot block claims), sweep_treasury, migrate_as_platform on any vault. MasterCap: mint souls, set allowances/scopes, retire, issue LedgerCaps. CUSTODY.md says PlatformCap + upgrade capability live in a 2-of-3 multisig — good, but the composition of that multisig (members, threshold, key locations) is not in the tree, and a 2-of-3 among three keys held by one operator is a hot key wearing a multisig costume.",
+      "mitigations_to_verify": [
+        "Verify on-chain: which address(es) hold PlatformCap, the upgrade Cap, MasterCap; confirm multisig composition and that members' keys are independently held (per CUSTODY.md claim)",
+        "Confirm fee ceilings (3_000/5_000/100 SUI) in published bytecode match sources",
+        "Confirm creation_fee_mist is 0 on mainnet today (sponsor vault path depends on it, sponsor.ts:383)"
+      ],
+      "status": "unknown-pending-audit"
+    },
+    {
+      "id": "TR-19",
+      "threat": "Purse hot key (1-of-2 multisig member) leak spends up to one epoch's allowance before the brake sweeps",
+      "category": "stride",
+      "component": [
+        "purse.server",
+        "signer.policy-signer"
+      ],
+      "likelihood": "unlikely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "The estate knowingly accepts a hot key: Heron's address is 1-of-2 (hot+brake), so a leaked hot key signs alone. Compensating controls: policy ceilings (heron-content: 0.4 SUI/day incl. gas, one allowed target set_content_price), the signing gate (simulate + 13 rules + audit chain), socket-only exposure with typed intents (no arbitrary bytes), systemd sealed credentials, serialized execution. Residual: an attacker holding the key file AND able to reach the purse socket is bounded by policy; one holding only the key can bypass the purse entirely but still hits the same on-chain limit — allowance per epoch via record_spend is consulted by the dispatcher, not the chain, so a raw key holder spending directly is bounded only by the wallet balance, not the soul's allowance.",
+      "mitigations_to_verify": [
+        "Confirm the hot wallet's total balance is kept near the epoch allowance (blast radius = balance, not policy, if the socket is bypassed)",
+        "Verify brake-sweep drill has been executed end-to-end (prepare -> inspect -> send) on mainnet",
+        "Confirm audit.jsonl chain head anchoring (daemon_audit_anchors-equivalent) and that a rewrite is detectable operationally"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-20",
+      "threat": "signPersonalMessage passes the signing gate with no effects to evaluate — statement signing is bounded only by the purse's statement judge",
+      "category": "stride",
+      "component": [
+        "signer.policy-signer",
+        "purse.server"
+      ],
+      "likelihood": "unlikely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "The gate's whole argument is simulate-then-sign: policy rules evaluate a transaction's effects. A personal-message signature has no effects (policy-signer.ts:194-212 allows it), so the only bound on what text an agent can sign is the purse's statement judge (statement.ts), which whitelists the weir statement grammar. If any intent kind ever maps to free-form text, or the judge accepts a statement whose action authorizes more than intended (e.g. a weir action statement is a valid API credential for its 10-minute window — first use always succeeds), a prompt-injected model could sign an API action on the agent's behalf. Bounded by: single-use spend, 10-min window, origin binding, and that money actions require transactions (which do pass effects evaluation).",
+      "mitigations_to_verify": [
+        "Enumerate statement kinds the purse will sign; confirm none embed attacker-controlled free text that renders as a weir action statement for a different action kind",
+        "Confirm MCP/post tooling cannot reach the purse socket from the model container (socket permissions, heron vs purse uids)",
+        "Test: prompt-injection attempt through a post body that asks the agent to sign an onramp/publish statement — judge must refuse or the quota must hold"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-21",
+      "threat": "MCP stdio client or prompt injection drives bounded spending (weir_buy/weir_subscribe) up to policy ceilings",
+      "category": "stride",
+      "component": [
+        "mcp.tools",
+        "mcp.transport",
+        "agent.tx"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "A malicious MCP client (or injected content through weir_read/wir_search results — wrapped untrusted, but the model still reads them) can invoke spending tools. Layered bounds: tools register only when signer+policy present (transport.ts:264-290); HTTP mode is forcibly keyless; maxPrice is mandatory and chain-read with refusal on mismatch (agent/tx.ts:184-247); policy ceilings + outflow windows in the signing gate; single-use signatures per API write. Residual: within ceiling, injected 'buy this post' instructions execute for real money; the ceiling IS the accept-risk decision.",
+      "mitigations_to_verify": [
+        "Confirm deployed policy ceilings are as tight as the purse docs claim (per-action, per-day, incl. gas)",
+        "Red-team: crafted post body triggering a purchase through the full stack (MCP -> agent tx -> gate) — expect refusal at maxPrice/ceiling, verify which layer refuses",
+        "Confirm weir_read truly never returns paid content even when entitled (tools.ts:519-546) in the published npm build"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-22",
+      "threat": "Creator picks the staking validator at open: a bad/departed validator delays principal despite the no-loss promise",
+      "category": "move",
+      "component": [
+        "move.stake_vault",
+        "external.sui-fullnode"
+      ],
+      "likelihood": "possible",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "open() takes any validator address; nothing checks liveness, fee, or future status. If the validator is later kicked/inactive, request_withdraw_stake against its pool can require the force-withdraw path (potentially epochs of delay) — withdraw()'s unwind loop would abort ECannotRaiseLiquidity only if tranches are empty AND liquid short, but the deeper failure is the stake syscall itself reverting against a non-active pool. Principal is not lost, but 'redeemable at any time' degrades to 'redeemable when Sui lets you', and the module's one promise is time-denial. Also: creator self-dealing — validator = creator's own operator address with high commission routes depositor yield to the validator operator (the creator) — an unstated conflicts channel.",
+      "mitigations_to_verify": [
+        "Test withdraw against a vault whose validator is inactive/scheduled-for-removal on testnet; document actual behavior",
+        "Consider an off-chain validator allowlist (active, commission-bounded, not validator-address==creator) enforced at vault-open prepare time in web.api.stake / checkout prepare",
+        "Check mainnet StakeVaults: which validators were chosen; any at-risk?"
+      ],
+      "status": "unknown-pending-audit"
+    },
+    {
+      "id": "TR-23",
+      "threat": "PTB composition: a hostile builder assembles entry functions with unexpected objects in one transaction",
+      "category": "move",
+      "component": [
+        "move.creator",
+        "move.stake_vault",
+        "move.entitlement"
+      ],
+      "likelihood": "unlikely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "On Sui, anyone can compose any public/entry function into a PTB with any object they can legitimately reference (owned-by-sender, shared, or immutable). The attack shape: interleave deposit/harvest/withdraw/subscribe so that state written by command N is read by command N+1 in ways the module authors didn't sequence. Verified against the tree: (1) owned-object parameters (SocialAccount, Subscription, Unlock, caps) are enforced by Sui ownership — you cannot reference another sender's owned object; (2) soulbound types (key without store) cannot be re-transferred by PTB — no public_transfer exists for them; (3) the same-tx deposit+harvest rebate attack is closed by FreshEntry (stake_vault docs) and the harvest-counter gate; (4) settle's conservation is structural (join remainder); (5) self-payment and price-from-vault block the obvious subscribe/tip manipulations; (6) money returned as change (Coin<T>) is fine to echo. The class remains in the register because composition correctness here rests on those five independent properties, and any new entry function must be re-checked against all of them — there is no machine check for 'PTB-safe' in CI.",
+      "mitigations_to_verify": [
+        "Add adversarial PTB tests to sui-contracts/tests: deposit->harvest->withdraw in one tx; withdraw->deposit->claim_rebate; subscribe->transfer attempts on Subscription; unlock for content re-priced between commands (should abort on identity, not price)",
+        "Verify seal_approve_* entry fns cannot be composed with anything that mutates the Subscription between the ref-pass and the assert (Move semantics make this impossible — assert it with a test anyway)",
+        "Lint rule ambition: every new public fun taking &mut CreatorVault/StakeVault gets a reviewed composition note"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-24",
+      "threat": "Replay rule substance: single-use is enforced on the SIGNATURE bytes, not the statement — and only where spend is actually called",
+      "category": "stride",
+      "component": [
+        "web.lib.identity",
+        "sdk.statements"
+      ],
+      "likelihood": "unlikely",
+      "impact": "low",
+      "severity": "medium",
+      "attack_path": "Enforcement: used_signatures PK on sha256(signature bytes), INSERT ON CONFLICT DO NOTHING, rowCount 0 => 'this signature has already been used' (identity.ts:162-187), spend inside the write transaction for deferred routes, fail-closed on DB outage, and expiry sweep bounds the table. Consequences if it were absent: every write (post, comment, tip-prepare, upload, declaration) replays for 10 minutes — the 10-min window IS the replay bound, so the ledger turns a 10-minute vuln window into a zero-use one. Edge semantics to know: (a) the same signer re-signing the same statement at a new timestamp spends fresh — intended for retries, but means 'duplicate action' detection does not exist at this layer (idempotency keys carry that for messages/posts/submit); (b) TR-12 lists the routes that never spend; (c) proveTransaction (money path) replays are stopped by issued_quotes digest consumption instead — a quoted tx can be submitted exactly once through the relay.",
+      "mitigations_to_verify": [
+        "Confirm every new route with side effects calls verifyAction or verifyActionDeferringSpend (CI grep for proveActionWithoutSpending should be a reviewed list)",
+        "Confirm the deferred-spend routes commit signature+write atomically (posts route.ts:282, mind route.ts:98)",
+        "Load test: concurrent identical requests racing the INSERT (single winner expected; ON CONFLICT guarantees it)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-26",
+      "threat": "Stake-vault rebate accounting anomaly paths: clamp-and-report instead of abort can mask a slowly-drifting accumulator",
+      "category": "move",
+      "component": [
+        "move.stake_vault"
+      ],
+      "likelihood": "unlikely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "accrue_on clamps shortfall to zero, pays no rebate for that step, and emits RebateAccountingAnomaly — chosen over aborting so principal stays reachable (the module's stated priority). The historical defects that made shortfall reachable (stale freshness markers on withdraw; stale acc re-read) were fixed 2026-09-01 with tests. The residual risk is not a theft vector (the error direction is under-credit, funds stay in rebate_pool) but a masking one: a NEW drift path would surface as anomalous events nobody is obliged to watch, while depositors quietly stop earning rebates. There is no monitor for the event in tree.",
+      "mitigations_to_verify": [
+        "Index RebateAccountingAnomaly and alert on first occurrence per vault (it is designed to be never-seen)",
+        "Re-run the full stake_vault property suite against the published bytecode digest",
+        "Verify claimable_rebate() mirrors settle_fresh+accrue_on exactly for a matured marker (drift here misleads UIs into promising money claim_rebate would pay)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-28",
+      "threat": "Subscription-lapse back-window renewal (pre-fix) granted a year of period keys for one month's payment; already-derived keys are permanent",
+      "category": "move",
+      "component": [
+        "move.entitlement",
+        "move.creator"
+      ],
+      "likelihood": "certain-under-conditions",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "Before 2026-09-01, extend() moved only expires_at_ms: subscribe January, lapse eleven months, renew one month, and the contiguous window spanned the whole gap — every period in it satisfied covers_period, and each period identity key derived is permanent. Fixed: a lapsed renewal now moves started_at_ms forward too (under-grant direction, remedy = sell Unlock). Exposure today = keys derived through the old window on mainnet, same unrecoverable shape as TR-04 but requiring an actual lapse-renewal to have occurred.",
+      "mitigations_to_verify": [
+        "Chain forensics: renewals where (new started_at == old started_at) and gap > period — enumerate affected subscriptions and derived period identities",
+        "Confirm the fixed extend() semantics in published bytecode"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-35",
+      "threat": "Checkout relay allowlist bypass: submitting a transaction the deployment never quoted",
+      "category": "stride",
+      "component": [
+        "web.lib.checkout",
+        "web.db"
+      ],
+      "likelihood": "unlikely",
+      "impact": "medium",
+      "severity": "medium",
+      "attack_path": "submitSigned deletes FROM issued_quotes WHERE digest=$1 AND expires_at_ms>$2 and refuses on rowCount 0 — the relay broadcasts only bytes whose exact digest it quoted within 30 minutes, which kills injected/rebuilt PTBs through the hosted submit path. Bypass classes to keep verifying: (a) quote collision — a malicious creator configures a vault such that the quoted simulate agrees but execution diverges (simulation-vs-execution divergence is Sui's problem, mitigated by shared-object versions in the digest); (b) the client is never forced to use the relay — anyone can submit ANY PTB to a fullnode directly; the allowlist protects the deployment's UX promise, not the chain. On-chain assert_payable/take_price remain the real money guards, which is the right layer.",
+      "mitigations_to_verify": [
+        "Confirm quote rows bind sender + digest (not just digest) so a quoted digest cannot be resubmitted by another sender",
+        "Fuzz: submit a modified-then-re-digested transaction — expect refusal",
+        "Confirm expiry sweep on issued_quotes is exercised (storage growth check)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-37",
+      "threat": "Soulbound enforcement integrity: could a SocialAccount/Subscription/Unlock/AdopterCredential/EmployeeSoul be transferred, faked, or obtained by the wrong party",
+      "category": "move",
+      "component": [
+        "move.account",
+        "move.entitlement",
+        "move.soul",
+        "move.agent_mind"
+      ],
+      "likelihood": "unlikely",
+      "impact": "high",
+      "severity": "medium",
+      "attack_path": "Systematic answer, since this is the mandated capability-handling class: (1) SocialAccount/Subscription/Unlock/AdopterCredential have key WITHOUT store and their modules publish no transfer — a PTB cannot move them (public_transfer needs store; module transfer is internal-only, used once at mint to the rightful owner). Faking is closed by assert_authenticates (owner==sender AND platform==issuer) on every paying path, and seal approvals re-check holder==sender. (2) EmployeeSoul is SHARED, not owned — 'a shared object cannot be transferred at all, by anybody' (soul.move docs); binding survives via the agent field checked against ctx.sender() in record_spend/assert_outward/adopt. (3) Caps with store (CreatorCap, StakeCap, PlatformCap, MasterCap, LedgerCap) ARE transferable by design — TR-16/TR-17/TR-18 cover the consequences; migration backstops (migrate_as_platform) exist precisely because caps get lost. (4) The mind is bound to the account OBJECT (agent_mind), not a key — a rotated agent keypair does not move the mind; only holding the account does. Residual unknown: whether any future upgrade adds a struct with store to these modules — policy, not code, must hold the line.",
+      "mitigations_to_verify": [
+        "verify-source (SECURITY.md) the published bytecode and diff the type abilities of all five soulbound types",
+        "Attempt a PTB TransferObjects on a Subscription on testnet — expect a build-time/type error; capture as a regression test",
+        "Code-review rule: no new 'has key, store' on identity/entitlement types without a documented waiver"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-25",
+      "threat": "used_signatures retention equals the validity window: after sweep, there is no forensic record that a signature was ever spent",
+      "category": "stride",
+      "component": [
+        "web.db",
+        "web.lib.identity"
+      ],
+      "likelihood": "possible",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "Rows expire with the window (10 min, or 24h for operator offers) and the sweep deletes <=500 per write. An attacker who replays an 11-minute-old signature gets 'expired', not 'already used' — indistinguishable from never-seen. For abuse disputes ('I never posted this'), the only durable evidence is the row written by the action itself, not the signature ledger. This is a deliberate storage/privacy trade, correctly fail-closed, but it caps the audit trail at the window length.",
+      "mitigations_to_verify": [
+        "If dispute resolution matters: append digest (not signature) to an append-only audit table on spend, keyed by address, with retention policy",
+        "Confirm error_events retention covers the same investigations"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-27",
+      "threat": "Harvest daemon crash windows: digest-loss resubmission and per-DB advisory lock admit duplicate (gas-wasting, not double-claiming) harvests",
+      "category": "ecosystem",
+      "component": [
+        "daemon.signer",
+        "daemon.journal",
+        "daemon.engine"
+      ],
+      "likelihood": "possible",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "If the node accepts a harvest but the response is lost, the daemon's own note says 'check the chain before retrying' — a naive retry spends gas on a no-op harvest (the one-rung-per-epoch rule makes the second call inert ON CHAIN, which is the real double-claim protection; the journal is bookkeeping, and lastHarvestOf is not even consulted by the engine). Two daemons on different Postgres instances both hold 'the' advisory lock (it is per-database) and both harvest — again gas-only. Also: journal refuses to open a run => exit 3, no unrecorded harvest (fail-closed, tested). So the class degrades to bounded gas waste plus duplicate Harvested events confusing downstream readers.",
+      "mitigations_to_verify": [
+        "Confirm digest-loss handling actually checks chain state before retry (code comment vs behavior)",
+        "Document/monitor the daemon's gas float burn rate; a duplicated daemon doubles it visibly",
+        "Confirm engine skips vaults whose on-chain state says already-staked-this-epoch even without journal knowledge (decideHarvest reads fresh state — verify test coverage)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-29",
+      "threat": "DM key registry accepts any 32 non-zero bytes: chain provides agreement, not validity — all small-order defenses are client-side",
+      "category": "ecosystem",
+      "component": [
+        "move.key_registry",
+        "sdk.e2e",
+        "sdk.keyregistry"
+      ],
+      "likelihood": "unlikely",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "A user can publish a low-order X25519 point (not all-zero, so the chain accepts it). Every shared secret derived against a clamped scalar with such a point is all-zero, and @noble/curves throws rather than returning it — measured against all five classic points (module doc). So the attack degrades to self-DoS (the publisher's own DMs become underivable) UNLESS some third-party client derives against it without the throw — the ecosystem risk is a non-noble implementation silently using a zero key. Substitution is structurally absent (publish has no owner parameter — sender is the only possible subject), rotation loses history (documented), and the version high-water mark prevents downgrade on revoke+republish.",
+      "mitigations_to_verify": [
+        "Confirm every decrypt path in tree routes through @noble/curves (or equivalent throwing implementation); grep for hand-rolled X25519",
+        "Confirm clients surface 'counterparty key is degenerate' as an error, not plaintext-fallback silence"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-30",
+      "threat": "On-chain handle squatting: registration is free and one-per-address, so desirable handles are claimed by generated keypairs",
+      "category": "move",
+      "component": [
+        "move.account"
+      ],
+      "likelihood": "likely",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "open() is free by design ('charging someone to exist would make the fee schedule a barrier'); handles are 3-30 chars [a-z0-9_], one account per address, addresses free to generate. Squatting brand handles for resale/impersonation is cheap and unstoppabble on-chain. Mitigants: charset/normalisation by rejection (no homoglyph folding traps), impersonation vector acknowledged in-code, no transfer of accounts so a squatted handle can't be 'resold' with the account — but the secondary market is 'transfer the whole keypair', which works. TR-07 adds an off-chain sponsor-path variant.",
+      "mitigations_to_verify": [
+        "Off-chain: verification/flagging for handles matching existing creator brands (the social layer's job, not Move's)",
+        "Monitor registry velocity: N opens from one funding address"
+      ],
+      "status": "unmitigated"
+    },
+    {
+      "id": "TR-31",
+      "threat": "Registry shared-object write contention: handle registration is the highest-frequency sequential write and can be gas-priced or delayed",
+      "category": "move",
+      "component": [
+        "move.account"
+      ],
+      "likelihood": "possible",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "Registry is a single shared object (deliberately split from Platform for this reason, but still one object): every open/close serializes on it. A burst of registrations (or a bot war over a dropping handle after a close) raises gas prices for that object and can price out or delay legitimate signups. Availability/cost nuisance only — no correctness impact; the design note shows the tradeoff was made knowingly.",
+      "mitigations_to_verify": [
+        "Load/measure registration gas during bursts on testnet; consider whether handle reservation needs its own sharded path at scale",
+        "Confirm close() releasing a handle cannot be sniped in the same tx by the closer's second address (it can — accepted; note in docs)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-32",
+      "threat": "Unauthenticated GET /api/agents/mind leaks ciphertext metadata: labels, sizes, nonces, envelopes by address",
+      "category": "stride",
+      "component": [
+        "web.api.mind"
+      ],
+      "likelihood": "possible",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "GET returns, for any address+label, the Walrus ciphertext descriptor plus nonce and envelope. Safe only by construction: the blob is client-side encrypted to a key derived from the agent's account (agent_mind identity = account-id||0x02; Seal approval requires holding the SocialAccount). What leaks: WHICH labels an agent remembers, their sizes and update cadence — traffic-analysis and prompt-injection reconnaissance ('memory' label names can be operationally revealing). No rate limit beyond the read bucket; enumerable by address.",
+      "mitigations_to_verify": [
+        "Confirm the envelope alone cannot derive anything without the Seal share (threshold math)",
+        "Consider requiring a read-session for GET, killing free enumeration",
+        "Cap label length/uniqueness to bound enumeration value"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-33",
+      "threat": "Unauthenticated error-intake endpoints (csp-report, telemetry/error) are a constrained DB-fill vector",
+      "category": "stride",
+      "component": [
+        "web.api.telemetry",
+        "web.db"
+      ],
+      "likelihood": "possible",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "Both write rows into error_events with fields capped (200/4000 chars) and are rate-limited, but rate limits are IP-keyed (TR-05). An attacker with IP rotation can grow error_events unboundedly, degrading the one observability channel the deployment has (the alarm reads that table) — poisoning the well rather than filling the disk. Breakers do not cover this table.",
+      "mitigations_to_verify": [
+        "Add a per-deployment daily row cap or retention sweep on error_events",
+        "Confirm the error-alarm query aggregates rather than assumes clean data (a flood should alert, not blind)"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-34",
+      "threat": "Sponsor and daemon hot keys load from environment variables — weaker than the purse's file-credential standard",
+      "category": "ecosystem",
+      "component": [
+        "web.lib.sponsor",
+        "daemon.signer",
+        "signer.adapters"
+      ],
+      "likelihood": "unlikely",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "The purse refuses env/argv keys outright (key.ts:59-100) and loads via systemd LoadCredentialEncrypted; the sponsor key (PROJECTX_SOCIAL_SPONSOR_KEY) and daemon key (PROJECTX_DAEMON_SIGNER_SECRET) are env vars — visible in /proc, crash dumps, child processes, and Vercel's env UI to every admin. Both keys are capability-poor by design (sponsor: gas-only, shape-asserted, simulated before signing, 0.02 SUI budgets, 50-slot caps; daemon: harvest-only target allowlist), so the blast radius is bounded float drain. The inconsistency is the finding: the estate proved it knows better in packages/purse.",
+      "mitigations_to_verify": [
+        "Move daemon key to credential file on the VM (matches purse pattern); keep sponsor key bounded by a dedicated low-balance wallet",
+        "Confirm sponsor wallet holds only the gas float; alert on drain rate"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-36",
+      "threat": "Cross-deployment statement replay: origin-bound heads protect weir.social↔staging, but same-origin deployments (localhost, misconfigured proxies) share a signature space",
+      "category": "stride",
+      "component": [
+        "sdk.statements",
+        "web.lib.identity"
+      ],
+      "likelihood": "unlikely",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "statementFor binds address/timestampMs/ORIGIN in the signed head, so a statement signed for https://weir.social fails verification on any other origin (and vice versa) — good. The residual: deployments that share an origin string (local dev, a proxy that rewrites Host, a future second app on the same origin) share a single-use namespace per signature but distinct semantics; the onramp action additionally binds walletAddress+network while others bind only the head. Low because production origins are distinct by construction today.",
+      "mitigations_to_verify": [
+        "Confirm the server verifies origin against its own canonical origin (not the request's Host header) — check identity.ts origin handling against proxy Host forgery",
+        "Consider binding network/chain-id into every statement head, not just onramp"
+      ],
+      "status": "mitigated-but-untested"
+    },
+    {
+      "id": "TR-38",
+      "threat": "Walrus blob↔post binding disputes: the binding is Postgres-only and the blob object goes to the creator — nothing on chain proves a blob belongs to a post",
+      "category": "ecosystem",
+      "component": [
+        "web.lib.walrus",
+        "web.lib.media",
+        "web.db",
+        "external.walrus-aggregator"
+      ],
+      "likelihood": "unlikely",
+      "impact": "low",
+      "severity": "low",
+      "attack_path": "The binding chain is: assets row (server-generated id, blob_id, seal wrapped key, post_id) -> posts.assetIds subselect -> media route checks the asset is in the post's list -> entitlement checked -> ciphertext served. Claiming someone else's blobId through the API is not reachable (attachAsset only runs with the blob the server itself just stored; upload requires uploader == on-chain vault.owner). Dispute surfaces that remain: (a) a compromised DB rewrites blob_id mappings — silent substitution, caught only by the plaintext sha256 check for unsealed media and client-side sha256 for sealed; (b) a compromised/agreeing aggregator serves different bytes — same detection; (c) Walrus Blob objects are sent to the creator's address (send_object_to), so on-chain 'ownership' of storage proof sits with creators while the content binding sits with the DB — two sources of truth that can disagree, resolved today only by the DB. No on-chain registry exists by design (grep of sui-contracts finds no Walrus write).",
+      "mitigations_to_verify": [
+        "Confirm every sealed-media client path enforces the x-plaintext-sha256 check (seal-open.ts:382-390) — it is the only tamper detector for sealed blobs",
+        "For high-value content, consider anchoring (post_id, merkle of asset blob_ids) on-chain or in a signed manifest — currently absent",
+        "Verify aggregator responses are never cached across users (cache-control private,no-store asserted in route)"
+      ],
+      "status": "mitigated-but-untested"
+    }
+  ]
+}

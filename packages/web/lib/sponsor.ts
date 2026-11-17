@@ -7,6 +7,7 @@ import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Transaction } from '@mysten/sui/transactions';
 import { toBase64 } from '@mysten/sui/utils';
 import {
+  classify,
   createClient,
   fail,
   ok,
@@ -24,9 +25,38 @@ const { openAccount, openCreatorVault } = txBuilders;
 
 export const SETTLE_SCAN_LIMIT = 12;
 
+/// Pages of `VaultOpened` events one confirmation pass will walk, per package-id prefix.
+/// Capped for the same reason discovery everywhere else is: an unbounded walk is an unbounded
+/// gas/CPU gift to whoever makes rows to confirm. Truncation under-confirms; the hold frees the
+/// slot regardless, so the safe direction costs a delayed confirmation and nothing else.
+const MAX_VAULT_EVENT_PAGES = 5;
+
 export const SPONSORSHIP_SEATS = 50;
 
 export const SEAT_HOLD_MS = 15 * 60 * 1000;
+
+/// How long an unconfirmed sponsored-vault slot stays held before another address may take it.
+///
+/// Migration 030 argued for no expiry on the grounds that "a row here means it happened". It was
+/// written as if `vault_id` were filled in when the gas was signed; nothing in the tree ever
+/// wrote it, so a row meant only that the sponsor had SIGNED bytes the requester was free never
+/// to submit. Fifty throwaway addresses with vaults to name and slots to burn could consume the
+/// whole offer permanently at no cost to themselves — the signature that would authorise
+/// execution is theirs, and simply withholding it costs the sponsor nothing (TR-07).
+///
+/// Two changes close it, and both are here rather than in a migration because the schema already
+/// carries every column they need:
+///
+/// 1. The hold. An unconfirmed slot frees after `VAULT_HOLD_MS`, the same person-shaped gap the
+///    seat hold allows for claim-then-submit. A real requester signs and submits in seconds; a
+///    burner's rows evaporate and the budget recovers.
+///
+/// 2. The confirmation. `confirmVaultClaimsFromChain` walks `VaultOpened` events and writes
+///    `vault_id` when the chain shows a vault for the address — which is what finally makes
+///    030's sentence true: a CONFIRMED row means it happened, and confirmed rows never free.
+///    The per-address rule stays one-ever (matching seats), so a freed slot cannot be re-taken
+///    by the same address; each fresh burn attempt costs a fresh funded account.
+export const VAULT_HOLD_MS = 15 * 60 * 1000;
 
 export const SPONSOR_KEY_ENV = 'PROJECTX_SOCIAL_SPONSOR_KEY';
 
@@ -434,27 +464,43 @@ export async function claimVaultSlot(input: {
   const address = normaliseAddress(input.address);
 
   try {
+    const holdCutoff = input.nowMs - VAULT_HOLD_MS;
     const { rows } = await db().query<{ slot: number }>(
       `
       INSERT INTO agent_sponsored_vaults (address, slot, gas_budget_mist, sponsored_at_ms)
       SELECT $1, s.slot, $2, $3
         FROM generate_series(1, $4) AS s(slot)
        WHERE NOT EXISTS (
-             SELECT 1 FROM agent_sponsored_vaults taken WHERE taken.slot = s.slot
+             SELECT 1 FROM agent_sponsored_vaults taken
+              WHERE taken.slot = s.slot
+                -- A confirmed row is spent for good. An unconfirmed one holds its slot only
+                -- for the window; past the hold the slot is the offer's again, and the row
+                -- itself still bars this address from a second turn.
+                AND (taken.vault_id IS NOT NULL OR taken.sponsored_at_ms > $5)
        )
          /*
            This address already holds one: select nothing rather than reaching the primary key and
            raising. Returning no rows is the correct answer; the diagnostic below says which of the
-           two reasons it was.
+           two reasons it was. Deliberately unbounded by time — one sponsored vault each, ever, is
+           the anti-burn rule, and the hold frees the SLOT, never the address's turn.
          */
          AND NOT EXISTS (
              SELECT 1 FROM agent_sponsored_vaults mine WHERE mine.address = $1
        )
        ORDER BY s.slot
        LIMIT 1
+      /* Take over an expired hold in place, the way 027 does for seats: the row exists, the
+         reservation does not. The WHERE keeps a confirmed or still-held row untouched — for
+         those the statement must fall through to no rows so the diagnostics can speak. */
+      ON CONFLICT (slot) DO UPDATE
+         SET address         = EXCLUDED.address,
+             gas_budget_mist = EXCLUDED.gas_budget_mist,
+             sponsored_at_ms = EXCLUDED.sponsored_at_ms
+       WHERE agent_sponsored_vaults.vault_id IS NULL
+         AND agent_sponsored_vaults.sponsored_at_ms <= $5
       RETURNING slot
       `,
-      [address, input.gasBudgetMist.toString(), input.nowMs, SPONSORED_VAULT_SLOTS],
+      [address, input.gasBudgetMist.toString(), input.nowMs, SPONSORED_VAULT_SLOTS, holdCutoff],
     );
 
     if (rows.length > 0) return ok({ slot: rows[0]!.slot });
@@ -471,13 +517,15 @@ export async function claimVaultSlot(input: {
       );
     }
     const used = await db().query<{ n: number }>(
-      'SELECT count(*)::int AS n FROM agent_sponsored_vaults',
+      `SELECT count(*)::int AS n FROM agent_sponsored_vaults
+        WHERE vault_id IS NOT NULL OR sponsored_at_ms > $1`,
+      [input.nowMs - VAULT_HOLD_MS],
     );
     return fail(
       'budget-exhausted',
       source,
       `the sponsored vault offer is fully taken — ${used.rows[0]?.n ?? 0} of ${SPONSORED_VAULT_SLOTS} ` +
-        'slots are used. Opening a vault still works; it costs about 0.02 SUI in gas.',
+        'slots are confirmed or held. Opening a vault still works; it costs about 0.02 SUI in gas.',
     );
   } catch (error) {
     if ((error as { code?: string } | null)?.code === '23505') {
@@ -491,15 +539,100 @@ export async function claimVaultSlot(input: {
   }
 }
 
-export async function vaultSlotsLeft(): Promise<Reading<number>> {
+/// Free the slots of vaults the chain has confirmed, and say how many were confirmed.
+///
+/// Walks `VaultOpened` events (both package-id prefixes an event could carry — vaults opened
+/// under earlier upgrades emitted under those) and writes `vault_id` for any unconfirmed row
+/// whose address appears as an owner. Deliberately conservative in both failure directions:
+/// a truncated walk confirms only what it saw, and a walk that errors returns `transport`
+/// without touching a row — under-confirming costs nothing, because an unconfirmed row frees
+/// its slot through the hold anyway, while a FALSE confirmation would spend the offer's budget
+/// on a vault that does not exist.
+export async function confirmVaultClaimsFromChain(input: {
+  config: ProjectXSocialConfig;
+  nowMs: number;
+}): Promise<Reading<number>> {
+  const source = 'sponsor-vault-slot';
+  try {
+    const { rows } = await db().query<{ address: string }>(
+      `SELECT address FROM agent_sponsored_vaults
+        WHERE vault_id IS NULL
+        ORDER BY sponsored_at_ms ASC
+        LIMIT $1`,
+      [SETTLE_SCAN_LIMIT],
+    );
+    if (rows.length === 0) return ok(0);
+
+    const wanted = new Map<string, string>(rows.map((r) => [r.address, r.address]));
+    const vaultOfOwner = new Map<string, string>();
+
+    const client = createClient(input.config);
+    for (const emitter of new Set([input.config.packageId, input.config.latestPackageId])) {
+      let cursor: string | null = null;
+      for (let page = 0; page < MAX_VAULT_EVENT_PAGES; page += 1) {
+        const result: {
+          events?: Array<{ json?: unknown }>;
+          hasNextPage?: boolean;
+          endCursor?: string | null;
+        } = await client.listEvents({
+          filter: { eventType: `${emitter}::creator::VaultOpened` },
+          limit: 50,
+          ...(cursor === null ? {} : { cursor }),
+        });
+
+        for (const event of result.events ?? []) {
+          const json = event.json as Record<string, unknown> | undefined;
+          const owner = json?.['owner'];
+          const vault = json?.['vault'];
+          if (typeof owner !== 'string' || typeof vault !== 'string') continue;
+          const key = BigInt(owner).toString();
+          if (!vaultOfOwner.has(key)) vaultOfOwner.set(key, vault);
+        }
+
+        if (result.hasNextPage !== true) break;
+        cursor = result.endCursor ?? null;
+        if (cursor === null || page === MAX_VAULT_EVENT_PAGES - 1) break;
+      }
+    }
+
+    let confirmed = 0;
+    for (const address of wanted.keys()) {
+      // One malformed stored address must not fail the whole pass — skip it and let the hold
+      // expire the row the way it expires every other unconfirmed one.
+      let key: string;
+      try {
+        key = BigInt(address).toString();
+      } catch {
+        continue;
+      }
+      const vault = vaultOfOwner.get(key);
+      if (vault === undefined) continue;
+      await db().query(
+        'UPDATE agent_sponsored_vaults SET vault_id = $1 WHERE address = $2 AND vault_id IS NULL',
+        [vault, address],
+      );
+      confirmed += 1;
+    }
+    return ok(confirmed);
+  } catch (error) {
+    const failure = classify(error, source);
+    return fail(failure.kind, source, opaqueDetail(source, failure.detail));
+  }
+}
+
+/// How many slots the offer can still spend: confirmed rows are gone for good, unconfirmed rows
+/// count only while their hold is live. A page of expired unconfirmed rows is not usage.
+export async function vaultSlotsLeft(nowMs: number): Promise<Reading<number>> {
   const source = 'sponsor-vault-slot';
   try {
     const { rows } = await db().query<{ n: number }>(
-      'SELECT count(*)::int AS n FROM agent_sponsored_vaults',
+      `SELECT count(*)::int AS n FROM agent_sponsored_vaults
+        WHERE vault_id IS NOT NULL OR sponsored_at_ms > $1`,
+      [nowMs - VAULT_HOLD_MS],
     );
     return ok(Math.max(0, SPONSORED_VAULT_SLOTS - (rows[0]?.n ?? 0)));
   } catch (error) {
-    return fail('transport', source, opaqueDetail(source, error));
+    return fail('transport', source, opaqueDetail('sponsor-vault-slot', error));
   }
 }
 
