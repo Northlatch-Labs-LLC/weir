@@ -78,6 +78,7 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
                 </div>
 
                 <div
+                  className="vault-facts"
                   style={{
                     display: 'grid',
                     gap: 'var(--space-20)',
