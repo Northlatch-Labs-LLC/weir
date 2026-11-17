@@ -9,7 +9,10 @@ const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8')
 
 function inlineScripts(): string[] {
   const src = read('app/layout.tsx');
-  const blocks = [...src.matchAll(/__html:\s*((?:\s*'(?:[^'\\]|\\.)*'\s*\+?)+)\s*,/g)];
+  // The first quoted string is mandatory and every further one must begin with a literal '+', so
+  // the engine can never split the same text two ways — the earlier form, with an optional '+'
+  // inside a repeated group, could backtrack exponentially and CodeQL flagged it (js/redos).
+  const blocks = [...src.matchAll(/__html:\s*('(?:[^'\\\n]|\\.)*'(?:\s*\+\s*'(?:[^'\\\n]|\\.)*')*)\s*,/g)];
   return blocks.map((block) => {
     const parts = [...block[1]!.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1] ?? '');
     return parts.join('').replaceAll('\\"', '"').replaceAll("\\'", "'");
