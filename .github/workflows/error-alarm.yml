@@ -44,6 +44,13 @@ jobs:
           # Ubuntu keeps its own older client first on PATH, so the installed binaries
           # are put ahead of it explicitly.
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          # Exported rather than re-typed per step: a step-local variable dies with its
+          # step, and the daemon check downstream then runs an EMPTY command — bash's
+          # "line 13: : command not found" — which this workflow filed as "the daemon
+          # journal could not be read". A broken monitor filing alarms about the thing
+          # it monitors is worse than silence; the path lives in the environment now,
+          # where every later step reads the same value.
+          echo "PSQL=/usr/lib/postgresql/17/bin/psql" >> "$GITHUB_ENV"
 
       # Supabase direct host resolves to IPv6 only, and GitHub runners have no IPv6 route,
       # so a connection against it fails with "Network is unreachable" before it reads a
@@ -88,7 +95,6 @@ jobs:
           THRESHOLD=25
           echo "THRESHOLD=$THRESHOLD" >> "$GITHUB_ENV"
 
-          PSQL=/usr/lib/postgresql/17/bin/psql
           WHERE="(at_ms > (extract(epoch from now() - interval '1 hour') * 1000))"
 
           # Connection errors and query errors land in the same bucket on purpose: a
