@@ -28,7 +28,7 @@
     },
     "production": {
       "observed_at": "2026-11-17T21:40Z",
-      "commit": "9a688958adf4fd5e6c673bbe52a2490d5c36868f (9a68895)",
+      "commit": "f08a133e3ca7084dab0ff590d6ff67464b8cf134 (f08a133)",
       "method": "x-projectx-commit response header + public endpoints + response headers, fetched from https://weir.social",
       "findings": [
         "PRODUCTION RUNS 9a68895 - everything merged on 2026-11-17 (PRs #254, #255, #256, #257) is NOT deployed. The sponsor slot hold, the seeking spend, the error_events cap, and the deployment-records fixes are all main-only until the next Vercel deploy. Deploying main is the single highest-value action on this register.",
@@ -49,7 +49,14 @@
         "creation_paused": false,
         "payments_paused": false,
         "source": "SDK readPlatform over gRPC against the live Platform object, 2026-11-17"
-      }
+      },
+      "deployed_at": "2026-11-17T22:0xZ",
+      "deploy_method": "git integration (deploymentEnabled.main re-enabled in PR #260; CLI upload aborts were unworkable)",
+      "post_deploy_findings": [
+        "All 2026-11-17 fixes are now LIVE in production: sponsor slot hold (#255), seeking signature spend (#257), error_events bounded sweep (#257), deployment-records gate (#254), alarm monitor fix (#256)",
+        "COMMITTEE RE-CHECKED POST-DEPLOY: /api/seal still serves exactly one key server (0xfa8d3bab..., weight 1) - the deploy now serves the CURRENT remote env, so one server is the configured committee, not deployment lag. TR-01 unmitigated stands with final evidence; the fix requires standing up/registering additional Seal key servers and adding them to PROJECTX_SOCIAL_SEAL_KEY_SERVERS with an explicit threshold >= 2 - a decision and infrastructure only the operator can supply",
+        "Sponsor endpoint live with 30/50 seats on the protected build; seeking listings empty (no data exposed by the spend change)"
+      ]
     }
   },
   "threats": [
