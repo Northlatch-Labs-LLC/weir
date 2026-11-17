@@ -14,6 +14,7 @@ import {
   loadSponsor,
   releaseSeat,
   confirmClaimsFromChain,
+  confirmVaultClaimsFromChain,
   reserveSeat,
   seatsRemaining,
   sponsorAccountOpen,
@@ -99,6 +100,12 @@ export async function POST(request: Request) {try {
       );
     }
     const feeMist = String(platform.value.creationFeeMist);
+
+    // Settle what the chain has already confirmed before spending a slot on this ask — the same
+    // order the account branch uses for seats (confirmClaimsFromChain before reserveSeat). A
+    // failure here must not block the offer: an unconfirmed row frees through the hold anyway,
+    // so confirmation is an optimisation whose failure direction is safe.
+    await confirmVaultClaimsFromChain({ config: cfgV.value, nowMs: Date.now() });
 
     const slot = await claimVaultSlot({
       address: normaliseAddress(addr.trim()),
