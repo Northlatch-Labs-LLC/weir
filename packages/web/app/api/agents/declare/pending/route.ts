@@ -27,6 +27,13 @@ export async function POST(request: Request) {
   const conflict = await operatorConflict(half.address, half.operatorAddress);
   if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
 
+  // Deliberately NOT spent, unlike every other write surface: this half carries the SAME
+  // declare-agent signature /api/agents/declare later consumes on the operator's co-sign
+  // (verifyAction there, the authoritative single use). Burning it here would strand the
+  // two-phase flow — the CI database test caught exactly that. What bounds replay instead:
+  // the row is a pure function of the statement (same statement, same row values — the
+  // upsert rewrites an identical row), so a captured half replays as a no-op, and the
+  // signature it carries can be consumed exactly once, by declare.
   const proof = await proveActionWithoutSpending({
     origin: new URL(request.url).origin,
     address: half.address,

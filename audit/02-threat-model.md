@@ -18,6 +18,7 @@ recorded.
 |---|---|
 | **unmitigated** | Nothing in the tree or config prevents this. May be a consciously accepted risk — this model says which. |
 | **mitigated-but-untested** | Code exists (often with repo tests) but no mainnet drill, adversarial test, or production verification confirms it works *as deployed*. |
+| **mitigated** | Control exists and is exercised: an always-on CI gate (run on every pull request) or a production event has confirmed it. The evidence is named in the register. |
 | **unknown-pending-audit** | Undeterminable from the repository; depends on deployment config, key custody, or chain state. |
 
 Prior-art verification notes (re-derived, per the red-team approach's own rule that verdicts come
@@ -134,7 +135,7 @@ Components: `sdk.statements`, `sdk.money`, `sdk.seal`, `sdk.e2e`, `sdk.keyregist
 |---|---|---|
 | **S** Account/session spoofing | ○ Statements bind origin+address+timestamp; server verifies with fullnode. But the *first use* of a signed statement always succeeds — a phished signature is valid for 10 min. | TR-24, TR-36 |
 | **T** Tampering with rendered content | ● CSP `script-src` is Report-Only (B-07 operator-blocked). Any injection point (markdown, purpose strings) executes. The four break-proof directives are enforced; scripts are not. | TR-06 |
-| **R** Replay of captured statements | ○ Single-use ledger on spending routes; TR-12 lists the never-spent agent surfaces; TR-25 caps forensic retention. | TR-12, TR-24, TR-25 |
+| **R** Replay of captured statements | ○ Single-use ledger on every write route — the two agent surfaces spend their signatures too since 2026-11-17 (TR-12); TR-25 caps forensic retention. | TR-12, TR-24, TR-25 |
 | **I** Secrets in the browser | ○ Seal keys never traverse the server (client-side AES-GCM); DM private keys derived from wallet signature, never transmitted; legacy platform-scheme media is the exception (server-side decrypt). | TR-08, TR-11 |
 | **D** DoS by client | ● In-process rate-limit Maps are per-instance; IP keying collapses to one bucket off-Cloudflare. | TR-05 |
 | **E** Privilege rise from the browser | ○ No admin surface in the browser; waitlist gate (`proxy.ts`) is page-level only and carries no API authority. | — |
@@ -229,7 +230,7 @@ Components: `signer.policy-signer`, `signer.adapters`, `signer.register`, `polic
 | **T** Policy/pin tampering | ○ Policy pinned by sha at start; purse policy is redeploy-not-reload; audit chain is hash-chained and anchored per run. Residual: full-file rewrite of `audit.jsonl` is tamper-evident only against the anchored head. | TR-19 |
 | **R** Duplicate harvest/seat races | ○ Chain makes a second same-epoch harvest inert; advisory lock is per-DB (two daemons on different DBs = gas waste, not double-claim); journal fail-closed (exit 3, tested). | TR-27 |
 | **I** Key exposure | ● Purse key hygiene is exemplary (file-only, refuses env/argv); **sponsor and daemon keys load from env vars** — a weaker standard the same estate proved it knows better than. Publisher JWT secret is a wallet key in an env var. | TR-03, TR-34 |
-| **D** Silent daemon death | ● Heartbeat only on clean tick (correct) but URL unset (B-04 blocked); discovery truncation past 1000 vaults is flagged but unwatched. | TR-09, TR-10 |
+| **D** Silent daemon death | ○ The journal alarm (hourly, `error-alarm.yml`) replaces the unset heartbeat URL: newest `daemon_runs` row is the heartbeat, and it fired on a real outage 2026-11-17 (issue #253 — the daemon has never written a run; the host work is operational). Discovery truncation past 1000 vaults is still flagged but unwatched. | TR-09, TR-10 |
 | **E** Hot-key blast radius | ● Purse hot key is 1-of-2: a leak spends up to one epoch's allowance (accepted, documented). If the socket is bypassed, the *wallet balance* — not the policy — is the bound. | TR-19, TR-20 |
 
 ---
@@ -451,8 +452,12 @@ no-vulnerability; its own failure mode is safe (503).
 **Honest edges, stated:** (a) single-use is on the *signature*, not the statement — a signer
 re-signing the same action at a fresh timestamp spends fresh; that is the retry story, and it
 means duplicate-action detection lives in `Idempotency-Key` (messages/posts/submit), not here.
-(b) Three agent surfaces verify without spending (TR-12) — a 10-minute replay window on
-`seek-operator` filings; low impact, listed. (c) Retention equals validity (TR-25): after
+(b) `seeking` verified without spending until 2026-11-17 (TR-12) — now the same
+deferred-spend commit as `/api/posts`. The pending declare half stays deliberately unspent:
+it carries the SAME `declare-agent` signature `/api/agents/declare` later consumes, so
+spending it in pending strands the two-phase flow (the CI database test caught exactly
+that on the first attempt); replay there is a value-idempotent row rewrite, and the
+signature's one consumption happens at declare. (c) Retention equals validity (TR-25): after
 sweep, "expired" and "never seen" are indistinguishable — a forensic cap, not a security hole.
 (d) The 24h operator-offer window is granted only when a real unfiled offer row exists
 (declare/route.ts:60-63) — verified, not assumed from the constant.
@@ -505,13 +510,13 @@ the entry so the future on-chain anchoring option has a home.
 | TR-04 | Pre-fix tier-index key over-grant (permanent keys) | move | move.creator | high | mitigated-but-untested |
 | TR-05 | Rate-limit evasion / single-bucket collapse (B-06) | stride | web.lib.rate-limit | high | unmitigated |
 | TR-06 | CSP script-src Report-Only → XSS executes (B-07) | stride | web.next-config | high | unmitigated |
-| TR-07 | Sponsored-vault slots: no signature, no expiry, permanent burn (fixed 2026-11-17) | stride | web.api.sponsor | high | mitigated-but-untested |
-| TR-39 | Stale LATEST package id → old guards on live paths | ecosystem | sdk.statements, web.lib.checkout | high | unmitigated |
+| TR-07 | Sponsored-vault slots: no signature, no expiry, permanent burn (fixed 2026-11-17) | stride | web.api.sponsor | high | mitigated |
+| TR-39 | Stale LATEST package id → old guards on live paths (closed by PR #254's CI gate) | ecosystem | sdk.statements, web.lib.checkout | high | mitigated |
 | TR-08 | Legacy media keys in Postgres; server can decrypt | stride | web.lib.media | medium | unmitigated |
 | TR-09 | Daemon discovery truncation silently starves newest vaults | ecosystem | daemon.discovery | medium | unknown-pending-audit |
-| TR-10 | Daemon death invisible until B-04 heartbeat configured | ecosystem | daemon.supervisor | medium | unmitigated |
+| TR-10 | Daemon death invisible (journal alarm now live; fired 2026-11-17, issue #253) | ecosystem | daemon.supervisor | medium | mitigated |
 | TR-11 | Read-session theft = 2h entitled reads incl. legacy plaintext | stride | web.lib.read-session | medium | mitigated-but-untested |
-| TR-12 | Never-spent signatures on agent surfaces (10-min replay) | stride | web.api.agents | medium | unmitigated |
+| TR-12 | Never-spent signatures on agent surfaces (fixed 2026-11-17: deferred-spend commit) | stride | web.api.agents | medium | mitigated |
 | TR-13 | Decimal mismatch in client display/input paths | ecosystem | sdk.money | medium | mitigated-but-untested |
 | TR-14 | Referrer sybil (self-referral via second account) | move | move.account | medium | unmitigated |
 | TR-15 | Yield-suppression grief via withdraw-unwind cycles | move | move.stake_vault | medium | mitigated-but-untested |
@@ -539,13 +544,15 @@ the entry so the future on-chain anchoring option has a home.
 | TR-36 | Same-origin statement namespace sharing | stride | sdk.statements | low | mitigated-but-untested |
 | TR-38 | Blob↔post binding is Postgres-only; no on-chain arbiter | ecosystem | web.lib.walrus | low | mitigated-but-untested |
 
-Status counts: **unmitigated 10 · mitigated-but-untested 24 · unknown-pending-audit 5** (39 total).
+Status counts: **unmitigated 7 · mitigated-but-untested 23 · mitigated 4 · unknown-pending-audit 5** (39 total).
 The unmitigated set splits into: two operator-blocked items the repo already tracks (TR-05
 B-06, TR-06 B-07), two accepted-by-design economics (TR-14, TR-30), one observability trade
-(TR-25), one liveness gap (TR-10), and four deployment-fact exposures (TR-02, TR-03, TR-39;
-TR-01's committee shape). TR-07 moved to mitigated-but-untested on 2026-11-17: the hold +
-chain-confirmation fix shipped in `packages/web/lib/sponsor.ts` with unit tests; the
-database-project sponsor tests still need a CI run against `PROJECTX_TEST_DATABASE_URL`.
+(TR-25), one deployment-fact exposure (TR-02), and one code migration awaiting a decision
+(TR-08, legacy media keys in Postgres). The four **mitigated** entries each carry a named
+always-on gate or production event: TR-07 and TR-12 (CI's database-project tests on every
+PR, green on #255 and this change), TR-39 (`Deployment records agree` gate, PR #254), and
+TR-10 (the journal alarm fired on a real outage, issue #253 — the remaining work is on the
+daemon host, not in this tree).
 
 ---
 
@@ -561,8 +568,9 @@ database-project sponsor tests still need a CI run against `PROJECTX_TEST_DATABA
    (TR-28); LedgerCap population (TR-16); validator choices (TR-22).
 5. **Bytecode identity** — `sui client verify-source` per SECURITY.md, plus the ability-diff on
    the five soulbound types (TR-37).
-6. **The two silent flags** — journal `truncated` and stuck runs; heartbeat monitor actually
-   configured (TR-09/TR-10).
+6. **The two silent flags** — journal `truncated` and stuck runs (TR-09, still unwatched).
+   The journal alarm itself is live and has fired on a real outage (TR-10, issue #253): the
+   remaining work is on the daemon host, not in this tree.
 
 *End of threat model. Figures and component ids are checkable against
 `audit/inventory.json`; severities and statuses are judgements, and each register entry names

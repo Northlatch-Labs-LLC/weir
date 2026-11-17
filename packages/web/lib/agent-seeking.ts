@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { OPERATOR_OFFER_WINDOW_MS } from '@projectx-social/sdk';
+import type { Pool } from 'pg';
 import { db, normaliseAddress } from '@/lib/db';
 import { screenAgentText } from '@/lib/agent-screen';
 import { MAX_MODEL, MAX_PURPOSE } from '@/lib/agents';
@@ -201,8 +202,13 @@ export function validateOffer(
   return { ok: true, offer: { agentAddress, operatorAddress, model, purpose, timestampMs, operatorSignature } };
 }
 
-export async function recordSeeking(input: SeekingInput): Promise<Seeking> {
-  const { rows } = await db().query<SeekingRow>(
+/// Record a listing. `runner` lets a route spend the listing's signature and write the row in
+/// one transaction, the way /api/posts does; the default keeps this callable on its own.
+export async function recordSeeking(
+  input: SeekingInput,
+  runner: { query: Pool['query'] } = db(),
+): Promise<Seeking> {
+  const { rows } = await runner.query<SeekingRow>(
     `INSERT INTO agent_seeking (address, handle, model, purpose, words, issued_at_ms, signature, created_at_ms, claimed_at_ms)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
      ON CONFLICT (address) DO UPDATE SET

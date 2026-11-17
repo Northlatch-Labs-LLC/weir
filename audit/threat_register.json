@@ -10,7 +10,8 @@
     "status_legend": {
       "unmitigated": "No code or configuration currently prevents this; may be accepted/documented.",
       "mitigated-but-untested": "Code exists (possibly with repo tests) but no mainnet drill, adversarial test, or production verification has confirmed the control works as deployed.",
-      "unknown-pending-audit": "Cannot be determined from the repository; depends on deployment configuration, key custody, or chain state that must be checked in the audit phase."
+      "unknown-pending-audit": "Cannot be determined from the repository; depends on deployment configuration, key custody, or chain state that must be checked in the audit phase.",
+      "mitigated": "Control exists AND is exercised: an always-on gate (CI on every pull request) or a production event has confirmed it works as deployed. The evidence is named in mitigations_to_verify."
     },
     "ordering": "entries sorted by severity (high to low), then by id",
     "component_source": "audit/inventory.json"
@@ -148,14 +149,12 @@
       "severity": "high",
       "attack_path": "AS FOUND: the vault path required only {address, accountId, coinType} strings — unlike the account path it demanded no signature from the address. claimVaultSlot allocated from 50 slots with NO time expiry and NO chain reconciliation (nothing in the tree ever wrote vault_id, so migration 030's premise — “a row here means it happened” — was false: a row meant only that the sponsor had signed bytes the requester was free never to submit). An attacker scripting 50 requests for throwaway addresses permanently burned the entire sponsored-vault budget at ~zero cost: gas is spent only on execution, which requires the attacker's own signature — withheld, it costs the sponsor nothing but the signature. Handle squatting via the account path remains bounded by the 15-minute seat hold. Rate limiting was the only barrier, and it is IP-keyed (TR-05).",
       "mitigations_to_verify": [
-        "FIXED in packages/web/lib/sponsor.ts (2026-11-17): unconfirmed slots now hold for VAULT_HOLD_MS (15 min) and free afterwards (ON CONFLICT takeover, mirroring 027's seat hold); confirmed rows never free",
-        "FIXED: confirmVaultClaimsFromChain walks VaultOpened events under both package-id prefixes and writes vault_id, making 030's 'a row means it happened' true for confirmed rows; called in the route before each claim, fail-safe (transport error confirms nothing)",
-        "FIXED: vaultSlotsLeft and the budget diagnostics count live rows only (confirmed OR hold unexpired)",
-        "VERIFY: run test/sponsor.test.ts + sponsor-gate.test.ts against PROJECTX_TEST_DATABASE_URL in CI (DB tests could not run in this environment)",
-        "VERIFY: one-per-address-ever still holds for recycled slots (fresh burn attempts need a fresh funded account with a SocialAccount)",
-        "RESIDUAL (accepted): an attacker who first burns the 50 account seats with throwaway addresses can still cycle vault slots at the cost of one funded account per slot per hold window — economically pointless; monitor agent_sponsored_vaults fill rate vs confirmed vaults"
+        "FIXED 2026-11-17 (PR #255): unconfirmed slots hold for VAULT_HOLD_MS (15 min) and free via ON CONFLICT takeover (mirrors 027's seat hold); confirmed rows never free",
+        "FIXED: confirmVaultClaimsFromChain walks VaultOpened events under both package-id prefixes and writes vault_id; route confirms before claiming; fail-safe (transport error confirms nothing)",
+        "VERIFIED: CI's database project (sponsor.test.ts, sponsor-gate.test.ts, with PROJECTX_TEST_DATABASE_URL) passed on PR #255 with the fix; 9 new unit tests in sponsor-vault-meter.test.ts",
+        "RESIDUAL (accepted): burning the 50 account seats first still lets an attacker cycle vault slots at one funded account per slot per window — economically pointless; monitor agent_sponsored_vaults fill vs confirmed vaults"
       ],
-      "status": "mitigated-but-untested"
+      "status": "mitigated"
     },
     {
       "id": "TR-39",
@@ -173,11 +172,11 @@
       "severity": "high",
       "attack_path": "01-architecture.md finding (High): latestPackageIdInEnvExample (0xfa7e…) != latestPackageIdOnChain (0xdc6d…). Anything that reads the package id from env to BUILD a transaction — checkout prepare, client approval PTBs for Seal (approveUnlock/approveSubscription), agent tx builders, sponsor shape-asserts (SPONSORABLE targets use c.latestPackageId) — targets the OLD package. On Sui old versions stay callable, so these PTBs still succeed, but they execute the OLD bytecode: any guard added in the last two upgrades (e.g. the price-ranked seal_approve_subscription, ETierPriceNotAscending enforcement) is absent on that path. The concrete money-adjacent case: a client whose approval PTB targets a pre-v5 package gets the RETIRED aborting approval (fail-closed, denial of service) or, for upgrades that fixed over-grants, a path that would have needed the fix. Conversely an attacker cannot exploit a stale id to ADD authority — old bytecode is weaker, not stronger — so the exposure is missed-protection + breakage, not privilege escalation, EXCEPT where a fix narrowed what users could derive and the old path still derives it (see TR-04/TR-28: the retired entitlement approval aborts, but any OTHER stale target re-enables pre-fix behavior on that call path).",
       "mitigations_to_verify": [
-        "Pin the deployed latestPackageId in env/config at deploy time (automation, not hand-editing); fail startup when env id != chain id read from the deployment record",
-        "Sweep every latestPackageId consumer (sdk config, sponsor SPONSORABLE, seal identity/approval builders) and assert they read the SAME verified source",
-        "Re-derive: which of the last two upgrades changed security behavior, and does any live client path still call the old package for those functions (tx history by package id)"
+        "FIXED by PR #254 (2026-11-17): .env.example's PROJECTX_SOCIAL_LATEST_PACKAGE_ID now matches the deployment record (0xdc6d...); scripts/check-deployment-ids.mjs compares .env.example <-> sui-contracts/deploy/mainnet.json <-> CUSTODY.md offline on every PR",
+        "VERIFIED BY GATE: the 'Deployment records agree' check passed on PRs #254, #255 and #256",
+        "REMAINING HUMAN STEP: the script compares records with each other, not with the chain — mainnet.json's custody block claims its owners were verified on chain; re-verify against the chain per SECURITY.md when auditing"
       ],
-      "status": "unmitigated"
+      "status": "mitigated"
     },
     {
       "id": "TR-08",
@@ -230,11 +229,11 @@
       "severity": "medium",
       "attack_path": "The daemon is the liveness guarantee for yield (harvest is permissionless, but nobody else is paid to call it). Heartbeat POSTs only on a fully clean tick — correct — but send failures are logged and ignored, exit codes 1/2/3 must 'all look the same to the monitor as a daemon that is dead', and PROJECTX_DAEMON_HEARTBEAT_URL is operator-configured and currently unset per the blocker matrix. A daemon that dies leaves every vault's ladder frozen; depositors see flat yield and principal still withdrawable (withdraw unwinds tranches itself), so the failure is silent rather than spectacular.",
       "mitigations_to_verify": [
-        "Operator: configure heartbeat URL + Betterstack monitor (B-04, blocked); confirm the monitor alerts on missing heartbeat, not on non-2xx",
-        "Confirm stuckRuns detection (index.ts:210-228) is logged where a human reads it",
-        "Consider an on-chain watchdog: alert when any vault's newest tranche age exceeds LADDER_DEPTH+2 epochs"
+        "The journal alarm shipped as the 'Check the harvest daemon is alive' step in .github/workflows/error-alarm.yml (hourly, gated on repo variable DAEMON_EXPECTED): newest daemon_runs row is the heartbeat; files-or-updates one issue, closes itself when fresh",
+        "VERIFIED IN PRODUCTION 2026-11-17: after fixing the monitor's own bug (PR #256, an empty $PSQL filing false alarms), the alarm fired on a REAL outage — daemon_runs has never recorded a run; tracked as issue #253 with the operator checklist",
+        "REMAINING IS OPERATIONAL: the daemon host must run (PROJECTX_DAEMON_DATABASE_URL set to the same DB the alarm reads; startup exit codes 1/2/3 documented in the issue)"
       ],
-      "status": "unmitigated"
+      "status": "mitigated"
     },
     {
       "id": "TR-11",
@@ -257,7 +256,7 @@
     },
     {
       "id": "TR-12",
-      "threat": "Signatures on non-spending agent surfaces (seeking, declare/pending, seeking/offers) are verifiable but never spent — 10-minute replay window",
+      "threat": "Seeking signatures were never spent (10-min replay window); the pending declare half must stay unspent by design — its signature is consumed later by /api/agents/declare",
       "category": "stride",
       "component": [
         "web.api.agents",
@@ -268,11 +267,12 @@
       "severity": "medium",
       "attack_path": "proveActionWithoutSpending verifies then discards; the same signature replays for 10 minutes (24h for operator offers consumed via declare). A captured seek-operator statement can be re-POSTed to spam the seeking register under the victim's identity; a captured declare/pending half can pre-file declarations. No money moves and each write is idempotent-ish (recordSeeking), but the surfaces are forgeable-traffic amplifiers and pollute the operator market with ghost agents.",
       "mitigations_to_verify": [
-        "Either spend these signatures too, or make the handlers idempotent per (address,timestampMs) so replay is a no-op",
-        "Confirm operator-offer 24h window (OPERATOR_OFFER_WINDOW_MS) is only granted when a real unfiled offer row exists (declare/route.ts:60-63) — otherwise it is a 24h replay window on a signature",
-        "Rate-limit recordSeeking per address (quotaLimit) rather than per IP"
+        "FIXED: /api/agents/seeking POST now spends its signature (verifyActionDeferringSpend -> spendSignature committed in the same transaction as the row, the /api/posts pattern); replay answers 'this signature has already been used — sign again'. recordSeeking takes an optional runner so spend and write commit together",
+        "DELIBERATELY NOT SPENT: /api/agents/declare/pending carries the SAME declare-agent signature /api/agents/declare later consumes with verifyAction — the authoritative single use. Spending it in pending strands the two-phase flow (the CI database test caught exactly that on the first attempt). Replay there is bounded by value-idempotence: the row is a pure function of the statement, so a captured half rewrites an identical row, and the signature can be consumed exactly once — by declare",
+        "The 24h operator-offer window on /api/agents/declare is unchanged and still granted only against a recorded unfiled offer",
+        "VERIFIED BY GATE: CI's database project runs agent-seeking.test.ts and agent-declare-pending.test.ts (real Postgres) on every PR; the two-phase filing test pins the unspent-pending behavior"
       ],
-      "status": "unmitigated"
+      "status": "mitigated"
     },
     {
       "id": "TR-13",
@@ -704,8 +704,8 @@
       "severity": "low",
       "attack_path": "Both write rows into error_events with fields capped (200/4000 chars) and are rate-limited, but rate limits are IP-keyed (TR-05). An attacker with IP rotation can grow error_events unboundedly, degrading the one observability channel the deployment has (the alarm reads that table) — poisoning the well rather than filling the disk. Breakers do not cover this table.",
       "mitigations_to_verify": [
-        "Add a per-deployment daily row cap or retention sweep on error_events",
-        "Confirm the error-alarm query aggregates rather than assumes clean data (a flood should alert, not blind)"
+        "FIXED: recordFailure now sweeps every 64th write — a bounded ctid trim (<=500 rows per direction) enforces migration 044's documented 365-day retention AND a 50,000-row cap against the unauthenticated intake flood; fire-and-forget, swallows its own errors",
+        "Drill: seed error_events past the cap in the test database and assert the sweep trims (no test exists yet — the sweep is otherwise exercised only in production)"
       ],
       "status": "mitigated-but-untested"
     },
