@@ -72,7 +72,7 @@ jobs:
       # without this the deploy would ship whatever main happened to be at the time the run began
       # rather than the commit that was actually tested. Deploying an untested commit because the
       # gate said green would be worse than having no gate.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
@@ -116,9 +116,9 @@ jobs:
       # build and fails with ENOENT if it is not on PATH first. The version is
       # deliberately not set here — package.json already pins it via
       # packageManager, and declaring it twice is an error.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
 
@@ -148,7 +148,7 @@ jobs:
           echo "prod_url=$(grep -Eo 'https://[^ ]+\.vercel\.app' deploy-output.txt | head -1)" >> "$GITHUB_ENV"
 
       - name: Keep the exact bits that shipped
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: prod-build-${{ steps.pinned.outputs.short }}
           path: .vercel/output

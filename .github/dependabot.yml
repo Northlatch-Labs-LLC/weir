@@ -9,8 +9,8 @@
 #     vulnerability should not wait for Monday.
 #   - github-actions: the workflows themselves pin actions; those go stale too.
 #
-# Not configured here: CodeQL code scanning, which on a private repository requires GitHub
-# Advanced Security.
+# CodeQL code scanning is configured, in its own workflow (codeql.yml): the repository is
+# public, so code scanning alerts are free and Advanced Security is not required.
 #
 # Move dependencies (sui-contracts) are not covered — Dependabot has no Move ecosystem.
 # The framework dependency there moves only when the packages are deliberately upgraded.
