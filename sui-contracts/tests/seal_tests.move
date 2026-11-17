@@ -12,6 +12,12 @@
 /// what they must also establish is that the bytes being requested are the bytes that entitlement
 /// covers. A policy that checks the holder and not the identity approves a reader who bought
 /// something cheap for the key to something expensive.
+///
+/// THIS IS entitlement.move'S TEST FILE. There is no `entitlement_tests.move` on purpose: the
+/// module exists to be consumed — minted by `creator`, approved by key servers — so its suite
+/// lives where both behaviours are exercised, through the `#[test_only]` seams below and the
+/// payment paths in `creator_tests.move`. If you are looking for entitlement coverage, you are
+/// looking here.
 #[test_only]
 module projectx_social::seal_tests;
 

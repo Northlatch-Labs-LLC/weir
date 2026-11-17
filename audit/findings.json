@@ -1,0 +1,124 @@
+{
+  "title": "weir.social architecture audit — findings: behaviour vs documented intent",
+  "generated": "2026-11-17",
+  "commit": "9a68895",
+  "scope": "Places where code contradicts documented intent, or where documentation is missing for load-bearing behaviour. Severity scale: Critical (funds/identity at risk, rule broken in practice) / High (documented claim is false in a way that misleads operators or deployers) / Medium (doc gap or drift on a security-relevant surface) / Low (doc gap with bounded blast radius) / Informational (clarification, no action strictly required).",
+  "severityCounts": {
+    "Critical": 0,
+    "High": 1,
+    "Medium": 5,
+    "Low": 3,
+    "Informational": 3
+  },
+  "findings": [
+    {
+      "id": "W-01",
+      "title": ".env.example's 'LATEST' package id is two upgrades stale against the deployment record it claims to mirror",
+      "severity": "High",
+      "location": ".env.example (PROJECTX_SOCIAL_LATEST_PACKAGE_ID) vs sui-contracts/deploy/mainnet.json (upgrades.v3/v4/v5)",
+      "impact": ".env.example states its mainnet ids are 'a RECORD, from sui-contracts/deploy/mainnet.json' and that the LATEST id is 'the only correct target for a moveCall'. It names v3 (0xfa7e…3694) while the record's newest upgrade is v5 (0xdc6d…84b5). A deployment provisioned from this file executes v3 bytecode: it lacks v5's price-ranked creator::seal_approve_subscription, so subscription key release would ride the retired index-ranked entitlement::seal_approve_subscription path and could approve keys for tiers the subscriber did not pay for. The file's own header ('check them against that file before trusting them') is the intended mitigation, but the record's purpose is to be authoritative, and it currently is not.",
+      "recommendation": "Update PROJECTX_SOCIAL_LATEST_PACKAGE_ID to the v5 id, and add a CI check that parses deploy/mainnet.json and fails if .env.example's five chain ids drift from it — the file already promises the check happens; make a machine do it.",
+      "resolution": "RESOLVED 2026-11-17: .env.example now carries the v5 id, and scripts/check-deployment-ids.mjs (new, wired as the CI \"records\" job) fails if .env.example, CUSTODY.md and deploy/mainnet.json ever disagree again."
+    },
+    {
+      "id": "W-02",
+      "title": "Sealing of paid posts/media happens server-side, so 'the platform can no longer decrypt' holds only at rest, not in transit or process",
+      "severity": "Medium",
+      "location": "packages/web/lib/body-storage.ts (storeBody), lib/blob-crypto.ts (encryptBlob), lib/seal.ts (sealTo), app/api/posts/route.ts, app/api/studio/upload/route.ts vs db/019_seal_key_custody.sql ('platform can no longer decrypt paid media') and .env.example ('gated media is encrypted before it is stored')",
+      "impact": "The creator's browser sends plaintext over HTTPS; the Next.js process generates the AES key, encrypts the blob, and Seal-wraps that same key before discarding it. Nothing is persisted (verified: addPost writes '' into posts.body whenever a sealedBody exists — lib/content.ts:518; the assets table stores no enc_key for seal-scheme assets), but the publishing process necessarily observes the plaintext and holds the raw AES key transiently — it could log or retain it. The documented framing ('encrypted before it is stored', 'platform can no longer decrypt') describes the storage guarantee, yet reads like an end-to-end property the DM path genuinely has (db/004 moved DM keys client-side). A creator or compliance reader would over-trust the paid-post path.",
+      "recommendation": "State the trust boundary explicitly in README/security page: paid-post confidentiality is 'encrypted at rest and on Walrus, key never persisted' — the platform is trusted at publish time, unlike E2E DMs where it is not. If platform-trust at publish is unacceptable, move body encryption into the browser (SealClient.encrypt works client-side; the server would then never see key material).",
+      "resolution": "RESOLVED 2026-11-17 (documentation): README Contracts section and the security page guarantee card now state the boundary exactly — server-side sealing at publish, plaintext seen once and never stored, DMs end-to-end in the browser. Client-side sealing was considered and deliberately not taken: it is an architecture change, not a doc fix, and is recorded here as the option if the trust model must tighten."
+    },
+    {
+      "id": "W-03",
+      "title": "Seal key-server committee variables are required by code but absent from .env.example",
+      "severity": "Medium",
+      "location": "packages/sdk/src/config.ts:138-142 (SEAL_ENV: PROJECTX_SOCIAL_SEAL_KEY_SERVERS, PROJECTX_SOCIAL_SEAL_THRESHOLD, PROJECTX_SOCIAL_SEAL_API_KEY_NAME) vs .env.example (lists only PROJECTX_SOCIAL_SEAL_API_KEY)",
+      "impact": "Without SEAL_KEY_SERVERS the loader fails closed ('Gated media is encrypted to a Seal key server committee…' refusal), so no insecure default exists — but an operator provisioning from the example file cannot discover that the variable exists, let alone its csv shape (objectId|weight|aggregatorUrl) or the threshold<=weight invariant. Every paid post and every decrypt depends on this committee; the configuration surface is undocumented at the point of use.",
+      "recommendation": "Add a Seal section to .env.example documenting all four SEAL_ENV variables with the csv format, the all-or-none pairing of API key name/key, and the mainnet committee reference.",
+      "resolution": "RESOLVED 2026-11-17: .env.example gained a Seal section documenting KEY_SERVERS (csv shape), THRESHOLD (no default, <= total weight) and the API-key-name/key all-or-none pairing, with the committee's role stated."
+    },
+    {
+      "id": "W-04",
+      "title": "agent_mind deployment id is required, used in production routes, recorded nowhere",
+      "severity": "Medium",
+      "location": "packages/sdk/src/config.ts:50-67 (MIND_PACKAGE_ENV = PROJECTX_SOCIAL_MIND_PACKAGE_ID, refusal when unset) + app/api/agents/mind/route.ts + db/036_agent_minds.sql vs .env.example (absent) and sui-contracts/deploy/mainnet.json (no soul/mind package ids recorded)",
+      "impact": "/api/agents/mind stores and serves agents' encrypted memories against the agent_mind package's approval rule, migration 036 built the table, and the SDK refuses to load the mind config without PROJECTX_SOCIAL_MIND_PACKAGE_ID — yet the variable is absent from .env.example, mainnet.json records no id for either satellite package, and sui-contracts-mind has no Published.toml in-tree (so a fresh checkout cannot even prove which bytecode the id should point at). The deployment record that README calls authoritative is silent on a live feature.",
+      "recommendation": "Record the published soul and agent_mind package ids in mainnet.json (or a sibling deploy record), add the env var to .env.example, and commit the mind package's Published.toml or note in its Move.toml where the published version lives.",
+      "resolution": "RESOLVED 2026-11-17: PROJECTX_SOCIAL_MIND_PACKAGE_ID (+ the three mind quota knobs) added to .env.example; mainnet.json gained a satellitePackages section recording soul's published id/upgrade-cap (from its Published.toml) and agent_mind's no-in-tree-record status; the three stale \"NOT IN .env.example\" flags in docs/app-production/08-LAUNCH.md removed (19 further stale flags on vars that WERE present were corrected in passing)."
+    },
+    {
+      "id": "W-05",
+      "title": "README 'What is here' table omits four of the twelve workspace packages, including the one that holds an agent's hot key",
+      "severity": "Medium",
+      "location": "README.md (package table: sdk, web, agent, mcp, policy, signer, room, daemon) vs packages/agent-runtime, packages/purse, packages/ui, packages/wren",
+      "impact": "purse is the process that holds Heron's hot signing key (1-of-2 multisig member), runs on a droplet with systemd LoadCredentialEncrypted, and has an audit chain — materially the most security-sensitive code in the repository for agent custody — and a reader of the README cannot discover it exists. agent-runtime (the agent's mind/beat loop with its ten startup rules), ui (the design system web is built from) and wren (the second agent's host recipe) are equally invisible. The README is the canonical map; four twelfths of the estate are off it.",
+      "recommendation": "Extend the table with one row per omitted package; purse's row should state plainly that it holds a hot key and where its audit trail lives.",
+      "resolution": "RESOLVED 2026-11-17: README \"What is here\" now lists all twelve packages; purse's row states plainly that it holds Heron's hot key."
+    },
+    {
+      "id": "W-06",
+      "title": "PlatformCap custody is documented in three places that have already drifted apart, and the drift is self-acknowledged",
+      "severity": "Medium",
+      "location": "sui-contracts/deploy/mainnet.json capabilities._comment ('This comment has repeatedly lagged the actual custody arrangement') vs README.md Contracts section and CUSTODY.md",
+      "impact": "The UpgradeCap sits in a 2-of-3 multisig (cold), but the PlatformCap was moved back to the single-key publisher address on 2026-08-28 because 'the multisig ceremony was too heavy for day-to-day operation' — meaning fee changes, pause switches and treasury sweeps are one hot key away. That is a defensible operational choice, and the mainnet.json comment records it honestly, but the same file admits its custody comment 'has repeatedly lagged', and README's Contracts narrative carries no hint that day-to-day platform authority is hot. An auditor reconciling README/CUSTODY.md against the chain today would find the docs behind.",
+      "recommendation": "Make CUSTODY.md the single source (ids, owners, date of each move), have mainnet.json's comment point at it instead of restating facts, and add the same CI cross-check suggested in W-01 style: a script that reads the caps' on-chain owners and fails on mismatch with CUSTODY.md.",
+      "resolution": "RESOLVED 2026-11-17: CUSTODY.md's wrong \"both capabilities in the multisig\" sentence replaced with the two-temperature split and a capability table carrying object ids and full holder addresses; mainnet.json's capabilities comment now points at CUSTODY.md; scripts/check-deployment-ids.mjs cross-checks the two (and CUSTODY.md against the custody block) on every PR."
+    },
+    {
+      "id": "W-07",
+      "title": "Three /api/admin* routes carry no in-route admin gate despite the name",
+      "severity": "Low",
+      "location": "packages/web/app/api/admin/route.ts (GET), app/api/admin/revenue/route.ts (GET, simulateLimit only), app/api/admin/prepare/route.ts (POST quote) vs the hard isSiteAdmin gates on /api/access-codes and POST /api/site-mode",
+      "impact": "GET /api/admin and /api/admin/revenue expose aggregated platform status/revenue to anyone (the underlying data is chain-readable, so nothing secret leaks — but the aggregation convenience and the route naming imply authority that is not checked). POST /api/admin/prepare builds admin-action quotes for any caller; the on-chain PlatformCap refuses at execution, so no authority is bypassed, yet the asymmetry with sibling routes is unexplained anywhere.",
+      "recommendation": "Either gate the three routes with the same isSiteAdmin check for consistency, or rename/document them as public chain-read endpoints (e.g. /api/platform/*) so 'admin' in a URL always means gated.",
+      "resolution": "RESOLVED 2026-11-17: GET /api/admin, GET /api/admin/revenue and POST /api/admin/prepare now gate on the same on-chain Publisher-cap check (isSiteAdmin via the read session) as /api/access-codes, with a comment at each gate explaining why the name now means what it says. Callers (AdminPanel, AdminControls, PlatformRevenue) render only inside the admin-gated widgets, so no UI path broke; admin.test.ts and revenue-window.test.ts (20 tests) pass; web typecheck passes."
+    },
+    {
+      "id": "W-08",
+      "title": "entitlement.move and stake_ladder.move are the only modules without a dedicated test file",
+      "severity": "Low",
+      "location": "sui-contracts/tests/ (8 files; no entitlement_tests.move, no stake_ladder_tests.move)",
+      "impact": "Both are covered transitively — entitlement via seal_tests.move's test_only seams and creator_tests.move, stake_ladder via stake_vault_tests.move — but stake_ladder's pure functions (rung_size, capture_bps, is_matured bounds) have no standalone unit tests, and entitlement's identity layout is the bytes every Seal key derivation depends on. Coverage exists; the map of 'module -> its test file' that the other seven modules satisfy is broken for the two whose correctness is most load-bearing for key release and staking maths.",
+      "recommendation": "Add a thin stake_ladder_tests.move for the pure functions and either an entitlement_tests.move or a header comment in seal_tests.move stating it is entitlement's test file.",
+      "resolution": "RESOLVED 2026-11-17: sui-contracts/tests/stake_ladder_tests.move added (8 tests: constants, capture bps, rung-size floor/division/overflow, convergence semantics) — full Move suite 211/211 green; seal_tests.move now opens with \"THIS IS entitlement.move'S TEST FILE\" so the module->test mapping is explicit."
+    },
+    {
+      "id": "W-09",
+      "title": "docs/app-production/02-ARCHITECTURE.md references a prototype path that no longer exists",
+      "severity": "Low",
+      "location": "docs/app-production/02-ARCHITECTURE.md (references packages/site/...PaymentDialog.tsx) vs the live implementation in packages/web/components/app/UnlockDialog.tsx and use-unlock.ts",
+      "impact": "The rendering/settlement state-machine spec points readers at a pre-rename prototype tree; anyone following it lands in a missing directory and must re-derive the mapping to the real components (UnlockDialog, useUnlock, useCheckout, checkout routes) themselves.",
+      "recommendation": "Update the doc's component references to the packages/web paths, or mark it historical and point at audit/01-architecture.md as the current architecture baseline.",
+      "resolution": "RESOLVED 2026-11-17: the prototype reference replaced with the shipped component paths (UnlockDialog, use-unlock, use-checkout, submitSigned) and a pointer to audit/01-architecture.md as the living map."
+    },
+    {
+      "id": "W-10",
+      "title": "soul.move carries deliberate dead weight that only the source explains",
+      "severity": "Informational",
+      "location": "sui-contracts-soul/sources/soul.move (FreshEntry.debt_delta written, never read; error codes 24/25/26/28/29 burned)",
+      "impact": "debt_delta is documented in-source as dead weight and the five error codes are permanently reserved for removed mechanisms (never reused). Correct and intentional — but invisible to anyone reading event data or building decoders without the source comment.",
+      "recommendation": "No code change. Note the burned codes and the dead field in the eventual protocol reference so SDK authors do not try to give them meaning.",
+      "resolution": "CORRECTED 2026-11-17 — the original claim was wrong on both counts and no code change was warranted: the burned error codes were already documented in sui-contracts-soul/README.md \"Abort codes\", and FreshEntry.debt_delta lives in stake_vault.move (not soul), IS read (only to rescale itself; no payout derives from it), cannot be removed because live vaults store its layout, and already carries a \"do not fix\" warning in its own doc comment. Nothing to fix beyond this record."
+    },
+    {
+      "id": "W-11",
+      "title": "/api/seal and /api/keys release no key material — entitlement gating lives elsewhere, by design",
+      "severity": "Informational",
+      "location": "packages/web/app/api/seal/route.ts (committee/config discovery), app/api/keys/route.ts (public X25519 DM keys) vs app/api/posts/[id]/route.ts, app/api/media/[postId]/[assetId]/route.ts, and the Seal committee's approval-PTB execution",
+      "impact": "A reader expecting the 'key endpoints' to be the entitlement boundary will mis-classify both as under-gated. In reality: /api/seal tells clients which key servers to ask (public by necessity), /api/keys serves recipients' public DM keys (public by definition), and actual key release happens only when the key-server committee executes an approval move call (seal_approve_unlock / creator::seal_approve_subscription) that aborts unless the requester owns the entitlement object and the key id matches the identity derived from it. The server never decrypts and cannot.",
+      "recommendation": "No change required; the division is sound. Document it once in the security page so the classification is not re-litigated (this audit's route table records it).",
+      "resolution": "RESOLVED 2026-11-17: the security page gained the \"No key ever passes through this server\" guarantee card naming what /api/seal and /api/keys actually serve and where shares release."
+    },
+    {
+      "id": "W-12",
+      "title": "Rate-limit identity falls back to a client-settable header when not behind Cloudflare",
+      "severity": "Informational",
+      "location": "packages/web/lib/rate-limit.ts (cf-connecting-ip when PROJECTX_SOCIAL_BEHIND_CLOUDFLARE=true with optional x-edge-secret verification; else x-real-ip with an in-code warning; else a shared 'unattributed' bucket)",
+      "impact": "Self-hosted without Cloudflare, a caller can spoof x-real-ip to spread across buckets. The code warns, and the failure mode is the historical one (spoofable identity), but the unattributed-bucket fallback means the spoof only buys per-IP headroom, not anonymity from the per-address quotas — the write paths that matter (publish, message, purchase) are signature-gated and therefore bind to a real address regardless of IP.",
+      "recommendation": "No change required for the current deployment (Cloudflare-fronted). If a self-hosted deployment is ever supported, document that per-IP limits are advisory there and only per-address quotas are binding.",
+      "resolution": "RESOLVED 2026-11-17: the PROJECTX_SOCIAL_BEHIND_CLOUDFLARE entry in .env.example now states the self-hosted fallback (client-settable x-real-ip, advisory per-IP limits) and which limits remain binding regardless."
+    }
+  ],
+  "remediatedAt": "2026-11-17"
+}

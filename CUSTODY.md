@@ -85,8 +85,20 @@ directions, so the rebate pool cannot come to be fed from anything but staking.
 | upgrade capability | publish a new version of the package | move funds; an upgrade is a public on-chain transaction, and the current authority is published at weir.social/security |
 | the harvest daemon's key | call `harvest`, which is permissionless and pays gas | direct where the proceeds go — the split is computed in the module |
 
-The platform and upgrade capabilities are held in a 2-of-3 multisig. The daemon's key can only
-call a function anybody could call.
+The platform and upgrade capabilities are **split, deliberately, at two temperatures**. The
+UpgradeCap sits in a 2-of-3 multisig (`0x00e734…1605`, members recorded in
+`MULTISIG-RECOVERY-CARD.md`), so no single key can substitute code. The PlatformCap sits on the
+operator's publisher address — **hot, by choice, since 2026-08-28** — because platform actions
+(pause, fees, treasury) are day-to-day operational and the full multisig ceremony was too heavy
+for them; it was moved out of the multisig the same day it had been moved in, and the transactions
+are recorded in `sui-contracts/deploy/mainnet.json` under `capabilities.custody`. This section is
+the narrative home for custody; that record is the data, and `scripts/check-deployment-ids.mjs`
+fails if the two ever disagree. The daemon's key can only call a function anybody could call.
+
+| Capability | Object id | Held by | Since |
+|---|---|---|---|
+| `PlatformCap` | `0x23909c63932afd97de2515c142ca5ea082c71c5efab469401a239631acc3b683` | publisher address `0xda784b6c20c5995f6b719a20a26eddee5ec971c8ecec890e61c8b4634dd1715d` (hot — one-key platform actions) | 2026-08-28 |
+| UpgradeCap | `0x895e20c44aed9c884be8dffa42c93d93653b47e86cd3a12d919998d9b1eaed08` | 2-of-3 multisig `0x00e734d54be45c002579f36698823eaf2410b59eb30a398fd6c8af9e1b111605` (cold — code changes) | publish (2026-08-14) |
 
 ## What this document does not cover
 

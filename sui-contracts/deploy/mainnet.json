@@ -16,7 +16,7 @@
     "registry": "0x1a3fb4ac25458d7524be064a2b7e1586ccd9ed09c0d5b351621e3b101e1203a0"
   },
   "capabilities": {
-    "_comment": "The governing caps are SPLIT AGAIN, deliberately. PlatformCap was moved from the multisig back to the publisher (dev) address later on 2026-08-28 (tx d9QgGRN7CQEw9h2ZzVaDqurSdk8LHZ8uMKed8ufVxL5) so the operator can run platform actions \u2014 starting with re-pausing vault creation \u2014 through the /admin single-key sign path; the multisig ceremony was too heavy for day-to-day operation with no guided console. UpgradeCap remains in the 2-of-3 multisig, so code upgrades stay cold. Publisher and Display<Platform> have been on the publisher address throughout. Owners below were read from chain after the move on 2026-08-28 \u2014 see custody. This comment has repeatedly lagged the actual custody arrangement; if you are editing capability ownership, edit this line in the same commit.",
+    "_comment": "The governing caps are SPLIT AGAIN, deliberately. PlatformCap was moved from the multisig back to the publisher (dev) address later on 2026-08-28 (tx d9QgGRN7CQEw9h2ZzVaDqurSdk8LHZ8uMKed8ufVxL5) so the operator can run platform actions \u2014 starting with re-pausing vault creation \u2014 through the /admin single-key sign path; the multisig ceremony was too heavy for day-to-day operation with no guided console. UpgradeCap remains in the 2-of-3 multisig, so code upgrades stay cold. Publisher and Display<Platform> have been on the publisher address throughout. Owners below were read from chain after the move on 2026-08-28 \u2014 see custody. This comment has repeatedly lagged the actual custody arrangement; if you are editing capability ownership, edit this line in the same commit. CUSTODY.md is the narrative home for capability custody and holds the same ids; scripts/check-deployment-ids.mjs fails CI if this record, that document, or .env.example ever disagree.",
     "platformCap": "0x23909c63932afd97de2515c142ca5ea082c71c5efab469401a239631acc3b683",
     "upgradeCap": "0x895e20c44aed9c884be8dffa42c93d93653b47e86cd3a12d919998d9b1eaed08",
     "publisher": "0x64f007b87b9e46d08f75f6833af33b45955f51ee4cdc233a0daed0b8c1417d27",
@@ -32,6 +32,27 @@
       "consequence": "PlatformCap is on the publisher (dev) address, so set_fees, set_creation_paused, set_payments_paused, sweep_treasury and migrate can each be signed by the dev key alone, and the /admin console's single-key Sign-and-submit path governs platform actions again. UpgradeCap stays 2-of-3: replacing the contract code still requires two committee signatures. Accepted trade, chosen by the operator on 2026-08-28: platform operation is hot for usability (the immediate need was re-pausing vault creation to return Weir to waitlist mode), code custody stays cold. Fees remain fee 290 bps, referral_share 500 bps, creation fee 29 SUI = 29000000000 MIST.",
       "platformCapMovedIso": "2026-08-28",
       "platformCapMovedNote": "Two moves on 2026-08-28. First: publisher -> multisig, tx 447M5vYAEDUuU3jy3HRftmn7T6Pb94JiNR1YcXSfBQMF (SUCCESS), signed by the publisher key. Second, later the same day: multisig -> publisher, tx d9QgGRN7CQEw9h2ZzVaDqurSdk8LHZ8uMKed8ufVxL5 (SUCCESS), executed by the operator as a full 2-of-3 ceremony from this laptop \u2014 serialized transfer with the multisig as sender, dry-run first, signed by committee members 1 (msig-laptop) and 3 (msig-offsite, temporarily re-imported into the keystore for the ceremony), signatures combined with multi-sig-combine-partial-sig and executed with execute-signed-tx; gas paid by the multisig. The multisig itself is unchanged: same 2-of-3 derived from the same three public keys in MULTISIG-RECOVERY-CARD.md, and it still holds the UpgradeCap."
+    }
+  },
+  "satellitePackages": {
+    "_comment": [
+      "Packages beside the money package that this record does NOT govern. Each records itself:",
+      "soul publishes its id, upgrade cap and a byte-exact chain check in its own directory",
+      "(sui-contracts-soul/Published.toml, check-matches-mainnet.sh). agent_mind has no in-tree",
+      "publish record as of 2026-11-17: its package id is deployment configuration",
+      "(PROJECTX_SOCIAL_MIND_PACKAGE_ID) held by the deployment that published it. When a",
+      "Published.toml for agent_mind is committed, move its facts here the same day."
+    ],
+    "northlatch_soul": {
+      "originalId": "0x8d6567ed7bf34d99eefefe745c3a282fd89a12fdcd77e6bd10b19b35b599635f",
+      "version": 1,
+      "upgradeCap": "0xcb0342634013d9135b0780e81f9fcd453bf5597f90da64a11c1cd9f9da78eea8",
+      "record": "sui-contracts-soul/Published.toml"
+    },
+    "agent_mind": {
+      "originalId": null,
+      "record": null,
+      "note": "unpublished in-tree (no Published.toml); id lives in the deployment env as PROJECTX_SOCIAL_MIND_PACKAGE_ID"
     }
   },
   "configurationTxs": {
