@@ -513,7 +513,7 @@ the entry so the future on-chain anchoring option has a home.
 
 | ID | Threat (short) | Category | Component (inventory id) | Sev | Status |
 |---|---|---|---|---|---|
-| TR-01 | Seal committee compromise/misconfiguration releases all keys (attested fixed 2026-11-17) | ecosystem | external.seal-keyservers | high | attested-unverified |
+| TR-01 | Seal committee is ONE server in production (fetched 2026-11-17; attestation contradicted) | ecosystem | external.seal-keyservers | high | unmitigated |
 | TR-02 | zkLogin seed compromise = mass takeover, irrotatable (attested fixed 2026-11-17) | stride | web.lib.zklogin-server | high | attested-unverified |
 | TR-03 | Publisher JWT secret theft drains publisher wallet (attested fixed 2026-11-17) | ecosystem | web.lib.publisher-token | high | attested-unverified |
 | TR-04 | Pre-fix tier-index key over-grant (permanent keys) | move | move.creator | high | mitigated-but-untested |
@@ -553,28 +553,36 @@ the entry so the future on-chain anchoring option has a home.
 | TR-36 | Same-origin statement namespace sharing | stride | sdk.statements | low | mitigated-but-untested |
 | TR-38 | Blob↔post binding is Postgres-only; no on-chain arbiter | ecosystem | web.lib.walrus | low | mitigated-but-untested |
 
-Status counts: **unmitigated 6 · mitigated-but-untested 23 · mitigated 4 · attested-unverified 3 · unknown-pending-audit 3** (39 total).
-The unmitigated set splits into: two operator-blocked items the repo already tracks (TR-05
-B-06, TR-06 B-07), two accepted-by-design economics (TR-14, TR-30), one observability trade
-(TR-25), one code migration awaiting a decision (TR-08, legacy media keys in Postgres). The
-three **attested-unverified** entries (TR-01, TR-02, TR-03) carry the operator's 2026-11-17
-statement that Seal, Walrus-publisher, and zkLogin were remediated during the provider
-migrations (GCP → DigitalOcean → OVH; web unchanged on Vercel/GitHub; daemons now on
-Cloudflare and gridframes.app) — the named production checks remain the audit day's first
-hour. The four **mitigated** entries each carry a named always-on gate or production event:
-TR-07 and TR-12 (CI's database-project tests on every PR), TR-39 (`Deployment records agree`
-gate, PR #254), and TR-10 (the journal alarm fired on a real empty journal, issue #253 —
-operator attests the daemon work was completed and the deployment record was never
-appended; the probable reconciliation is one env var: the daemon's journal URL across the
-provider migrations).
+Status counts: **unmitigated 7 · mitigated-but-untested 23 · mitigated 4 · attested-unverified 2 · unknown-pending-audit 3** (39 total).
+**The winning state of production is behind main**: the live deployment serves commit
+`9a68895` (`x-projectx-commit` header, fetched 2026-11-17T21:40Z) — everything merged that
+day (#254 remediation, #255 sponsor hold, #256 alarm fix, #257 agent-surface spend and
+error cap) ships only on the next Vercel deploy. Deploying main is the single
+highest-value action on this register. The unmitigated set splits into: the one finding
+the fact-check *changed* (TR-01 — production serves a **one-key-server** Seal committee,
+contradicting the same-day attestation; worst case live), two operator-blocked items
+(TR-05 B-06, TR-06 B-07 — CSP Report-Only re-confirmed in fetched production headers),
+two accepted-by-design economics (TR-14, TR-30), one observability trade (TR-25), and one
+code migration awaiting a decision (TR-08). The two **attested-unverified** entries
+(TR-02 zkLogin — pipeline probe corroborated live, custody still attested-only; TR-03
+publisher) and the three **unknowns** (TR-09, TR-18, TR-22) are the remaining audit-day
+work. TR-10 stays mitigated on the strength of its alarm; the attestation that the daemon
+is running is contradicted by the journal's emptiness as of the observation — the one-URL
+reconciliation on the daemon VM remains the fix, tracked by the self-closing issue #253.
 
 ---
 
 ## 7. What the audit phase must check that the tree cannot answer
 
-1. **Deployed committee shape** — key-server object ids, weights, threshold; `verifyKeyServers`
-   exercised end-to-end (TR-01 — operator attests fixed 2026-11-17; this read converts the
-   attestation to verified).
+0. **Deploy main.** Production serves `9a68895` (fetched 2026-11-17): four merged PRs of
+   fixes — the sponsor slot hold, the seeking spend, the `error_events` cap, the
+   deployment-records gate — are not live until the next Vercel deploy. This is one click
+   and it retires three exploitable-in-production findings (TR-07, TR-12's replay window,
+   TR-33's unbounded table).
+1. **Fix the Seal committee, then verify it** — production serves ONE key server
+   (TR-01, fetched evidence; the attestation was wrong). Configure n≥3, threshold≥2,
+   redeploy, re-fetch `/api/seal`, and decide the fate of content encrypted against any
+   earlier committee.
 2. **Custody composition** — which addresses hold PlatformCap/upgradeCap/MasterCap; multisig
    membership actually independent (TR-18, against CUSTODY.md's claim).
 3. **Env integrity across the provider migrations** — after GCP → DigitalOcean → OVH, re-confirm

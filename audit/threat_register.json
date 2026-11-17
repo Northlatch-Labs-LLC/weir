@@ -25,12 +25,26 @@
         "daemons: Cloudflare and gridframes.app team accounts for the VMs (current)"
       ],
       "note": "Multiple provider migrations carried configuration with them. A deployment completed in an earlier era may hold a resource URL (database, key-server set, prover, publisher) from the provider it left. Where a control reads a URL from env, the migration history itself is a drift vector: every URL must be re-confirmed against the CURRENT provider after each move."
+    },
+    "production": {
+      "observed_at": "2026-11-17T21:40Z",
+      "commit": "9a688958adf4fd5e6c673bbe52a2490d5c36868f (9a68895)",
+      "method": "x-projectx-commit response header + public endpoints + response headers, fetched from https://weir.social",
+      "findings": [
+        "PRODUCTION RUNS 9a68895 - everything merged on 2026-11-17 (PRs #254, #255, #256, #257) is NOT deployed. The sponsor slot hold, the seeking spend, the error_events cap, and the deployment-records fixes are all main-only until the next Vercel deploy. Deploying main is the single highest-value action on this register.",
+        "CSP script-src is still Report-Only in production (fetched headers) - TR-06 open as recorded",
+        "PRODUCTION SEAL DESCRIPTOR LISTS ONE KEY SERVER (objectId 0xfa8d3bab..., weight 1, no threshold field) - fetched from /api/seal. This CONTRADICTS the same-day attestation that Seal was fixed, and is TR-01's worst case: one server's honesty and uptime carry every sealed key, and anything encrypted against a larger earlier committee can no longer gather enough shares",
+        "zkLogin pipeline is alive (prover reachable, epoch 1314, maxEpoch 1316) - corroborates a working pipeline; seed custody remains attested-only",
+        "Production env carries the correct latestPackageId (0xdc6dbb96...) matching the deployment record - TR-39's substance verified in production, not just in the example file",
+        "Sponsor program live with 30/50 seats remaining - on the PRE-FIX build, so the vault-slot burn (TR-07) is exploitable in production until the deploy",
+        "Local .env.local in this checkout is the docker-compose dev environment (app and daemon URLs identical, localhost-refused); production DB access was not attempted and the daemon-journal check relies on the alarm's own production reads (journal empty at 19:59Z and 20:52Z)"
+      ]
     }
   },
   "threats": [
     {
       "id": "TR-01",
-      "threat": "Seal key-server committee compromise or threshold misconfiguration releases every sealed key without entitlement",
+      "threat": "Seal key-server committee compromise or threshold misconfiguration releases every sealed key without entitlement (production serves a ONE-server committee - attestation contradicted by fetched descriptor 2026-11-17)",
       "category": "ecosystem",
       "component": [
         "external.seal-keyservers",
@@ -44,11 +58,12 @@
       "severity": "high",
       "attack_path": "The seal_approve* entry functions are the only thing standing between a reader and a key share; they are enforced by the committee executing them with the reader as sender. A committee that colludes, is compromised, or is configured with threshold >= committee size (or threshold 1) can derive any wrapped key for any identity without any on-chain entitlement — the chain never learns a key was released. Misconfiguration is the cheaper half: PROJECTX_SOCIAL_SEAL_KEY_SERVERS/THRESHOLD are deliberately absent from .env.example, so the deployed committee shape is unverifiable from the tree.",
       "mitigations_to_verify": [
-        "OPERATOR ATTESTATION 2026-11-17: the Seal key-server configuration was remediated (fixed) during the infrastructure migrations; current configuration lives with the deployment, not this tree",
-        "Still owed before 'mitigated': read the deployed committee shape (object ids, weights, threshold from /api/seal on production) and confirm t-of-n with n>=3, t>=2 and https-only aggregators",
-        "End-to-end adversarial check owed once: a below-price subscription must fail to derive a higher-tier period key against the PRODUCTION committee"
+        "FACT-CHECKED AGAINST PRODUCTION 2026-11-17: /api/seal returns keyServers = [{objectId 0xfa8d3bab..., weight 1}] and NO threshold field - a one-server committee, the exact worst case this entry named. The same-day operator attestation that Seal was fixed is CONTRADICTED by the deployed configuration as served",
+        "One server means: its compromise releases every sealed key; its downtime blinds every paid read; and any content encrypted against an earlier, larger committee can no longer meet its embedded threshold from the one server clients now know",
+        "FIX: configure multiple independent key servers (n>=3, threshold>=2, weights recorded) in PROJECTX_SOCIAL_SEAL_KEY_SERVERS/THRESHOLD, redeploy, then re-fetch /api/seal and confirm the descriptor; for content encrypted against the old committee, re-wrap or re-issue (the codebase's own remedy: sell the missing access as Unlocks)",
+        "Then an adversarial end-to-end check: a below-price subscription must fail to derive a higher-tier period key against the production committee"
       ],
-      "status": "attested-unverified"
+      "status": "unmitigated"
     },
     {
       "id": "TR-02",
@@ -65,6 +80,7 @@
       "attack_path": "Every zkLogin address is derived from (OAuth credential, salt) where salt = HKDF(seed, user). The seed is documented 'BACKUP-CRITICAL, AND IT CAN NEVER BE ROTATED'. An attacker with the seed still needs each victim's Google JWT to forge a proof — but any phishing/token-replay window then becomes permanent account takeover, and rotating the seed would re-derive every address, orphaning every SocialAccount, vault, and balance simultaneously. The blast radius of one env-var leak is the entire zkLogin user base.",
       "mitigations_to_verify": [
         "OPERATOR ATTESTATION 2026-11-17: zkLogin was fixed/remediated during the infrastructure migrations",
+        "CORROBORATED BY PRODUCTION READ 2026-11-17: /api/zklogin/session returns available:true, prover reachable, epoch 1314, maxEpoch 1316 - the pipeline works as migrated; note maxEpoch is a moving horizon (current+2) and zkLogin sessions past it fail until refreshed",
         "The seed itself is irrotatable by design - 'fixed' can only mean custody, handling, and access controls around it. Record exactly which of those changed",
         "Still owed before 'mitigated': confirm clockTolerance:0, aud pinning, and nonce equality in the deployed build; name the documented recovery path if the seed ever leaks; confirm the salt-derivation seed survived the provider migrations intact (a lost seed orphans every zkLogin address)"
       ],
@@ -142,7 +158,8 @@
       "mitigations_to_verify": [
         "Operator: switch script-src from Report-Only to enforced (B-07); watch /api/csp-report → error_events for the fortnight before",
         "Audit renderers for markdown/HTML injection independently of CSP (CSP is the backstop, not the fix)",
-        "Confirm no eval/remote scripts would break on enforcement (csp.test.ts:44-48 asserts Report-Only today)"
+        "Confirm no eval/remote scripts would break on enforcement (csp.test.ts:44-48 asserts Report-Only today)",
+        "FACT-CHECKED AGAINST PRODUCTION 2026-11-17: response headers confirm script-src is still delivered via Content-Security-Policy-Report-Only only; the four break-proof directives are enforced"
       ],
       "status": "unmitigated"
     },
@@ -184,7 +201,8 @@
       "mitigations_to_verify": [
         "FIXED by PR #254 (2026-11-17): .env.example's PROJECTX_SOCIAL_LATEST_PACKAGE_ID now matches the deployment record (0xdc6d...); scripts/check-deployment-ids.mjs compares .env.example <-> sui-contracts/deploy/mainnet.json <-> CUSTODY.md offline on every PR",
         "VERIFIED BY GATE: the 'Deployment records agree' check passed on PRs #254, #255 and #256",
-        "REMAINING HUMAN STEP: the script compares records with each other, not with the chain — mainnet.json's custody block claims its owners were verified on chain; re-verify against the chain per SECURITY.md when auditing"
+        "REMAINING HUMAN STEP: the script compares records with each other, not with the chain — mainnet.json's custody block claims its owners were verified on chain; re-verify against the chain per SECURITY.md when auditing",
+        "PRODUCTION-VERIFIED 2026-11-17: the LIVE deployment (commit 9a68895) serves latestPackageId 0xdc6dbb96... matching the record - the id itself was never wrong in production env, only in .env.example"
       ],
       "status": "mitigated"
     },
@@ -243,7 +261,8 @@
         "VERIFIED IN PRODUCTION 2026-11-17: after fixing the monitor's own bug (PR #256, an empty $PSQL filing false alarms), the alarm fired on an empty journal - daemon_runs has no rows in the app database; tracked as issue #253",
         "OPERATOR ATTESTATION 2026-11-17: the daemon work was completed; the deployment record simply was never appended. Daemons run on Cloudflare and gridframes.app team VMs",
         "PROBABLE ROOT CAUSE (hypothesis, verify on the VM): across the GCP -> DigitalOcean -> OVH migrations the daemon's PROJECTX_DAEMON_DATABASE_URL may still point at a former provider-era database. The journal tables are designed to live in the app database (packages/web/db/029 co-locates daemon_runs), so an empty journal in the app DB while a daemon runs elsewhere means exactly this one URL is stale",
-        "The fix is one env var on the gridframes VM; the alarm then closes issue #253 by itself within its six-hour window"
+        "The fix is one env var on the gridframes VM; the alarm then closes issue #253 by itself within its six-hour window",
+        "FACT-CHECK LIMIT RECORDED 2026-11-17: this checkout's .env.local is the docker-compose dev environment (app and daemon URLs identical, connection refused locally), so the production journal could not be re-read from here - the alarm's own production reads stand: journal empty at 19:59Z and 20:52Z, which contradicts 'the daemon is running' as of those instants regardless of the attestation; the reconciliation (journal URL on the gridframes VM) remains the one-env-var fix and the issue closes itself when it lands"
       ],
       "status": "mitigated"
     },
