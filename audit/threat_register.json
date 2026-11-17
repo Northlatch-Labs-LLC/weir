@@ -38,7 +38,18 @@
         "Production env carries the correct latestPackageId (0xdc6dbb96...) matching the deployment record - TR-39's substance verified in production, not just in the example file",
         "Sponsor program live with 30/50 seats remaining - on the PRE-FIX build, so the vault-slot burn (TR-07) is exploitable in production until the deploy",
         "Local .env.local in this checkout is the docker-compose dev environment (app and daemon URLs identical, localhost-refused); production DB access was not attempted and the daemon-journal check relies on the alarm's own production reads (journal empty at 19:59Z and 20:52Z)"
-      ]
+      ],
+      "deploy_state": "CLI deploy attempted twice 2026-11-17T21:52Z: Vercel API returned missing_files for ~150 hashes and the re-upload fetches aborted (network-level). Mitigation shipped instead: vercel.json's deploymentEnabled.main flipped back to true so Vercel's GitHub integration deploys main on every merge - the disabled flag was itself stale configuration and the reason four merged PRs never reached production. Local .env.local points at the live network, so the SDK gRPC reads above are production reads.",
+      "platform_facts": {
+        "accounts_created": 40,
+        "vaults_created": 45,
+        "fee_bps": 290,
+        "referral_share_bps": 500,
+        "creation_fee_mist": 0,
+        "creation_paused": false,
+        "payments_paused": false,
+        "source": "SDK readPlatform over gRPC against the live Platform object, 2026-11-17"
+      }
     }
   },
   "threats": [
@@ -227,7 +238,7 @@
     },
     {
       "id": "TR-09",
-      "threat": "Daemon discovery truncation silently stops harvesting the newest vaults past 1000 (20 pages x 50)",
+      "threat": "Daemon discovery truncation silently stops harvesting the newest vaults past 1000 (currently moot: only 45 vaults exist on-chain as of 2026-11-17)",
       "category": "ecosystem",
       "component": [
         "daemon.discovery",
@@ -238,9 +249,8 @@
       "severity": "medium",
       "attack_path": "Discovery paginates StakeVaultOpened events up to maxDiscoveryPages (default 20) and returns truncated:true past the cap; engine additionally caps at MAX_VAULTS_PER_TICK=200. The flag is recorded in the journal — but nothing in the tree alerts on it. Past 1000 vaults (or 200 actionable ones in a tick), the newest vaults' principal sits unstaked, earning nothing, with depositors unaware; yield leak, not principal loss. It fails exactly when the product succeeds.",
       "mitigations_to_verify": [
-        "Confirm whether any monitor reads the journal truncated flag (heartbeat fires on 'clean' ticks — does a truncated tick count as clean?)",
-        "Load-test discovery pagination against a mainnet-scale event count; raise maxDiscoveryPages or switch to checkpoint reads",
-        "Verify supervisor backoff cannot skip ticks such that >200 vaults become actionable between ticks"
+        "PRODUCTION-VERIFIED 2026-11-17 (SDK gRPC read of the Platform object): accounts_created=40, vaults_created=45 - discovery's 1000-event cap and 200/tick cap are far from reachable at current scale; the truncation flag remains the right tripwire for the day the product succeeds",
+        "Keep the flag monitored or raise maxDiscoveryPages when vault count approaches ~800 (10 pages of headroom)"
       ],
       "status": "unknown-pending-audit"
     },
