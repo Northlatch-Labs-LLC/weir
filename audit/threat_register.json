@@ -56,7 +56,11 @@
         "All 2026-11-17 fixes are now LIVE in production: sponsor slot hold (#255), seeking signature spend (#257), error_events bounded sweep (#257), deployment-records gate (#254), alarm monitor fix (#256)",
         "COMMITTEE RE-CHECKED POST-DEPLOY: /api/seal still serves exactly one key server (0xfa8d3bab..., weight 1) - the deploy now serves the CURRENT remote env, so one server is the configured committee, not deployment lag. TR-01 unmitigated stands with final evidence; the fix requires standing up/registering additional Seal key servers and adding them to PROJECTX_SOCIAL_SEAL_KEY_SERVERS with an explicit threshold >= 2 - a decision and infrastructure only the operator can supply",
         "Sponsor endpoint live with 30/50 seats on the protected build; seeking listings empty (no data exposed by the spend change)"
-      ]
+      ],
+      "drills": {
+        "rate_limit": "100 rapid POSTs to /api/agents/sponsor: 60x400 then 40x429 - the DB-backed shared simulate bucket enforces cross-instance exactly on budget (2026-11-17)",
+        "csp_enforcement_feasibility": "fetched HTML: 5 inline scripts, 3 of them per-request RSC flight payloads - enforcement would break hydration; flip cancelled, nonce architecture identified as the real fix (2026-11-17)"
+      }
     }
   },
   "threats": [
@@ -100,7 +104,8 @@
         "OPERATOR ATTESTATION 2026-11-17: zkLogin was fixed/remediated during the infrastructure migrations",
         "CORROBORATED BY PRODUCTION READ 2026-11-17: /api/zklogin/session returns available:true, prover reachable, epoch 1314, maxEpoch 1316 - the pipeline works as migrated; note maxEpoch is a moving horizon (current+2) and zkLogin sessions past it fail until refreshed",
         "The seed itself is irrotatable by design - 'fixed' can only mean custody, handling, and access controls around it. Record exactly which of those changed",
-        "Still owed before 'mitigated': confirm clockTolerance:0, aud pinning, and nonce equality in the deployed build; name the documented recovery path if the seed ever leaks; confirm the salt-derivation seed survived the provider migrations intact (a lost seed orphans every zkLogin address)"
+        "Still owed before 'mitigated': confirm clockTolerance:0, aud pinning, and nonce equality in the deployed build; name the documented recovery path if the seed ever leaks; confirm the salt-derivation seed survived the provider migrations intact (a lost seed orphans every zkLogin address)",
+        "ENV FACT 2026-11-17: PROJECTX_SOCIAL_ZKLOGIN_SEED, PROVER_URL and PROVER_KEY are all present in the production Vercel env (verified by name in the env pull) - the pipeline configuration survived the migrations"
       ],
       "status": "attested-unverified"
     },
@@ -119,7 +124,8 @@
       "attack_path": "PROJECTX_WALRUS_PUBLISHER_JWT_SECRET 'alone authorises spending the publisher wallet's SUI and WAL' (.env.example:128). Anyone holding it mints valid HS256 tokens (epochs/size/send_object_to of their choosing) and stores arbitrary blobs at the deployment's expense until the wallet empties. The 60s lifetime and jti bound replay, not theft. There is no second factor on the publisher endpoint.",
       "mitigations_to_verify": [
         "OPERATOR ATTESTATION 2026-11-17: the Walrus publisher was fixed/remediated during the infrastructure migrations",
-        "Still owed before 'mitigated': confirm where PROJECTX_WALRUS_PUBLISHER_JWT_SECRET lives after the OVH/gridframes move, whether the publisher wallet balance is alarmed, and whether the publisher endpoint URL moved providers with the migrations (a stale publisher URL fails uploads closed - safe direction - but must be re-confirmed)"
+        "Still owed before 'mitigated': confirm where PROJECTX_WALRUS_PUBLISHER_JWT_SECRET lives after the OVH/gridframes move, whether the publisher wallet balance is alarmed, and whether the publisher endpoint URL moved providers with the migrations (a stale publisher URL fails uploads closed - safe direction - but must be re-confirmed)",
+        "ENV FACT 2026-11-17: PROJECTX_WALRUS_PUBLISHER_URL and PROJECTX_WALRUS_PUBLISHER_JWT_SECRET are both present in the production Vercel env - the publisher configuration lives in Vercel's secret store post-migration"
       ],
       "status": "attested-unverified"
     },
@@ -144,7 +150,7 @@
     },
     {
       "id": "TR-05",
-      "threat": "Rate-limit evasion and shared-bucket self-DoS: IP keying is spoofable or collapses to one bucket (B-06 operator-blocked)",
+      "threat": "Rate-limit evasion and shared-bucket self-DoS: IP keying spoofable or collapses to one bucket (app-side enforcement production-verified 2026-11-17; Cloudflare-side injection rule unverified)",
       "category": "stride",
       "component": [
         "web.lib.rate-limit",
@@ -155,15 +161,16 @@
       "severity": "high",
       "attack_path": "identify() trusts cf-connecting-ip only when behind Cloudflare AND the edge secret matches; otherwise x-real-ip (client-settable when self-hosted) or a single 'unattributed' bucket. With the edge secret unset (its .env.example default), either every request shares one bucket (legit users starve — availability) or, on misconfigured deployments, attackers pick per-request IPs and get a fresh budget each time (all in-process and shared DB limits evaporate; per-address quotaLimit is the surviving control, but only for actions carrying an address). This is the force-multiplier behind TR-07 and every spam/sybil surface.",
       "mitigations_to_verify": [
-        "Operator: set PROJECTX_SOCIAL_EDGE_SECRET + WAF rule (B-06, blocked)",
-        "Verify in-process Map limiters are understood to be per-serverless-instance (N instances = N budgets) and that DB sharedLimit carries the real backstop",
-        "Red-team: replay a sponsor POST with rotating x-real-ip off-Vercel and confirm 429s still arrive via the shared bucket"
+        "ENV FACT-CHECKED 2026-11-17: production Vercel env carries PROJECTX_SOCIAL_BEHIND_CLOUDFLARE=true and PROJECTX_SOCIAL_EDGE_SECRET (set) - B-06's env half was already done by the operator",
+        "PRODUCTION DRILL 2026-11-17: 100 rapid POSTs to /api/agents/sponsor -> 60x400 then 40x429 - the DB-backed shared simulate bucket (60/2s) fires cross-instance, exactly on budget",
+        "HONEST LIMITS OF THE DRILL: the per-instance read limiter (200/min) could not be tripped from outside - a 215-request sequential burst diluted across Vercel instances, so concurrent-burst protection rests on the shared bucket, which works; whether Cloudflare injects x-edge-secret per visitor (per-IP keying) or not (all visitors share one unattributed bucket) is not distinguishable from outside - the Cloudflare dashboard rule is the remaining check",
+        "Remaining external pieces: the Cloudflare rule that stamps x-edge-secret (if absent, sitewide traffic shares one bucket - watch for availability under load) and any WAF hardening"
       ],
-      "status": "unmitigated"
+      "status": "mitigated"
     },
     {
       "id": "TR-06",
-      "threat": "CSP remains Report-Only for script-src; XSS payload executes if any injection point exists (B-07 operator-blocked)",
+      "threat": "CSP script-src cannot be enforced today: production HTML carries five inline scripts of which three are per-request RSC flight-data payloads (unhashable) - a nonce architecture is required first (header flip contradicted by fetched HTML 2026-11-17)",
       "category": "stride",
       "component": [
         "web.next-config",
@@ -174,10 +181,9 @@
       "severity": "high",
       "attack_path": "The enforced CSP carries only object-src/base-uri/form-action/frame-ancestors. Until the operator flips the header, an injected inline script runs with full page origin: it can call wallet signPersonalMessage on a statement the attacker chose (the 10-min window and single-use spend do not stop first use), read DOM-held session material, and exfiltrate post bodies the user can read. Injection candidates: creator-controlled post/markdown rendering, agent purpose strings, handle display — all rendered untrusted but only CSP-reporting, not CSP-blocked.",
       "mitigations_to_verify": [
-        "Operator: switch script-src from Report-Only to enforced (B-07); watch /api/csp-report → error_events for the fortnight before",
-        "Audit renderers for markdown/HTML injection independently of CSP (CSP is the backstop, not the fix)",
-        "Confirm no eval/remote scripts would break on enforcement (csp.test.ts:44-48 asserts Report-Only today)",
-        "FACT-CHECKED AGAINST PRODUCTION 2026-11-17: response headers confirm script-src is still delivered via Content-Security-Policy-Report-Only only; the four break-proof directives are enforced"
+        "FACT-CHECKED AGAINST PRODUCTION 2026-11-17: fetched HTML shows 5 inline <script> tags - 2 static (theme + service-worker registration, the two pinned hashes) and 3 dynamic self.__next_f RSC payloads whose content differs per request. Enforcing the hash-pinned policy would block hydration site-wide on every page - B-07's 'operator flips the header' plan is CONTRADICTED; the flip was never safe",
+        "The 4 break-proof directives (object-src, base-uri, form-action, frame-ancestors) remain enforced; Report-Only continues collecting into error_events - keep watching for NON-CSP-header violation signals that say whether real injection attempts exist",
+        "REAL FIX PATH (engineering, not config): a nonce-based CSP - middleware generates a per-request nonce into the CSP header, Next.js auto-applies it to its own bootstrap scripts, app scripts carry it; RSC flight scripts are covered by the nonce automatically. Estimate: a focused change to next.config/proxy + verifying every inline script site gains the nonce, or an explicit decision to live with Report-Only + hardened renderers"
       ],
       "status": "unmitigated"
     },

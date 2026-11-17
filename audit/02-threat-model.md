@@ -143,10 +143,10 @@ Components: `sdk.statements`, `sdk.money`, `sdk.seal`, `sdk.e2e`, `sdk.keyregist
 | Threat | Assessment | Ref |
 |---|---|---|
 | **S** Account/session spoofing | ○ Statements bind origin+address+timestamp; server verifies with fullnode. But the *first use* of a signed statement always succeeds — a phished signature is valid for 10 min. | TR-24, TR-36 |
-| **T** Tampering with rendered content | ● CSP `script-src` is Report-Only (B-07 operator-blocked). Any injection point (markdown, purpose strings) executes. The four break-proof directives are enforced; scripts are not. | TR-06 |
+| **T** Tampering with rendered content | ● CSP `script-src` cannot be enforced today — production HTML carries 3 unhashable per-request RSC flight scripts (fetched 2026-11-17); enforcement needs a nonce architecture first, not a header flip. The 4 break-proof directives stay enforced; Report-Only keeps collecting. | TR-06 |
 | **R** Replay of captured statements | ○ Single-use ledger on every write route — the two agent surfaces spend their signatures too since 2026-11-17 (TR-12); TR-25 caps forensic retention. | TR-12, TR-24, TR-25 |
 | **I** Secrets in the browser | ○ Seal keys never traverse the server (client-side AES-GCM); DM private keys derived from wallet signature, never transmitted; legacy platform-scheme media is the exception (server-side decrypt). | TR-08, TR-11 |
-| **D** DoS by client | ● In-process rate-limit Maps are per-instance; IP keying collapses to one bucket off-Cloudflare. | TR-05 |
+| **D** DoS by client | ○ Production drill (2026-11-17): the DB-backed shared bucket fired 429s cross-instance exactly on budget; edge secret + Cloudflare flag verified in the live env. The Cloudflare-side injection rule is the remaining external check. | TR-05 |
 | **E** Privilege rise from the browser | ○ No admin surface in the browser; waitlist gate (`proxy.ts`) is page-level only and carries no API authority. | — |
 
 ### 4.2 Next.js API (packages/web/app/api + lib)
@@ -161,7 +161,7 @@ Components: `web.api.*` (73 routes), `web.lib.identity`, `web.lib.rate-limit`, `
 | **T** Stale bytecode targeting | ● LATEST package id in `.env.example` is two upgrades stale (phase-01 High). PTBs built from it execute old guards. | TR-39 |
 | **R** Signature replay | ○ `used_signatures` PK on signature digest, `ON CONFLICT DO NOTHING`, atomic with writes on deferred routes, fail-closed on DB outage. | TR-24 |
 | **I** Secrets at rest in API land | ● `PROJECTX_WALRUS_PUBLISHER_JWT_SECRET` alone authorises spending the publisher wallet; legacy `enc_key` sits in Postgres reachable by the app role. | TR-03, TR-08 |
-| **D** Rate-limit evasion / self-DoS | ● IP keying spoofable or collapse-to-one-bucket (B-06 operator-blocked); error-intake endpoints are unauthenticated write surfaces. | TR-05, TR-33 |
+| **D** Rate-limit evasion / self-DoS | ○ Shared DB bucket production-verified (drill 2026-11-17: 40×429 on budget); edge secret + flag verified in env. Error-intake endpoints are still unauthenticated write surfaces (bounded). | TR-05, TR-33 |
 | **E** Idempotency/quote key abuse | ○ `agent_requests` PK (address,key) + body-hash; same key different body → 409; fail-closed. | TR-35 |
 
 ### 4.3 Postgres (Supabase)
@@ -517,8 +517,8 @@ the entry so the future on-chain anchoring option has a home.
 | TR-02 | zkLogin seed compromise = mass takeover, irrotatable (attested fixed 2026-11-17) | stride | web.lib.zklogin-server | high | attested-unverified |
 | TR-03 | Publisher JWT secret theft drains publisher wallet (attested fixed 2026-11-17) | ecosystem | web.lib.publisher-token | high | attested-unverified |
 | TR-04 | Pre-fix tier-index key over-grant (permanent keys) | move | move.creator | high | mitigated-but-untested |
-| TR-05 | Rate-limit evasion / single-bucket collapse (B-06) | stride | web.lib.rate-limit | high | unmitigated |
-| TR-06 | CSP script-src Report-Only → XSS executes (B-07) | stride | web.next-config | high | unmitigated |
+| TR-05 | Rate-limit evasion / single-bucket collapse (app-side drill verified 2026-11-17) | stride | web.lib.rate-limit | high | mitigated |
+| TR-06 | CSP script-src unenforceable without a nonce architecture (flip contradicted by fetched HTML) | stride | web.next-config | high | unmitigated |
 | TR-07 | Sponsored-vault slots: no signature, no expiry, permanent burn (fixed 2026-11-17) | stride | web.api.sponsor | high | mitigated |
 | TR-39 | Stale LATEST package id → old guards on live paths (closed by PR #254's CI gate) | ecosystem | sdk.statements, web.lib.checkout | high | mitigated |
 | TR-08 | Legacy media keys in Postgres; server can decrypt | stride | web.lib.media | medium | unmitigated |
@@ -553,22 +553,22 @@ the entry so the future on-chain anchoring option has a home.
 | TR-36 | Same-origin statement namespace sharing | stride | sdk.statements | low | mitigated-but-untested |
 | TR-38 | Blob↔post binding is Postgres-only; no on-chain arbiter | ecosystem | web.lib.walrus | low | mitigated-but-untested |
 
-Status counts: **unmitigated 7 · mitigated-but-untested 23 · mitigated 4 · attested-unverified 2 · unknown-pending-audit 3** (39 total).
-**The winning state of production is behind main**: the live deployment serves commit
-`9a68895` (`x-projectx-commit` header, fetched 2026-11-17T21:40Z) — everything merged that
-day (#254 remediation, #255 sponsor hold, #256 alarm fix, #257 agent-surface spend and
-error cap) ships only on the next Vercel deploy. Deploying main is the single
-highest-value action on this register. The unmitigated set splits into: the one finding
-the fact-check *changed* (TR-01 — production serves a **one-key-server** Seal committee,
-contradicting the same-day attestation; worst case live), two operator-blocked items
-(TR-05 B-06, TR-06 B-07 — CSP Report-Only re-confirmed in fetched production headers),
-two accepted-by-design economics (TR-14, TR-30), one observability trade (TR-25), and one
-code migration awaiting a decision (TR-08). The two **attested-unverified** entries
-(TR-02 zkLogin — pipeline probe corroborated live, custody still attested-only; TR-03
-publisher) and the three **unknowns** (TR-09, TR-18, TR-22) are the remaining audit-day
-work. TR-10 stays mitigated on the strength of its alarm; the attestation that the daemon
-is running is contradicted by the journal's emptiness as of the observation — the one-URL
-reconciliation on the daemon VM remains the fix, tracked by the self-closing issue #253.
+Status counts: **unmitigated 6 · mitigated-but-untested 23 · mitigated 5 · attested-unverified 2 · unknown-pending-audit 3** (39 total).
+**Production was advanced and then verified**: the deployment gap (production serving
+`9a68895` while four PRs sat merged) was closed in PR #260 by re-enabling git deployment
+— the disabled flag was stale migration-era config, and the CLI upload path aborts. A
+post-deploy poll confirmed `f08a133` live, putting the sponsor slot hold, the seeking
+spend, and the `error_events` bound into production. The fact-check then ran drills
+against the live site: the DB-backed rate bucket fired 429s cross-instance exactly on
+budget (TR-05 → mitigated), while the CSP-enforcement plan (B-07) was **contradicted by
+fetched HTML** — production carries 3 unhashable per-request RSC flight scripts, so the
+header flip would have broken hydration site-wide; TR-06 stays unmitigated with the real
+fix path recorded (nonce architecture). The unmitigated remainder: TR-01 (production
+serves a one-key-server Seal committee — re-confirmed post-deploy, so it is the configured
+committee, not lag), TR-06, two accepted-by-design economics (TR-14, TR-30), one
+observability trade (TR-25), and one code migration awaiting a decision (TR-08). TR-02's
+and TR-03's attestations gained env corroboration (seed/prover/publisher vars verified
+present in the production env).
 
 ---
 
