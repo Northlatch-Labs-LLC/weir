@@ -345,6 +345,7 @@
       "mitigations_to_verify": [
         "Sweep packages/web + packages/ui for hardcoded 1e9/1e6/toFixed/Number(amount) near price/tip/tier fields; every amount input must route through parseAmount(input, metadata.decimals)",
         "Verify the tier-price and min-tip setters read decimals per coin type at render time, not from a cached SUI assumption",
+        "SWEEP EXECUTED 2026-11-17: all display paths convert bps->percent or use formatUnits(units, coin-decimals) - correct; the one money-math hit is lib/names-purchase.ts (USD->MIST quote via Math.ceil, rounding UP in the platform's favour by at most 1 mist) against the SuINS registrar's own on-chain authority - bounded dust, aborts visible on shortfall. The 1000x misprice class is absent from the swept surface",
         "Property-test: set a 6-dec price, read it back through every display path, assert identical string",
         "Behavior on metadata-less coin: confirm refusal propagates to the form (disabled) rather than defaulting"
       ],
