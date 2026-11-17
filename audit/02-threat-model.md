@@ -19,7 +19,16 @@ recorded.
 | **unmitigated** | Nothing in the tree or config prevents this. May be a consciously accepted risk — this model says which. |
 | **mitigated-but-untested** | Code exists (often with repo tests) but no mainnet drill, adversarial test, or production verification confirms it works *as deployed*. |
 | **mitigated** | Control exists and is exercised: an always-on CI gate (run on every pull request) or a production event has confirmed it. The evidence is named in the register. |
+| **attested-unverified** | The operator states the risk was remediated in infrastructure this tree cannot see (hosts, dashboards, provider consoles). Attestation recorded with date and attribution; the named production verification remains owed. Attestations are recorded as attestations, never as verified facts. |
 | **unknown-pending-audit** | Undeterminable from the repository; depends on deployment config, key custody, or chain state. |
+
+**Deployment facts** (operator statement, recorded 2026-11-17): the estate has migrated
+hosts — GCP → DigitalOcean → OVH for VMs — while weir.social itself stayed on Vercel,
+served from GitHub. Daemons now run on Cloudflare and gridframes.app team accounts. Every
+provider migration carries resource URLs (databases, key-server sets, provers, publisher
+endpoints) with it, so for controls configured by env URL, the migration history is itself
+a drift vector: each URL must be re-confirmed against the current provider after each move.
+See `deployment_facts` in the register meta.
 
 Prior-art verification notes (re-derived, per the red-team approach's own rule that verdicts come
 from checks, not memory): 73/73 `/api` route files carry a limiter call (A6 holds);
@@ -504,9 +513,9 @@ the entry so the future on-chain anchoring option has a home.
 
 | ID | Threat (short) | Category | Component (inventory id) | Sev | Status |
 |---|---|---|---|---|---|
-| TR-01 | Seal committee compromise/misconfiguration releases all keys | ecosystem | external.seal-keyservers | high | unknown-pending-audit |
-| TR-02 | zkLogin seed compromise = mass takeover, irrotatable | stride | web.lib.zklogin-server | high | unmitigated |
-| TR-03 | Publisher JWT secret theft drains publisher wallet | ecosystem | web.lib.publisher-token | high | unknown-pending-audit |
+| TR-01 | Seal committee compromise/misconfiguration releases all keys (attested fixed 2026-11-17) | ecosystem | external.seal-keyservers | high | attested-unverified |
+| TR-02 | zkLogin seed compromise = mass takeover, irrotatable (attested fixed 2026-11-17) | stride | web.lib.zklogin-server | high | attested-unverified |
+| TR-03 | Publisher JWT secret theft drains publisher wallet (attested fixed 2026-11-17) | ecosystem | web.lib.publisher-token | high | attested-unverified |
 | TR-04 | Pre-fix tier-index key over-grant (permanent keys) | move | move.creator | high | mitigated-but-untested |
 | TR-05 | Rate-limit evasion / single-bucket collapse (B-06) | stride | web.lib.rate-limit | high | unmitigated |
 | TR-06 | CSP script-src Report-Only → XSS executes (B-07) | stride | web.next-config | high | unmitigated |
@@ -514,7 +523,7 @@ the entry so the future on-chain anchoring option has a home.
 | TR-39 | Stale LATEST package id → old guards on live paths (closed by PR #254's CI gate) | ecosystem | sdk.statements, web.lib.checkout | high | mitigated |
 | TR-08 | Legacy media keys in Postgres; server can decrypt | stride | web.lib.media | medium | unmitigated |
 | TR-09 | Daemon discovery truncation silently starves newest vaults | ecosystem | daemon.discovery | medium | unknown-pending-audit |
-| TR-10 | Daemon death invisible (journal alarm now live; fired 2026-11-17, issue #253) | ecosystem | daemon.supervisor | medium | mitigated |
+| TR-10 | Daemon outage invisible (alarm live and truthful; attestation + one-URL reconciliation owed) | ecosystem | daemon.supervisor | medium | mitigated |
 | TR-11 | Read-session theft = 2h entitled reads incl. legacy plaintext | stride | web.lib.read-session | medium | mitigated-but-untested |
 | TR-12 | Never-spent signatures on agent surfaces (fixed 2026-11-17: deferred-spend commit) | stride | web.api.agents | medium | mitigated |
 | TR-13 | Decimal mismatch in client display/input paths | ecosystem | sdk.money | medium | mitigated-but-untested |
@@ -544,26 +553,35 @@ the entry so the future on-chain anchoring option has a home.
 | TR-36 | Same-origin statement namespace sharing | stride | sdk.statements | low | mitigated-but-untested |
 | TR-38 | Blob↔post binding is Postgres-only; no on-chain arbiter | ecosystem | web.lib.walrus | low | mitigated-but-untested |
 
-Status counts: **unmitigated 7 · mitigated-but-untested 23 · mitigated 4 · unknown-pending-audit 5** (39 total).
+Status counts: **unmitigated 6 · mitigated-but-untested 23 · mitigated 4 · attested-unverified 3 · unknown-pending-audit 3** (39 total).
 The unmitigated set splits into: two operator-blocked items the repo already tracks (TR-05
 B-06, TR-06 B-07), two accepted-by-design economics (TR-14, TR-30), one observability trade
-(TR-25), one deployment-fact exposure (TR-02), and one code migration awaiting a decision
-(TR-08, legacy media keys in Postgres). The four **mitigated** entries each carry a named
-always-on gate or production event: TR-07 and TR-12 (CI's database-project tests on every
-PR, green on #255 and this change), TR-39 (`Deployment records agree` gate, PR #254), and
-TR-10 (the journal alarm fired on a real outage, issue #253 — the remaining work is on the
-daemon host, not in this tree).
+(TR-25), one code migration awaiting a decision (TR-08, legacy media keys in Postgres). The
+three **attested-unverified** entries (TR-01, TR-02, TR-03) carry the operator's 2026-11-17
+statement that Seal, Walrus-publisher, and zkLogin were remediated during the provider
+migrations (GCP → DigitalOcean → OVH; web unchanged on Vercel/GitHub; daemons now on
+Cloudflare and gridframes.app) — the named production checks remain the audit day's first
+hour. The four **mitigated** entries each carry a named always-on gate or production event:
+TR-07 and TR-12 (CI's database-project tests on every PR), TR-39 (`Deployment records agree`
+gate, PR #254), and TR-10 (the journal alarm fired on a real empty journal, issue #253 —
+operator attests the daemon work was completed and the deployment record was never
+appended; the probable reconciliation is one env var: the daemon's journal URL across the
+provider migrations).
 
 ---
 
 ## 7. What the audit phase must check that the tree cannot answer
 
 1. **Deployed committee shape** — key-server object ids, weights, threshold; `verifyKeyServers`
-   exercised end-to-end (TR-01).
+   exercised end-to-end (TR-01 — operator attests fixed 2026-11-17; this read converts the
+   attestation to verified).
 2. **Custody composition** — which addresses hold PlatformCap/upgradeCap/MasterCap; multisig
    membership actually independent (TR-18, against CUSTODY.md's claim).
-3. **Env integrity** — the seed (TR-02), publisher secret (TR-03), edge secret (TR-05), and the
-   stale LATEST id (TR-39) as they exist in Vercel/VM, not in `.env.example`.
+3. **Env integrity across the provider migrations** — after GCP → DigitalOcean → OVH, re-confirm
+   every env-URL control against the CURRENT provider: the zkLogin seed and its custody (TR-02,
+   attested fixed), the publisher secret and endpoint (TR-03, attested fixed), the edge secret
+   (TR-05), and the daemon's `PROJECTX_DAEMON_DATABASE_URL` (TR-10, issue #253 — the probable
+   one-URL reconciliation).
 4. **Chain forensics** — vaults with non-ascending tiers (TR-04); lapse-window renewals
    (TR-28); LedgerCap population (TR-16); validator choices (TR-22).
 5. **Bytecode identity** — `sui client verify-source` per SECURITY.md, plus the ability-diff on

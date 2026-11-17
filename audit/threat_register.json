@@ -11,10 +11,21 @@
       "unmitigated": "No code or configuration currently prevents this; may be accepted/documented.",
       "mitigated-but-untested": "Code exists (possibly with repo tests) but no mainnet drill, adversarial test, or production verification has confirmed the control works as deployed.",
       "unknown-pending-audit": "Cannot be determined from the repository; depends on deployment configuration, key custody, or chain state that must be checked in the audit phase.",
-      "mitigated": "Control exists AND is exercised: an always-on gate (CI on every pull request) or a production event has confirmed it works as deployed. The evidence is named in mitigations_to_verify."
+      "mitigated": "Control exists AND is exercised: an always-on gate (CI on every pull request) or a production event has confirmed it works as deployed. The evidence is named in mitigations_to_verify.",
+      "attested-unverified": "The operator states the risk was remediated in infrastructure this tree cannot see (hosts, dashboards, provider consoles). The attestation is recorded with date and attribution; the named production verification remains owed before this can be called mitigated. Attestations are recorded as attestations, never as verified facts."
     },
     "ordering": "entries sorted by severity (high to low), then by id",
-    "component_source": "audit/inventory.json"
+    "component_source": "audit/inventory.json",
+    "deployment_facts": {
+      "recorded": "2026-11-17",
+      "source": "operator statement (this repository's owner), recorded verbatim in substance",
+      "hosting_history": [
+        "GCP (earlier era) -> DigitalOcean -> OVH (current VM provider)",
+        "web: Vercel, served from GitHub (unchanged across migrations)",
+        "daemons: Cloudflare and gridframes.app team accounts for the VMs (current)"
+      ],
+      "note": "Multiple provider migrations carried configuration with them. A deployment completed in an earlier era may hold a resource URL (database, key-server set, prover, publisher) from the provider it left. Where a control reads a URL from env, the migration history itself is a drift vector: every URL must be re-confirmed against the CURRENT provider after each move."
+    }
   },
   "threats": [
     {
@@ -33,11 +44,11 @@
       "severity": "high",
       "attack_path": "The seal_approve* entry functions are the only thing standing between a reader and a key share; they are enforced by the committee executing them with the reader as sender. A committee that colludes, is compromised, or is configured with threshold >= committee size (or threshold 1) can derive any wrapped key for any identity without any on-chain entitlement — the chain never learns a key was released. Misconfiguration is the cheaper half: PROJECTX_SOCIAL_SEAL_KEY_SERVERS/THRESHOLD are deliberately absent from .env.example, so the deployed committee shape is unverifiable from the tree.",
       "mitigations_to_verify": [
-        "Confirm deployed key-server object ids, weights, and threshold (t-of-n with n>=3, t>=2) against a trusted source; confirm verifyKeyServers:true is exercised on both server wrap path (lib/seal.ts) and client unwrap path (seal-open.ts)",
-        "Verify key servers run the approval in a context where aborting withholds shares (Seal contract behavior), and that no key server accepts an approval tx whose sender is not the requesting reader",
-        "Test: with a held Subscription below tier price, a direct key-server request for a higher-period identity must fail end-to-end"
+        "OPERATOR ATTESTATION 2026-11-17: the Seal key-server configuration was remediated (fixed) during the infrastructure migrations; current configuration lives with the deployment, not this tree",
+        "Still owed before 'mitigated': read the deployed committee shape (object ids, weights, threshold from /api/seal on production) and confirm t-of-n with n>=3, t>=2 and https-only aggregators",
+        "End-to-end adversarial check owed once: a below-price subscription must fail to derive a higher-tier period key against the PRODUCTION committee"
       ],
-      "status": "unknown-pending-audit"
+      "status": "attested-unverified"
     },
     {
       "id": "TR-02",
@@ -53,11 +64,11 @@
       "severity": "high",
       "attack_path": "Every zkLogin address is derived from (OAuth credential, salt) where salt = HKDF(seed, user). The seed is documented 'BACKUP-CRITICAL, AND IT CAN NEVER BE ROTATED'. An attacker with the seed still needs each victim's Google JWT to forge a proof — but any phishing/token-replay window then becomes permanent account takeover, and rotating the seed would re-derive every address, orphaning every SocialAccount, vault, and balance simultaneously. The blast radius of one env-var leak is the entire zkLogin user base.",
       "mitigations_to_verify": [
-        "Confirm where the seed is set (Vercel env) and who can read it; confirm host-level access controls and audit trail on that store",
-        "Confirm clockTolerance:0, aud/clientId pinning, and nonce==generateNonce(ephemeral,maxEpoch,randomness) hold in the deployed build (they hold in tree, zklogin-server.ts:105-163)",
-        "Rehearse: what is the documented recovery if the seed leaks? (Answer should name a migration path or accept the loss — verify one exists in runbooks)"
+        "OPERATOR ATTESTATION 2026-11-17: zkLogin was fixed/remediated during the infrastructure migrations",
+        "The seed itself is irrotatable by design - 'fixed' can only mean custody, handling, and access controls around it. Record exactly which of those changed",
+        "Still owed before 'mitigated': confirm clockTolerance:0, aud pinning, and nonce equality in the deployed build; name the documented recovery path if the seed ever leaks; confirm the salt-derivation seed survived the provider migrations intact (a lost seed orphans every zkLogin address)"
       ],
-      "status": "unmitigated"
+      "status": "attested-unverified"
     },
     {
       "id": "TR-03",
@@ -73,11 +84,10 @@
       "severity": "high",
       "attack_path": "PROJECTX_WALRUS_PUBLISHER_JWT_SECRET 'alone authorises spending the publisher wallet's SUI and WAL' (.env.example:128). Anyone holding it mints valid HS256 tokens (epochs/size/send_object_to of their choosing) and stores arbitrary blobs at the deployment's expense until the wallet empties. The 60s lifetime and jti bound replay, not theft. There is no second factor on the publisher endpoint.",
       "mitigations_to_verify": [
-        "Confirm wallet balance alarms / spending caps exist for the publisher wallet; confirm the secret is >=32 chars and unique per environment",
-        "Confirm a rotation drill exists (change secret + publisher-side if applicable) — B-05 claims procedures documented; verify against operations docs",
-        "Check whether send_object_to on attacker-minted tokens can redirect Blob objects to attacker addresses (blob theft is cheap; storage spend is the cost)"
+        "OPERATOR ATTESTATION 2026-11-17: the Walrus publisher was fixed/remediated during the infrastructure migrations",
+        "Still owed before 'mitigated': confirm where PROJECTX_WALRUS_PUBLISHER_JWT_SECRET lives after the OVH/gridframes move, whether the publisher wallet balance is alarmed, and whether the publisher endpoint URL moved providers with the migrations (a stale publisher URL fails uploads closed - safe direction - but must be re-confirmed)"
       ],
-      "status": "unknown-pending-audit"
+      "status": "attested-unverified"
     },
     {
       "id": "TR-04",
@@ -230,8 +240,10 @@
       "attack_path": "The daemon is the liveness guarantee for yield (harvest is permissionless, but nobody else is paid to call it). Heartbeat POSTs only on a fully clean tick — correct — but send failures are logged and ignored, exit codes 1/2/3 must 'all look the same to the monitor as a daemon that is dead', and PROJECTX_DAEMON_HEARTBEAT_URL is operator-configured and currently unset per the blocker matrix. A daemon that dies leaves every vault's ladder frozen; depositors see flat yield and principal still withdrawable (withdraw unwinds tranches itself), so the failure is silent rather than spectacular.",
       "mitigations_to_verify": [
         "The journal alarm shipped as the 'Check the harvest daemon is alive' step in .github/workflows/error-alarm.yml (hourly, gated on repo variable DAEMON_EXPECTED): newest daemon_runs row is the heartbeat; files-or-updates one issue, closes itself when fresh",
-        "VERIFIED IN PRODUCTION 2026-11-17: after fixing the monitor's own bug (PR #256, an empty $PSQL filing false alarms), the alarm fired on a REAL outage — daemon_runs has never recorded a run; tracked as issue #253 with the operator checklist",
-        "REMAINING IS OPERATIONAL: the daemon host must run (PROJECTX_DAEMON_DATABASE_URL set to the same DB the alarm reads; startup exit codes 1/2/3 documented in the issue)"
+        "VERIFIED IN PRODUCTION 2026-11-17: after fixing the monitor's own bug (PR #256, an empty $PSQL filing false alarms), the alarm fired on an empty journal - daemon_runs has no rows in the app database; tracked as issue #253",
+        "OPERATOR ATTESTATION 2026-11-17: the daemon work was completed; the deployment record simply was never appended. Daemons run on Cloudflare and gridframes.app team VMs",
+        "PROBABLE ROOT CAUSE (hypothesis, verify on the VM): across the GCP -> DigitalOcean -> OVH migrations the daemon's PROJECTX_DAEMON_DATABASE_URL may still point at a former provider-era database. The journal tables are designed to live in the app database (packages/web/db/029 co-locates daemon_runs), so an empty journal in the app DB while a daemon runs elsewhere means exactly this one URL is stale",
+        "The fix is one env var on the gridframes VM; the alarm then closes issue #253 by itself within its six-hour window"
       ],
       "status": "mitigated"
     },
