@@ -7,6 +7,18 @@ of Weir; everything under it is history, in reverse. Stop reading when you know 
 anything a desk told you, **this wins** — and the newer entry wins over the older one. An older
 entry that contradicts a newer one is not a conflict to resolve; it was already superseded.
 
+## 2026-11-16 (evening, PST) · The Sui stack catches up: sui 2.39.1, seal 1.5.4, dapp-kit and suins current — the 2.30.0 refusal superseded
+
+**The bump.** Thirteen pin lines across the seven workspace manifests, all still exact, no carets: `@mysten/sui` 2.30.0 → 2.39.1 in agent, daemon, mcp, purse, sdk, signer and web; `@mysten/seal` 1.4.10 → 1.5.4 in agent and web (dependencies) and in signer (devDependencies, where it stays a devDependency per that manifest's own note, and version-identical with the rest of the workspace); and in web, `@mysten/dapp-kit-core` 1.6.43, `@mysten/dapp-kit-react` 2.1.45, `@mysten/suins` 2.0.20.
+
+**Why the 2026-09-12 refusal ("2.31.0 is a minor, not a patch") is superseded.** Holding sui at 2.30.0 had become its own defect: seal, dapp-kit-core, suins, slush-wallet and wallet-standard all declare `@mysten/sui ^2.31.0` as a peer, and the lockfile recorded those wanted ranges while binding them to a resolution — 2.30.0 — that did not satisfy them. That is exactly the lockfile-says-one-thing, node_modules-says-another mismatch class the mcp manifest's dependency note records. Nine minors of upstream drift (2.30 → 2.39) came in with the repair; no breaking rename surfaced against this repository's import surface when every consuming package was checked.
+
+**Transitive movement, all inside @mysten's own closures and listed here:** `@mysten/bcs` 2.1.1 → 2.1.4; `@mysten/utils` 0.4.1 → 0.4.2 (which drops its `@scure/base` dependency); `@mysten/slush-wallet` 1.2.2 → 1.3.8; `@mysten/wallet-standard` 0.21.24 → 0.21.38; `@mysten/window-wallet-core` 0.3.0 → 0.4.1. One package is new: `@noble/post-quantum` 0.7.1, a dependency of sui 2.39.1, built on the `@noble/ciphers`, `@noble/curves` and `@noble/hashes` 2.4.0 versions the workspace already pins. Nothing else in the lockfile moved.
+
+**Proof.** `pnpm install` clean (+11/−10 packages, no version refused). The lockfile holds exactly one copy each of sui 2.39.1, seal 1.5.4, dapp-kit-core 1.6.43, dapp-kit-react 2.1.45 and suins 2.0.20, with zero 2.30.0/1.4.10-era remnants, and every peer entry that read `^2.31.0` now reads `^2.39.1` against the version actually installed. `tsc --noEmit` clean in sdk, signer, agent, mcp — and, as extra checks, purse and daemon. The release gates re-ran green on the branch: the recursive typecheck, every package suite, and the Move digest guard unchanged (Move bytecode is unaffected by TypeScript dependency pins).
+
+---
+
 ## 2026-10-01 (PDT) · walrus.weir.social and seal.weir.social are healthy behind GridFrames; their bare 404s and 400s are contract, not incidents
 
 **The check.** Both storage subdomains were read live through the Cloudflare edge today, after the mcp
