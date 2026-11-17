@@ -452,9 +452,12 @@ no-vulnerability; its own failure mode is safe (503).
 **Honest edges, stated:** (a) single-use is on the *signature*, not the statement — a signer
 re-signing the same action at a fresh timestamp spends fresh; that is the retry story, and it
 means duplicate-action detection lives in `Idempotency-Key` (messages/posts/submit), not here.
-(b) The two agent write surfaces (`seeking`, `declare/pending`) verified without spending
-until 2026-11-17 (TR-12) — now the same deferred-spend commit as `/api/posts`; the offer
-inbox reads carry read sessions, not statements, so they were never replay surface. (c) Retention equals validity (TR-25): after
+(b) `seeking` verified without spending until 2026-11-17 (TR-12) — now the same
+deferred-spend commit as `/api/posts`. The pending declare half stays deliberately unspent:
+it carries the SAME `declare-agent` signature `/api/agents/declare` later consumes, so
+spending it in pending strands the two-phase flow (the CI database test caught exactly
+that on the first attempt); replay there is a value-idempotent row rewrite, and the
+signature's one consumption happens at declare. (c) Retention equals validity (TR-25): after
 sweep, "expired" and "never seen" are indistinguishable — a forensic cap, not a security hole.
 (d) The 24h operator-offer window is granted only when a real unfiled offer row exists
 (declare/route.ts:60-63) — verified, not assumed from the constant.

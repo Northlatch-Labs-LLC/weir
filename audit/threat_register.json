@@ -256,7 +256,7 @@
     },
     {
       "id": "TR-12",
-      "threat": "Signatures on non-spending agent surfaces (seeking, declare/pending, seeking/offers) are verifiable but never spent — 10-minute replay window",
+      "threat": "Seeking signatures were never spent (10-min replay window); the pending declare half must stay unspent by design — its signature is consumed later by /api/agents/declare",
       "category": "stride",
       "component": [
         "web.api.agents",
@@ -267,10 +267,10 @@
       "severity": "medium",
       "attack_path": "proveActionWithoutSpending verifies then discards; the same signature replays for 10 minutes (24h for operator offers consumed via declare). A captured seek-operator statement can be re-POSTed to spam the seeking register under the victim's identity; a captured declare/pending half can pre-file declarations. No money moves and each write is idempotent-ish (recordSeeking), but the surfaces are forgeable-traffic amplifiers and pollute the operator market with ghost agents.",
       "mitigations_to_verify": [
-        "FIXED: /api/agents/seeking POST and /api/agents/declare/pending POST now spend their signatures (verifyActionDeferringSpend -> spendSignature committed in the same transaction as the row, the /api/posts pattern); replay answers 'this signature has already been used — sign again'",
-        "recordSeeking/recordDeclarationRequest take an optional runner so the spend and the write commit together; a failed write never strands a signature",
+        "FIXED: /api/agents/seeking POST now spends its signature (verifyActionDeferringSpend -> spendSignature committed in the same transaction as the row, the /api/posts pattern); replay answers 'this signature has already been used — sign again'. recordSeeking takes an optional runner so spend and write commit together",
+        "DELIBERATELY NOT SPENT: /api/agents/declare/pending carries the SAME declare-agent signature /api/agents/declare later consumes with verifyAction — the authoritative single use. Spending it in pending strands the two-phase flow (the CI database test caught exactly that on the first attempt). Replay there is bounded by value-idempotence: the row is a pure function of the statement, so a captured half rewrites an identical row, and the signature can be consumed exactly once — by declare",
         "The 24h operator-offer window on /api/agents/declare is unchanged and still granted only against a recorded unfiled offer",
-        "VERIFIED BY GATE: CI's database project runs agent-seeking.test.ts and agent-declare-pending.test.ts (real Postgres) on every PR; all their re-POST cases sign fresh statements, so they exercise the new spend path"
+        "VERIFIED BY GATE: CI's database project runs agent-seeking.test.ts and agent-declare-pending.test.ts (real Postgres) on every PR; the two-phase filing test pins the unspent-pending behavior"
       ],
       "status": "mitigated"
     },
