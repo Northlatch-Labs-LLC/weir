@@ -8,6 +8,7 @@ import { findProfile, setProfileImage } from '@/lib/content';
 import { detectType } from '@/lib/media';
 import { grantUpload } from '@/lib/publisher-token';
 import { storeBlob } from '@/lib/walrus';
+import { recordFailure } from '@/lib/error-log';
 import { tooLarge } from '@/lib/body-limit';
 import { AVATAR_MAX_BYTES, AVATAR_TYPES, avatarUrl } from '@/lib/avatar';
 
@@ -99,6 +100,16 @@ export async function POST(request: Request) {
   if (!stored.ok) {
     const status =
       stored.failure.kind === 'malformed' ? 400 : stored.failure.kind === 'unconfigured' ? 503 : 502;
+    // The earlier 503s in this route are configuration answers a deployment without the chain or
+    // the upload secrets gives on purpose; this one is reached only after a grant was signed, so
+    // an unconfigured store here means the deployment half-enabled uploads — a fault to see.
+    if (status === 503) {
+      await recordFailure({
+        source: 'api route',
+        detail: `${stored.failure.kind}: ${stored.failure.detail}`,
+        route: '/api/account/image',
+      });
+    }
     return NextResponse.json({ error: stored.failure.detail, kind: stored.failure.kind }, { status });
   }
 

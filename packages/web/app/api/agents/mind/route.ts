@@ -54,7 +54,14 @@ export async function POST(request: Request) {
 
   if (proof.value !== null) {
     const spent = await isSignatureSpent(proof.value);
-    if (!spent.ok) return NextResponse.json({ error: spent.failure.detail }, { status: 503 });
+    if (!spent.ok) {
+      await recordFailure({
+        source: 'api route',
+        detail: `${spent.failure.kind}: ${spent.failure.detail}`,
+        route: '/api/agents/mind',
+      });
+      return NextResponse.json({ error: spent.failure.detail }, { status: 503 });
+    }
     if (spent.value) return NextResponse.json({ error: 'this signature has already been used — sign again' }, { status: 401 });
   }
 
@@ -71,6 +78,13 @@ export async function POST(request: Request) {
 
   const stored = await storeMind({ owner: address, ciphertext });
   if (!stored.ok) {
+    // Both statuses are recorded: an unconfigured store (501) on this route means the deployment
+    // half-enabled minds, and that is a fault to see, not a state to sit in quietly.
+    await recordFailure({
+      source: 'api route',
+      detail: `${stored.failure.kind}: ${stored.failure.detail}`,
+      route: '/api/agents/mind',
+    });
     return NextResponse.json(
       { error: `the mind was not stored: ${stored.failure.detail}` },
       { status: stored.failure.kind === 'unconfigured' ? 501 : 503 },

@@ -4,6 +4,7 @@ import { quotaLimit, simulateLimit } from '@/lib/rate-limit';
 import { isPurchase, moveTargets } from '@/lib/tx-shape';
 import { fold, type FailureKind } from '@projectx-social/sdk';
 import { proveTransaction } from '@/lib/identity';
+import { recordFailure } from '@/lib/error-log';
 import { submitSigned } from '@/lib/checkout';
 import { idempotently } from '@/lib/idempotent-route';
 import { Transaction } from '@mysten/sui/transactions';
@@ -51,6 +52,15 @@ async function submitOnce(request: Request) {
 
   const proved = await proveTransaction({ bytes: body.bytes, signature: body.signature });
   if (!proved.ok) {
+    // Only the kinds that map to 503 are ours to fix; a refused signature (401) or malformed
+    // bytes (400) is the caller's, and recording those would be noise, not an alarm.
+    if (statusFor(proved.failure.kind) === 503) {
+      await recordFailure({
+        source: 'api route',
+        detail: `${proved.failure.kind}: ${proved.failure.detail}`,
+        route: '/api/checkout/submit',
+      });
+    }
     return NextResponse.json(
       { error: proved.failure.detail, kind: proved.failure.kind },
       { status: statusFor(proved.failure.kind) },

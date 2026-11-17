@@ -9,6 +9,7 @@ import { MAX_BYTES, storeAsset, type AssetGate } from '@/lib/media';
 import { tierForAccess } from '@/lib/storage-retention';
 import { tooLarge } from '@/lib/body-limit';
 import { siteConfig } from '@/lib/chain';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -65,7 +66,14 @@ export async function POST(request: Request) {
   if (profile === null) return NextResponse.json({ error: 'no such creator' }, { status: 404 });
 
   const config = siteConfig();
-  if (!config.ok) return NextResponse.json({ error: config.failure.detail }, { status: 503 });
+  if (!config.ok) {
+    await recordFailure({
+      source: 'api route',
+      detail: `${config.failure.kind}: ${config.failure.detail}`,
+      route: '/api/studio/upload',
+    });
+    return NextResponse.json({ error: config.failure.detail }, { status: 503 });
+  }
 
   if (profile.vaultId === null) {
     return NextResponse.json(
@@ -76,6 +84,11 @@ export async function POST(request: Request) {
 
   const vault = await readCreatorVault(createClient(config.value), profile.vaultId);
   if (!vault.ok) {
+    await recordFailure({
+      source: 'api route',
+      detail: `${vault.failure.kind}: ${vault.failure.detail}`,
+      route: '/api/studio/upload',
+    });
     return NextResponse.json(
       { error: `could not read the vault: ${vault.failure.detail}` },
       { status: 503 },
