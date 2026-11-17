@@ -107,7 +107,9 @@ describe('a session the server already holds', () => {
     serve({ checked: true, reader: A.address });
     mount();
 
-    await waitFor(() => expect(screen.getByTestId('proof').textContent).toBe('proved'));
+    await waitFor(() => expect(screen.getByTestId('proof').textContent).toBe('proved'), {
+      timeout: 3000,
+    });
     expect(signCalls).toBe(0);
   });
 

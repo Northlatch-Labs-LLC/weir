@@ -1,11 +1,11 @@
 {
   "name": "@projectx-social/mcp",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
   "license": "Apache-2.0",
   "comment": "exports points at TypeScript source rather than dist, matching @projectx-social/agent. There is no tsconfig.build.json here yet, so naming a dist entry point would name a directory nothing produces. In-repo consumers run tsx. Add a build before this is published outside the workspace. Note also that there is deliberately no bin entry: a bin pointing at a .ts file is not executable, and a bin pointing at a dist that does not exist is worse, so the launch surface is the two scripts below until there is a build.",
-  "dependencyComment": "@modelcontextprotocol/sdk, zod and @mysten/sui are pinned EXACT with no caret. A caret on the dependency that defines your wire protocol is how this estate lost a night of test claims to node_modules holding @mysten/seal 1.4.4 while the lockfile said 1.4.5. See the README section 'Pinned SDK' for which version and why. @projectx-social/signer and @projectx-social/policy are the enforcement layer for every spending ceiling -- the signer holds the key, the policy holds the principal's standing authority -- and this package registers NO tool that spends or writes unless both are bound (capabilitiesOf, src/transport.ts). They are imported dynamically rather than statically, and that stays true after they land: a keyless hosted deployment has no business loading a signing library into its address space at all. Absence of either is a supported state that produces a smaller tool list, never a crash. NOTE: pnpm install has NOT been run since these two lines were added, so packages/mcp/node_modules does not yet link them and the dynamic import will report them absent until it is.",
-  "peerDependencyComment": "@projectx-social/signer and @projectx-social/policy are the enforcement layer for every spending ceiling: the signer holds the key and the policy holds the principal's standing authority, and this package registers NO tool that spends or writes unless both are bound (see capabilitiesOf in src/transport.ts). They are declared as OPTIONAL PEERS rather than as dependencies for one reason, and it is a concurrency reason rather than a design one: both packages are being written right now and do not yet exist in this workspace, and a `workspace:*` entry in `dependencies` pointing at a package that does not exist fails `pnpm install` for the whole repository, which would stop every other agent working in it. Move them into `dependencies` the moment those packages land — that is the correct final home, and this note is the record of why they are not there yet.",
+  "dependencyComment": "@modelcontextprotocol/sdk, zod and @mysten/sui are pinned EXACT with no caret. A caret on the dependency that defines your wire protocol is how this estate lost a night of test claims to node_modules holding @mysten/seal 1.4.4 while the lockfile said 1.4.5. See the README section 'Pinned SDK' for which version and why. @projectx-social/signer and @projectx-social/policy are the enforcement layer for every spending ceiling -- the signer holds the key, the policy holds the principal's standing authority -- and this package registers NO tool that spends or writes unless both are bound (capabilitiesOf, src/transport.ts). They are imported dynamically rather than statically, and that stays true after they land: a keyless hosted deployment has no business loading a signing library into its address space at all. Absence of either is a supported state that produces a smaller tool list, never a crash. NOTE (updated 2026-11-16): the older warning here — that pnpm install had not yet run and the dynamic imports would report both packages absent — is history now; signer and policy have been linked in the lockfile since 2026-11-11, and every environment that has installed since binds both. The lesson that warning recorded stands: a dependency line in this file is not a dependency in node_modules until `pnpm install` runs, and between those two states a build behaves as if the line were never written — so run the install and watch the link appear before trusting the behavior.",
+  "peerDependencyComment": "This key is a relic kept for its history, not a description of the present. It dates from when signer and policy were OPTIONAL PEERS, declared that way only because they did not yet exist in the workspace and a `workspace:*` dependency on an absent package failed `pnpm install` for the whole repository. They landed long ago: both are regular dependencies of this package today, and there is no peerDependencies field here. The enforcement fact the note recorded still holds and is the reason to keep it readable: this package registers NO tool that spends or writes unless both signer and policy are bound (see capabilitiesOf in src/transport.ts).",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -26,12 +26,12 @@
     "prepare": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.0",
-    "@mysten/sui": "2.30.0",
-    "@projectx-social/agent": "1.0.2",
-    "@projectx-social/policy": "1.0.2",
-    "@projectx-social/signer": "1.0.2",
-    "zod": "4.6.6"
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@mysten/sui": "2.39.1",
+    "@projectx-social/agent": "1.0.3",
+    "@projectx-social/policy": "1.0.3",
+    "@projectx-social/signer": "1.0.3",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "typescript": "7.0.2"

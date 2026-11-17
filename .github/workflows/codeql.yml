@@ -1,0 +1,49 @@
+# Static security analysis of the application code, on GitHub's own infrastructure.
+#
+# The repository is public, so code scanning alerts are free and need no Advanced
+# Security add-on. This watches the TypeScript half — the web app, the packages the
+# SDK exposes, the daemon and signer — with the queries that look for the failure
+# shapes a unit test cannot name: tainted input reaching a query, a secret logged,
+# an incomplete sanitize. The Move contracts are out of scope here; CodeQL has no
+# Move extractor, and their gate is the digest guard in ci.yml.
+#
+# Analysis is source-only (`build-mode: none`): the extractor reads TypeScript the
+# way it is written, so no database, no environment and no production build is
+# needed on this runner — the web job in ci.yml already proves the build.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Monday, off the hour like every scheduled job here (the runners queue on the
+    # hour). Weekly, because the daily value of a re-scan of a slow-moving tree is
+    # small and the runner minutes are not.
+    - cron: '19 6 * * 1'
+
+permissions:
+  security-events: write   # publish alerts to the Security tab
+  contents: read           # read the repository
+
+jobs:
+  analyze:
+    name: Analyze JavaScript/TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          category: "/language:javascript-typescript"

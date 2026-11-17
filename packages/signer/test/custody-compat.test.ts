@@ -99,7 +99,7 @@ describe('TO CONFIRM 1 — does verifyPersonalMessageSignature accept a MultiSig
   });
 });
 
-describe("TO CONFIRM 2 — does @mysten/seal 1.4.6's SessionKey accept a multisig or secp256r1 signer?", () => {
+describe("TO CONFIRM 2 — does @mysten/seal 1.5.4's SessionKey accept a multisig or secp256r1 signer?", () => {
   const PACKAGE_ID = `0x${'0'.repeat(63)}1`;
   const stubClient = {
     core: { getObject: async () => ({ object: { version: '1' } }) },
@@ -159,16 +159,37 @@ describe("TO CONFIRM 2 — does @mysten/seal 1.4.6's SessionKey accept a multisi
     expect(verified.toSuiAddress()).toBe(address);
   });
 
-  it('refuses a signer whose address is not the session address', async () => {
-    const keypair = Ed25519Keypair.generate();
-    await expect(
-      SessionKey.create({
-        address: Ed25519Keypair.generate().toSuiAddress(),
-        packageId: PACKAGE_ID,
-        ttlMin: 10,
-        signer: keypair,
-        suiClient: stubClient,
-      }),
-    ).rejects.toThrow(/does not match/i);
+  it('records the seal 1.5 contract: a mismatched signer is accepted (address alias), so the identity binding is the consumer’s to enforce', async () => {
+    const signer = Ed25519Keypair.generate();
+    const claimedAddress = Ed25519Keypair.generate().toSuiAddress();
+    expect(claimedAddress).not.toBe(signer.getPublicKey().toSuiAddress());
+
+    // Pinned against @mysten/seal 1.4.6, this probe asserted the opposite: SessionKey.create refused
+    // a signer whose address differed from the session address ("does not match"). seal 1.5.0
+    // (changelog 0cd291e) replaced that rejection on purpose — address-alias support — so create()
+    // no longer compares the two. The answer changed upstream, so the question is re-pinned here.
+    const sessionKey = await SessionKey.create({
+      address: claimedAddress,
+      packageId: PACKAGE_ID,
+      ttlMin: 10,
+      signer,
+      suiClient: stubClient,
+    });
+    const certificate = await sessionKey.getCertificate();
+
+    // The certificate names the CLAIMED address as its user while the signature belongs to the
+    // signer's key — nothing upstream binds the two any more. Both real consumers in this estate
+    // bind identity by construction and need no library guard: the web session helper keys every
+    // session off input.signer.address, and the agent passes its own address. That is where the
+    // floor lives now; a consumer that passes a caller-chosen address mints a certificate for it.
+    expect(certificate.user).toBe(claimedAddress);
+    const signerAddress = signer.getPublicKey().toSuiAddress();
+    const verified = await verifyPersonalMessageSignature(
+      sessionKey.getPersonalMessage(),
+      certificate.signature,
+      { address: signerAddress },
+    );
+    expect(verified.toSuiAddress()).toBe(signerAddress);
   });
 });
+

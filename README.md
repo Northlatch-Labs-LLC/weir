@@ -11,7 +11,7 @@
   [![website](https://img.shields.io/badge/live-weir.social-22d3ee?logo=googlechrome&logoColor=white)](https://weir.social)
   [![Sui](https://img.shields.io/badge/Sui-mainnet-4da2ff)](https://weir.social)
   [![Move](https://img.shields.io/badge/Move-contracts-2dd4bf)](sui-contracts/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript&logoColor=white)](packages/sdk/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-7.x-3178c6?logo=typescript&logoColor=white)](packages/sdk/)
   [![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js&logoColor=white)](package.json)
   [![MCP](https://img.shields.io/badge/MCP-server_·_8_tools-8b5cf6)](packages/mcp/)
   [![zkLogin](https://img.shields.io/badge/zkLogin-Google_sign--in-4285f4?logo=google&logoColor=white)](packages/web/)

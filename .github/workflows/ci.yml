@@ -58,8 +58,8 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       # CI has no .env, so this run is PATTERNS ONLY and the scanner now says so rather than
@@ -100,14 +100,14 @@ jobs:
       PROJECTX_TEST_DATABASE_URL: postgres://postgres:ci@localhost:5432/projectx_social_test
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # No `version` here on purpose. The root package.json pins pnpm with an integrity hash, and
       # the action reads it from there — naming it twice makes the action refuse outright, and the
       # copy that is not hash-pinned is the weaker of the two anyway.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: pnpm
@@ -182,9 +182,10 @@ jobs:
       # CI was already safe here by accident, because a build step happens to run earlier in this
       # job. A developer's checkout was not, and `pnpm test` is what a developer types.
       #
-      # NOT covered, and this step must not be read as claiming otherwise: `packages/room` defines
-      # no `test` script at all, so `-r` skips it silently. Six packages are newly gated here
-      # (sdk, agent, daemon, policy, signer, mcp); room has no tests for any gate to run.
+      # NOT covered, and this step must not be read as claiming otherwise: nothing — every
+      # workspace package now defines a `test` script, and `-r` gates each one. Six packages were
+      # newly gated here (sdk, agent, daemon, policy, signer, mcp); `packages/room` had no script
+      # then and defines one today (`tsx test/the-live-boundary.ts`), so it runs under `-r` too.
 
       # heron-purse.service starts /opt/node22/bin/node by that exact path -- Debian 13 on the
       # droplet ships node 20, and @mysten/sui requires 22 -- and
@@ -266,15 +267,15 @@ jobs:
           fi
 
       - name: Checkout PR head branch
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           token: ${{ secrets.DEPENDABOT_LOCKFILE_TOKEN }}
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: pnpm
@@ -296,7 +297,7 @@ jobs:
     name: Move tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Pinned to the version the contracts were published and tested with. A floating toolchain
       # means a framework revision can change what compiles without a line of this repository
@@ -359,7 +360,7 @@ jobs:
     name: Digest guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Pinned to the version the contracts were published and tested with. A floating toolchain
       # means a framework revision can change what compiles without a line of this repository

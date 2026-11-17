@@ -37,7 +37,7 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Supabase direct host resolves to IPv6 only and GitHub runners have no IPv6 route, so the
       # pooler rewrite below is copied verbatim from backup.yml and error-alarm.yml. Session mode
@@ -67,8 +67,8 @@ jobs:
           echo "::add-mask::$URL"
           echo "PROJECTX_DATABASE_URL=$URL" >> "$GITHUB_ENV"
 
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
 

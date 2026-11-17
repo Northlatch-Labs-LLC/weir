@@ -5,6 +5,7 @@ import { fromB64 } from '@projectx-social/sdk';
 import { tooLarge } from '@/lib/body-limit';
 import { agentAccount } from '@/lib/agents';
 import { db, normaliseAddress } from '@/lib/db';
+import { recordFailure } from '@/lib/error-log';
 import { isSignatureSpent, spendSignature, sweepUsedSignatures, verifyActionDeferringSpend } from '@/lib/identity';
 import { LABEL, latestMind, mindConfig, recordMind, storeMind, validateMindSubmission } from '@/lib/mind';
 import { quotaLimitConfigured, rateLimit } from '@/lib/rate-limit';
@@ -53,7 +54,14 @@ export async function POST(request: Request) {
 
   if (proof.value !== null) {
     const spent = await isSignatureSpent(proof.value);
-    if (!spent.ok) return NextResponse.json({ error: spent.failure.detail }, { status: 503 });
+    if (!spent.ok) {
+      await recordFailure({
+        source: 'api route',
+        detail: `${spent.failure.kind}: ${spent.failure.detail}`,
+        route: '/api/agents/mind',
+      });
+      return NextResponse.json({ error: spent.failure.detail }, { status: 503 });
+    }
     if (spent.value) return NextResponse.json({ error: 'this signature has already been used — sign again' }, { status: 401 });
   }
 
@@ -70,6 +78,13 @@ export async function POST(request: Request) {
 
   const stored = await storeMind({ owner: address, ciphertext });
   if (!stored.ok) {
+    // Both statuses are recorded: an unconfigured store (501) on this route means the deployment
+    // half-enabled minds, and that is a fault to see, not a state to sit in quietly.
+    await recordFailure({
+      source: 'api route',
+      detail: `${stored.failure.kind}: ${stored.failure.detail}`,
+      route: '/api/agents/mind',
+    });
     return NextResponse.json(
       { error: `the mind was not stored: ${stored.failure.detail}` },
       { status: stored.failure.kind === 'unconfigured' ? 501 : 503 },
@@ -95,6 +110,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ mind: publicView(record) }, { status: 201 });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
+    // The rollback above undoes the transaction on this client; the failure is recorded through
+    // the pool, which is a different connection, so the two never contend.
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/agents/mind',
+    });
     return NextResponse.json(
       { error: `the blob was stored but the record was not written: ${error instanceof Error ? error.message : String(error)}` },
       { status: 503 },

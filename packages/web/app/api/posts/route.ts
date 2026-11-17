@@ -290,6 +290,9 @@ async function publishOnce(request: Request) {
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
+    // Rethrown rather than answered: an error that escapes a route handler reaches
+    // instrumentation.onRequestError, which records it as an uncaught route failure under this
+    // route's template. A recordFailure here would count the same fault twice.
     throw error;
   } finally {
     client.release();

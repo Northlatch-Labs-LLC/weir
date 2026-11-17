@@ -174,7 +174,9 @@ the harvest that withdraws it", and names the precedent — "22 consecutive zero
 predecessor". Supervision in the repository is a systemd unit and hourly timer
 (`packages/daemon/deploy/projectx-harvest.service:29-31`,
 `packages/daemon/deploy/projectx-harvest.timer:6-10`), but the live daemon is a container run from
-a GCP VM instance startup script (`UPDATE.md:243`). Its journal is written to Cloud SQL
+a GCP VM instance startup script (`UPDATE.md:1045` — the daemon-roll record that also reports the
+audit anchor write failing loudly; the repo copy of that startup script writes `harvest-public.env`
+and the `docker run` unit at `packages/daemon/deploy/social-startup.sh:104,121-122`). Its journal is written to Cloud SQL
 `projectx-pg` / `social_harvest`, and the same entry records `db/002_audit_anchor.sql` as not yet
 applied there, so the audit anchor write "failed loudly as designed". Every reporting path is
 pull-only: `pnpm status` and `pnpm journal` (`packages/daemon/package.json:26-28`) are commands a

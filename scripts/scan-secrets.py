@@ -386,7 +386,9 @@ CONFIG_SHAPED = re.compile(
     r'(^|/)(\.env[^/]*|Dockerfile[^/]*|[^/]*\.(ya?ml|sh|toml|properties|ini|cfg))$'
 )
 
-ASSIGN = re.compile(r'^\s*(?:export\s+|-\s+)?([A-Z][A-Z0-9_]{2,})\s*[:=]\s*(.+?)\s*$')
+# Same [ \t] rule as the live-env parser below: with re.M, \s* past the separator swallows the
+# newline of a blank value and the capture reads the next line as this one's phantom value.
+ASSIGN = re.compile(r'^\s*(?:export[ \t]+|-[ \t]+)?([A-Z][A-Z0-9_]{2,})[ \t]*[:=][ \t]*(.+?)[ \t]*$')
 
 # A value that is a reference, a template or a stand-in — never the thing itself.
 TEMPLATED = re.compile(
@@ -502,8 +504,12 @@ def live_secrets() -> dict[str, str]:
             except OSError:
                 continue
 
-            # NAME=VALUE, secret-named only.
-            for name, raw in re.findall(r'^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$', text, re.M):
+            # NAME=VALUE, secret-named only. The whitespace around the separator is [ \t], never
+            # \s: with re.M, a \s* after '=' swallows the newline of a BLANK value and (.*) then
+            # captures the NEXT line's text as this variable's phantom value — a blank
+            # SECRET_NAME= above an unrelated line made every tracked file compare against the
+            # neighbour's content, and the pre-push gate red with findings nobody wrote.
+            for name, raw in re.findall(r'^\s*([A-Z_][A-Z0-9_]*)[ \t]*=[ \t]*(.*)$', text, re.M):
                 value = raw.strip().strip('"').strip("'")
                 if len(value) >= MIN_LITERAL and SECRET_NAME.search(name):
                     # A value that holds no credential must not become something every tracked

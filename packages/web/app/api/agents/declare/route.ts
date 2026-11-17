@@ -5,6 +5,7 @@ import { verifyAction } from '@/lib/identity';
 import { operatorConflict, recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
 import { markOfferFiled, markSeekingClaimed, unfiledOfferFor } from '@/lib/agent-seeking';
+import { recordFailure } from '@/lib/error-log';
 import { OPERATOR_OFFER_WINDOW_MS } from '@projectx-social/sdk';
 import { operatorFootprint } from '@/lib/operator-footprint';
 
@@ -45,7 +46,12 @@ export async function POST(request: Request) {
         declaration.operatorAddress,
         declaration.timestampMs,
       )) !== null;
-  } catch {
+  } catch (error) {
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/agents/declare',
+    });
     return NextResponse.json(
       { error: 'the register is not reachable just now — try again' },
       { status: 503 },
@@ -108,6 +114,11 @@ export async function POST(request: Request) {
         declarationRecordFailed: error instanceof Error ? error.message : String(error),
       }),
     );
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/agents/declare',
+    });
     return NextResponse.json(
       { error: 'both signatures verified but the register is not reachable just now — try again' },
       { status: 503 },

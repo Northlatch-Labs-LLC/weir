@@ -2,6 +2,7 @@
 import type { NextConfig } from 'next';
 
 const INLINE_THEME_SCRIPT_SHA256 = 'xOzuRG2yFs86iI5GqL/OQiIlHl49POOgQv+m9I8u4o0=';
+const INLINE_SW_SCRIPT_SHA256 = 'uLL3CQubsanfRr5a5efKchfddDFP/G7jwCha6hB0cu4=';
 
 const config: NextConfig = {
   distDir: process.env['NEXT_DIST_DIR'] ?? '.next',
@@ -59,7 +60,7 @@ const config: NextConfig = {
             key: 'Content-Security-Policy-Report-Only',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'sha256-${INLINE_THEME_SCRIPT_SHA256}'`,
+              `script-src 'self' 'sha256-${INLINE_THEME_SCRIPT_SHA256}' 'sha256-${INLINE_SW_SCRIPT_SHA256}'`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "connect-src 'self'",

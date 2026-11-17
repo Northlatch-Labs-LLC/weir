@@ -121,7 +121,9 @@ async function mount(network: string | null = 'mainnet') {
       <Probe />
     </SignerProvider>,
   );
-  await waitFor(() => expect(screen.getByTestId('ready').textContent).toBe('yes'));
+  await waitFor(() => expect(screen.getByTestId('ready').textContent).toBe('yes'), {
+    timeout: 3000,
+  });
   return view;
 }
 

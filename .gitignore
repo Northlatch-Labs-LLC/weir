@@ -173,3 +173,5 @@ Claude outputs/
 # Local pnpm store and mission scratch
 .pnpm-store/
 .agents/
+# Local Move bytecode dumps from the digest drill (sui move build --dump-bytecode-as-base64)
+sui-contracts/build-dump.json

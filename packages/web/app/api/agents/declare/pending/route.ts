@@ -5,6 +5,7 @@ import { proveActionWithoutSpending } from '@/lib/identity';
 import { operatorConflict, validateAgentHalf } from '@/lib/agents';
 import { pendingDeclarationsFor, recordDeclarationRequest, requestExpiresAtMs } from '@/lib/agent-declarations';
 import { normaliseAddress } from '@/lib/db';
+import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,11 @@ export async function POST(request: Request) {
         declarationRequestRecordFailed: error instanceof Error ? error.message : String(error),
       }),
     );
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/agents/declare/pending',
+    });
     return NextResponse.json(
       { error: 'the request verified but the register is not reachable just now — try again' },
       { status: 503 },
