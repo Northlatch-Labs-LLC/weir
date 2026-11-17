@@ -1,10 +1,15 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { proveActionWithoutSpending } from '@/lib/identity';
+import {
+  isSignatureSpent,
+  spendSignature,
+  sweepUsedSignatures,
+  verifyActionDeferringSpend,
+} from '@/lib/identity';
 import { operatorConflict, validateAgentHalf } from '@/lib/agents';
 import { pendingDeclarationsFor, recordDeclarationRequest, requestExpiresAtMs } from '@/lib/agent-declarations';
-import { normaliseAddress } from '@/lib/db';
+import { db, normaliseAddress } from '@/lib/db';
 import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +32,10 @@ export async function POST(request: Request) {
   const conflict = await operatorConflict(half.address, half.operatorAddress);
   if (conflict !== null) return NextResponse.json({ error: conflict }, { status: 409 });
 
-  const proof = await proveActionWithoutSpending({
+  // Spent, not just proved: a verified-but-unspent declare half replayed for its whole
+  // ten-minute window, pre-filing declarations under a captured signature. The spend commits
+  // with the row so a failed write never strands one (Security F1 keeps its fixed sentence).
+  const proof = await verifyActionDeferringSpend({
     origin: new URL(request.url).origin,
     address: half.address,
     signature: half.agentSignature,
@@ -37,8 +45,31 @@ export async function POST(request: Request) {
   if (!proof.ok) {
     return NextResponse.json({ error: `the agent's signature does not stand: ${proof.failure.detail}` }, { status: 401 });
   }
+  if (proof.value !== null) {
+    const spent = await isSignatureSpent(proof.value);
+    if (!spent.ok) {
+      await recordFailure({
+        source: 'api route',
+        detail: `${spent.failure.kind}: ${spent.failure.detail}`,
+        route: '/api/agents/declare/pending',
+      });
+      return NextResponse.json({ error: spent.failure.detail }, { status: 503 });
+    }
+    if (spent.value) {
+      return NextResponse.json({ error: 'this signature has already been used — sign again' }, { status: 401 });
+    }
+  }
 
+  const client = await db().connect();
   try {
+    await client.query('BEGIN');
+    if (proof.value !== null) {
+      const spent = await spendSignature(client, proof.value);
+      if (!spent.ok) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: spent.failure.detail }, { status: 401 });
+      }
+    }
     const stored = await recordDeclarationRequest({
       address: half.address,
       operatorAddress: half.operatorAddress,
@@ -46,7 +77,9 @@ export async function POST(request: Request) {
       purpose: half.purpose,
       issuedAtMs: half.timestampMs,
       agentSignature: half.agentSignature,
-    });
+    }, client);
+    await client.query('COMMIT');
+    void sweepUsedSignatures();
     return NextResponse.json(
       {
         request: stored,
@@ -56,6 +89,7 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     console.error(
       JSON.stringify({
         declarationRequestRecordFailed: error instanceof Error ? error.message : String(error),
@@ -70,6 +104,8 @@ export async function POST(request: Request) {
       { error: 'the request verified but the register is not reachable just now — try again' },
       { status: 503 },
     );
+  } finally {
+    client.release();
   }
 }
 

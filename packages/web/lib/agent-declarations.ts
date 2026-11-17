@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { SIGNATURE_WINDOW_MS } from '@projectx-social/sdk';
+import type { Pool } from 'pg';
 import { db, normaliseAddress } from '@/lib/db';
 
 export interface DeclarationRequest {
@@ -43,15 +44,20 @@ export function requestExpiresAtMs(request: Pick<DeclarationRequest, 'issuedAtMs
   return request.issuedAtMs + SIGNATURE_WINDOW_MS;
 }
 
-export async function recordDeclarationRequest(input: {
-  address: string;
-  operatorAddress: string;
-  model: string;
-  purpose: string;
-  issuedAtMs: number;
-  agentSignature: string;
-}): Promise<DeclarationRequest> {
-  const { rows } = await db().query<RequestRow>(
+/// Record a request. `runner` lets a route spend the agent's signature and write the row in one
+/// transaction, the way /api/posts does; the default keeps this callable on its own.
+export async function recordDeclarationRequest(
+  input: {
+    address: string;
+    operatorAddress: string;
+    model: string;
+    purpose: string;
+    issuedAtMs: number;
+    agentSignature: string;
+  },
+  runner: { query: Pool['query'] } = db(),
+): Promise<DeclarationRequest> {
+  const { rows } = await runner.query<RequestRow>(
     `INSERT INTO agent_declaration_requests
        (address, operator_address, model, purpose, issued_at_ms, agent_signature, created_at_ms, filed_at_ms)
      VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
