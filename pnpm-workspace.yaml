@@ -24,6 +24,10 @@ linkWorkspacePackages: true
 # you may never have read. esbuild's fetches its own platform binary and genuinely needs one.
 allowBuilds:
   esbuild: true
+# The quarantine, stated explicitly. pnpm 12 already defaults minimumReleaseAge to 1440 minutes;
+# writing it here turns a default nobody can see into a decision someone can audit, and keeps the
+# refusal working even if a future pnpm moves the default.
+minimumReleaseAge: 1440
 # A package published in the last 24 hours is refused, because that is the window in which a
 # compromised publish is usually caught. The four below are ours: they are published from this
 # repository, so the quarantine would be refusing our own release.
