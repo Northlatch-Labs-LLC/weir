@@ -396,11 +396,13 @@ export function CreatorSetup() {
       <div className="feed-head" id="pool">
         <h2>Support without spending</h2>
       </div>
-      <p className="unmeasured">
-        Until you open this, nobody can back you — and backing is the only support on Weir that costs a
-        reader nothing, because they can withdraw it in full. It is one transaction, and the validator
-        you choose is permanent.
-      </p>
+      {setup.vaults.every((vault) => !vault.accepting) && (
+        <p className="unmeasured">
+          Until you open this, nobody can back you — and backing is the only support on Weir that costs a
+          reader nothing, because they can withdraw it in full. It is one transaction, and the validator
+          you choose is permanent.
+        </p>
+      )}
       <StakeVaultSetup accountId={setup.accountId} />
 
       {error !== null && <p className="unmeasured">{error}</p>}

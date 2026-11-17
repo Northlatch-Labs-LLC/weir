@@ -117,6 +117,24 @@ describe('a vault nobody can subscribe to', () => {
   });
 });
 
+describe('the backing intro', () => {
+  it('says nobody can back you while no vault is accepting', async () => {
+    mockSetup({
+        stage: 'ready', accountId: '0xacc', handle: 'alice',
+        vaults: [{ ...VAULT, accepting: false }],
+      });
+    render(<CreatorSetup />);
+    await waitFor(() => expect(screen.getByText(/nobody can back you/i)).toBeTruthy());
+  });
+
+  it('does not instruct an open vault to open', async () => {
+    mockSetup({ stage: 'ready', accountId: '0xacc', handle: 'alice', vaults: [VAULT] });
+    render(<CreatorSetup />);
+    await waitFor(() => expect(screen.getByText(/nobody can subscribe/i)).toBeTruthy());
+    expect(screen.queryByText(/nobody can back you/i)).toBeNull();
+  });
+});
+
 describe('signed out', () => {
   it('offers sign-in rather than an empty setup', () => {
     signer = null;
