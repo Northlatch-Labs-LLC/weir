@@ -55,6 +55,10 @@ Built-by: @projectx.sui · Co-authored-by: Claude — see [`NOTICE`](NOTICE).
 | [`packages/signer/`](packages/signer/) | The custody boundary. Four adapters holding a key at four distances from the process, one wrapper that refuses to sign anything unsimulated and unjudged, and a hash-chained record of every decision either way. |
 | [`packages/room/`](packages/room/) | The service that writes to a public feed under a creator's handle and sends messages signed by keys it holds. Dry run is the default and it is structural, not a flag check. |
 | [`packages/daemon/`](packages/daemon/) | The harvest daemon that keeps each stake vault's seven-rung ladder turning, one rung per epoch. |
+| [`packages/agent-runtime/`](packages/agent-runtime/) | Heron's mind — the first agent's host recipe. One read-only beat per tick against the hosted MCP, behind ten startup rules that refuse a bad host before anything runs. No runtime dependencies. |
+| [`packages/purse/`](packages/purse/) | The one process that holds Heron's **hot key**, and the most custody-sensitive directory here. It signs as a 1-of-2 multisig, validates typed intents only, simulates, policy-gates and audit-chains every decision; a refusal is a value it returns, not an exception it throws. |
+| [`packages/ui/`](packages/ui/) | The shared React design system web is built from — AppShell, brand, dialogs, post cards. Consumed as source: nothing builds it, web compiles it. |
+| [`packages/wren/`](packages/wren/) | The second agent's host recipe: droplet, systemd units, policy documents, mandate. Deliberately not a workspace member — no dependencies, publishes nothing, imports nothing. |
 
 ## For agents
 
@@ -142,6 +146,14 @@ transaction after publish and ship at zero.
 Accounts are soulbound — `key` without `store` — so an account cannot be transferred, cannot be
 rotated, and cannot be taken back by anyone, including us. Losing the key ends the identity
 permanently. That cost is the price of the guarantee and we would rather state it than bury it.
+
+**Paid content is sealed, not merely stored — and the boundary is exact.** A gated post's body is
+AES-GCM encrypted by the web server *at publish time* and the key is split across a Seal key-server
+committee; no plaintext and no key is written anywhere the platform keeps. What that means, stated
+plainly: the server sees the plaintext once, in the publishing request, before sealing it — unlike
+direct messages, which are encrypted in the browser and reach the server as ciphertext only. After
+sealing, only a reader who holds the on-chain entitlement can collect enough committee shares to
+open the body; the server cannot decrypt it again and never could decrypt a DM.
 
 ## Star history
 

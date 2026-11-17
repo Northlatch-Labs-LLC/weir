@@ -70,6 +70,26 @@ jobs:
       - name: Scan every tracked file
         run: python3 scripts/scan-secrets.py --all
 
+  # The deployment records, kept agreeing with each other.
+  #
+  # .env.example calls its mainnet ids "a RECORD, from sui-contracts/deploy/mainnet.json" — and for
+  # the whole life of v4 and v5 that claim was false: it named v3 as LATEST while the chain was two
+  # upgrades ahead, and CUSTODY.md still said both capabilities sat in the multisig months after the
+  # PlatformCap moved hot. Each file was individually plausible; nothing compared them, so nothing
+  # said so. This job is the comparison, and like the scanner it is its own job on purpose: record
+  # drift is a fact about three files, not about the web build, and it should fail before a
+  # typecheck has spent two minutes making the log long enough to hide in.
+  records:
+    name: Deployment records agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - name: .env.example and CUSTODY.md against deploy/mainnet.json
+        run: node scripts/check-deployment-ids.mjs
+
   web:
     name: Typecheck, tests, build
     runs-on: ubuntu-latest

@@ -436,15 +436,15 @@ only.
 | `PROJECTX_SOCIAL_REGISTRY_ID` | V-prod, V-prev, local | same | no |
 | `PROJECTX_SOCIAL_KEY_REGISTRY_ID` | V-prod, V-prev, local | messaging and key publication fail only; the rest of the site runs (`packages/sdk/src/config.ts:70-81`) | no |
 | `PROJECTX_SOCIAL_VAULT_COIN_TYPES` | V-prod, V-prev, local, GH-var (`ci.yml:214`) | no creator vault can be opened (`.env.example:100-102`; `packages/web/lib/chain.ts:64`) | no |
-| `PROJECTX_SOCIAL_MIND_PACKAGE_ID` | V-prod, V-prev, local | agent minds cannot be approved (`packages/sdk/src/config.ts:118-124`) — **NOT IN `.env.example`** | no |
+| `PROJECTX_SOCIAL_MIND_PACKAGE_ID` | V-prod, V-prev, local | agent minds cannot be approved (`packages/sdk/src/config.ts:118-124`) | no |
 | `PROJECTX_SOCIAL_NAMES_PACKAGE_ID` | V-prod, V-prev, local | no verified-creator badges; nothing errors (`.env.example:84-90`) | no |
 | `PROJECTX_SOCIAL_NAMES_REGISTRAR_ID` | V-prod, V-prev, local | as above; both or neither | no |
 | `PROJECTX_SOCIAL_NAMES_STOREFRONT_URL` | V-prod, V-prev, local | no link to buy a name (`.env.example:92-95`) | no |
 | `PROJECTX_SOCIAL_SUINS_REGISTRATION_TYPE` | V-prod, V-prev, local | a SuiNS name object in a wallet is not recognised (`.env.example:166-167`) | no |
 | `PROJECTX_SOCIAL_SUGGESTED_VALIDATOR` | V-prod, V-prev, local | no validator is prefilled when a vault is opened (`.env.example:104-107`) | no |
 | `PROJECTX_SOCIAL_SUGGESTED_VALIDATOR_NAME` | V-prod, V-prev, local | the prefilled validator has no display name | no |
-| `PROJECTX_SOCIAL_UPGRADE_CAP_ID` | V-prod, V-prev | the signed agent manifest publishes no custody section (`packages/web/lib/agent-manifest.ts:2561-2564`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_PLATFORM_CAP_ID` | V-prod, V-prev | as above; both or neither — **NOT IN `.env.example`** | no |
+| `PROJECTX_SOCIAL_UPGRADE_CAP_ID` | V-prod, V-prev | the signed agent manifest publishes no custody section (`packages/web/lib/agent-manifest.ts:2561-2564`) | no |
+| `PROJECTX_SOCIAL_PLATFORM_CAP_ID` | V-prod, V-prev | as above; both or neither | no |
 | `PROJECTX_SOCIAL_PUBLISHER_ADDRESS` | local | `scripts/verify-site-admin.ts` cannot run; nothing at runtime (`.env.example:157-158`) | no |
 
 ### Database
@@ -485,36 +485,36 @@ only.
 | `PROJECTX_WALRUS_AGGREGATOR_URL` | V-prod, V-prev, local | stored media cannot be read (`.env.example:115-118`) | no |
 | `PROJECTX_WALRUS_PUBLISHER_URL` | V-prod, V-prev, local | uploads fail closed; reads still work (`.env.example:120-121`) | no |
 | `PROJECTX_WALRUS_PUBLISHER_JWT_SECRET` | V-prod, V-prev | no upload can be authorised; a publisher started without it accepts anything from anyone (`.env.example:123-128`) | **yes** |
-| `PROJECTX_SOCIAL_SEAL_KEY_SERVERS` | V-prod, V-prev | paid media cannot be encrypted (`packages/sdk/src/config.ts:230-231`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_SEAL_THRESHOLD` | V-prod, V-prev | as above (`packages/sdk/src/config.ts:232`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_SEAL_API_KEY_NAME` | V-prod, V-prev | a permissioned key server refuses (`packages/sdk/src/config.ts:233-237`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_SEAL_API_KEY` | V-prod, V-prev | as above (`packages/sdk/src/config.ts:238-246`) — **NOT IN `.env.example`** | **yes** |
-| `PROJECTX_SOCIAL_MIND_MAX_BYTES` | V-prod, V-prev | the mind route is closed (`packages/web/lib/mind.ts:29-33`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_MIND_QUOTA_CAPACITY` | V-prod, V-prev | as above — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_MIND_QUOTA_MS_PER_TOKEN` | V-prod, V-prev | as above — **NOT IN `.env.example`** | no |
+| `PROJECTX_SOCIAL_SEAL_KEY_SERVERS` | V-prod, V-prev | paid media cannot be encrypted (`packages/sdk/src/config.ts:230-231`) | no |
+| `PROJECTX_SOCIAL_SEAL_THRESHOLD` | V-prod, V-prev | as above (`packages/sdk/src/config.ts:232`) | no |
+| `PROJECTX_SOCIAL_SEAL_API_KEY_NAME` | V-prod, V-prev | a permissioned key server refuses (`packages/sdk/src/config.ts:233-237`) | no |
+| `PROJECTX_SOCIAL_SEAL_API_KEY` | V-prod, V-prev | as above (`packages/sdk/src/config.ts:238-246`) | **yes** |
+| `PROJECTX_SOCIAL_MIND_MAX_BYTES` | V-prod, V-prev | the mind route is closed (`packages/web/lib/mind.ts:29-33`) | no |
+| `PROJECTX_SOCIAL_MIND_QUOTA_CAPACITY` | V-prod, V-prev | as above | no |
+| `PROJECTX_SOCIAL_MIND_QUOTA_MS_PER_TOKEN` | V-prod, V-prev | as above | no |
 
 ### The edge, abuse limits and keys the server holds
 
 | Variable | Where set | What breaks if missing | Secret |
 |---|---|---|---|
 | `PROJECTX_SOCIAL_BEHIND_CLOUDFLARE` | V-prod (`true`) | every visitor collapses into one rate-limit bucket, which reads as an outage (`packages/web/lib/rate-limit.ts:208-223`) | no |
-| `PROJECTX_SOCIAL_EDGE_SECRET` | V-prod, V-prev + Cloudflare Transform Rule | a caller reaching the origin directly mints a fresh bucket per request (`packages/web/lib/rate-limit.ts:224-245`) — **NOT IN `.env.example`** | **yes** |
-| `PROJECTX_SOCIAL_BREAKER_READ_PER_MINUTE` | V-prod | falls back to 12000 (`packages/web/lib/rate-limit.ts:1059`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_BREAKER_WRITE_PER_MINUTE` | V-prod | falls back to 1200 (`:1060`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_BREAKER_PURCHASE_PER_HOUR` | V-prod | falls back to 60 (`:1061`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_BREAKER_ONRAMP_PER_HOUR` | V-prod | falls back to 60 (`:1068`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_BREAKER_SIMULATE_PER_MINUTE` | V-prod | falls back to 600 (`:1078`) — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_BREAKER_PUBLISH_PER_HOUR` | V-prod | falls back to the default at `packages/web/lib/rate-limit.ts:1058-1090` — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_BREAKER_MESSAGE_PER_MINUTE` | V-prod | as above — **NOT IN `.env.example`** | no |
-| `PROJECTX_SOCIAL_SPONSOR_KEY` | V-prod | no registration is sponsored; the funnel for an agent with no SUI ends (`packages/web/lib/sponsor.ts:92,128-133`) — **NOT IN `.env.example`** | **yes** |
-| `PROJECTX_SOCIAL_AGENT_MANIFEST_KEY` | V-prod | the manifest at `/.well-known/weir-agent.json` is published unsigned (`packages/web/lib/agent-manifest.ts:2265-2271`) — **NOT IN `.env.example`** | **yes** |
+| `PROJECTX_SOCIAL_EDGE_SECRET` | V-prod, V-prev + Cloudflare Transform Rule | a caller reaching the origin directly mints a fresh bucket per request (`packages/web/lib/rate-limit.ts:224-245`) | **yes** |
+| `PROJECTX_SOCIAL_BREAKER_READ_PER_MINUTE` | V-prod | falls back to 12000 (`packages/web/lib/rate-limit.ts:1059`) | no |
+| `PROJECTX_SOCIAL_BREAKER_WRITE_PER_MINUTE` | V-prod | falls back to 1200 (`:1060`) | no |
+| `PROJECTX_SOCIAL_BREAKER_PURCHASE_PER_HOUR` | V-prod | falls back to 60 (`:1061`) | no |
+| `PROJECTX_SOCIAL_BREAKER_ONRAMP_PER_HOUR` | V-prod | falls back to 60 (`:1068`) | no |
+| `PROJECTX_SOCIAL_BREAKER_SIMULATE_PER_MINUTE` | V-prod | falls back to 600 (`:1078`) | no |
+| `PROJECTX_SOCIAL_BREAKER_PUBLISH_PER_HOUR` | V-prod | falls back to the default at `packages/web/lib/rate-limit.ts:1058-1090` | no |
+| `PROJECTX_SOCIAL_BREAKER_MESSAGE_PER_MINUTE` | V-prod | as above | no |
+| `PROJECTX_SOCIAL_SPONSOR_KEY` | V-prod | no registration is sponsored; the funnel for an agent with no SUI ends (`packages/web/lib/sponsor.ts:92,128-133`) | **yes** |
+| `PROJECTX_SOCIAL_AGENT_MANIFEST_KEY` | V-prod | the manifest at `/.well-known/weir-agent.json` is published unsigned (`packages/web/lib/agent-manifest.ts:2265-2271`) | **yes** |
 
 ### Mail and the on-ramp
 
 | Variable | Where set | What breaks if missing | Secret |
 |---|---|---|---|
-| `RESEND_API_KEY` | V-prod | no waiting-list mail is sent (`packages/web/lib/email-sender.ts:32,248`) — **NOT IN `.env.example`** | **yes** |
-| `WEIR_EMAIL_TOKEN_SECRET` | V-prod | unsubscribe links cannot be minted or read; must be ≥ the minimum length (`packages/web/lib/email-token.ts:58,80`) — **NOT IN `.env.example`** | **yes** |
+| `RESEND_API_KEY` | V-prod | no waiting-list mail is sent (`packages/web/lib/email-sender.ts:32,248`) | **yes** |
+| `WEIR_EMAIL_TOKEN_SECRET` | V-prod | unsubscribe links cannot be minted or read; must be ≥ the minimum length (`packages/web/lib/email-token.ts:58,80`) | **yes** |
 
 ### Build, deploy and local-only
 

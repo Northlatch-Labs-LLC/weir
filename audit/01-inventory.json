@@ -1,0 +1,2104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "weir.social architecture inventory (companion to audit/01-architecture.md)",
+  "generated": "2026-11-17",
+  "commit": "9a68895",
+  "network": "sui-mainnet",
+  "note": "audit/inventory.json (also in this directory) is a separate, pre-existing component inventory backing audit/02-threat-model.md and threat_register.json; this file is the module/package/route/config inventory and does not replace it.",
+  "counts": {
+    "workspacePackages": 12,
+    "movePackages": 3,
+    "moveModules": 9,
+    "moveTestFiles": 11,
+    "moveTestFunctions": 352,
+    "apiRoutes": 80,
+    "pages": 39,
+    "envVarsInExample": 57,
+    "envVarsReadByCodeNotInExample": 0,
+    "migrations": 44
+  },
+  "deployment": {
+    "originalPackageId": "0xc5c833991ed1123d70b1001c0bcdb01ec5728b09f25dfc42a0edaf16005d404d",
+    "latestPackageIdOnChain": "0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5",
+    "latestPackageIdInEnvExample": "0xdc6dbb96885ba049c5d860d0b775b9e968cf9053a227861ae006f22e352884b5 (matches chain; enforced by scripts/check-deployment-ids.mjs in CI)",
+    "platformId": "0x3f695b2c32714e2359c4bb9515598d8dd765b216148c5b8fa818073d52b50f36",
+    "registryId": "0x1a3fb4ac25458d7524be064a2b7e1586ccd9ed09c0d5b351621e3b101e1203a0",
+    "keyRegistryId": "0xe5b8456ccee16c1a1a6ddce1c5523418b4df6b5ce08eb14cea9bf6606eceb6d6",
+    "upgradeCapCustody": "2-of-3 multisig 0x00e734d54be45c002579f36698823eaf2410b59eb30a398fd6c8af9e1b111605",
+    "platformCapCustody": "hot single key (publisher/dev address, moved out of multisig 2026-08-28)",
+    "liveFees": {
+      "feeBps": 290,
+      "referralShareBps": 500,
+      "creationFeeMist": 0
+    },
+    "soulsPackagePublished": true,
+    "mindPackagePublished": false
+  },
+  "workspacePackages": [
+    {
+      "dir": "packages/sdk",
+      "npmName": "@projectx-social/sdk",
+      "version": "1.0.3",
+      "published": true,
+      "purpose": "TypeScript client over Sui gRPC: BCS decoders, tx builders, statements, simulation; Reading<T>; config with no defaults",
+      "dependsOn": [],
+      "consumedBy": [
+        "web",
+        "agent",
+        "mcp",
+        "daemon",
+        "signer",
+        "purse",
+        "room"
+      ],
+      "testFiles": 20
+    },
+    {
+      "dir": "packages/web",
+      "npmName": "@projectx-social/web",
+      "version": "1.0.0",
+      "published": false,
+      "purpose": "Next.js app + HTTP API: feed, studio, paid bodies (Seal/Walrus), zkLogin, waitlist gate, agent routes, Postgres schema",
+      "dependsOn": [
+        "sdk",
+        "ui"
+      ],
+      "consumedBy": [],
+      "testFiles": 199
+    },
+    {
+      "dir": "packages/agent",
+      "npmName": "@projectx-social/agent",
+      "version": "1.0.3",
+      "published": true,
+      "purpose": "Headless client for programs: own Ed25519 key, own SocialAccount, spend-guard maxPrice, same routes as browsers",
+      "dependsOn": [
+        "sdk"
+      ],
+      "consumedBy": [
+        "mcp",
+        "purse",
+        "room"
+      ],
+      "testFiles": 24
+    },
+    {
+      "dir": "packages/mcp",
+      "npmName": "@projectx-social/mcp",
+      "version": "1.0.5",
+      "published": true,
+      "purpose": "MCP server (stdio/streamable HTTP), 13 tools in 3 authority tiers, registered only when they can succeed",
+      "dependsOn": [
+        "agent",
+        "policy",
+        "signer"
+      ],
+      "consumedBy": [],
+      "testFiles": 16
+    },
+    {
+      "dir": "packages/policy",
+      "npmName": "@projectx-social/policy",
+      "version": "1.0.3",
+      "published": true,
+      "purpose": "Pure zero-dependency evaluator: simulated effects + policy doc + ledger -> allow or reason; mutation-tested",
+      "dependsOn": [],
+      "consumedBy": [
+        "signer",
+        "mcp",
+        "daemon",
+        "purse"
+      ],
+      "testFiles": 4
+    },
+    {
+      "dir": "packages/signer",
+      "npmName": "@projectx-social/signer",
+      "version": "1.0.3",
+      "published": true,
+      "purpose": "Custody boundary: 4 key adapters, policy-signer refuses unsimulated/unjudged, hash-chained audit",
+      "dependsOn": [
+        "sdk",
+        "policy"
+      ],
+      "consumedBy": [
+        "mcp",
+        "daemon",
+        "purse"
+      ],
+      "testFiles": 9
+    },
+    {
+      "dir": "packages/daemon",
+      "npmName": "@projectx-social/daemon",
+      "version": "1.0.3",
+      "published": true,
+      "purpose": "Harvest daemon: permissionless stake_vault::harvest per epoch per vault, Postgres journal, dry-run default",
+      "dependsOn": [
+        "sdk",
+        "policy",
+        "signer"
+      ],
+      "consumedBy": [],
+      "testFiles": 12
+    },
+    {
+      "dir": "packages/agent-runtime",
+      "npmName": "@projectx-social/agent-runtime",
+      "version": "0.1.0",
+      "published": false,
+      "purpose": "Heron's mind: one PicoClaw beat per tick against hosted MCP, read-only phase, ten hard rules checked pre-start",
+      "dependsOn": [],
+      "consumedBy": [],
+      "testFiles": 7
+    },
+    {
+      "dir": "packages/purse",
+      "npmName": "@projectx-social/purse",
+      "version": "0.1.0",
+      "published": false,
+      "purpose": "Holds Heron's hot key; signs as 1-of-2 multisig; validates intents, simulates, policy-gates, audit-chains; refusal is a value",
+      "dependsOn": [
+        "sdk",
+        "policy",
+        "signer"
+      ],
+      "consumedBy": [],
+      "testFiles": 18
+    },
+    {
+      "dir": "packages/room",
+      "npmName": "@projectx-social/room",
+      "version": "1.0.0",
+      "published": false,
+      "purpose": "Agent deliberation arena over E2E DMs; sold record sealed to period identity; dry-run is structural (branded Commit)",
+      "dependsOn": [
+        "sdk"
+      ],
+      "consumedBy": [],
+      "testFiles": 1
+    },
+    {
+      "dir": "packages/ui",
+      "npmName": "@projectx-social/ui",
+      "version": "1.0.0",
+      "published": false,
+      "purpose": "React design system consumed as source (no build): AppShell, brand, Dialog, PostCard, weir-ui.css",
+      "dependsOn": [],
+      "consumedBy": [
+        "web"
+      ],
+      "testFiles": 5
+    },
+    {
+      "dir": "packages/wren",
+      "npmName": "@projectx-social/wren",
+      "version": "0.1.0",
+      "published": false,
+      "workspaceMember": false,
+      "purpose": "Host recipe (not a JS package): second agent's droplet, systemd units, policy docs, mandate; excluded from workspace graph",
+      "dependsOn": [],
+      "consumedBy": [],
+      "testFiles": 3
+    }
+  ],
+  "movePackages": [
+    {
+      "dir": "sui-contracts",
+      "name": "projectx_social",
+      "chainStatus": "mainnet v5 (original 0xc5c8..404d; latest 0xdc6d..84b5)",
+      "dependencies": [
+        "SuiSystem (pinned rev)"
+      ],
+      "modules": [
+        {
+          "file": "sui-contracts/sources/account.move",
+          "module": "account",
+          "purpose": "Soulbound SocialAccount + shared Registry; assert_authenticates is the auth gate for all paying fns",
+          "keyEntries": [
+            "open",
+            "close"
+          ],
+          "structs": [
+            "Registry (shared)",
+            "SocialAccount (owned, soulbound)"
+          ],
+          "dependsOn": [
+            "platform"
+          ],
+          "tests": {
+            "file": "tests/account_tests.move",
+            "count": 18
+          }
+        },
+        {
+          "file": "sui-contracts/sources/creator.move",
+          "module": "creator",
+          "purpose": "CreatorVault<T> shared per coin type; generic Coin<T> rail for subscribe/renew/tip/unlock; compute_split; price-ranked seal approval (v5)",
+          "keyEntries": [
+            "open_vault",
+            "add_tier",
+            "update_tier",
+            "set_content_price",
+            "unprice_content",
+            "set_min_tip",
+            "set_accepting",
+            "accept_current_terms",
+            "subscribe",
+            "renew",
+            "tip",
+            "unlock",
+            "claim_earnings",
+            "claim_platform_fees",
+            "seal_approve_subscription",
+            "migrate",
+            "migrate_as_platform",
+            "compute_split"
+          ],
+          "structs": [
+            "CreatorVault<T> (shared)",
+            "CreatorCap (owned)",
+            "Tier (value)"
+          ],
+          "dependsOn": [
+            "account",
+            "entitlement",
+            "platform"
+          ],
+          "tests": {
+            "files": [
+              "tests/creator_tests.move",
+              "tests/split_tests.move",
+              "tests/split_property_tests.move"
+            ],
+            "count": 83
+          }
+        },
+        {
+          "file": "sui-contracts/sources/entitlement.move",
+          "module": "entitlement",
+          "purpose": "Soulbound Subscription + Unlock; Seal identities unlock_identity/period_identity; retired subscription approval aborts EDeprecatedApproval",
+          "keyEntries": [
+            "seal_approve_unlock",
+            "is_active",
+            "assert_subscribed",
+            "unlocks",
+            "assert_unlocked",
+            "unlock_identity",
+            "period_identity",
+            "covers_period"
+          ],
+          "structs": [
+            "Subscription (owned, soulbound)",
+            "Unlock (owned, soulbound)"
+          ],
+          "dependsOn": [],
+          "tests": {
+            "file": "tests/seal_tests.move",
+            "count": 22,
+            "note": "no dedicated entitlement_tests.move; covered via test_only seams"
+          }
+        },
+        {
+          "file": "sui-contracts/sources/key_registry.move",
+          "module": "key_registry",
+          "purpose": "X25519 DM-key directory (NOT the Seal registry): versioned PublishedKey per address with HighWater across revokes",
+          "keyEntries": [
+            "publish",
+            "revoke",
+            "high_water"
+          ],
+          "structs": [
+            "KeyRegistry (shared)",
+            "PublishedKey (value)",
+            "HighWater (dynamem)"
+          ],
+          "dependsOn": [],
+          "tests": {
+            "file": "tests/key_registry_tests.move",
+            "count": 22
+          }
+        },
+        {
+          "file": "sui-contracts/sources/platform.move",
+          "module": "platform",
+          "purpose": "Fees/pauses/treasury with hard ceilings; ships shut (paused, zero fees); package-internal hooks collect_creation_fee/assert_can_pay",
+          "keyEntries": [
+            "set_fees",
+            "set_creation_paused",
+            "set_payments_paused",
+            "sweep_treasury",
+            "migrate"
+          ],
+          "structs": [
+            "Platform (shared)",
+            "PlatformCap (owned)",
+            "PLATFORM (witness)"
+          ],
+          "dependsOn": [],
+          "tests": {
+            "file": "tests/platform_tests.move",
+            "count": 13
+          }
+        },
+        {
+          "file": "sui-contracts/sources/stake_ladder.move",
+          "module": "stake_ladder",
+          "purpose": "Pure 7-rung ladder policy over StakedSui: matured at depth 6, one rung per epoch, decline-don't-abort staking",
+          "keyEntries": [
+            "is_matured",
+            "staked_this_epoch",
+            "rung_size",
+            "capture_bps",
+            "harvest_matured (pkg)",
+            "stake_one_rung (pkg)",
+            "unwind_newest (pkg)"
+          ],
+          "structs": [],
+          "dependsOn": [
+            "sui_system"
+          ],
+          "tests": {
+            "file": "tests/stake_ladder_tests.move",
+            "count": 8,
+            "note": "added 2026-11-17: pure arithmetic (constants, capture_bps, rung_size floor/division/overflow, convergence); tranche behaviour remains covered via stake_vault_tests.move"
+          }
+        },
+        {
+          "file": "sui-contracts/sources/stake_vault.move",
+          "module": "stake_vault",
+          "purpose": "No-loss SUI support pool: deposits staked via ladder, only yield reaches creator; permissionless harvest; rebate accumulator; claims ignore pauses",
+          "keyEntries": [
+            "open",
+            "deposit",
+            "withdraw",
+            "harvest",
+            "claim_rebate",
+            "claim_creator_yield",
+            "claim_platform_yield",
+            "set_rebate_bps",
+            "set_accepting",
+            "compute_yield_split",
+            "migrate",
+            "migrate_as_platform"
+          ],
+          "structs": [
+            "StakeVault (shared, SUI-only)",
+            "StakeCap (owned)",
+            "Position (value)"
+          ],
+          "dependsOn": [
+            "account",
+            "platform",
+            "stake_ladder",
+            "sui_system"
+          ],
+          "tests": {
+            "file": "tests/stake_vault_tests.move",
+            "count": 45
+          }
+        }
+      ]
+    },
+    {
+      "dir": "sui-contracts-soul",
+      "name": "northlatch_soul",
+      "chainStatus": "mainnet v1 (published-at = original 0x8d65..635f)",
+      "dependencies": [
+        "Sui framework only (charter: no projectx_social dep)"
+      ],
+      "modules": [
+        {
+          "file": "sui-contracts-soul/sources/soul.move",
+          "module": "soul",
+          "purpose": "EmployeeSoul: shared+soulbound employment record; epoch allowance enforced by record_spend; MasterCap vs LedgerCap authority split; agent-consented adoption; burned error codes 24/25/26/28/29",
+          "keyEntries": [
+            "mint",
+            "issue_ledger_cap",
+            "issue_adopter_credential",
+            "set_allowance",
+            "set_scope",
+            "set_outward",
+            "repin_mandate",
+            "retire",
+            "override_tier",
+            "offer",
+            "withdraw_offer",
+            "adopt",
+            "renounce",
+            "pause",
+            "unpause",
+            "request_retirement",
+            "record_spend",
+            "assert_outward",
+            "book_earned",
+            "book_burned",
+            "settle_epoch"
+          ],
+          "structs": [
+            "SoulRegistry (shared)",
+            "EmployeeSoul (shared + soulbound)",
+            "MasterCap",
+            "LedgerCap",
+            "AdopterCredential (soulbound)",
+            "AdoptionOffer (shared)",
+            "AdoptionRule (value)"
+          ],
+          "dependsOn": [],
+          "tests": {
+            "file": "sui-contracts-soul/tests/soul_tests.move",
+            "count": 137
+          }
+        }
+      ]
+    },
+    {
+      "dir": "sui-contracts-mind",
+      "name": "agent_mind",
+      "chainStatus": "not published in-tree (no Published.toml)",
+      "dependencies": [
+        "projectx_social (type-only: SocialAccount)"
+      ],
+      "modules": [
+        {
+          "file": "sui-contracts-mind/sources/agent_mind.move",
+          "module": "agent_mind",
+          "purpose": "Seal policy binding an agent's encrypted mind to its account object: mind_identity = accountId||0x02; possession of the soulbound account is the approval",
+          "keyEntries": [
+            "mind_identity",
+            "seal_approve_mind"
+          ],
+          "structs": [],
+          "dependsOn": [
+            "projectx_social::account"
+          ],
+          "tests": {
+            "file": "sui-contracts-mind/tests/agent_mind_tests.move",
+            "count": 4
+          }
+        }
+      ]
+    }
+  ],
+  "apiRoutes": [
+    {
+      "route": "/.well-known/agent-card.json",
+      "file": "packages/web/app/.well-known/agent-card.json/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/.well-known/agent-registration.json",
+      "file": "packages/web/app/.well-known/agent-registration.json/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/.well-known/mcp.json",
+      "file": "packages/web/app/.well-known/mcp.json/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/.well-known/security.txt",
+      "file": "packages/web/app/.well-known/security.txt/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/.well-known/weir-agent.json",
+      "file": "packages/web/app/.well-known/weir-agent.json/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/access-codes",
+      "file": "packages/web/app/api/access-codes/route.ts",
+      "class": "admin",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/access-codes/redeem",
+      "file": "packages/web/app/api/access-codes/redeem/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/account",
+      "file": "packages/web/app/api/account/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/account/prepare",
+      "file": "packages/web/app/api/account/prepare/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only; execution needs signature"
+    },
+    {
+      "route": "/api/account/profile",
+      "file": "packages/web/app/api/account/profile/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/account/image",
+      "file": "packages/web/app/api/account/image/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin",
+      "file": "packages/web/app/api/admin/route.ts",
+      "class": "admin",
+      "methods": [
+        "GET"
+      ],
+      "note": "gated 2026-11-17: isSiteAdmin via read session, as siblings"
+    },
+    {
+      "route": "/api/admin/prepare",
+      "file": "packages/web/app/api/admin/prepare/route.ts",
+      "class": "admin",
+      "methods": [
+        "POST"
+      ],
+      "note": "gated 2026-11-17: isSiteAdmin via read session, as siblings"
+    },
+    {
+      "route": "/api/admin/revenue",
+      "file": "packages/web/app/api/admin/revenue/route.ts",
+      "class": "admin",
+      "methods": [
+        "GET"
+      ],
+      "note": "gated 2026-11-17: isSiteAdmin via read session, as siblings"
+    },
+    {
+      "route": "/api/agents",
+      "file": "packages/web/app/api/agents/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/agents/[address]",
+      "file": "packages/web/app/api/agents/[address]/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/agents/declare",
+      "file": "packages/web/app/api/agents/declare/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ],
+      "note": "two signatures: agent + operator"
+    },
+    {
+      "route": "/api/agents/declare/pending",
+      "file": "packages/web/app/api/agents/declare/pending/route.ts",
+      "class": "mixed: POST signature-gated / GET public",
+      "methods": [
+        "POST",
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/agents/mind",
+      "file": "packages/web/app/api/agents/mind/route.ts",
+      "class": "mixed: POST signature-gated+declared+quota / GET public",
+      "methods": [
+        "POST",
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/agents/seeking",
+      "file": "packages/web/app/api/agents/seeking/route.ts",
+      "class": "mixed: POST signature-gated / GET public",
+      "methods": [
+        "POST",
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/agents/seeking/offers",
+      "file": "packages/web/app/api/agents/seeking/offers/route.ts",
+      "class": "mixed: POST signature-gated / GET public",
+      "methods": [
+        "POST",
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/agents/sponsor",
+      "file": "packages/web/app/api/agents/sponsor/route.ts",
+      "class": "public",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "note": "quote-only; sponsor signature embedded"
+    },
+    {
+      "route": "/api/avatar/[blobId]",
+      "file": "packages/web/app/api/avatar/[blobId]/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/browse",
+      "file": "packages/web/app/api/browse/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/checkout/prepare",
+      "file": "packages/web/app/api/checkout/prepare/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/checkout/submit",
+      "file": "packages/web/app/api/checkout/submit/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ],
+      "note": "proveTransaction + issued_quotes; all spends execute here"
+    },
+    {
+      "route": "/api/checkout/subscribe",
+      "file": "packages/web/app/api/checkout/subscribe/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/checkout/tip",
+      "file": "packages/web/app/api/checkout/tip/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/checkout/unlock",
+      "file": "packages/web/app/api/checkout/unlock/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only; blockers not clamps"
+    },
+    {
+      "route": "/api/comments",
+      "file": "packages/web/app/api/comments/route.ts",
+      "class": "mixed: GET session+entitlement / POST signature+entitlement",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/comments/[id]/authorship",
+      "file": "packages/web/app/api/comments/[id]/authorship/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/creator",
+      "file": "packages/web/app/api/creator/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/creator/accepting",
+      "file": "packages/web/app/api/creator/accepting/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/creator/perks",
+      "file": "packages/web/app/api/creator/perks/route.ts",
+      "class": "mixed: GET public / POST signature-gated",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/creator/profile",
+      "file": "packages/web/app/api/creator/profile/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/creator/tier",
+      "file": "packages/web/app/api/creator/tier/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/creator/vault",
+      "file": "packages/web/app/api/creator/vault/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only; creation fee in Coin<SUI>"
+    },
+    {
+      "route": "/api/csp-report",
+      "file": "packages/web/app/api/csp-report/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/deployment",
+      "file": "packages/web/app/api/deployment/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/earnings",
+      "file": "packages/web/app/api/earnings/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/earnings/prepare",
+      "file": "packages/web/app/api/earnings/prepare/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/follow",
+      "file": "packages/web/app/api/follow/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/keys",
+      "file": "packages/web/app/api/keys/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ],
+      "note": "PUBLIC X25519 DM keys only; no key material (W-11)"
+    },
+    {
+      "route": "/api/keys/prepare",
+      "file": "packages/web/app/api/keys/prepare/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/media/[postId]/[assetId]",
+      "file": "packages/web/app/api/media/[postId]/[assetId]/route.ts",
+      "class": "entitlement-gated",
+      "methods": [
+        "GET"
+      ],
+      "note": "403 not entitled; 503 on truncated entitlement read"
+    },
+    {
+      "route": "/api/messages",
+      "file": "packages/web/app/api/messages/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/messages/read",
+      "file": "packages/web/app/api/messages/read/route.ts",
+      "class": "signature-gated + entitlement",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/messages/threads",
+      "file": "packages/web/app/api/messages/threads/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/names",
+      "file": "packages/web/app/api/names/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/names/manage/prepare",
+      "file": "packages/web/app/api/names/manage/prepare/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/names/owned",
+      "file": "packages/web/app/api/names/owned/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/names/purchase/prepare",
+      "file": "packages/web/app/api/names/purchase/prepare/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/names/reverse",
+      "file": "packages/web/app/api/names/reverse/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/notifications",
+      "file": "packages/web/app/api/notifications/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/posts",
+      "file": "packages/web/app/api/posts/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ],
+      "note": "publish; sealed bodies encrypted server-side, no plaintext persisted"
+    },
+    {
+      "route": "/api/posts/[id]",
+      "file": "packages/web/app/api/posts/[id]/route.ts",
+      "class": "mixed: summary public / body entitlement-gated",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/posts/[id]/authorship",
+      "file": "packages/web/app/api/posts/[id]/authorship/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/purchases",
+      "file": "packages/web/app/api/purchases/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/referrals",
+      "file": "packages/web/app/api/referrals/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/seal",
+      "file": "packages/web/app/api/seal/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ],
+      "note": "config + committee discovery; releases no key material (W-11)"
+    },
+    {
+      "route": "/api/session",
+      "file": "packages/web/app/api/session/route.ts",
+      "class": "mixed: POST signature-gated / GET, DELETE public",
+      "methods": [
+        "POST",
+        "GET",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/site-mode",
+      "file": "packages/web/app/api/site-mode/route.ts",
+      "class": "mixed: GET public / POST admin",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/stake",
+      "file": "packages/web/app/api/stake/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/stake/accepting",
+      "file": "packages/web/app/api/stake/accepting/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/stake/rebate",
+      "file": "packages/web/app/api/stake/rebate/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/stake/settings",
+      "file": "packages/web/app/api/stake/settings/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/stake/suggested",
+      "file": "packages/web/app/api/stake/suggested/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/stake/vault",
+      "file": "packages/web/app/api/stake/vault/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/stake/withdraw",
+      "file": "packages/web/app/api/stake/withdraw/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/stake/yield",
+      "file": "packages/web/app/api/stake/yield/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only"
+    },
+    {
+      "route": "/api/studio/content-price",
+      "file": "packages/web/app/api/studio/content-price/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/studio/price",
+      "file": "packages/web/app/api/studio/price/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "quote-only; creator-cap checked at execution"
+    },
+    {
+      "route": "/api/studio/upload",
+      "file": "packages/web/app/api/studio/upload/route.ts",
+      "class": "signature-gated",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/telemetry/error",
+      "file": "packages/web/app/api/telemetry/error/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/waitlist",
+      "file": "packages/web/app/api/waitlist/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/zklogin/complete",
+      "file": "packages/web/app/api/zklogin/complete/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "Google JWT verified server-side; salt derived from ZKLOGIN_SEED"
+    },
+    {
+      "route": "/api/zklogin/export",
+      "file": "packages/web/app/api/zklogin/export/route.ts",
+      "class": "public",
+      "methods": [
+        "POST"
+      ],
+      "note": "Google JWT verified server-side"
+    },
+    {
+      "route": "/api/zklogin/session",
+      "file": "packages/web/app/api/zklogin/session/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/robots.txt",
+      "file": "packages/web/app/robots.txt/route.ts",
+      "class": "public",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/unsubscribe",
+      "file": "packages/web/app/unsubscribe/route.ts",
+      "class": "public",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "note": "valid HMAC unsubscribe token required"
+    }
+  ],
+  "pages": [
+    {
+      "route": "/",
+      "file": "packages/web/app/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/account/recovery",
+      "file": "packages/web/app/(app)/account/recovery/page.tsx",
+      "class": "public (shell)"
+    },
+    {
+      "route": "/admin",
+      "file": "packages/web/app/(app)/admin/page.tsx",
+      "class": "public shell; widgets admin-gated"
+    },
+    {
+      "route": "/admin/errors",
+      "file": "packages/web/app/(app)/admin/errors/page.tsx",
+      "class": "public shell; failure list admin-gated"
+    },
+    {
+      "route": "/alerts",
+      "file": "packages/web/app/(app)/alerts/page.tsx",
+      "class": "public shell; personalised"
+    },
+    {
+      "route": "/auth/callback",
+      "file": "packages/web/app/(app)/auth/callback/page.tsx",
+      "class": "public (client-only)"
+    },
+    {
+      "route": "/creator",
+      "file": "packages/web/app/(app)/creator/page.tsx",
+      "class": "session-aware"
+    },
+    {
+      "route": "/earnings",
+      "file": "packages/web/app/(app)/earnings/page.tsx",
+      "class": "public shell"
+    },
+    {
+      "route": "/join",
+      "file": "packages/web/app/(app)/join/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/messages",
+      "file": "packages/web/app/(app)/messages/page.tsx",
+      "class": "session-aware"
+    },
+    {
+      "route": "/names",
+      "file": "packages/web/app/(app)/names/page.tsx",
+      "class": "session-aware"
+    },
+    {
+      "route": "/purchases",
+      "file": "packages/web/app/(app)/purchases/page.tsx",
+      "class": "public shell"
+    },
+    {
+      "route": "/referrals",
+      "file": "packages/web/app/(app)/referrals/page.tsx",
+      "class": "public shell"
+    },
+    {
+      "route": "/studio",
+      "file": "packages/web/app/(app)/studio/page.tsx",
+      "class": "session-aware"
+    },
+    {
+      "route": "/vault/[id]",
+      "file": "packages/web/app/(app)/vault/[id]/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/verified",
+      "file": "packages/web/app/(app)/verified/page.tsx",
+      "class": "public (permanent redirect to /names)"
+    },
+    {
+      "route": "/add-funds",
+      "file": "packages/web/app/add-funds/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/agents",
+      "file": "packages/web/app/agents/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/agents/[handle]",
+      "file": "packages/web/app/agents/[handle]/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/agents/build",
+      "file": "packages/web/app/agents/build/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/agents/declare",
+      "file": "packages/web/app/agents/declare/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/agents/reference",
+      "file": "packages/web/app/agents/reference/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/c/[handle]",
+      "file": "packages/web/app/c/[handle]/page.tsx",
+      "class": "public; entitlement-aware"
+    },
+    {
+      "route": "/chests",
+      "file": "packages/web/app/chests/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/creators",
+      "file": "packages/web/app/creators/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/disclosure",
+      "file": "packages/web/app/disclosure/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/explore",
+      "file": "packages/web/app/explore/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/explore/agents",
+      "file": "packages/web/app/explore/agents/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/feed",
+      "file": "packages/web/app/feed/page.tsx",
+      "class": "session-gated (redirect /signin)"
+    },
+    {
+      "route": "/legal/creator-terms",
+      "file": "packages/web/app/legal/creator-terms/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/legal/privacy",
+      "file": "packages/web/app/legal/privacy/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/legal/terms",
+      "file": "packages/web/app/legal/terms/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/p/[id]",
+      "file": "packages/web/app/p/[id]/page.tsx",
+      "class": "public; body entitlement-aware"
+    },
+    {
+      "route": "/security",
+      "file": "packages/web/app/security/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/signin",
+      "file": "packages/web/app/signin/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/treasury",
+      "file": "packages/web/app/treasury/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/vault",
+      "file": "packages/web/app/vault/page.tsx",
+      "class": "session-aware"
+    },
+    {
+      "route": "/waitlist",
+      "file": "packages/web/app/waitlist/page.tsx",
+      "class": "public"
+    },
+    {
+      "route": "/welcome",
+      "file": "packages/web/app/welcome/page.tsx",
+      "class": "session-gated (redirect /signin)"
+    }
+  ],
+  "envVars": {
+    "inExample": [
+      {
+        "name": "POSTGRES_PASSWORD",
+        "class": "secret"
+      },
+      {
+        "name": "WEB_PORT",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_NETWORK",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_GRPC_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_PACKAGE_ID",
+        "class": "deployment-id",
+        "mainnetJson": "match (packageId, v1 original)"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_LATEST_PACKAGE_ID",
+        "class": "deployment-id",
+        "mainnetJson": "match (v5, the newest upgrade) — enforced by scripts/check-deployment-ids.mjs"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_PLATFORM_ID",
+        "class": "deployment-id",
+        "mainnetJson": "match (shared.platform)"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_REGISTRY_ID",
+        "class": "deployment-id",
+        "mainnetJson": "match (shared.registry)"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_KEY_REGISTRY_ID",
+        "class": "deployment-id",
+        "mainnetJson": "match (upgrades.v2.created.keyRegistry)"
+      },
+      {
+        "name": "PROJECTX_DAEMON_SIGNER_SECRET",
+        "class": "secret",
+        "note": "gas-only; empty = dry-run"
+      },
+      {
+        "name": "PROJECTX_DAEMON_TICK_SECONDS",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_GOOGLE_CLIENT_ID",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_ZKLOGIN_REDIRECT_URI",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_ZKLOGIN_PROVER_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_ZKLOGIN_SEED",
+        "class": "secret",
+        "note": "backup-critical; never rotatable; every zkLogin address is a function of it"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_NAMES_PACKAGE_ID",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_NAMES_REGISTRAR_ID",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_NAMES_STOREFRONT_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_VAULT_COIN_TYPES",
+        "class": "deployment-id",
+        "note": "unset = no vault can open"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SUGGESTED_VALIDATOR",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SUGGESTED_VALIDATOR_NAME",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_WALRUS_AGGREGATOR_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_WALRUS_PUBLISHER_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_WALRUS_PUBLISHER_JWT_SECRET",
+        "class": "secret",
+        "note": "alone authorises spending publisher wallet"
+      },
+      {
+        "name": "PROJECTX_DATABASE_URL",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_TEST_DATABASE_URL",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_DAEMON_DATABASE_URL",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_PUBLISHER_ADDRESS",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_WEB_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BEHIND_CLOUDFLARE",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SUINS_REGISTRATION_TYPE",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_ZKLOGIN_PROVER_KEY",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_ZKLOGIN_DISABLED",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_DAEMON_GAS_BUDGET_MIST",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_READ_PER_MINUTE",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_WRITE_PER_MINUTE",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_PURCHASE_PER_HOUR",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_ONRAMP_PER_HOUR",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_SIMULATE_PER_MINUTE",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_PUBLISH_PER_HOUR",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_BREAKER_MESSAGE_PER_MINUTE",
+        "class": "public"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_EDGE_SECRET",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_DAEMON_HEARTBEAT_URL",
+        "class": "deployment-id"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SPONSOR_KEY",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_AGENT_MANIFEST_KEY",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SEAL_API_KEY",
+        "class": "secret"
+      },
+      {
+        "name": "RESEND_API_KEY",
+        "class": "secret"
+      },
+      {
+        "name": "WEIR_EMAIL_TOKEN_SECRET",
+        "class": "secret"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SEAL_KEY_SERVERS",
+        "class": "deployment-id",
+        "note": "csv objectId|weight|aggregatorUrl; no default committee"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SEAL_THRESHOLD",
+        "class": "public",
+        "note": "required; <= total weight"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_SEAL_API_KEY_NAME",
+        "class": "public",
+        "note": "paired with SEAL_API_KEY, all-or-none"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_MIND_PACKAGE_ID",
+        "class": "deployment-id",
+        "note": "required for /api/agents/mind; not recorded in-tree (see mainnet.json satellitePackages)"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_MIND_MAX_BYTES",
+        "class": "public",
+        "note": "optional; blank = mind route closed (501)"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_MIND_QUOTA_CAPACITY",
+        "class": "public",
+        "note": "optional"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_MIND_QUOTA_MS_PER_TOKEN",
+        "class": "public",
+        "note": "optional"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_PLATFORM_CAP_ID",
+        "class": "deployment-id",
+        "note": "optional; agent-manifest custody section"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_UPGRADE_CAP_ID",
+        "class": "deployment-id",
+        "note": "optional; agent-manifest custody section"
+      }
+    ],
+    "readByCodeButNotInExample": [],
+    "note": "After remediation 2026-11-17: every variable the code reads is documented in .env.example; the four formerly-undocumented ones plus five more (mind quota knobs, cap ids) were added, and scripts/check-deployment-ids.mjs enforces the chain-id subset in CI."
+  },
+  "migrations": [
+    {
+      "n": 1,
+      "file": "001_init.sql",
+      "summary": "core schema; founding rule: no entitlement table"
+    },
+    {
+      "n": 2,
+      "file": "002_e2e.sql",
+      "summary": "DM E2E encryption columns + encryption_keys"
+    },
+    {
+      "n": 3,
+      "file": "003_encrypted_is_open.sql",
+      "summary": "CHECK: encrypted messages cannot be paid"
+    },
+    {
+      "n": 4,
+      "file": "004_keys_move_on_chain.sql",
+      "summary": "drop encryption_keys; X25519 to on-chain key_registry"
+    },
+    {
+      "n": 5,
+      "file": "005_search.sql",
+      "summary": "trigram GIN indexes"
+    },
+    {
+      "n": 6,
+      "file": "006_accounts_without_vaults.sql",
+      "summary": "profiles.vault_id nullable"
+    },
+    {
+      "n": 7,
+      "file": "007_one_profile_per_vault.sql",
+      "summary": "UNIQUE(vault_id)"
+    },
+    {
+      "n": 8,
+      "file": "008_close_postgrest_exposure.sql",
+      "summary": "RLS on six original tables"
+    },
+    {
+      "n": 9,
+      "file": "009_drop_dead_stake_vault_id.sql",
+      "summary": "drop never-written column"
+    },
+    {
+      "n": 10,
+      "file": "010_media_to_walrus.sql",
+      "summary": "assets -> Walrus blob ids"
+    },
+    {
+      "n": 11,
+      "file": "011_signature_replay.sql",
+      "summary": "used_signatures (sha256 only)"
+    },
+    {
+      "n": 12,
+      "file": "012_issued_quotes.sql",
+      "summary": "quote ledger; submit refuses foreign bytes"
+    },
+    {
+      "n": 13,
+      "file": "013_read_sessions.sql",
+      "summary": "read_sessions; kills ?reader= spoofing"
+    },
+    {
+      "n": 14,
+      "file": "014_waitlist.sql",
+      "summary": "waitlist_signups"
+    },
+    {
+      "n": 15,
+      "file": "015_site_mode.sql",
+      "summary": "site_mode front-door state"
+    },
+    {
+      "n": 16,
+      "file": "016_waitlist_growth.sql",
+      "summary": "ref codes, launch target"
+    },
+    {
+      "n": 17,
+      "file": "017_creator_perks.sql",
+      "summary": "creator_perks, supporters_first"
+    },
+    {
+      "n": 18,
+      "file": "018_access_codes.sql",
+      "summary": "access_codes + access_passes"
+    },
+    {
+      "n": 19,
+      "file": "019_seal_key_custody.sql",
+      "summary": "media keys to Seal (platform cannot decrypt at rest)"
+    },
+    {
+      "n": 20,
+      "file": "020_sealed_bodies.sql",
+      "summary": "post bodies sealed to Walrus; sealed posts store body=''"
+    },
+    {
+      "n": 21,
+      "file": "021_subscriber_bodies.sql",
+      "summary": "body_tier/body_period (period identity at publish)"
+    },
+    {
+      "n": 22,
+      "file": "022_subscriber_media.sql",
+      "summary": "seal_tier/seal_period on assets"
+    },
+    {
+      "n": 23,
+      "file": "023_agent_accounts.sql",
+      "summary": "agent register (two signatures)"
+    },
+    {
+      "n": 24,
+      "file": "024_agent_requests.sql",
+      "summary": "agent write idempotency"
+    },
+    {
+      "n": 25,
+      "file": "025_quotas.sql",
+      "summary": "agent_quotas in Postgres"
+    },
+    {
+      "n": 26,
+      "file": "026_close_creator_perks_exposure.sql",
+      "summary": "RLS on last PostgREST-writable table"
+    },
+    {
+      "n": 27,
+      "file": "027_agent_sponsorships.sql",
+      "summary": "sponsored seats, bounded"
+    },
+    {
+      "n": 28,
+      "file": "028_statement_timeout.sql",
+      "summary": "statement_timeout for app role"
+    },
+    {
+      "n": 29,
+      "file": "029_rls_and_revoke_on_every_table.sql",
+      "summary": "RLS + REVOKE everywhere"
+    },
+    {
+      "n": 30,
+      "file": "030_sponsored_vaults.sql",
+      "summary": "meter sponsored vault openings"
+    },
+    {
+      "n": 31,
+      "file": "031_vault_ids_are_normalised.sql",
+      "summary": "sargable vault_id CHECK"
+    },
+    {
+      "n": 32,
+      "file": "032_prices_are_whole_numbers.sql",
+      "summary": "integer-money CHECKs"
+    },
+    {
+      "n": 33,
+      "file": "033_drop_the_redundant_slot_index.sql",
+      "summary": "index hygiene"
+    },
+    {
+      "n": 34,
+      "file": "034_machine_bodies.sql",
+      "summary": "second sealing under <key>#machine"
+    },
+    {
+      "n": 35,
+      "file": "035_declaration_requests.sql",
+      "summary": "parked agent declaration halves"
+    },
+    {
+      "n": 36,
+      "file": "036_agent_minds.sql",
+      "summary": "agent_minds (Seal envelope)"
+    },
+    {
+      "n": 37,
+      "file": "037_agent_seeking.sql",
+      "summary": "seeking + operator offers"
+    },
+    {
+      "n": 38,
+      "file": "038_authorship_proof.sql",
+      "summary": "posts retain publish signature"
+    },
+    {
+      "n": 39,
+      "file": "039_operator_footprint.sql",
+      "summary": "operator observables"
+    },
+    {
+      "n": 40,
+      "file": "040_comment_authorship.sql",
+      "summary": "comments retain signature"
+    },
+    {
+      "n": 41,
+      "file": "041_footprint_observed_at.sql",
+      "summary": "footprint timestamps"
+    },
+    {
+      "n": 42,
+      "file": "042_waitlist_email_sends.sql",
+      "summary": "insert-before-send guard"
+    },
+    {
+      "n": 43,
+      "file": "043_profile_image.sql",
+      "summary": "image_blob_id avatars"
+    },
+    {
+      "n": 44,
+      "file": "044_error_events.sql",
+      "summary": "error_events table"
+    }
+  ],
+  "paidPostFlow": [
+    {
+      "step": 1,
+      "stage": "session",
+      "what": "zkLogin availability probe",
+      "where": [
+        "app/api/zklogin/session/route.ts",
+        "lib/zklogin.ts#maxEpochFrom"
+      ]
+    },
+    {
+      "step": 2,
+      "stage": "session",
+      "what": "Google door: ephemeral key + nonce, pending session",
+      "where": [
+        "components/signer/SignerKit.tsx#signInWithGoogle",
+        "lib/zklogin.ts#buildAuthUrl"
+      ]
+    },
+    {
+      "step": 3,
+      "stage": "session",
+      "what": "JWT verify, HKDF salt, address, ZK proof",
+      "where": [
+        "app/api/zklogin/complete/route.ts",
+        "lib/zklogin-server.ts#verifyGoogleIdToken",
+        "lib/zklogin-server.ts#deriveUserSalt",
+        "lib/zklogin-server.ts#requestProof"
+      ]
+    },
+    {
+      "step": 4,
+      "stage": "session",
+      "what": "wallet door: read-content statement",
+      "where": [
+        "components/signer/SignerKit.tsx#proveSession",
+        "packages/sdk/src/statements.ts#statementFor"
+      ]
+    },
+    {
+      "step": 5,
+      "stage": "session",
+      "what": "verifyAction (single-use) -> mintReadSession cookie",
+      "where": [
+        "app/api/session/route.ts",
+        "lib/identity.ts#verifyAction",
+        "lib/identity.ts#spendSignature",
+        "lib/read-session.ts#mintReadSession"
+      ]
+    },
+    {
+      "step": 6,
+      "stage": "creation",
+      "what": "composer (access=paid, content key, price)",
+      "where": [
+        "components/StudioComposer.tsx"
+      ]
+    },
+    {
+      "step": 7,
+      "stage": "creation",
+      "what": "price the content key on chain: creator::set_content_price",
+      "where": [
+        "StudioComposer.tsx#priceKeyOnChain",
+        "app/api/studio/price/route.ts",
+        "lib/checkout.ts#prepareSetContentPrice",
+        "packages/sdk/src/tx.ts#setContentPrice"
+      ]
+    },
+    {
+      "step": 8,
+      "stage": "creation",
+      "what": "publish: verifyActionDeferringSpend, vault+price re-read, sealBothEditions",
+      "where": [
+        "app/api/posts/route.ts",
+        "lib/identity.ts#verifyActionDeferringSpend",
+        "lib/machine-pricing.ts#sealBothEditions",
+        "packages/sdk/src/creator.ts#readContentPrice"
+      ]
+    },
+    {
+      "step": 9,
+      "stage": "encryption",
+      "what": "AES-256-GCM blob encrypt",
+      "where": [
+        "lib/body-storage.ts#storeBody",
+        "lib/blob-crypto.ts#encryptBlob"
+      ]
+    },
+    {
+      "step": 10,
+      "stage": "encryption",
+      "what": "Seal wrap AES key to unlock/period identity (SealClient.encrypt, key servers hold shares)",
+      "where": [
+        "lib/seal.ts#sealUnlockKey",
+        "lib/seal.ts#sealPeriodKey",
+        "lib/seal.ts#sealTo",
+        "packages/sdk/src/seal.ts#unlockIdentity",
+        "packages/sdk/src/seal.ts#periodIdentity"
+      ]
+    },
+    {
+      "step": 11,
+      "stage": "upload",
+      "what": "publisher JWT (60s exp) then PUT blob",
+      "where": [
+        "lib/publisher-token.ts#grantUpload",
+        "lib/walrus.ts#storeBlob"
+      ]
+    },
+    {
+      "step": 12,
+      "stage": "persist",
+      "what": "row with body='' + sealed envelope",
+      "where": [
+        "lib/content.ts#addPost"
+      ]
+    },
+    {
+      "step": 13,
+      "stage": "purchase",
+      "what": "paywall render (visiblePost strips body)",
+      "where": [
+        "app/p/[id]/page.tsx",
+        "lib/entitlement.ts#readEntitlements",
+        "lib/entitlement.ts#canRead",
+        "lib/entitlement.ts#sealApprover",
+        "lib/content.ts#visiblePost"
+      ]
+    },
+    {
+      "step": 14,
+      "stage": "purchase",
+      "what": "quote: split Coin<T>, moveCall creator::unlock<T>, change back, simulate, rememberQuote",
+      "where": [
+        "components/app/use-unlock.ts",
+        "app/api/checkout/unlock/route.ts",
+        "lib/checkout.ts#prepareUnlock"
+      ]
+    },
+    {
+      "step": 15,
+      "stage": "purchase",
+      "what": "sign + submit: proveTransaction, issued_quotes consumed, execute, checkpoint",
+      "where": [
+        "app/api/checkout/submit/route.ts",
+        "lib/checkout.ts#submitSigned"
+      ]
+    },
+    {
+      "step": 16,
+      "stage": "settlement",
+      "what": "assert_payable -> settle (compute_split) -> PaymentSettled -> entitlement::new_unlock mints soulbound Unlock",
+      "where": [
+        "sui-contracts/sources/creator.move#unlock",
+        "sui-contracts/sources/creator.move#settle",
+        "sui-contracts/sources/creator.move#compute_split",
+        "sui-contracts/sources/entitlement.move#new_unlock"
+      ]
+    },
+    {
+      "step": 17,
+      "stage": "key-release",
+      "what": "committee discovery only (no key material)",
+      "where": [
+        "app/api/seal/route.ts",
+        "packages/sdk/src/config.ts#loadSealConfig"
+      ]
+    },
+    {
+      "step": 18,
+      "stage": "key-release",
+      "what": "server entitlement gate for media (403/503)",
+      "where": [
+        "app/api/media/[postId]/[assetId]/route.ts"
+      ]
+    },
+    {
+      "step": 19,
+      "stage": "key-release",
+      "what": "client builds approval PTB (seal_approve_unlock / creator::seal_approve_subscription); key servers execute it and release shares to threshold",
+      "where": [
+        "components/SealedBody.tsx",
+        "lib/seal-session.ts#sessionKeyFor",
+        "lib/seal-open.ts#approvalFor",
+        "packages/sdk/src/seal.ts#approveUnlock",
+        "sui-contracts/sources/entitlement.move#seal_approve_unlock"
+      ]
+    },
+    {
+      "step": 20,
+      "stage": "decrypt-render",
+      "what": "fetch ciphertext from public aggregator, AES-GCM open, sha256 check, render",
+      "where": [
+        "components/SealedBody.tsx",
+        "lib/seal-open.ts#openBlob",
+        "components/PostBody.tsx",
+        "components/SealedMedia.tsx",
+        "lib/seal-open.ts#openSealedMedia"
+      ]
+    }
+  ],
+  "designRules": [
+    {
+      "rule": "Nothing hardcoded that belongs to a deployment",
+      "enforced": [
+        "packages/sdk/src/config.ts (typed refusals, no defaults)",
+        ".env.example header",
+        "sui-contracts/deploy/mainnet.json _comment",
+        "lib/agent-manifest.ts (chain-read at request time)"
+      ]
+    },
+    {
+      "rule": "A failed read is never a value",
+      "enforced": [
+        "packages/sdk/src/reading.ts (Reading<T>)",
+        "app/api/media/[postId]/[assetId]/route.ts (503 on truncated entitlement read, never downgrade)"
+      ]
+    },
+    {
+      "rule": "A default must not make an impossible state look cheap",
+      "enforced": [
+        "lib/checkout.ts#prepareUnlock (blockers: price-moved, not-for-sale, insufficient-balance)",
+        "lib/rate-limit.ts (non-integer/0 closes bucket)",
+        "lib/identity.ts#sweepUsedSignatures",
+        "sui-contracts/sources/stake_ladder.move#stake_one_rung (declines, returns 0)"
+      ]
+    },
+    {
+      "rule": "Mirrored constants tested against their source",
+      "enforced": [
+        "packages/sdk/test (Move-source mirror tests)",
+        "sui-contracts/tests/split_property_tests.move",
+        "scripts/check-ladder-drift.sh"
+      ]
+    },
+    {
+      "rule": "Nothing signed that was not first simulated",
+      "enforced": [
+        "lib/checkout.ts (quote -> rememberQuote -> issued_quotes, migration 012)",
+        "app/api/checkout/submit/route.ts",
+        "packages/signer policy-signer",
+        "packages/agent spend guard"
+      ]
+    },
+    {
+      "rule": "Integers for money",
+      "enforced": [
+        "packages/sdk money handling (bigint smallest unit, readDecimals)",
+        "sui-contracts compute_split / compute_yield_split (u128 intermediates)",
+        "db/032_prices_are_whole_numbers.sql"
+      ]
+    },
+    {
+      "rule": "Every signature is single-use, reads included",
+      "enforced": [
+        "lib/identity.ts#isSingleUse (true for every action)",
+        "lib/identity.ts#spendSignature + used_signatures (migration 011)",
+        "POST /api/session spends the read-content signature"
+      ]
+    }
+  ],
+  "remediation": "Findings W-01..W-12 remediated 2026-11-17; see findings.json resolutions. Move suites 211+137+4 green; web typecheck green; admin/revenue tests 20/20."
+}

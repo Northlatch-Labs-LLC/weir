@@ -115,9 +115,12 @@ idle → preparing → simulating → awaiting-signature → submitted → confi
 - `rejected` — the user declined. Nothing was spent. Say exactly that.
 - `failed` — say what failed, **what state the money is in**, and what to do next.
 
-The prototype already models this (`packages/site/src/components/post/PaymentDialog.tsx`,
-`preparing / submitted / confirming / settled / rejected / failed`). That component moves into
-`packages/ui` and becomes the only path to a payment in the application.
+This shipped. The payment flow these states describe is `packages/web/components/app/UnlockDialog.tsx`
+driven by `use-unlock.ts` (with `use-checkout.ts` behind subscribe/tip), quoting through
+`/api/checkout/*` and settling through `/api/checkout/submit`; the digest-is-shown-before-confirmation
+step is the checkpoint wait in `packages/web/lib/checkout.ts` `submitSigned`. The current
+end-to-end map, kept current, is `audit/01-architecture.md` §4 — this document is the spec the
+implementation was checked against, not the map of where it lives.
 
 **Idempotency.** Every settlement write sends an `Idempotency-Key` (the mechanism already exists at
 `packages/web/lib/idempotent-route.ts`). A retried submit must never double-charge.
