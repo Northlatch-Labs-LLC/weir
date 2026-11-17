@@ -7,12 +7,21 @@ import { describe, expect, it } from 'vitest';
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8');
 
-function inlineThemeScript(): string {
+function inlineScripts(): string[] {
   const src = read('app/layout.tsx');
-  const block = /__html:\s*((?:\s*'(?:[^'\\]|\\.)*'\s*\+?)+)\s*,/.exec(src);
-  if (block === null) return '';
-  const parts = [...block[1]!.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1] ?? '');
-  return parts.join('').replaceAll('\\"', '"').replaceAll("\\'", "'");
+  const blocks = [...src.matchAll(/__html:\s*((?:\s*'(?:[^'\\]|\\.)*'\s*\+?)+)\s*,/g)];
+  return blocks.map((block) => {
+    const parts = [...block[1]!.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1] ?? '');
+    return parts.join('').replaceAll('\\"', '"').replaceAll("\\'", "'");
+  });
+}
+
+function inlineThemeScript(): string {
+  return inlineScripts()[0] ?? '';
+}
+
+function inlineServiceWorkerScript(): string {
+  return inlineScripts()[1] ?? '';
 }
 
 const config = () => read('next.config.ts');
@@ -27,6 +36,43 @@ describe('the inline script is allowed by its own hash', () => {
   it('is the hash the policy actually carries', () => {
     const digest = createHash('sha256').update(inlineThemeScript()).digest('base64');
     expect(config()).toContain(digest);
+  });
+});
+
+describe('the service worker registration script is allowed by its own hash', () => {
+  it('finds the second inline script at all', () => {
+    const script = inlineServiceWorkerScript();
+    expect(script.length).toBeGreaterThan(40);
+    expect(script).toContain('serviceWorker');
+  });
+
+  it('is the hash the policy actually carries', () => {
+    const digest = createHash('sha256').update(inlineServiceWorkerScript()).digest('base64');
+    expect(config()).toContain(digest);
+  });
+});
+
+describe('what the report-only policy observes', () => {
+  const headers = config();
+  const reportOnly =
+    /key: 'Content-Security-Policy-Report-Only',\s*value: \[([\s\S]*?)\]/.exec(headers)?.[1] ?? '';
+  // The policy is assembled from constants, so the source names `${INLINE_...}` where the
+  // header will carry the digest. Resolve those references, or the assertion below would be
+  // about names in the source rather than the hash the browser actually sees.
+  const resolved = reportOnly.replaceAll(
+    /\$\{([A-Z0-9_]+)\}/g,
+    (reference, name: string) => new RegExp(`const ${name} = '([^']+)'`).exec(headers)?.[1] ?? reference,
+  );
+
+  it('carries a hash for every inline script layout renders, so enforcement cannot blank the page', () => {
+    // Layout renders exactly two inline scripts: the theme pick and the service worker
+    // registration. A third would not be covered by anything here, which is why the count
+    // itself is asserted.
+    expect(inlineScripts().length).toBe(2);
+    const theme = createHash('sha256').update(inlineThemeScript()).digest('base64');
+    const sw = createHash('sha256').update(inlineServiceWorkerScript()).digest('base64');
+    expect(resolved).toContain(`'sha256-${theme}'`);
+    expect(resolved).toContain(`'sha256-${sw}'`);
   });
 });
 

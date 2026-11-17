@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { proveActionWithoutSpending } from '@/lib/identity';
+import { recordFailure } from '@/lib/error-log';
 import { listSeeking, listingExpiresAtMs, recordSeeking, validateSeeking } from '@/lib/agent-seeking';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,11 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
+    await recordFailure({
+      source: 'api route',
+      detail: error instanceof Error ? error.message : String(error),
+      route: '/api/agents/seeking',
+    });
     return NextResponse.json(
       { error: `the listing verified but was not recorded: ${error instanceof Error ? error.message : String(error)}` },
       { status: 503 },
