@@ -980,6 +980,15 @@ a.tier:hover {
   letter-spacing: var(--tracking-heading);
   color: var(--text-primary);
 }
+/* The vault page reads its figures into auto-fit columns as narrow as 140px. The base stat size
+   is a display size (36px), which the creator page already overrides inline on every value; a
+   long decimal like 0.001554198 at that size is wider than its column and spills over the card.
+   Fact lists read at the creator page's size, and a figure that cannot fit wraps inside its
+   column rather than escaping it. */
+.vault-facts .stat .v {
+  font-size: var(--text-h4);
+  overflow-wrap: anywhere;
+}
 
 .empty {
   text-align: center;
