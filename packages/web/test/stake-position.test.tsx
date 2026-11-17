@@ -129,8 +129,14 @@ describe('stake vaults are read from chain, not from a column', () => {
   });
 
   it('lists every vault the creator has opened rather than the first found', () => {
-    expect(page).toContain('walked.value.vaults.filter');
-    expect(page).not.toContain('walked.value.vaults.find');
+    // The page's first source was the StakeVaultOpened event walk, and this assertion pinned its
+    // shape (filter over the walk, never find). That walk returned zero on the mainnet gRPC
+    // endpoint's recent-events window — every creator's page said they had opened no pool — and
+    // the pool is now found through the owner's StakeCaps. The every-vaults property lives in the
+    // lib: findStakeCaps collects every cap the owner holds, and the page chooses from that list.
+    expect(stake).toContain('caps.push(');
+    expect(page).toContain('stakeCaps.value[0]?.vaultId ?? null');
+    expect(page).not.toContain('walked.value.vaults');
   });
 
   it('does not treat the stored column as the list', () => {

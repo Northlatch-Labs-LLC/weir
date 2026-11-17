@@ -275,15 +275,16 @@ export default async function CreatorPage({
   const depositSlot =
     viewer === null ? (
       <Wall why="Backing an account needs an account." />
-    ) : onChainStakeVault === undefined ? (
+    ) : onChainStakeVault == null ? (
+      // One style block serves both prose states — the token budget ratchets down, never up.
       <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
-        The backing pool could not be read from the chain just now. That is a failed read, not an
-        answer: this page is not saying the account has no pool, and it is not saying it has one.
-        Try again in a moment.
-      </p>
-    ) : onChainStakeVault === null ? (
-      <p style={{ margin: 0, color: DIM, fontSize: '0.9375rem' }}>
-        {viewer === profile.owner ? (
+        {onChainStakeVault === undefined ? (
+          <>
+            The backing pool could not be read from the chain just now. That is a failed read, not an
+            answer: this page is not saying the account has no pool, and it is not saying it has one.
+            Try again in a moment.
+          </>
+        ) : viewer === profile.owner ? (
           <>
             You have not opened a pool, so nobody can back you yet — and backing is the support that
             costs a reader nothing. <a href="/creator#pool">Open your pool</a>, and this becomes a
