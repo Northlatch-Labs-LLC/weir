@@ -98,7 +98,9 @@ describe('an unconfigured deployment is not a broken one', () => {
   it('reports the network even when zkLogin is unavailable', async () => {
     mockSession({ network: 'mainnet', available: false, reason: 'not set: …' });
     render(<SignerProvider eager network="mainnet" rpcUrl="http://127.0.0.1:9000"><Probe /></SignerProvider>);
-    await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'));
+    await waitFor(() => expect(screen.getByTestId('network').textContent).toBe('mainnet'), {
+      timeout: 3000,
+    });
   });
 
   it('signs nobody in on its own', async () => {

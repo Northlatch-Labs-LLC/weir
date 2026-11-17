@@ -273,6 +273,7 @@ describe('encryption', () => {
     secret = await readFile(keyPath, 'utf8');
   });
 
+  // Real openssl subprocess round trip: measured up to ~5s under parallel full-suite load; 15s ceiling.
   it('encrypts, verifies the round trip, and shreds the plaintext', async () => {
     const result = await encryptInPlace({
       keyPath,
@@ -288,7 +289,7 @@ describe('encryption', () => {
     const ciphertext = await readFile(result.value);
     expect(ciphertext.length).toBeGreaterThan(16);
     expect(ciphertext.toString('utf8')).not.toContain(BECH32_SECRET_PREFIX);
-  });
+  }, 15_000);
 
   it('refuses to encrypt over an existing ciphertext', async () => {
     const result = await encryptInPlace({

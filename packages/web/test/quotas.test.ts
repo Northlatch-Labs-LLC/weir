@@ -467,6 +467,7 @@ describeSql('the idempotency key collision path', () => {
     ).rejects.toThrow(/no unique or exclusion constraint matching/i);
   });
 
+  // Sequential Postgres round-trips on the shared test database; the default 5s per-test window expired under parallel load. 10s ceiling.
   it('will not release a claim that has already answered', async () => {
     const key = `${RUN}-d`;
     const a = addr(13);
@@ -484,5 +485,5 @@ describeSql('the idempotency key collision path', () => {
       (await pool!.query('SELECT 1 FROM agent_requests WHERE address = $1 AND key = $2', [a, key]))
         .rowCount,
     ).toBe(1);
-  });
+  }, 10_000);
 });
