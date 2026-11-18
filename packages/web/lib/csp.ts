@@ -38,7 +38,14 @@ export function cspFor(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' 'sha256-${INLINE_THEME_SCRIPT_SHA256}' 'sha256-${INLINE_SW_SCRIPT_SHA256}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "connect-src 'self'",
+    // The hosted wallet is a door, not a script. Slush's wallet runs on my.slush.app, embedded
+    // by this page as an iframe, and the SDK talks to api.slush.app — the policy names both
+    // origins or the door is shut. A browser extension injects through its own content scripts,
+    // which a page policy cannot reach, and that is why every extension door kept working the
+    // day this CSP landed and the hosted one — the first screen's wallet, for the reader who
+    // has never installed anything — silently did not.
+    "connect-src 'self' https://api.slush.app https://my.slush.app",
+    "frame-src https://my.slush.app",
     "font-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",

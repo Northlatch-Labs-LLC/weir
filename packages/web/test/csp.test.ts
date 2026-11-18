@@ -76,6 +76,15 @@ describe('the document policy is enforced with a per-request nonce', () => {
     expect(moduleSrc).toContain("frame-ancestors 'none'");
   });
 
+  it('leaves the hosted-wallet door open at exactly the origins the SDK names', () => {
+    // Slush's wallet is embedded as an iframe on my.slush.app and the SDK calls api.slush.app;
+    // the SDK's own bundle (node_modules/@mysten/slush-wallet) carries these two origins and
+    // nothing else. Extensions inject via content scripts a page policy cannot reach — the
+    // hosted wallet is the only door this policy can shut, and it did, the day it shipped.
+    expect(moduleSrc).toContain("connect-src 'self' https://api.slush.app https://my.slush.app");
+    expect(moduleSrc).toContain('frame-src https://my.slush.app');
+  });
+
   it('reports violations of the ENFORCED policy to the endpoint that exists', () => {
     expect(moduleSrc).toContain('report-uri /api/csp-report');
     expect(config()).toContain('Reporting-Endpoints');
