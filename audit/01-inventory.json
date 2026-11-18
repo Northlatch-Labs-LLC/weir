@@ -13,7 +13,7 @@
     "moveTestFunctions": 352,
     "apiRoutes": 80,
     "pages": 39,
-    "envVarsInExample": 57,
+    "envVarsInExample": 58,
     "envVarsReadByCodeNotInExample": 0,
     "migrations": 44
   },
@@ -1611,6 +1611,11 @@
         "name": "PROJECTX_SOCIAL_UPGRADE_CAP_ID",
         "class": "deployment-id",
         "note": "optional; agent-manifest custody section"
+      },
+      {
+        "name": "PROJECTX_SOCIAL_GRAPHQL_URL",
+        "class": "deployment-id",
+        "note": "added post-audit (pool-index fix, 2026-11-17): the all-vaults event walk needs full-history events; the gRPC event query serves a recent window only"
       }
     ],
     "readByCodeButNotInExample": [],
