@@ -48,6 +48,14 @@ const UNREACHABLE_ROUTES: string[] = [
 */
 const BROWSER_REACHED: string[] = ['csp-report'];
 
+/*
+  Reached by the scheduler rather than by application source: `vercel.json` names
+  /api/cron/daemon in its `crons`, and Vercel Cron GETs it hourly with the CRON_SECRET
+  bearer. No lib or component fetches it, which is why the caller scan above will never
+  see it — the exemption is the caller, not a gap.
+*/
+const SCHEDULER_REACHED: string[] = ['cron/daemon'];
+
 describe('every API route has a caller', () => {
   const routes = walk('app/api')
     .filter((f) => f.endsWith('/route.ts'))
@@ -59,7 +67,7 @@ describe('every API route has a caller', () => {
 
   const unreachable = routes.filter((route) => {
     const stem = route.split('/[')[0] ?? route;
-    if (BROWSER_REACHED.includes(stem)) return false;
+    if (BROWSER_REACHED.includes(stem) || SCHEDULER_REACHED.includes(stem)) return false;
     const needle = `api/${stem}`;
     return !sources.some(
       ({ file, text }) => !file.startsWith('app/api/') && text.includes(needle),
