@@ -6,6 +6,7 @@ import { isSiteAdmin } from '@/lib/site-admin';
 import { readSiteMode } from '@/lib/site-mode';
 import { passIsValid, passTokenFrom } from '@/lib/access-codes';
 import { isAlwaysOpen } from '@/lib/front-door';
+import { cspFor, CSP_NONCE_HEADER } from '@/lib/csp';
 
 export const config = {
   matcher: [
@@ -20,7 +21,15 @@ export const PATHNAME_HEADER = 'x-weir-pathname';
 function letThrough(request: NextRequest): NextResponse {
   const headers = new Headers(request.headers);
   headers.set(PATHNAME_HEADER, request.nextUrl.pathname);
-  return NextResponse.next({ request: { headers } });
+  // One nonce per document request, minted here where the response headers are reachable,
+  // handed to the server components through the request header and written into the
+  // enforced policy on the response. lib/csp.ts owns the policy text; this owns the
+  // freshness. Requests that render no HTML (API routes) carry a harmless extra header.
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  headers.set(CSP_NONCE_HEADER, nonce);
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set('Content-Security-Policy', cspFor(nonce));
+  return response;
 }
 
 export async function proxy(request: NextRequest) {

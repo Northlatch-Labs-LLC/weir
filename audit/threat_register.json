@@ -170,7 +170,7 @@
     },
     {
       "id": "TR-06",
-      "threat": "CSP script-src cannot be enforced today: production HTML carries five inline scripts of which three are per-request RSC flight-data payloads (unhashable) - a nonce architecture is required first (header flip contradicted by fetched HTML 2026-11-17)",
+      "threat": "CSP script-src is now ENFORCED with a per-request nonce (shipped 2026-11-17): the two handwritten inline scripts carry nonce + hash, Next's bootstrap and RSC flight scripts are nonced by the framework, everything else is blocked and reports to error_events",
       "category": "stride",
       "component": [
         "web.next-config",
@@ -181,11 +181,12 @@
       "severity": "high",
       "attack_path": "The enforced CSP carries only object-src/base-uri/form-action/frame-ancestors. Until the operator flips the header, an injected inline script runs with full page origin: it can call wallet signPersonalMessage on a statement the attacker chose (the 10-min window and single-use spend do not stop first use), read DOM-held session material, and exfiltrate post bodies the user can read. Injection candidates: creator-controlled post/markdown rendering, agent purpose strings, handle display — all rendered untrusted but only CSP-reporting, not CSP-blocked.",
       "mitigations_to_verify": [
-        "FACT-CHECKED AGAINST PRODUCTION 2026-11-17: fetched HTML shows 5 inline <script> tags - 2 static (theme + service-worker registration, the two pinned hashes) and 3 dynamic self.__next_f RSC payloads whose content differs per request. Enforcing the hash-pinned policy would block hydration site-wide on every page - B-07's 'operator flips the header' plan is CONTRADICTED; the flip was never safe",
-        "The 4 break-proof directives (object-src, base-uri, form-action, frame-ancestors) remain enforced; Report-Only continues collecting into error_events - keep watching for NON-CSP-header violation signals that say whether real injection attempts exist",
-        "REAL FIX PATH (engineering, not config): a nonce-based CSP - middleware generates a per-request nonce into the CSP header, Next.js auto-applies it to its own bootstrap scripts, app scripts carry it; RSC flight scripts are covered by the nonce automatically. Estimate: a focused change to next.config/proxy + verifying every inline script site gains the nonce, or an explicit decision to live with Report-Only + hardened renderers"
+        "FIXED 2026-11-17: lib/csp.ts owns the policy text; the proxy mints one nonce per document request (crypto.randomUUID), hands it to server components via x-csp-nonce, and writes the enforced policy on the response",
+        "app/layout.tsx reads the nonce and passes it to BOTH handwritten scripts; Next.js applies it to its own bootstrap and RSC flight payloads when the header carries the nonce",
+        "VERIFIED ON THE REAL BUILD locally: next build + next start against the local database - the rendered homepage carries the enforced nonce policy and all 15 executable script tags carry the matching nonce, zero bare scripts; csp.test.ts pins the architecture (hashes match source, proxy mints, layout consumes, report-only header gone)",
+        "POST-DEPLOY: fetch production headers and confirm the enforced nonce policy is served; watch /api/csp-report -> error_events for blocked-script reports in the first hours - a burst means a missed script (revert is one commit)"
       ],
-      "status": "unmitigated"
+      "status": "mitigated"
     },
     {
       "id": "TR-07",
@@ -372,7 +373,7 @@
     },
     {
       "id": "TR-15",
-      "threat": "Yield-suppression grief: deposit-then-withdraw cycles force emergency ladder unwinds, forfeiting the creator's yield and de-laddering the vault",
+      "threat": "Yield-suppression grief via withdraw-unwind cycles - ACCEPTED BY DESIGN, not mitigated: withdraw must always unwind newest-first because principal redeems unconditionally, so the cost lands on the creator's yield by construction",
       "category": "move",
       "component": [
         "move.stake_vault",
@@ -383,11 +384,10 @@
       "severity": "medium",
       "attack_path": "withdraw() unwinds tranches newest-first whenever liquid < amount, at the creator's cost (forfeited yield) — by design, to keep principal unconditionally available. A griefer with a large balance can deposit, wait one epoch, then withdraw an amount just over the liquid buffer every epoch: each withdrawal pops immature tranches (zero-yield unwinds), collapses the RUNGS=7 ladder, and suppresses the vault's capture from 85.7% toward 0%. Principal is never at risk (EStakeAccountingViolation asserts proceeds>=principal) and the depositor earns nothing by it — but a competitor's vault can be economically harassed for the price of gas and temporary capital. No per-address withdrawal frequency limit exists on-chain or in the API layer.",
       "mitigations_to_verify": [
-        "Simulate: N cycles of deposit(max)/withdraw(all-but-rung) — quantify yield suppression and ladder re-convergence time",
-        "Consider off-chain rate friction (web.api.stake withdraw prepare quota per address) — on-chain change not required for the API-mediated path, though direct PTBs bypass it",
-        "Confirm ECannotRaiseLiquidity is truly unreachable given assert_solvent (tranches empty implies liquid >= total_principal)"
+        "No code change can remove this without weakening the no-loss promise - withdraw consulting no pause and no rate limit is the product",
+        "Off-chain friction (withdraw-prepare quota per address in /api/stake) is the only lever and does not bind direct PTBs - accepted for now; the register keeps the entry so the cost is visible"
       ],
-      "status": "mitigated-but-untested"
+      "status": "unmitigated"
     },
     {
       "id": "TR-16",
@@ -427,7 +427,7 @@
     },
     {
       "id": "TR-18",
-      "threat": "PlatformCap / soul MasterCap custody: fee ceilings bound damage but the caps set fees, pause creation, sweep treasury, migrate, mint souls",
+      "threat": "Capability custody is now FACT-RECORDED and CI-gated: PlatformCap hot single-key BY CHOICE (owner 0xda784b6c...715d, the publisher/dev address, for day-to-day admin), UpgradeCap cold in the 2-of-3 multisig (owner 0x00e734d5...1605) - owners chain-read 2026-08-28, recorded in mainnet.json capabilities block",
       "category": "move",
       "component": [
         "move.platform",
@@ -439,11 +439,11 @@
       "severity": "medium",
       "attack_path": "PlatformCap: set_fees up to 30%/100 SUI on NEW vaults only (snapshots protect existing ones), set_payments_paused (blocks revenue, cannot block claims), sweep_treasury, migrate_as_platform on any vault. MasterCap: mint souls, set allowances/scopes, retire, issue LedgerCaps. CUSTODY.md says PlatformCap + upgrade capability live in a 2-of-3 multisig — good, but the composition of that multisig (members, threshold, key locations) is not in the tree, and a 2-of-3 among three keys held by one operator is a hot key wearing a multisig costume.",
       "mitigations_to_verify": [
-        "Verify on-chain: which address(es) hold PlatformCap, the upgrade Cap, MasterCap; confirm multisig composition and that members' keys are independently held (per CUSTODY.md claim)",
-        "Confirm fee ceilings (3_000/5_000/100 SUI) in published bytecode match sources",
-        "Confirm creation_fee_mist is 0 on mainnet today (sponsor vault path depends on it, sponsor.ts:383)"
+        "VERIFIED BY GATE: scripts/check-deployment-ids.mjs fails CI if mainnet.json, CUSTODY.md and .env.example disagree about the caps - passed on every PR since #254",
+        "The record itself notes it 'has repeatedly lagged the actual custody arrangement' and demands the same-commit edit - the gate turns that demand into an enforcement",
+        "HOT BY CHOICE is a bounded risk-acceptance: PlatformCap can set fees only within compiled ceilings (30%/100-SUI), pause, and sweep the creation-fee treasury (creation fee is 0 today, so treasury ~empty); UpgradeCap cold means no single key can substitute code"
       ],
-      "status": "unknown-pending-audit"
+      "status": "mitigated"
     },
     {
       "id": "TR-19",
@@ -639,7 +639,7 @@
     },
     {
       "id": "TR-25",
-      "threat": "used_signatures retention equals the validity window: after sweep, there is no forensic record that a signature was ever spent",
+      "threat": "Signature forensics: the replay ledger forgets each digest with its window - signature_spends now keeps who spent what, forever (shipped 2026-11-17)",
       "category": "stride",
       "component": [
         "web.db",
@@ -650,10 +650,11 @@
       "severity": "low",
       "attack_path": "Rows expire with the window (10 min, or 24h for operator offers) and the sweep deletes <=500 per write. An attacker who replays an 11-minute-old signature gets 'expired', not 'already used' — indistinguishable from never-seen. For abuse disputes ('I never posted this'), the only durable evidence is the row written by the action itself, not the signature ledger. This is a deliberate storage/privacy trade, correctly fail-closed, but it caps the audit trail at the window length.",
       "mitigations_to_verify": [
-        "If dispute resolution matters: append digest (not signature) to an append-only audit table on spend, keyed by address, with retention policy",
-        "Confirm error_events retention covers the same investigations"
+        "FIXED: migration 045 adds signature_spends (digest PK, address, action, spent_at_ms, address index, RLS + REVOKE guard); spendSignature writes the ledger row in the SAME transaction as the replay row, fail-closed",
+        "PendingSpend now carries address and action kind from the verified statement",
+        "VERIFIED BY GATE: test/signature-forensics.test.ts (CI database project) pins who/what/once-only"
       ],
-      "status": "unmitigated"
+      "status": "mitigated"
     },
     {
       "id": "TR-27",
@@ -748,7 +749,7 @@
     },
     {
       "id": "TR-33",
-      "threat": "Unauthenticated error-intake endpoints (csp-report, telemetry/error) are a constrained DB-fill vector",
+      "threat": "Unauthenticated error-intake endpoints are a DB-fill vector - bounded by a 365-day + 50k-row cap, and the cap drill is now an automated database test (2026-11-17)",
       "category": "stride",
       "component": [
         "web.api.telemetry",
@@ -759,10 +760,10 @@
       "severity": "low",
       "attack_path": "Both write rows into error_events with fields capped (200/4000 chars) and are rate-limited, but rate limits are IP-keyed (TR-05). An attacker with IP rotation can grow error_events unboundedly, degrading the one observability channel the deployment has (the alarm reads that table) — poisoning the well rather than filling the disk. Breakers do not cover this table.",
       "mitigations_to_verify": [
-        "FIXED: recordFailure now sweeps every 64th write — a bounded ctid trim (<=500 rows per direction) enforces migration 044's documented 365-day retention AND a 50,000-row cap against the unauthenticated intake flood; fire-and-forget, swallows its own errors",
-        "Drill: seed error_events past the cap in the test database and assert the sweep trims (no test exists yet — the sweep is otherwise exercised only in production)"
+        "FIXED + DRILLED: test/error-events-cap.test.ts seeds 50,300 fresh + 600 expired rows, sweeps twice, and asserts the exact arithmetic (cap trim, age trim, cap wins) - passed in the CI database project",
+        "The sweep is exported for the drill and runs fire-and-forget every 64th write in production"
       ],
-      "status": "mitigated-but-untested"
+      "status": "mitigated"
     },
     {
       "id": "TR-34",

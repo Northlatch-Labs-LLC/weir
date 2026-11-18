@@ -20,11 +20,21 @@ vi.mock('@/lib/chain', () => ({
 
 const ADDRESS = `0x${'1'.repeat(64)}`;
 
-function insertSucceedsThenSweepFails() {
+/*
+  Call order inside verifyAction since the forensics ledger landed (045):
+    1. the replay insert into used_signatures  — must succeed for acceptance
+    2. the forensics insert into signature_spends — fail-closed: a spend nobody recorded
+       is a spend a dispute cannot resolve, so a failure here refuses the write
+    3. the sweep's DELETE of expired rows — fire-and-forget: its failure must never
+       reach the caller, which is what this file was written to pin.
+*/
+
+function calls(...outcomes: Array<'ok' | 'reject'>): void {
   query.mockReset();
-  query
-    .mockResolvedValueOnce({ rows: [], rowCount: 1 })
-    .mockRejectedValueOnce(new Error('connection terminated during the sweep'));
+  for (const outcome of outcomes) {
+    if (outcome === 'ok') query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    else query.mockRejectedValueOnce(new Error('connection terminated'));
+  }
 }
 
 async function verify() {
@@ -46,16 +56,23 @@ beforeEach(() => {
 
 describe('a signature that was recorded stays accepted', () => {
   it('does not reject the caller when only the sweep fails', async () => {
-    insertSucceedsThenSweepFails();
+    calls('ok', 'ok', 'reject');
 
     const result = await verify();
 
     expect(result.ok).toBe(true);
   });
 
-  it('still refuses when the insert itself fails, which is the half that must not change', async () => {
-    query.mockReset();
-    query.mockRejectedValueOnce(new Error('connection terminated during the insert'));
+  it('refuses when the forensics ledger insert fails, because a spend nobody recorded is a dispute nobody can resolve', async () => {
+    calls('ok', 'reject');
+
+    const result = await verify();
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('still refuses when the replay insert itself fails, which is the half that must not change', async () => {
+    calls('reject');
 
     const result = await verify();
 

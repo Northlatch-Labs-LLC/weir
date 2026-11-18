@@ -16,6 +16,8 @@ export const DATABASE_TEST_FILES: readonly string[] = [
   'test/revoked-agent-refused.test.ts',
   'test/relay.test.ts',
   'test/replay.test.ts',
+  'test/signature-forensics.test.ts',
+  'test/error-events-cap.test.ts',
   'test/routes/browse.test.ts',
   'test/routes/creator-profile.test.ts',
   'test/spend-with-the-write.test.ts',
