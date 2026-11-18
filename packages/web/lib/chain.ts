@@ -52,27 +52,66 @@ export async function readVaults(): Promise<Reading<{ vaults: VaultSummary[]; tr
   if (!config.ok) return config;
 
   const source = 'StakeVaultOpened events';
-  const client = createClient(config.value);
   const eventType = `${config.value.packageId}::stake_vault::StakeVaultOpened`;
+
+  // The walk goes through the GraphQL service, not the gRPC event query. The mainnet gRPC
+  // endpoint serves event queries from a recent window only: the same walk through it SUCCEEDS
+  // with zero events, and every pool on /explore, /treasury and /vault read as absent for every
+  // creator — including creators whose pool was funded and earning. The GraphQL service pages
+  // complete history by cursor, which is the property this index exists on.
+  const endpoint = (process.env['PROJECTX_SOCIAL_GRAPHQL_URL'] ?? '').trim();
+  if (endpoint === '') {
+    return fail(
+      'unconfigured',
+      source,
+      'PROJECTX_SOCIAL_GRAPHQL_URL is not set. The all-vaults walk reads StakeVaultOpened events ' +
+        'through the GraphQL service because the gRPC event query serves a recent window only; ' +
+        'without an endpoint that serves full history, the walk cannot tell "no vaults" from ' +
+        '"history not served", and an empty answer would be a value it did not observe.',
+    );
+  }
 
   const vaults: VaultSummary[] = [];
   let cursor: string | null = null;
-  const MAX_PAGES = 10;
+  const MAX_PAGES = 40;
 
   try {
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const result: {
-        events?: Array<{ json?: unknown }>;
-        hasNextPage?: boolean;
-        endCursor?: string | null;
-      } = await client.listEvents({
-        filter: { eventType },
-        limit: 50,
-        ...(cursor === null ? {} : { cursor }),
-      });
+      const query = cursor === null
+        ? 'query Events($type: String!) { events(filter: { type: $type }, first: 50) { pageInfo { hasNextPage endCursor } nodes { contents { json } } } }'
+        : 'query Events($type: String!, $cursor: String!) { events(filter: { type: $type }, first: 50, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { contents { json } } } }';
+      const variables = cursor === null
+        ? { type: eventType }
+        : { type: eventType, cursor };
 
-      for (const event of result.events ?? []) {
-        const e = event.json as Record<string, unknown> | undefined;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) {
+        return fail(
+          'transport',
+          source,
+          `the GraphQL event walk at ${endpoint} answered ${response.status}`,
+        );
+      }
+
+      const body = (await response.json()) as {
+        data?: { events?: { pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }; nodes?: Array<{ contents?: { json?: unknown } | null }> } };
+        errors?: Array<{ message?: string }>;
+      };
+      if (body.errors !== undefined && body.errors.length > 0) {
+        return fail('transport', source, body.errors.map((e) => e.message ?? 'unknown error').join('; '));
+      }
+      const connection = body.data?.events;
+      if (connection === undefined) {
+        return fail('malformed', source, 'the GraphQL response carried no events connection');
+      }
+
+      for (const node of connection.nodes ?? []) {
+        const e = node?.contents?.json as Record<string, unknown> | undefined;
         if (
           typeof e?.['vault'] !== 'string' ||
           typeof e['creator'] !== 'string' ||
@@ -88,8 +127,8 @@ export async function readVaults(): Promise<Reading<{ vaults: VaultSummary[]; tr
         });
       }
 
-      if (result.hasNextPage !== true) return ok({ vaults, truncated: false });
-      cursor = result.endCursor ?? null;
+      if (connection.pageInfo?.hasNextPage !== true) return ok({ vaults, truncated: false });
+      cursor = connection.pageInfo?.endCursor ?? null;
       if (cursor === null) return ok({ vaults, truncated: true });
     }
     return ok({ vaults, truncated: true });
