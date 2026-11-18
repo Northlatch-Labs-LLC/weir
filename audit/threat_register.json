@@ -184,7 +184,8 @@
         "FIXED 2026-11-17: lib/csp.ts owns the policy text; the proxy mints one nonce per document request (crypto.randomUUID), hands it to server components via x-csp-nonce, and writes the enforced policy on the response",
         "app/layout.tsx reads the nonce and passes it to BOTH handwritten scripts; Next.js applies it to its own bootstrap and RSC flight payloads when the header carries the nonce",
         "VERIFIED ON THE REAL BUILD locally: next build + next start against the local database - the rendered homepage carries the enforced nonce policy and all 15 executable script tags carry the matching nonce, zero bare scripts; csp.test.ts pins the architecture (hashes match source, proxy mints, layout consumes, report-only header gone)",
-        "POST-DEPLOY: fetch production headers and confirm the enforced nonce policy is served; watch /api/csp-report -> error_events for blocked-script reports in the first hours - a burst means a missed script (revert is one commit)"
+        "POST-DEPLOY: fetch production headers and confirm the enforced nonce policy is served; watch /api/csp-report -> error_events for blocked-script reports in the first hours - a burst means a missed script (revert is one commit)",
+        "PRODUCTION-VERIFIED 2026-11-17T23:5xZ (post-deploy): weir.social serves the enforced nonce policy on every document response; a single request's HTML carries 20 script tags all matching that request's own nonce, zero bare executable scripts. Watch /api/csp-report for the first days - a blocked-script report names whatever was missed"
       ],
       "status": "mitigated"
     },
