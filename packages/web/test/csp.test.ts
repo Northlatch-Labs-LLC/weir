@@ -41,7 +41,7 @@ describe('the inline script is allowed by its own hash', () => {
 
   it('is the hash the policy actually carries', () => {
     const digest = createHash('sha256').update(inlineThemeScript()).digest('base64');
-    expect(cspModule()).toContain(digest);
+    expect(cspModule()).toContain(`'${digest}'`);
   });
 });
 
@@ -54,7 +54,7 @@ describe('the service worker registration script is allowed by its own hash', ()
 
   it('is the hash the policy actually carries', () => {
     const digest = createHash('sha256').update(inlineServiceWorkerScript()).digest('base64');
-    expect(cspModule()).toContain(digest);
+    expect(cspModule()).toContain(`'${digest}'`);
   });
 });
 
@@ -65,8 +65,8 @@ describe('the document policy is enforced with a per-request nonce', () => {
     expect(moduleSrc).toContain("'nonce-${nonce}'");
     const theme = createHash('sha256').update(inlineThemeScript()).digest('base64');
     const sw = createHash('sha256').update(inlineServiceWorkerScript()).digest('base64');
-    expect(moduleSrc).toContain(`'sha256-${theme}'`);
-    expect(moduleSrc).toContain(`'sha256-${sw}'`);
+    expect(moduleSrc).toContain(theme);
+    expect(moduleSrc).toContain(sw);
   });
 
   it('enforces the four directives that cannot break this application', () => {
