@@ -375,6 +375,11 @@ export {
   assertJournalConfigured,
   assertSignerConfigured,
 } from './config.js';
+// Exports for the cron route (packages/web/app/api/cron/daemon): the route reuses the daemon's
+// own balance check and audit anchoring rather than duplicating either beside it.
+export { readSignerBalance, anchor };
+export type { HarvestSigner } from './adapters/signer.js';
+export type { RunHandle } from './adapters/journal.js';
 export { openJournal, type Journal, type RunSummary } from './adapters/journal.js';
 export * from './supervisor.js';
 export { discoverVaults } from './adapters/discovery.js';

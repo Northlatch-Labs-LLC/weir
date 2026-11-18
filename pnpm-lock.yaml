@@ -353,6 +353,9 @@ importers:
       '@noble/hashes':
         specifier: 2.4.0
         version: 2.4.0
+      '@projectx-social/daemon':
+        specifier: workspace:*
+        version: link:../daemon
       '@projectx-social/sdk':
         specifier: workspace:*
         version: link:../sdk

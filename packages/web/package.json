@@ -20,6 +20,7 @@
     "@mysten/sui": "2.39.1",
     "@mysten/suins": "2.0.20",
     "@noble/hashes": "2.4.0",
+    "@projectx-social/daemon": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
     "@projectx-social/ui": "workspace:*",
     "jose": "^6.2.12",
