@@ -98,6 +98,12 @@ async function proveSignature(input: Parameters<typeof verifyAction>[0]): Promis
     // Retained exactly as long as the signature is valid: a digest forgotten early makes the
     // signature replayable, which is the property single-use exists to hold.
     expiresAtMs: input.timestampMs + windowMs,
+    // Carried to the forensics ledger: the replay ledger forgets the digest when the window
+    // closes, so the only durable record that a signature was spent — by whom, doing what —
+    // is written here. Who and what are exactly what a dispute needs and what the replay
+    // table cannot answer after its sweep runs.
+    address: input.address,
+    action: input.action.kind,
   });
 }
 
@@ -157,6 +163,11 @@ export async function proveTransaction(input: {
 export interface PendingSpend {
   digest: Buffer;
   expiresAtMs: number;
+  /// Who the spent signature authenticated, and which statement kind it authorised. Written
+  /// to the forensics ledger at spend time, because the replay ledger expires with the
+  /// signature's validity window and a dispute does not arrive inside one.
+  address: string;
+  action: string;
 }
 
 export async function spendSignature(
@@ -175,6 +186,19 @@ export async function spendSignature(
     if (claimed.rowCount === 0) {
       return fail('malformed', source, 'this signature has already been used — sign again');
     }
+
+    // The forensics ledger. The replay row above is swept when the window closes — that is
+    // its retention policy, deliberately — so this is the only durable record that the
+    // signature existed, who presented it, and what it authorised. Same runner, same
+    // transaction: a spend that fails to be recorded here must not half-happen. A ledger
+    // failure refuses the write (fail-closed, like everything else in this file), because
+    // an unrecorded spend is exactly the state a dispute cannot resolve.
+    await runner.query(
+      `INSERT INTO signature_spends (digest, address, action, spent_at_ms)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (digest) DO NOTHING`,
+      [pending.digest, pending.address, pending.action, Date.now()],
+    );
   } catch (error) {
     return fail(
       'transport',

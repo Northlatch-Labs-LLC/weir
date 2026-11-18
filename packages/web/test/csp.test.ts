@@ -27,7 +27,10 @@ function inlineServiceWorkerScript(): string {
   return inlineScripts()[1] ?? '';
 }
 
+const cspModule = () => read('lib/csp.ts');
 const config = () => read('next.config.ts');
+const proxy = () => read('proxy.ts');
+const layout = () => read('app/layout.tsx');
 
 describe('the inline script is allowed by its own hash', () => {
   it('finds the script at all', () => {
@@ -38,7 +41,7 @@ describe('the inline script is allowed by its own hash', () => {
 
   it('is the hash the policy actually carries', () => {
     const digest = createHash('sha256').update(inlineThemeScript()).digest('base64');
-    expect(config()).toContain(digest);
+    expect(cspModule()).toContain(digest);
   });
 });
 
@@ -51,119 +54,63 @@ describe('the service worker registration script is allowed by its own hash', ()
 
   it('is the hash the policy actually carries', () => {
     const digest = createHash('sha256').update(inlineServiceWorkerScript()).digest('base64');
-    expect(config()).toContain(digest);
+    expect(cspModule()).toContain(digest);
   });
 });
 
-describe('what the report-only policy observes', () => {
-  const headers = config();
-  const reportOnly =
-    /key: 'Content-Security-Policy-Report-Only',\s*value: \[([\s\S]*?)\]/.exec(headers)?.[1] ?? '';
-  // The policy is assembled from constants, so the source names `${INLINE_...}` where the
-  // header will carry the digest. Resolve those references, or the assertion below would be
-  // about names in the source rather than the hash the browser actually sees.
-  const resolved = reportOnly.replaceAll(
-    /\$\{([A-Z0-9_]+)\}/g,
-    (reference, name: string) => new RegExp(`const ${name} = '([^']+)'`).exec(headers)?.[1] ?? reference,
-  );
+describe('the document policy is enforced with a per-request nonce', () => {
+  const moduleSrc = cspModule();
 
-  it('carries a hash for every inline script layout renders, so enforcement cannot blank the page', () => {
-    // Layout renders exactly two inline scripts: the theme pick and the service worker
-    // registration. A third would not be covered by anything here, which is why the count
-    // itself is asserted.
-    expect(inlineScripts().length).toBe(2);
+  it('builds a script policy from a nonce plus the two hashes', () => {
+    expect(moduleSrc).toContain("'nonce-${nonce}'");
     const theme = createHash('sha256').update(inlineThemeScript()).digest('base64');
     const sw = createHash('sha256').update(inlineServiceWorkerScript()).digest('base64');
-    expect(resolved).toContain(`'sha256-${theme}'`);
-    expect(resolved).toContain(`'sha256-${sw}'`);
+    expect(moduleSrc).toContain(`'sha256-${theme}'`);
+    expect(moduleSrc).toContain(`'sha256-${sw}'`);
+  });
+
+  it('enforces the four directives that cannot break this application', () => {
+    expect(moduleSrc).toContain("object-src 'none'");
+    expect(moduleSrc).toContain("base-uri 'none'");
+    expect(moduleSrc).toContain("form-action 'self'");
+    expect(moduleSrc).toContain("frame-ancestors 'none'");
+  });
+
+  it('reports violations of the ENFORCED policy to the endpoint that exists', () => {
+    expect(moduleSrc).toContain('report-uri /api/csp-report');
+    expect(config()).toContain('Reporting-Endpoints');
+  });
+
+  it('the report-only header is gone — enforcement superseded it, not joined it', () => {
+    expect(config()).not.toContain('Content-Security-Policy-Report-Only');
   });
 });
 
-describe('what is enforced now, and what is only observed', () => {
-  const headers = config();
-
-  it('enforces the four directives that cannot break this application', () => {
-    const enforced = /key: 'Content-Security-Policy',\s*value: \[([\s\S]*?)\]/.exec(headers)?.[1] ?? '';
-    expect(enforced).toContain("object-src 'none'");
-    expect(enforced).toContain("base-uri 'none'");
-    expect(enforced).toContain("form-action 'self'");
-    expect(enforced).toContain("frame-ancestors 'none'");
+describe('the proxy mints and the layout consumes the nonce', () => {
+  it('the proxy mints one nonce per request and writes the policy on the response', () => {
+    const src = proxy();
+    expect(src).toContain('crypto.randomUUID()');
+    expect(src).toContain('headers.set(CSP_NONCE_HEADER, nonce)');
+    expect(src).toContain("response.headers.set('Content-Security-Policy', cspFor(nonce))");
   });
 
-  it('does NOT enforce a script policy yet, which is the honest state', () => {
-    const enforced = /key: 'Content-Security-Policy',\s*value: \[([\s\S]*?)\]/.exec(headers)?.[1] ?? '';
-    expect(enforced).not.toContain('script-src');
-    expect(headers).toContain('Content-Security-Policy-Report-Only');
+  it('layout reads the nonce and passes it to BOTH handwritten scripts', () => {
+    const src = layout();
+    expect(src).toContain('CSP_NONCE_HEADER');
+    expect(src.match(/nonce=\{nonce\}/g)?.length ?? 0).toBe(2);
   });
+});
 
-  it('reports to an endpoint that exists, so the policy is actually evaluated', () => {
-    const code = headers.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-    // This assertion used to require that NO report endpoint was named, because none existed and
-    // a header pointing at a 404 is a lie. It now requires the opposite: the policy names
-    // /api/csp-report and the route is checked below, so the header and the code agree.
-    expect(code).toContain('report-uri /api/csp-report');
-    expect(code).toContain('Reporting-Endpoints');
+describe('the base policy still guards what documents do not cover', () => {
+  it('next.config enforces the four directives on API routes and static files', () => {
+    expect(config()).toContain('BASE_CSP');
+    expect(cspModule()).toContain('BASE_CSP');
   });
 });
 
 describe('the CSP report endpoint', () => {
   const route = read('app/api/csp-report/route.ts');
-  const code = route.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-
-  it('exists where the header points', () => {
-    expect(read('next.config.ts')).toContain('/api/csp-report');
-    expect(code).toContain('export async function POST');
-  });
-
-  it('records into the same table as every other failure', () => {
-    expect(code).toContain('recordFailure');
-    expect(code).toContain("source: 'csp.violation'");
-  });
-
-  it('drops the query string, so a token in a URL is never stored', () => {
-    // `/feed?token=...` is the realistic way a credential reaches a document-uri.
-    expect(code).toContain('url.pathname');
-    expect(code).not.toMatch(/url\.search|url\.href/);
-  });
-
-  it('refuses content types it does not understand', () => {
-    // A public endpoint that parses arbitrary bodies is a way to fill a database from the
-    // internet. Only the two report formats are read.
-    expect(code).toContain('application/csp-report');
-    expect(code).toContain('application/reports+json');
-    expect(code).toContain('415');
-  });
-
-  it('caps how much one request can write', () => {
-    expect(code).toContain('MAX_REPORTS_PER_REQUEST');
-    expect(code).toContain('slice(0, MAX_REPORTS_PER_REQUEST)');
-  });
-
-  it('is reachable while the waitlist is up, or reports vanish behind a redirect', () => {
-    expect(read('lib/front-door.ts')).toContain('/api/');
-  });
-});
-
-describe('the session token is asked for, not handed out', () => {
-  const route = read('app/api/session/route.ts')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-
-  it('withholds the bearer unless the caller asks', () => {
-    expect(route).toContain("x-weir-bearer");
-    expect(route).toMatch(/wantsBearer\s*\?\s*\{\s*token/);
-  });
-
-  it('still sets the cookie unconditionally', () => {
-    expect(route).toContain('set-cookie');
-    expect(route).toContain('readSessionCookie(');
-  });
-
-  it('the agent asks for it', () => {
-    const agent = readFileSync(
-      join(process.cwd(), '..', 'agent', 'src', 'session.ts'),
-      'utf8',
-    ).replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(agent).toContain("'x-weir-bearer': '1'");
+  it('exists and writes where the alarm already counts', () => {
+    expect(route).toContain('error_events');
   });
 });

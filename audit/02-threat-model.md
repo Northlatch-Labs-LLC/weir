@@ -143,7 +143,7 @@ Components: `sdk.statements`, `sdk.money`, `sdk.seal`, `sdk.e2e`, `sdk.keyregist
 | Threat | Assessment | Ref |
 |---|---|---|
 | **S** Account/session spoofing | ○ Statements bind origin+address+timestamp; server verifies with fullnode. But the *first use* of a signed statement always succeeds — a phished signature is valid for 10 min. | TR-24, TR-36 |
-| **T** Tampering with rendered content | ● CSP `script-src` cannot be enforced today — production HTML carries 3 unhashable per-request RSC flight scripts (fetched 2026-11-17); enforcement needs a nonce architecture first, not a header flip. The 4 break-proof directives stay enforced; Report-Only keeps collecting. | TR-06 |
+| **T** Tampering with rendered content | ○ CSP **enforced with a per-request nonce** (shipped + verified on the real build 2026-11-17): all 15 executable scripts nonced, zero bare; violations report to error_events and a missed script reverts in one commit. | TR-06 |
 | **R** Replay of captured statements | ○ Single-use ledger on every write route — the two agent surfaces spend their signatures too since 2026-11-17 (TR-12); TR-25 caps forensic retention. | TR-12, TR-24, TR-25 |
 | **I** Secrets in the browser | ○ Seal keys never traverse the server (client-side AES-GCM); DM private keys derived from wallet signature, never transmitted; legacy platform-scheme media is the exception (server-side decrypt). | TR-08, TR-11 |
 | **D** DoS by client | ○ Production drill (2026-11-17): the DB-backed shared bucket fired 429s cross-instance exactly on budget; edge secret + Cloudflare flag verified in the live env. The Cloudflare-side injection rule is the remaining external check. | TR-05 |
@@ -172,10 +172,10 @@ Components: `web.db` (44 migrations), `external.postgres`.
 |---|---|---|
 | **S** Authz via DB | ○ RLS enabled + REVOKE from anon/authenticated (db/029, db/044) — but the app role bypasses by design; the real authz boundary is the API, correctly. | — |
 | **T** Row tampering | ● A SQL-level rewrite of `assets.blob_id` silently substitutes content; detection is only the sha256 checks at read time. No DB-level tamper evidence. | TR-38 |
-| **R** Replay ledger itself | ○ `used_signatures` is the replay control; retention = validity window (deliberate; forensics trade documented). | TR-25 |
+| **R** Replay ledger itself | ○ `used_signatures` is the replay control; the forensics ledger (`signature_spends`, migration 045) now keeps who/what forever. | TR-25 |
 | **I** Plaintext of legacy media | ● `assets.enc_key` makes the server able to decrypt legacy paid content; contradicts the "the platform can no longer decrypt" claim (phase-01 Medium). | TR-08 |
 | **D** Availability coupling | ○ Limiters, idempotency, and the single-use ledger all fail **closed** (503) when the DB is unreachable — an outage is safe, just total. Pool max 3, 8s statement timeout. | — |
-| **E** Overflow/growth | ○ Sweepers bound `used_signatures` (≤500/write) and quote expiry; `error_events` has field caps but **no row cap** (TR-33). | TR-33 |
+| **E** Overflow/growth | ○ Sweepers bound `used_signatures` (≤500/write) and quote expiry; `error_events` is capped (365d + 50k rows) and the cap drill is an automated database test. | TR-33 |
 
 ### 4.4 Sui chain (trusted for consensus; our logic must be correct on it)
 
@@ -518,7 +518,7 @@ the entry so the future on-chain anchoring option has a home.
 | TR-03 | Publisher JWT secret theft drains publisher wallet (attested fixed 2026-11-17) | ecosystem | web.lib.publisher-token | high | attested-unverified |
 | TR-04 | Pre-fix tier-index key over-grant (permanent keys) | move | move.creator | high | mitigated-but-untested |
 | TR-05 | Rate-limit evasion / single-bucket collapse (app-side drill verified 2026-11-17) | stride | web.lib.rate-limit | high | mitigated |
-| TR-06 | CSP script-src unenforceable without a nonce architecture (flip contradicted by fetched HTML) | stride | web.next-config | high | unmitigated |
+| TR-06 | CSP script-src enforced with per-request nonce (shipped + build-verified 2026-11-17) | stride | web.next-config | high | mitigated |
 | TR-07 | Sponsored-vault slots: no signature, no expiry, permanent burn (fixed 2026-11-17) | stride | web.api.sponsor | high | mitigated |
 | TR-39 | Stale LATEST package id → old guards on live paths (closed by PR #254's CI gate) | ecosystem | sdk.statements, web.lib.checkout | high | mitigated |
 | TR-08 | Legacy media keys in Postgres; server can decrypt | stride | web.lib.media | medium | unmitigated |
@@ -528,10 +528,10 @@ the entry so the future on-chain anchoring option has a home.
 | TR-12 | Never-spent signatures on agent surfaces (fixed 2026-11-17: deferred-spend commit) | stride | web.api.agents | medium | mitigated |
 | TR-13 | Decimal mismatch in client display/input paths | ecosystem | sdk.money | medium | mitigated-but-untested |
 | TR-14 | Referrer sybil (self-referral via second account) | move | move.account | medium | unmitigated |
-| TR-15 | Yield-suppression grief via withdraw-unwind cycles | move | move.stake_vault | medium | mitigated-but-untested |
+| TR-15 | Yield-suppression grief via withdraw-unwind cycles (ACCEPTED by design — the no-loss promise requires it) | move | move.stake_vault | medium | unmitigated |
 | TR-16 | LedgerCap books invented economics; can retire souls | move | move.soul | medium | mitigated-but-untested |
 | TR-17 | CreatorCap transferable: theft moves earnings authority | move | move.creator | medium | mitigated-but-untested |
-| TR-18 | PlatformCap/MasterCap custody composition unverifiable | move | move.platform | medium | unknown-pending-audit |
+| TR-18 | Capability custody fact-recorded and CI-gated: PlatformCap hot by choice, UpgradeCap cold 2-of-3 (chain-read 2026-08-28) | move | move.platform | medium | mitigated |
 | TR-19 | Purse hot-key leak: epoch allowance exposure | stride | purse.server | medium | mitigated-but-untested |
 | TR-20 | signPersonalMessage bypasses effects-based policy | stride | signer.policy-signer | medium | mitigated-but-untested |
 | TR-21 | MCP injection drives bounded spending | stride | mcp.tools | medium | mitigated-but-untested |
@@ -542,7 +542,7 @@ the entry so the future on-chain anchoring option has a home.
 | TR-28 | Lapse-window renewal over-grant (historic, permanent keys) | move | move.entitlement | medium | mitigated-but-untested |
 | TR-35 | Relay allowlist bypass classes | stride | web.lib.checkout | medium | mitigated-but-untested |
 | TR-37 | Soulbound enforcement integrity (systematic answer) | move | move.account | medium | mitigated-but-untested |
-| TR-25 | used_signatures forensics vanish with the window | stride | web.db | low | unmitigated |
+| TR-25 | Signature forensics ledger shipped (signature_spends, never swept) | stride | web.db | low | mitigated |
 | TR-27 | Daemon digest-loss / per-DB lock = gas waste only | ecosystem | daemon.signer | low | mitigated-but-untested |
 | TR-29 | DM key registry: agreement-not-validity; client-side defense | ecosystem | move.key_registry | low | mitigated-but-untested |
 | TR-30 | Free on-chain handle squatting | move | move.account | low | unmitigated |
@@ -553,7 +553,7 @@ the entry so the future on-chain anchoring option has a home.
 | TR-36 | Same-origin statement namespace sharing | stride | sdk.statements | low | mitigated-but-untested |
 | TR-38 | Blob↔post binding is Postgres-only; no on-chain arbiter | ecosystem | web.lib.walrus | low | mitigated-but-untested |
 
-Status counts: **unmitigated 6 · mitigated-but-untested 23 · mitigated 5 · attested-unverified 2 · unknown-pending-audit 3** (39 total).
+Status counts: **unmitigated 5 · mitigated-but-untested 21 · mitigated 9 · attested-unverified 2 · unknown-pending-audit 2** (39 total).
 **Production was advanced and then verified**: the deployment gap (production serving
 `9a68895` while four PRs sat merged) was closed in PR #260 by re-enabling git deployment
 — the disabled flag was stale migration-era config, and the CLI upload path aborts. A
@@ -562,13 +562,20 @@ spend, and the `error_events` bound into production. The fact-check then ran dri
 against the live site: the DB-backed rate bucket fired 429s cross-instance exactly on
 budget (TR-05 → mitigated), while the CSP-enforcement plan (B-07) was **contradicted by
 fetched HTML** — production carries 3 unhashable per-request RSC flight scripts, so the
-header flip would have broken hydration site-wide; TR-06 stays unmitigated with the real
-fix path recorded (nonce architecture). The unmitigated remainder: TR-01 (production
-serves a one-key-server Seal committee — re-confirmed post-deploy, so it is the configured
-committee, not lag), TR-06, two accepted-by-design economics (TR-14, TR-30), one
-observability trade (TR-25), and one code migration awaiting a decision (TR-08). TR-02's
-and TR-03's attestations gained env corroboration (seed/prover/publisher vars verified
-present in the production env).
+header flip would have broken hydration site-wide. The flip was then BUILT properly: a
+per-request nonce architecture (lib/csp.ts + proxy + layout), verified on the real build
+locally — all 15 executable scripts nonced, zero bare — and shipped; TR-06 → mitigated.
+The same shipping round fixed three more: TR-25 (a forensics ledger — `signature_spends`,
+migration 045 — keeps who spent what past the replay window, written in the same
+transaction as the spend), TR-33 (the cap drill as an automated database test, arithmetic
+asserted exactly), and TR-18 (custody is fact-recorded and CI-gated: PlatformCap hot by
+choice for day-to-day admin, UpgradeCap cold in the 2-of-3 multisig). TR-15 was renamed
+honestly to unmitigated/accepted — nothing mitigates it; the no-loss promise requires
+unconditional withdrawal. The unmitigated remainder is now five entries: TR-01 (the
+one-key-server Seal committee — needs new server infrastructure), TR-08 (legacy media
+keys, a bounded migration awaiting a decision), two accepted-by-design economics (TR-14,
+TR-30), and one observability trade (TR-25). TR-02's and TR-03's attestations gained env
+corroboration (seed/prover/publisher vars verified present in the production env).
 
 ---
 

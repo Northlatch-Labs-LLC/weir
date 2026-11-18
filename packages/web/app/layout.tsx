@@ -1,8 +1,10 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { geist, geistMono, inter, jetbrainsMono, sourceSerif } from './fonts';
 import { fold } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
+import { CSP_NONCE_HEADER } from '@/lib/csp';
 import { SignerProvider } from '@/components/SignerProvider';
 import { AppShell } from '@/components/shell/AppShell';
 import { JsonLd } from '@/components/seo/JsonLd';
@@ -56,7 +58,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The nonce the proxy minted for THIS document. Undefined on any render that bypassed
+  // the proxy (tests, some error paths) — the two handwritten scripts below stay allowed
+  // by their hashes in that case, which is why lib/csp.ts carries both mechanisms.
+  const nonce = (await headers()).get(CSP_NONCE_HEADER) ?? undefined;
   return (
     <html
       lang="en"
@@ -65,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html:
               'document.documentElement.dataset.js="";' +
@@ -84,6 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AppShell>{children}</AppShell>
         </SignerProvider>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html:
               'if ("serviceWorker" in navigator) {' +

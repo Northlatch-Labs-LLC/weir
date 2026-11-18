@@ -39,7 +39,9 @@ let writesSinceSweep = 0;
 /// Bounded trim: delete the OLDEST rows past the age limit and the row cap, at most
 /// SWEEP_BATCH each, using ctid so the statement is one pass over the at_ms index and needs
 /// no count query. Under the cap the OFFSET selects nothing and the sweep is a no-op.
-async function sweepErrorEvents(): Promise<void> {
+/// Exported for the cap drill — test/error-events-cap.test.ts is the drill, and a drill
+/// that can only run against production is not a drill.
+export async function sweepErrorEvents(): Promise<void> {
   try {
     await db().query(
       `DELETE FROM error_events
