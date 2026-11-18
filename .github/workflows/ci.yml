@@ -137,8 +137,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # The SDK is consumed as compiled JavaScript through its `exports` map, so it must be built
-      # before anything that imports it is typechecked.
-      - run: pnpm --filter @projectx-social/sdk build
+      # before anything that imports it is typechecked. The daemon is too, since the cron route
+      # imports it (`pnpm -r build` orders that topologically; this typecheck step does not).
+      - run: pnpm --filter @projectx-social/sdk build && pnpm --filter @projectx-social/daemon build
 
       # In file-name order, which is the order they were written to run in.
       - name: Apply migrations
