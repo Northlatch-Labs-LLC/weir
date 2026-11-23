@@ -14,7 +14,7 @@
     "seal:migrate": "tsx --tsconfig tsconfig.scripts.json --env-file=.env.local scripts/seal-migrate-keys.ts"
   },
   "dependencies": {
-    "@mysten/dapp-kit-core": "1.6.43",
+    "@mysten/dapp-kit-core": "2.0.1",
     "@mysten/dapp-kit-react": "2.1.45",
     "@mysten/seal": "1.5.4",
     "@mysten/sui": "2.39.1",
