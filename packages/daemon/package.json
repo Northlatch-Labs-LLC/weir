@@ -29,7 +29,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@mysten/sui": "2.39.1",
+    "@mysten/sui": "3.0.1",
     "@projectx-social/policy": "1.0.3",
     "@projectx-social/sdk": "1.0.3",
     "@projectx-social/signer": "1.0.3",
