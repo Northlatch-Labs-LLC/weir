@@ -18,7 +18,7 @@
     "@mysten/dapp-kit-react": "2.1.45",
     "@mysten/seal": "1.5.4",
     "@mysten/sui": "2.39.1",
-    "@mysten/suins": "2.0.20",
+    "@mysten/suins": "3.0.1",
     "@noble/hashes": "2.4.0",
     "@projectx-social/daemon": "workspace:*",
     "@projectx-social/sdk": "workspace:*",

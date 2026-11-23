@@ -348,8 +348,8 @@ importers:
         specifier: 2.39.1
         version: 2.39.1(typescript@7.0.2)
       '@mysten/suins':
-        specifier: 2.0.20
-        version: 2.0.20(@mysten/sui@2.39.1(typescript@7.0.2))(debug@4.4.3)
+        specifier: 3.0.1
+        version: 3.0.1(@mysten/sui@2.39.1(typescript@7.0.2))(debug@4.4.3)
       '@noble/hashes':
         specifier: 2.4.0
         version: 2.4.0
@@ -870,11 +870,11 @@ packages:
     resolution: {integrity: sha512-cFhIn7WJcT6thzKlBO2OtqyLX5uigY/1IK0PRTa6o50Bcy0qLhacu+fjhqY7uHeXlXGrjc/kIsXs5o4KtPcieg==}
     engines: {node: '>=22'}
 
-  '@mysten/suins@2.0.20':
-    resolution: {integrity: sha512-N1bGsFO+ukBvbGCmzTk0qZ5amCLDRwR3cNL8gIgSJTXc/+DvtMBVzDbdBWXVo3l9yeKNIPHODXxmkzlo+lFpOg==}
+  '@mysten/suins@3.0.1':
+    resolution: {integrity: sha512-uba0v1Ryy/fyJv+Ccl6nrFC5avcb3o9S8Ja0MM/qyi1iwsr6Jd6XytjvE1ItqtOFfIicqF8R8jj1n6sikPADHg==}
     engines: {node: '>=16'}
     peerDependencies:
-      '@mysten/sui': ^2.39.1
+      '@mysten/sui': ^3.0.1
 
   '@mysten/utils@0.4.2':
     resolution: {integrity: sha512-K/5eBuYKxUFCrYcic1lvYvWE9OVSH581cjVjwsSJGUqPit91nZq2acUwes+B4lo98VE/CILIUeBcyEIvuNxMhA==}
@@ -2976,7 +2976,7 @@ snapshots:
       - '@gql.tada/vue-support'
       - typescript
 
-  '@mysten/suins@2.0.20(@mysten/sui@2.39.1(typescript@7.0.2))(debug@4.4.3)':
+  '@mysten/suins@3.0.1(@mysten/sui@2.39.1(typescript@7.0.2))(debug@4.4.3)':
     dependencies:
       '@mysten/sui': 2.39.1(typescript@7.0.2)
       axios: 1.20.0(debug@4.4.3)
