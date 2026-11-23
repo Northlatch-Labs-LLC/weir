@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@mysten/dapp-kit-core": "1.6.43",
-    "@mysten/dapp-kit-react": "2.1.45",
+    "@mysten/dapp-kit-react": "3.0.1",
     "@mysten/seal": "1.5.4",
     "@mysten/sui": "2.39.1",
     "@mysten/suins": "2.0.20",
