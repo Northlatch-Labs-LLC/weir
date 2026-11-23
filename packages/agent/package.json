@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@mysten/seal": "1.5.4",
-    "@mysten/sui": "2.39.1",
+    "@mysten/sui": "3.0.1",
     "@projectx-social/sdk": "1.0.3"
   },
   "devDependencies": {
