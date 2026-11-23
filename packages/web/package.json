@@ -23,7 +23,7 @@
     "@projectx-social/daemon": "workspace:*",
     "@projectx-social/sdk": "workspace:*",
     "@projectx-social/ui": "workspace:*",
-    "jose": "^6.2.12",
+    "jose": "^6.2.18",
     "next": "16.4.6",
     "pg": "8.23.1",
     "react": "19.3.1",
