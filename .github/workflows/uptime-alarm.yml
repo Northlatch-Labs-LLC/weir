@@ -74,11 +74,11 @@ jobs:
           TITLE='Uptime alarm: public estate host(s) down'
           BODY="$(printf 'Probe at %s UTC:\n\n%s\nThis issue closes automatically when all hosts report expected codes again.\n' "$(date -u +%FT%TZ)" "$DOWN")"
           # file-or-update: reuse the open issue with this exact title
-          ISSUE=$(gh issue list --search "in:title is:open ${TITLE}" --json number --jq '.[0].number // empty')
+          ISSUE=$(gh issue list -R Northlatch-Labs-LLC/weir --search "in:title is:open ${TITLE}" --json number --jq '.[0].number // empty')
           if [ -n "$ISSUE" ]; then
-            gh issue comment "$ISSUE" --body "$BODY"
+            gh issue comment -R Northlatch-Labs-LLC/weir "$ISSUE" --body "$BODY"
           else
-            gh issue create --title "$TITLE" --body "$BODY" --label alarm 2>/dev/null || gh issue create --title "$TITLE" --body "$BODY"
+            gh issue create -R Northlatch-Labs-LLC/weir --title "$TITLE" --body "$BODY" --label alarm 2>/dev/null || gh issue create --title "$TITLE" --body "$BODY"
           fi
 
       - name: Close on green
@@ -87,8 +87,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TITLE='Uptime alarm: public estate host(s) down'
-          ISSUE=$(gh issue list --search "in:title is:open ${TITLE}" --json number --jq '.[0].number // empty')
+          ISSUE=$(gh issue list -R Northlatch-Labs-LLC/weir --search "in:title is:open ${TITLE}" --json number --jq '.[0].number // empty')
           if [ -n "$ISSUE" ]; then
-            gh issue comment "$ISSUE" --body "All hosts green at $(date -u +%FT%TZ). Closing."
-            gh issue close "$ISSUE"
+            gh issue comment -R Northlatch-Labs-LLC/weir "$ISSUE" --body "All hosts green at $(date -u +%FT%TZ). Closing."
+            gh issue close -R Northlatch-Labs-LLC/weir "$ISSUE"
           fi
