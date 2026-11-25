@@ -1,0 +1,94 @@
+name: Uptime alarm
+
+# The estate serves ten public hosts across two edges (Vercel for weir.social, the
+# slvdev tunnel for the rest). Nothing watched them: a dead host was discovered by
+# a human noticing, which is what the walrus 502 was — three days old before anyone
+# looked. This workflow probes every host every 30 minutes and files an issue the
+# first time one goes wrong, updating that issue while the condition holds and
+# closing it when it clears — the same file-or-update / close-on-green pattern as
+# the drift and error alarms, so an outage becomes a thread that resolves itself
+# and cannot pile up duplicates while it runs.
+#
+# A probe is a HEAD request plus the expected status code. Expected codes differ
+# per host on purpose: seal 400 and api 403 are healthy refusals, walrus 404 is the
+# tunnel catch-all after the 2026-11-24 removal, zklogin 404 is "no root route".
+# Latency is recorded but not alarmed on — flapping on latency would train the
+# operator to ignore the alarm; availability is the signal.
+
+on:
+  schedule:
+    # Every 30 minutes, off the five-minute marks. Scheduled jobs pile on the hour
+    # and half hour; :13/:43 keeps this clear of backup (03:17) and error-alarm (:42).
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe the public estate
+        id: probe
+        run: |
+          # host|expected  — a host is DOWN when status != expected for 2 tries.
+          HOSTS=(
+            "weir.social|200"
+            "api.weir.social|403"
+            "mcp.weir.social|200"
+            "seal.weir.social|400"
+            "zklogin.weir.social|404"
+            "walrus.weir.social|404"
+            "gridframes.app|200"
+            "synappse.work|200"
+            "gateway.xlaunch.work|200"
+            "billing.xlaunch.work|200"
+          )
+          DECLARED=""
+          for entry in "${HOSTS[@]}"; do
+            host="${entry%%|*}"; want="${entry##*|}"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://${host}" 2>/dev/null || echo 000)
+            if [ "$code" != "$want" ]; then
+              # one retry to avoid alarming on a transient (mcp blipped once on 11-24)
+              sleep 5
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://${host}" 2>/dev/null || echo 000)
+            fi
+            if [ "$code" != "$want" ]; then
+              DECLARED="${DECLARED}- ${host}: got ${code}, want ${want}\n"
+            fi
+          done
+          if [ -n "$DECLARED" ]; then
+            echo "down<<EOF" >> "$GITHUB_OUTPUT"
+            printf '%b' "$DECLARED" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: File or update the outage issue
+        if: steps.probe.outputs.down
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOWN: ${{ steps.probe.outputs.down }}
+        run: |
+          TITLE='Uptime alarm: public estate host(s) down'
+          BODY="$(printf 'Probe at %s UTC:\n\n%s\nThis issue closes automatically when all hosts report expected codes again.\n' "$(date -u +%FT%TZ)" "$DOWN")"
+          # file-or-update: reuse the open issue with this exact title
+          ISSUE=$(gh issue list --search "in:title is:open ${TITLE}" --json number --jq '.[0].number // empty')
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label alarm 2>/dev/null || gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+      - name: Close on green
+        if: ${{ !steps.probe.outputs.down }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE='Uptime alarm: public estate host(s) down'
+          ISSUE=$(gh issue list --search "in:title is:open ${TITLE}" --json number --jq '.[0].number // empty')
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body "All hosts green at $(date -u +%FT%TZ). Closing."
+            gh issue close "$ISSUE"
+          fi
