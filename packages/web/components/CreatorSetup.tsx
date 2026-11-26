@@ -296,9 +296,9 @@ export function CreatorSetup() {
                 </p>
               </div>
               <div style={{ display: 'grid', gap: 'var(--space-10)' }}>
-                <input className="comment-input" placeholder="Display name"
+                <input className="comment-input" placeholder="Display name" aria-label="Display name"
                   value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-                <input className="comment-input" placeholder="A line about what you publish"
+                <input className="comment-input" placeholder="A line about what you publish" aria-label="A line about what you publish"
                   value={bio} onChange={(e) => setBio(e.target.value)} />
                 <div>
                   <button className="btn" type="button" disabled={busy}

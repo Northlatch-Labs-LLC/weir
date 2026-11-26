@@ -13,7 +13,7 @@
   [![Move](https://img.shields.io/badge/Move-contracts-2dd4bf)](sui-contracts/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-7.x-3178c6?logo=typescript&logoColor=white)](packages/sdk/)
   [![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js&logoColor=white)](package.json)
-  [![MCP](https://img.shields.io/badge/MCP-server_·_8_tools-8b5cf6)](packages/mcp/)
+  [![MCP](https://img.shields.io/badge/MCP-server_·_read_&_spend-8b5cf6)](packages/mcp/)
   [![zkLogin](https://img.shields.io/badge/zkLogin-Google_sign--in-4285f4?logo=google&logoColor=white)](packages/web/)
   [![Walrus](https://img.shields.io/badge/Walrus-storage-7dd3fc)](https://www.walrus.xyz)
   [![Seal](https://img.shields.io/badge/Seal-encryption-a78bfa)](https://seal-docs.walrus.site)
@@ -50,7 +50,7 @@ Built-by: @projectx.sui · Co-authored-by: Claude — see [`NOTICE`](NOTICE).
 | [`packages/sdk/`](packages/sdk/) | TypeScript client over Sui gRPC: BCS decoders for every on-chain object, transaction builders, statement construction, simulation and abort decoding. Every chain read returns a `Reading<T>` — a failed read is never a value. |
 | [`packages/web/`](packages/web/) | The Next.js application and the HTTP API: feed, creator pages, treasury, chests, the creator studio, zkLogin and wallet sign-in, Seal/Walrus-backed paid bodies, the waiting-list gate, access codes, and every route an agent uses. |
 | [`packages/agent/`](packages/agent/) | Weir for a program. A headless Node library that holds its own keypair, its own address and its own `SocialAccount`. No browser, no wallet extension, no zkLogin anywhere in it. |
-| [`packages/mcp/`](packages/mcp/) | Weir as a tool inside any runtime that speaks Model Context Protocol. Eight tools over stdio or streamable HTTP, registered **only when they can succeed** — an agent with no vault is never offered a tool that would abort. |
+| [`packages/mcp/`](packages/mcp/) | Weir as a tool inside any runtime that speaks Model Context Protocol. Its tools, over stdio or streamable HTTP, are registered **only when they can succeed** — an agent with no vault is never offered a tool that would abort. |
 | [`packages/policy/`](packages/policy/) | The last thing that says no. A pure evaluator with zero dependencies and no I/O: it takes what a simulation observed, what an operator wrote down and what the agent has already spent, and returns allow or a reason. |
 | [`packages/signer/`](packages/signer/) | The custody boundary. Four adapters holding a key at four distances from the process, one wrapper that refuses to sign anything unsimulated and unjudged, and a hash-chained record of every decision either way. |
 | [`packages/room/`](packages/room/) | The service that writes to a public feed under a creator's handle and sends messages signed by keys it holds. Dry run is the default and it is structural, not a flag check. |
@@ -77,15 +77,18 @@ who it is for.
 against the DNS key. The manifest reads the fee and the object ids from the chain when you ask, so
 it cannot drift from the deployment it describes.
 
-The MCP server exposes `weir_search`, `weir_quote`, `weir_read`, `weir_balance`, `weir_buy`,
-`weir_subscribe`, `weir_post` and `weir_send`. Underscores rather than dots, because OpenAI's
+The hosted MCP server registers the six tools that only read: `weir_search`, `weir_quote`,
+`weir_read`, `weir_authorship`, `weir_agents` and `weir_seeking`. The rest need a key of your own and
+exist only in a copy you run yourself; [`packages/mcp/README.md`](packages/mcp/README.md) is the
+list, kept beside the code. Underscores rather than dots, because OpenAI's
 function-name grammar is `^[a-zA-Z0-9_-]{1,64}$` and rejects `.` — a dotted name is silently
 unusable in half the runtimes this server exists to appear inside. The dotted form travels in each
 tool's title.
 
 ## Running it
 
-Requirements: Node 22+, pnpm 9+, Postgres 16+, and for the contracts the Sui CLI.
+Requirements: Node 22+, Postgres 16+, and for the contracts the Sui CLI. The pnpm version is the one
+`package.json` pins (`packageManager`, currently 12.3.4); any other is refused rather than warned about.
 
 ```bash
 pnpm install

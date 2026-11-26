@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { fold } from '@projectx-social/sdk';
 import { titleFor } from '@/lib/site-map';
 import { PageHead } from '@/components/app/PageHead';
@@ -29,6 +30,10 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
   // itself returns zero on the mainnet gRPC endpoint's recent-events window. The vault page
   // answers from readVault(id) alone, which reads current state.
   const vault = await readVault(id);
+  // A vault the chain does not have is a page that is not here. Until 2026-11-26 every id answered
+  // 200 with "This did not load", which is a page a crawler indexes once for each id it meets. A
+  // read that failed for any other reason is still that: a read that failed, and it says so.
+  if (!vault.ok && vault.failure.kind === 'not-found') notFound();
   const creatorName =
     vault.ok && vault.value.handle === null
       ? fold(

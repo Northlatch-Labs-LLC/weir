@@ -124,17 +124,20 @@ describe('robots.txt', () => {
 });
 
 describe('sitemap.xml', () => {
-  it('lists only pages from the open list, and no documents', () => {
+  it('lists only pages from the open list, the legal documents, and no agent documents', () => {
     const pages = openPages();
     expect(pages.length).toBeGreaterThan(0);
-    for (const page of pages) expect(ALWAYS_OPEN).toContain(page);
+    for (const page of pages) {
+      if (page.startsWith('/legal/')) continue;
+      expect(ALWAYS_OPEN, page).toContain(page);
+    }
     for (const notAPage of ['/api/', '/signin', '/waitlist', '/.well-known/', '/llms.txt', '/robots.txt', '/sitemap.xml']) {
       expect(pages).not.toContain(notAPage);
     }
   });
 
-  it('the sitemap itself carries the agent documents, even though they are not pages', () => {
-    const urls = sitemap().map((entry) => entry.url);
+  it('the sitemap itself carries the agent documents, even though they are not pages', async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
     for (const doc of ['/llms.txt', '/.well-known/weir-agent.json', '/.well-known/mcp.json']) {
       expect(urls, `${doc} must be in the sitemap`).toContain(`https://weir.social${doc}`);
     }
@@ -145,13 +148,42 @@ describe('sitemap.xml', () => {
     expect(openPages()).toContain('/agents');
   });
 
-  it('lists the homepage, and only once', () => {
-    const urls = sitemap().map((entry) => entry.url);
+  /*
+    On 2026-11-26 the live sitemap listed `/legal` — a redirect — and none of the three documents
+    it redirects to, and named nine URLs in total on a site whose door was open.
+  */
+  it('names the legal documents, and not the redirect that leads to them', () => {
+    const pages = openPages();
+    for (const page of ['/legal/terms', '/legal/privacy', '/legal/creator-terms']) expect(pages, page).toContain(page);
+    expect(pages).not.toContain('/legal');
+  });
+
+  it('lists the rest of the public pages when the front door is open, and not while it is shut', () => {
+    const shut = openPages(true);
+    const open = openPages(false);
+    for (const page of ['/creators', '/treasury', '/explore/agents', '/agents/build', '/join']) {
+      expect(open, page).toContain(page);
+      expect(shut, page).not.toContain(page);
+    }
+    expect(open.every((page) => shut.includes(page) || page.startsWith('/'))).toBe(true);
+    expect(open.length).toBe(shut.length + 5);
+  });
+
+  it('follows the site’s mode, as the share card does', async () => {
+    // No database here, so the mode reads as its default: open.
+    const urls = (await sitemap()).map((entry) => entry.url);
+    expect(urls).toContain('https://weir.social/legal/privacy');
+    expect(urls).toContain('https://weir.social/creators');
+    expect(urls).not.toContain('https://weir.social/legal');
+  });
+
+  it('lists the homepage, and only once', async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
     expect(urls.filter((u) => u === 'https://weir.social/')).toHaveLength(1);
   });
 
-  it('never lists the same page twice', () => {
-    const urls = sitemap().map((entry) => entry.url);
+  it('never lists the same page twice', async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
     expect(new Set(urls).size).toBe(urls.length);
   });
 });
