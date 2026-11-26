@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { prepareNamePurchase, type NamePurchaseQuote } from '@/lib/names-purchase';
@@ -11,7 +12,9 @@ export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as {
     sender?: string;
     label?: string;
     years?: number;

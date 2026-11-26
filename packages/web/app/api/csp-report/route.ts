@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { recordFailure } from '@/lib/error-log';
 
@@ -74,12 +75,9 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 415 });
   }
 
-  let parsed: unknown;
-  try {
-    parsed = await request.json();
-  } catch {
-    return new NextResponse(null, { status: 400 });
-  }
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const parsed: unknown = read.value;
 
   const reports = Array.isArray(parsed) ? parsed.slice(0, MAX_REPORTS_PER_REQUEST) : [parsed];
 

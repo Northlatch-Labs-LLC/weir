@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { countFollowers, findProfile, setFollow } from '@/lib/content';
 import { verifyAction } from '@/lib/identity';
@@ -11,7 +12,9 @@ export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as {
     handle?: string;
     follower?: string;
     following?: boolean;

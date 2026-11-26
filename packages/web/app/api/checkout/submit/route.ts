@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { quotaLimit, simulateLimit } from '@/lib/rate-limit';
 import { isPurchase, moveTargets } from '@/lib/tx-shape';
 import { fold, type FailureKind } from '@projectx-social/sdk';
@@ -45,7 +46,9 @@ async function submitOnce(request: Request) {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as { bytes?: string; signature?: string };
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as { bytes?: string; signature?: string };
   if (!body.bytes || !body.signature) {
     return NextResponse.json({ error: 'bytes and signature are required' }, { status: 400 });
   }

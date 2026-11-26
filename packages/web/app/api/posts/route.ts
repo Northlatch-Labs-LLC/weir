@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { createHash } from 'node:crypto';
+import { readJsonBody } from '@/lib/body-limit';
 import { newId } from '@/lib/ids';
 import { NextResponse } from 'next/server';
 import { quotaLimit, rateLimit } from '@/lib/rate-limit';
@@ -42,7 +43,9 @@ async function publishOnce(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const bodyRead = await readJsonBody(request);
+  if (!bodyRead.ok) return bodyRead.response;
+  const body = bodyRead.value as {
     handle?: string;
     author?: string;
     title?: string;

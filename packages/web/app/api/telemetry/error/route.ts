@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { recordFailure } from '@/lib/error-log';
 
@@ -16,12 +17,9 @@ export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  let body: { source?: unknown; detail?: unknown; route?: unknown };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 });
-  }
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as { source?: unknown; detail?: unknown; route?: unknown };
 
   /*
     The only sender is global-error.tsx, and the literal it posts is SENDER_SOURCE. This endpoint

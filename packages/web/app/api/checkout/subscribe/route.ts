@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { simulateLimit } from '@/lib/rate-limit';
 import { isSuiId } from '@/lib/db';
 import { findProfileByVault } from '@/lib/content';
@@ -13,7 +14,9 @@ export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as {
     sender?: string;
     vaultId?: string;
     coinType?: string;

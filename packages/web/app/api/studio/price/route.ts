@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { findCreatorCaps, prepareSetContentPrice, type CheckoutQuote } from '@/lib/checkout';
@@ -14,7 +15,9 @@ export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const b = (await request.json()) as {
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const b = read.value as {
     sender?: string; vaultId?: string; coinType?: string; contentKey?: string; price?: string;
   };
   if (!b.sender || !b.vaultId || !b.coinType || !b.contentKey || !b.price) {

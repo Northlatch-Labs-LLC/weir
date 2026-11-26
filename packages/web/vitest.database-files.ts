@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 export const DATABASE_TEST_FILES: readonly string[] = [
   'test/authorship-proof.test.ts',
+  'test/bad-json-is-the-callers-mistake.test.ts',
   'test/idempotency-routes.test.ts',
   'test/machine-edition.test.ts',
   'test/prices-are-whole-numbers.test.ts',

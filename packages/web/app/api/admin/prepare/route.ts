@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { simulateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { prepareAdminAction, type AdminAction, type AdminQuote } from '@/lib/admin';
@@ -30,7 +31,9 @@ export async function POST(request: Request) {try {
     return NextResponse.json({ error: 'this address does not administer the site' }, { status: 403 });
   }
 
-  const body = (await request.json()) as { sender?: string; action?: AdminAction };
+  const bodyRead = await readJsonBody(request);
+  if (!bodyRead.ok) return bodyRead.response;
+  const body = bodyRead.value as { sender?: string; action?: AdminAction };
 
   if (!body.sender || !SUI_ADDRESS.test(body.sender)) {
     return NextResponse.json({ error: 'sender must be a Sui address' }, { status: 400 });

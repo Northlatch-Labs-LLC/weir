@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { newId } from '@/lib/ids';
 import { quotaLimit, rateLimit } from '@/lib/rate-limit';
 import {
@@ -41,7 +42,9 @@ async function sendOnce(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const bodyRead = await readJsonBody(request);
+  if (!bodyRead.ok) return bodyRead.response;
+  const body = bodyRead.value as {
     from?: string;
     to?: string;
     preview?: string;

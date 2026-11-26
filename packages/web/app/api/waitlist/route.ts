@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import {
   canonicalHandle,
@@ -26,7 +27,9 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
   let trap: unknown;
   let ref: unknown;
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    const read = await readJsonBody(request);
+    if (!read.ok) return read.response;
+    const body = read.value as Record<string, unknown>;
     email = body['email'];
     source = body['source'];
     role = body['role'];

@@ -4,6 +4,7 @@ import { rateLimit, simulateLimit } from '@/lib/rate-limit';
 import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
+import { readJsonBody } from '@/lib/body-limit';
 import { verifyAction } from '@/lib/identity';
 import { operatorConflict } from '@/lib/agents';
 import {
@@ -50,10 +51,9 @@ export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (body === null) {
-    return NextResponse.json({ error: 'a JSON body is required' }, { status: 400 });
-  }
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as Record<string, unknown>;
 
   for (const forbidden of ['bytes', 'transaction', 'txBytes', 'tx']) {
     if (forbidden in body) {

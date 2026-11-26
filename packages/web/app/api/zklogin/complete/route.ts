@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { simulateLimit } from '@/lib/rate-limit';
 import { computeZkLoginAddressFromSeed, genAddressSeed } from '@mysten/sui/zklogin';
 import { checkProveResponse, KEY_CLAIM_NAME, type ProveRequest } from '@/lib/zklogin';
@@ -12,7 +13,9 @@ export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as Record<string, unknown>;
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as Record<string, unknown>;
 
   const required = ['jwt', 'extendedEphemeralPublicKey', 'jwtRandomness'] as const;
   const missing = required.filter((key) => typeof body[key] !== 'string' || body[key] === '');

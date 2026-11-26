@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { listThreads, findProfileByOwner } from '@/lib/content';
@@ -13,7 +14,9 @@ export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const bodyRead = await readJsonBody(request);
+  if (!bodyRead.ok) return bodyRead.response;
+  const body = bodyRead.value as {
     viewer?: string;
     signature?: string;
     timestampMs?: number;
