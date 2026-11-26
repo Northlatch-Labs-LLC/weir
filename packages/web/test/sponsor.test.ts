@@ -153,6 +153,23 @@ describe('the cap, enforced by the database', () => {
     if (!clash.ok) expect(clash.failure.detail).toContain('already spoken for');
   });
 
+  /*
+    A hold that has lapsed holds nothing — not a seat, not an address, not a handle.
+
+    The row used to stay and keep barring both until some other registration happened to take its
+    seat, so an agent that asked, did not submit within the hold, and asked again was told "this
+    address already holds a sponsored seat" while it held nothing. Nothing was spent on a lapsed
+    hold, so removing it costs the offer nothing.
+
+    (How fast one source may take holds is a route concern — QUOTAS.sponsorHold in
+    lib/rate-limit.ts, and test/the-sponsor-offer-cannot-be-held-shut.test.ts. A ceiling on holds
+    in total was tried and removed: it refused the next honest agent rather than the caller who
+    meant no good.)
+  */
+  const claim = async (handle: string, atMs: number): Promise<void> => {
+    await testDb().query('UPDATE agent_sponsorships SET claimed_at_ms = $1 WHERE handle = $2', [atMs, handle]);
+  };
+
   it('runs out at exactly the advertised number and says so', async () => {
     for (let i = 1; i <= SPONSORSHIP_SEATS; i += 1) {
       const r = await reserveSeat({ address: addr(i), handle: `h${i}`, gasBudgetMist: 0n, nowMs: now });
@@ -176,6 +193,45 @@ describe('the cap, enforced by the database', () => {
     }
     const after = await seatsRemaining(now);
     expect(after.ok && after.value).toBe(0);
+  });
+
+  it('lets an agent whose own hold lapsed ask again, instead of telling it that it holds one', async () => {
+    const t0 = 3_000_000;
+    const first = await reserveSeat({ address: addr(7), handle: 'secondtry', gasBudgetMist: 1n, nowMs: t0 });
+    expect(first.ok).toBe(true);
+
+    const later = t0 + SEAT_HOLD_MS + 1;
+    const again = await reserveSeat({ address: addr(7), handle: 'secondtry', gasBudgetMist: 1n, nowMs: later });
+    expect(again.ok, again.ok ? '' : again.failure.detail).toBe(true);
+    if (again.ok && first.ok) expect(again.value.seat).toBe(first.value.seat);
+    // One row, one address: asking again replaced the lapsed hold rather than adding to it.
+    const rows = await testDb().query('SELECT 1 FROM agent_sponsorships WHERE address = $1', [addr(7)]);
+    expect(rows.rowCount).toBe(1);
+  });
+
+  it('frees a handle that only a lapsed registration ever asked for', async () => {
+    const t0 = 4_000_000;
+    expect((await reserveSeat({ address: addr(8), handle: 'lapsedname', gasBudgetMist: 1n, nowMs: t0 })).ok).toBe(true);
+    expect((await reserveSeat({ address: addr(9), handle: 'lapsedname', gasBudgetMist: 1n, nowMs: t0 })).ok).toBe(false);
+
+    const later = t0 + SEAT_HOLD_MS + 1;
+    const other = await reserveSeat({ address: addr(9), handle: 'lapsedname', gasBudgetMist: 1n, nowMs: later });
+    expect(other.ok, other.ok ? '' : other.failure.detail).toBe(true);
+  });
+
+  it('never frees a seat that the chain confirmed, however long ago it was claimed', async () => {
+    const t0 = 5_000_000;
+    const r = await reserveSeat({ address: addr(6), handle: 'claimedname', gasBudgetMist: 1n, nowMs: t0 });
+    expect(r.ok).toBe(true);
+    await claim('claimedname', t0);
+
+    const later = t0 + SEAT_HOLD_MS * 100;
+    const sameAddress = await reserveSeat({ address: addr(6), handle: 'claimedname', gasBudgetMist: 1n, nowMs: later });
+    expect(sameAddress.ok).toBe(false);
+    const other = await reserveSeat({ address: addr(10), handle: 'claimedname', gasBudgetMist: 1n, nowMs: later });
+    expect(other.ok).toBe(false);
+    const left = await seatsRemaining(later);
+    expect(left.ok && left.value).toBe(SPONSORSHIP_SEATS - 1);
   });
 
   it('releases a held seat back to the pool when the build failed', async () => {

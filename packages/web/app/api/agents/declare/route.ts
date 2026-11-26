@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { operatorConflict, recordDeclaration, validateDeclaration } from '@/lib/agents';
 import { markDeclarationRequestFiled } from '@/lib/agent-declarations';
 import { markOfferFiled, markSeekingClaimed, unfiledOfferFor } from '@/lib/agent-seeking';
@@ -72,6 +72,9 @@ export async function POST(request: Request) {
       purpose: declaration.purpose,
     },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slowAgent = throttleResponse(byAgent);
+  if (slowAgent !== null) return slowAgent;
   if (!byAgent.ok) {
     return NextResponse.json(
       { error: `the agent's signature does not stand: ${byAgent.failure.detail}` },
@@ -92,6 +95,9 @@ export async function POST(request: Request) {
       purpose: declaration.purpose,
     },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slowOperator = throttleResponse(byOperator);
+  if (slowOperator !== null) return slowOperator;
   if (!byOperator.ok) {
     return NextResponse.json(
       { error: `the operator's signature does not stand: ${byOperator.failure.detail}` },

@@ -54,6 +54,8 @@ describe('the shared ceiling is in the database, not in this process', () => {
   });
 
   it('refuses when the ceiling is reached, and says how long to wait', async () => {
+    // The deployment's breaker is asked first (one write, allowed), then this caller's row refuses.
+    query.mockResolvedValueOnce({ rowCount: 1, rows: [{ tokens: 5 }] });
     query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
     query.mockResolvedValueOnce({ rows: [{ tokens: 0, refilled_at_ms: '1000' }] });
     const { sharedLimit } = await import('../lib/rate-limit');
@@ -62,6 +64,29 @@ describe('the shared ceiling is in the database, not in this process', () => {
 
     expect(refused?.status).toBe(429);
     expect(Number(refused?.headers.get('retry-after'))).toBeGreaterThan(0);
+    // The caller's bucket, not the deployment's, is the one named.
+    expect(((await refused?.json()) as { bucket?: string }).bucket).toBe('read');
+  });
+
+  /*
+    A ceiling that holds for one address is still a ceiling per address. Since 2026-11-26 the
+    shared limit consults the deployment-wide breaker before the caller's row, as quotaLimit
+    always did, so that however many addresses ask, the whole has a ceiling.
+  */
+  it('trips the deployment’s breaker before it looks at the caller', async () => {
+    // The breaker's write is refused and its row is empty: the deployment is over its ceiling.
+    query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+    query.mockResolvedValueOnce({ rows: [{ tokens: 0, refilled_at_ms: '1000' }] });
+    const { sharedLimit } = await import('../lib/rate-limit');
+
+    const refused = await sharedLimit(get(), 'read');
+
+    // The breaker's own answer, as quotaLimit has always given it: not this caller's fault.
+    expect(refused?.status).toBe(503);
+    expect(refused?.headers.get('x-weir-breaker')).toBe('read;over-ceiling');
+    expect(JSON.stringify(query.mock.calls[0]?.[1])).toContain('*deployment*');
+    // The caller's row was never read: the deployment was already over.
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it('fails CLOSED when the store cannot be reached', async () => {

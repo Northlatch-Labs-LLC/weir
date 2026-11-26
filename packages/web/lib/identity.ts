@@ -3,7 +3,7 @@ import 'server-only';
 import { opaqueDetail } from './opaque';
 
 import { createHash } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { isValidTransactionSignature, verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64 } from '@mysten/sui/utils';
@@ -19,8 +19,47 @@ import {
 } from '@projectx-social/sdk';
 import { siteConfig } from './chain';
 import { db } from './db';
+import { QUOTAS, spendQuota, tripBreaker } from './rate-limit';
 
 export { isSingleUse, statementFor, SIGNATURE_WINDOW_MS, type Action };
+
+/*
+  The statements that read rather than write, and so are not counted against the write budget.
+  Everything else a signature can authorise changes something a person will see.
+*/
+const NOT_A_WRITE: ReadonlySet<string> = new Set(['read', 'read-content', 'onramp']);
+
+/*
+  The refusals made for a spent budget, so a route can answer them as what they are. A caller told
+  to wait must be told to wait — 429, with a Retry-After — and not 401, which reads as "sign
+  again": a client that obeys that signs a fresh statement for every retry and learns nothing.
+  Weak, so marking a refusal keeps it alive no longer than the refusal itself.
+*/
+const THROTTLED = new WeakMap<object, number>();
+
+/// The 429 for a refusal that was made because the address had spent its write budget, or null
+/// for any other result. Routes return it before they look at anything else.
+export function throttleResponse(reading: Reading<unknown>): Response | null {
+  if (reading.ok) return null;
+  const retryAfterSeconds = THROTTLED.get(reading.failure);
+  if (retryAfterSeconds === undefined) return null;
+  return Response.json(
+    {
+      error:
+        'too many signed writes from this address. The limit is on the address, not on where the ' +
+        'request came from, and it refills on its own. The signature was not used: send the same ' +
+        'request again.',
+      retryAfterSeconds,
+    },
+    {
+      status: 429,
+      headers: {
+        'retry-after': String(retryAfterSeconds),
+        'x-ratelimit-limit': String(QUOTAS.signedWrite.capacity),
+      },
+    },
+  );
+}
 
 export async function verifyAction(input: {
   address: string;
@@ -35,9 +74,87 @@ export async function verifyAction(input: {
   if (!proved.ok) return proved;
   if (proved.value === null) return ok(true);
 
-  const spent = await spendSignature(db(), proved.value);
+  if (!NOT_A_WRITE.has(input.action.kind)) {
+    /*
+      After the proof and before the spend, and both halves of that order are load-bearing. After
+      the proof: only a request that really was signed by this address can spend its budget, so
+      typing a stranger's address with any signature at all costs them nothing. Before the spend:
+      a caller over the budget keeps the signature they came with. A limit enforced after the spend
+      would take the signature away from a request it then refused.
+    */
+    const budget = await writeBudgetRefusal(input.address);
+    if (!budget.ok) return budget;
+  }
+
+  const spent = await spendInOneTransaction(proved.value);
   if (spent.ok) await sweepUsedSignatures();
   return spent;
+}
+
+/*
+  Spend a signature: the replay row and the forensics row, in one transaction or not at all.
+
+  spendSignature takes whatever runs the query, and the routes that defer their spend hand it a
+  transaction they opened for the purpose. This path handed it the pool, and a pool runs each
+  statement on its own: so the comment inside spendSignature — same runner, same transaction —
+  was true of four routes and false of the twelve that verify and spend in one step. If the second
+  insert failed there, the caller was told "not accepted" and the signature had been taken anyway.
+
+  A client pinned for the duration is a transaction. On any failure it is rolled back, so a spend
+  that is not recorded leaves no trace in the replay table either: the caller is told to try again
+  and the signature it came with is still good, which is what "not accepted" should mean.
+*/
+async function spendInOneTransaction(pending: PendingSpend): Promise<Reading<true>> {
+  let client: PoolClient | undefined;
+  try {
+    client = await db().connect();
+    await client.query('BEGIN');
+    const spent = await spendSignature(client, pending);
+    if (!spent.ok) {
+      await client.query('ROLLBACK');
+      return spent;
+    }
+    await client.query('COMMIT');
+    return spent;
+  } catch (error) {
+    if (client !== undefined) await client.query('ROLLBACK').catch(() => undefined);
+    return fail('transport', 'signature', `could not record this signature, so it was not accepted: ${opaqueDetail('signature', error)}`);
+  } finally {
+    client?.release();
+  }
+}
+
+/*
+  Spend one write from an address's budget, and refuse it if there is none to spend.
+
+  For the routes whose signature must NOT be spent when it is proved — an operator's offer is
+  filed later by the agent it was made to — this is the half of verifyAction they still owe: a
+  signed write is counted against whoever signed it, whether or not the signature is used up now.
+  Call it only after the signature has been proved, for the reason in verifyAction.
+*/
+export async function writeBudgetRefusal(address: string): Promise<Reading<true>> {
+  // The whole deployment's ceiling first, as every other quota does; then this address's.
+  const breaker = await tripBreaker('signedWrite');
+  if (breaker.tripped) {
+    const seconds =
+      breaker.kind === 'over-ceiling' ? breaker.retryAfterSeconds : breaker.kind === 'closed' ? 60 : 5;
+    const refusal =
+      breaker.kind === 'unavailable'
+        ? fail<true>('transport', 'signature', 'this write could not be counted against its budget, so it was not accepted')
+        : fail<true>('budget-exhausted', 'signature', `this deployment is not accepting signed writes at this rate; wait ${seconds}s`);
+    if (!refusal.ok) THROTTLED.set(refusal.failure, seconds);
+    return refusal;
+  }
+
+  const budget = await spendQuota(address, 'signedWrite');
+  if (budget.allowed) return ok(true);
+
+  const refusal =
+    budget.kind === 'unavailable'
+      ? fail<true>('transport', 'signature', 'this write could not be counted against its budget, so it was not accepted')
+      : fail<true>('budget-exhausted', 'signature', `this address has signed too many writes; wait ${budget.retryAfterSeconds}s`);
+  if (!refusal.ok) THROTTLED.set(refusal.failure, budget.kind === 'unavailable' ? 5 : budget.retryAfterSeconds);
+  return refusal;
 }
 
 export async function proveActionWithoutSpending(

@@ -229,14 +229,16 @@ describe('the endpoints it publishes', () => {
     }
   });
 
-  const SPENT_BY: Partial<Record<string, string>> = { simulate: 'simulateLimit(' };
+  // checkout/submit hands simulateLimit to idempotently as its way in, rather than calling it
+  // itself (see idempotent-route.ts), so the name is looked for with or without a call after it.
+  const SPENT_BY: Partial<Record<string, RegExp>> = { simulate: /\bsimulateLimit\b/ };
 
   it('names the rate-limit budget the route actually spends', () => {
     for (const endpoint of endpoints) {
       const source = read(fileFor(endpoint.path));
       const direct = source.includes(`rateLimit(request, '${endpoint.budget}')`);
       const guard = SPENT_BY[endpoint.budget];
-      const viaGuard = guard !== undefined && source.includes(guard);
+      const viaGuard = guard !== undefined && guard.test(source);
       expect([endpoint.path, direct || viaGuard]).toEqual([endpoint.path, true]);
     }
   });
@@ -568,7 +570,10 @@ describe('custody and the session token, told truthfully', () => {
 describe('the two profile routes are listed with exactly the fields they parse', () => {
   const fieldsParsedBy = (routePath: string): string[] => {
     const source = readFileSync(join(process.cwd(), 'app/api', routePath, 'route.ts'), 'utf8');
-    const block = source.slice(source.indexOf('await request.json()'), source.indexOf('};', source.indexOf('await request.json()')));
+    // The body is read through readJsonBody (2026-11-26); the type it is cast to lists the fields.
+    const start = source.indexOf('.value as {');
+    expect(start, `${routePath} reads its body through readJsonBody`).toBeGreaterThan(-1);
+    const block = source.slice(start, source.indexOf('};', start));
     return [...block.matchAll(/\b([a-zA-Z]+)\?:/g)].map((m) => m[1] as string).sort();
   };
 

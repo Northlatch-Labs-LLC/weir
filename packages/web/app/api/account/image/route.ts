@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { accountHandle } from '@/lib/accounts';
 import { findProfile, setProfileImage } from '@/lib/content';
 import { detectType } from '@/lib/media';
@@ -64,6 +64,9 @@ export async function POST(request: Request) {
     timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0,
     action: { kind: 'set-image', handle, imageSha256 },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proof);
+  if (slow !== null) return slow;
   if (!proof.ok) {
     return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
   }

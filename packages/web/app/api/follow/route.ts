@@ -1,8 +1,9 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { countFollowers, findProfile, setFollow } from '@/lib/content';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,9 @@ export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as {
     handle?: string;
     follower?: string;
     following?: boolean;
@@ -38,6 +41,9 @@ export async function POST(request: Request) {try {
     timestampMs,
     action: { kind: 'follow', handle, following },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
   const state = await setFollow(follower, handle, following);

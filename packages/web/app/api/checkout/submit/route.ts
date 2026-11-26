@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { quotaLimit, simulateLimit } from '@/lib/rate-limit';
 import { isPurchase, moveTargets } from '@/lib/tx-shape';
 import { fold, type FailureKind } from '@projectx-social/sdk';
@@ -38,14 +39,15 @@ function statusFor(kind: FailureKind): number {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  return idempotently(request, '/api/checkout/submit', senderOf, submitOnce);
+  // simulateLimit is admitted here rather than called in submitOnce, so a caller who is over
+  // budget is refused by its memory-burst half before the ledger is touched. See idempotent-route.ts.
+  return idempotently(request, '/api/checkout/submit', senderOf, submitOnce, simulateLimit);
 }
 
 async function submitOnce(request: Request) {
-  const limited = await simulateLimit(request);
-  if (limited !== null) return limited;
-
-  const body = (await request.json()) as { bytes?: string; signature?: string };
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as { bytes?: string; signature?: string };
   if (!body.bytes || !body.signature) {
     return NextResponse.json({ error: 'bytes and signature are required' }, { status: 400 });
   }

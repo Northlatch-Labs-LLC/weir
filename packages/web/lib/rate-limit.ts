@@ -1,6 +1,8 @@
 import { opaqueDetail } from './opaque';
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 
+import { timingSafeEqual } from 'node:crypto';
+
 import { db, normaliseAddress } from './db';
 
 export interface Budget {
@@ -91,6 +93,54 @@ export function clientKey(request: Request): string {
   return identify(request).key;
 }
 
+/*
+  For a deployment that is served through an edge it trusts: the refusal for a request that did not
+  come through it. Null unless the deployment has asked for this.
+
+  Why. weir.social sits behind Cloudflare, and on 2026-11-25 an external scan showed three ways to
+  reach the server without passing it: the host the platform gives every project, a platform address
+  with the site's own name in the handshake, and — on that path — a client-chosen cf-connecting-ip.
+  The edge's per-address limits and any rule it carries were left behind on all three. The address
+  itself cannot be hidden; what can be done is for the server to serve only the edge.
+
+  It is a request for a reason, and the reason is the order it has to be switched on in:
+    1. the edge is configured to add x-edge-secret to every request it forwards;
+    2. PROJECTX_SOCIAL_BEHIND_CLOUDFLARE=true and PROJECTX_SOCIAL_EDGE_SECRET are set here;
+    3. and only then PROJECTX_SOCIAL_REQUIRE_EDGE=true.
+  Switched on first, this would refuse everybody. So it does nothing until it is asked, and nothing
+  if it is asked without the two settings that make the question answerable — it says so in the
+  log instead of taking the site down.
+
+  The comparison is in constant time. The secret is the whole basis of the decision, and a refusal
+  that leaks how much of it matched is a poor sort of refusal.
+*/
+export function edgeRequiredRefusal(request: Request): Response | null {
+  if ((process.env['PROJECTX_SOCIAL_REQUIRE_EDGE'] ?? '').trim() !== 'true') return null;
+
+  const behindCloudflare = (process.env['PROJECTX_SOCIAL_BEHIND_CLOUDFLARE'] ?? '').trim() === 'true';
+  const expected = (process.env['PROJECTX_SOCIAL_EDGE_SECRET'] ?? '').trim();
+  if (!behindCloudflare || expected === '') {
+    warnOnce(
+      'PROJECTX_SOCIAL_REQUIRE_EDGE is true, but ' +
+        (!behindCloudflare ? 'PROJECTX_SOCIAL_BEHIND_CLOUDFLARE is not "true"' : 'no PROJECTX_SOCIAL_EDGE_SECRET is set') +
+        ', so nothing can tell an edged request from any other. Nothing is being refused. Set both ' +
+        'and confirm the edge sends x-edge-secret before relying on this.',
+    );
+    return null;
+  }
+
+  const presented = request.headers.get('x-edge-secret') ?? '';
+  const a = Buffer.from(presented, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  const same = a.length === b.length && timingSafeEqual(a, b);
+  if (same) return null;
+
+  return new Response('This site is served through its own domain.\n', {
+    status: 403,
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+  });
+}
+
 const hits = new Map<string, number[]>();
 
 const MAX_KEYS = 10_000;
@@ -151,6 +201,11 @@ export function rateLimit(request: Request, name: BudgetName): Response | null {
 }
 
 export async function sharedLimit(request: Request, name: QuotaName): Promise<Response | null> {
+  // The whole deployment first, then this caller. A ceiling that holds for one address is still
+  // a ceiling per address; the breaker is the one that holds however many addresses ask.
+  const breaker = await tripBreaker(name);
+  if (breaker.tripped) return breakerResponse(name, breaker);
+
   const outcome = await spendShared(clientKey(request), name);
   if (outcome.allowed) return null;
 
@@ -219,6 +274,56 @@ export const QUOTAS = {
   simulate: { capacity: 60, msPerToken: 2_000 },
   publish: { capacity: 20, msPerToken: 120_000 },
   message: { capacity: 60, msPerToken: 10_000 },
+  /*
+    For the two routes that write to error_events for strangers. It is a shared bucket because the
+    only limit they had was the in-memory one, which is per instance: requests spread across
+    serverless functions and the cap multiplied by however many were warm. A browser that hits a
+    violation or a crash loop sends a handful of reports; an address that sends thirty at once and
+    thirty a minute after that is not a browser.
+  */
+  errorReport: { capacity: 30, msPerToken: 2_000 },
+  /*
+    Every write a signature authorises, counted against the address that signed it.
+
+    The routes that take a signed statement also sit behind the per-address-in-memory burst limit,
+    and that limit is not a bound: it lives in one function instance's memory, so requests spread
+    across however many are warm and the cap multiplies. On 2026-11-25 a scan of weir.social sent
+    one hundred comments from one key in five seconds and not one was refused.
+
+    Forty in a burst and forty a minute after that is what the in-memory limit always meant to
+    allow (BUDGETS.write), now held where it cannot be raced: one atomic statement against a row
+    per address. It is spent only after the signature is proved, so nobody can drain a stranger's
+    budget by typing their address; and before the signature is spent, so a caller who is told to
+    wait can send the same signed request again.
+  */
+  signedWrite: { capacity: 40, msPerToken: 1_500 },
+  /*
+    Joining the waiting list. A person does it once; the in-memory write budget is per instance, so
+    without this one address fills the list at forty a row per warm function. Nothing is verified
+    when somebody joins, so a row costs the caller nothing but this.
+  */
+  waitlist: { capacity: 12, msPerToken: 5_000 },
+
+  /*
+    Taking a sponsored seat or vault slot: one source, a handful per hold.
+
+    A hold costs the caller a signature and nothing else, and a hold that is never executed holds a
+    real seat for fifteen minutes (lib/sponsor.ts, SEAT_HOLD_MS). An external scan of weir.social
+    (2026-11-25) took a seat with a throwaway key and watched the offer's count fall for a request
+    that never reached the chain; with enough keys one source could hold every seat left.
+
+    This is a bound on how fast ONE source can take holds, not on how many may be held at once.
+    A ceiling on holds in total was tried here first and removed: once a caller who meant no good
+    reached it, the next agent to arrive was the one refused, because at the moment of the hold
+    there is nothing to tell them apart. What can be told apart is where the requests come from.
+
+    Three at once, then one every five minutes. A hold lasts fifteen, so one source has at most six
+    seats at any moment however long it keeps asking, and holding the whole remaining offer takes
+    several sources for as long as the attack lasts. A source that reaches the sponsor through its
+    own domain rather than the edge is counted with every other such source in one bucket, so the
+    direct path to the origin cannot widen it.
+  */
+  sponsorHold: { capacity: 3, msPerToken: 300_000 },
 } as const satisfies Record<string, Quota>;
 
 export type QuotaName = keyof typeof QUOTAS;
@@ -476,6 +581,10 @@ export const BREAKER_ENV = {
   simulate: 'PROJECTX_SOCIAL_BREAKER_SIMULATE_PER_MINUTE',
   publish: 'PROJECTX_SOCIAL_BREAKER_PUBLISH_PER_HOUR',
   message: 'PROJECTX_SOCIAL_BREAKER_MESSAGE_PER_MINUTE',
+  errorReport: 'PROJECTX_SOCIAL_BREAKER_ERROR_REPORT_PER_MINUTE',
+  signedWrite: 'PROJECTX_SOCIAL_BREAKER_SIGNED_WRITE_PER_MINUTE',
+  sponsorHold: 'PROJECTX_SOCIAL_BREAKER_SPONSOR_HOLD_PER_MINUTE',
+  waitlist: 'PROJECTX_SOCIAL_BREAKER_WAITLIST_PER_MINUTE',
 } as const satisfies Record<QuotaName, string>;
 
 export const BREAKER_WINDOW_MS = {
@@ -486,6 +595,10 @@ export const BREAKER_WINDOW_MS = {
   simulate: 60_000,
   publish: 3_600_000,
   message: 60_000,
+  errorReport: 60_000,
+  signedWrite: 60_000,
+  sponsorHold: 60_000,
+  waitlist: 60_000,
 } as const satisfies Record<QuotaName, number>;
 
 export const BREAKER_DEFAULTS = {
@@ -496,6 +609,14 @@ export const BREAKER_DEFAULTS = {
   simulate: 600,
   publish: 600,
   message: 1_200,
+  /*
+    The whole deployment, per minute. Far above any honest volume and below what one coordinated
+    caller can produce: a hundred addresses at the forty-each signed-write budget is 4,000.
+  */
+  errorReport: 600,
+  signedWrite: 6_000,
+  sponsorHold: 60,
+  waitlist: 600,
 } as const satisfies Record<QuotaName, number>;
 
 export type BreakerSetting =

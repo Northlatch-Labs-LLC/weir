@@ -8,12 +8,31 @@ import {
 
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
 
+/// What a route does before its own work: its rate limit. Returns the refusal, or null to go on.
+export type Admission = (request: Request) => Response | null | Promise<Response | null>;
+
 export async function idempotently(
   request: Request,
   route: string,
   addressOf: (body: unknown) => string | null,
   run: (request: Request) => Promise<Response>,
+  admit?: Admission,
 ): Promise<Response> {
+  /*
+    The cheap refusal comes first, and the order is the whole point.
+
+    A claim is two writes to Postgres (the insert, then the release when the route refuses), and
+    until 2026-11-25 it happened before the route's limiter ran, because the limiter lived inside
+    `run`. So a caller who was already over budget — or who never intended to sign anything — still
+    spent database work on every request, with nothing cheap in front of it. The limiter is memory
+    and a microsecond; the ledger is shared by every reader of the site. Admit first, then read the
+    body, then claim.
+
+    A route that passes `admit` must not limit again inside `run`: one request, one charge.
+  */
+  const refused = admit === undefined ? null : await admit(request);
+  if (refused !== null) return refused;
+
   const key = request.headers.get(IDEMPOTENCY_HEADER);
   const raw = await request.text();
   const again = () => new Request(request.url, { method: request.method, headers: request.headers, body: raw });

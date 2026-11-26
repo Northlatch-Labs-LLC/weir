@@ -66,49 +66,13 @@ async function readStanding(email: string, refCode: string): Promise<WaitlistSta
   };
 }
 
-async function ensureCode(email: string): Promise<string> {
-  const { rows } = await db().query<{ ref_code: string | null }>(
-    `SELECT ref_code FROM waitlist_signups WHERE email = $1`,
-    [email],
-  );
-  const current = rows[0]?.ref_code ?? null;
-  if (current !== null) return current;
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const code = mintCode();
-    try {
-      const { rows: updated } = await db().query<{ ref_code: string }>(
-        `UPDATE waitlist_signups SET ref_code = $2
-         WHERE email = $1 AND ref_code IS NULL
-         RETURNING ref_code`,
-        [email, code],
-      );
-      const minted = updated[0];
-      if (minted !== undefined) return minted.ref_code;
-
-      const { rows: raced } = await db().query<{ ref_code: string | null }>(
-        `SELECT ref_code FROM waitlist_signups WHERE email = $1`,
-        [email],
-      );
-      const theirs = raced[0]?.ref_code ?? null;
-      if (theirs !== null) return theirs;
-    } catch (error) {
-      const pg = error as { code?: unknown; constraint?: unknown };
-      if (pg.code === '23505' && pg.constraint === 'waitlist_signups_ref_code_idx') continue;
-      throw error;
-    }
-  }
-
-  throw new Error('waitlist: could not mint a referral code');
-}
-
 export async function recordSignup(input: {
   email: string;
   source: WaitlistSource;
   role: WaitlistRole;
   handle: string | null;
   refCode?: string | null;
-}): Promise<{ result: SignupResult; standing: WaitlistStanding }> {
+}): Promise<{ result: SignupResult; standing: WaitlistStanding | null }> {
   const email = canonicalEmail(input.email);
 
   let referredBy: string | null = null;
@@ -133,8 +97,20 @@ export async function recordSignup(input: {
         return { result: 'created', standing: await readStanding(email, code) };
       }
 
-      const existing = await ensureCode(email);
-      return { result: 'already', standing: await readStanding(email, existing) };
+      /*
+        Already on the list, and that is all this says.
+
+        It used to answer with the entry's standing — position, referral code, referral count —
+        on the reasoning that the write was the only place standing was told, so no lookup had to
+        exist. But the write IS a lookup for anyone who can type an address: an external scan of
+        weir.social (2026-11-25) read a stranger's referral code this way. The code is the one part
+        worth keeping back — it is what lets somebody else attribute signups to that entry — and
+        the position tells a stranger more than "this address is on the list" already did.
+
+        The person who signed up was told their standing when they signed up. A panel that gets
+        `already` and no standing says "You are on the list", which is true and is enough.
+      */
+      return { result: 'already', standing: null };
     } catch (error) {
       const pg = error as { code?: unknown; constraint?: unknown };
       const codeCollision = pg.code === '23505' && pg.constraint === 'waitlist_signups_ref_code_idx';

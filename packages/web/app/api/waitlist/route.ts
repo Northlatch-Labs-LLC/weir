@@ -1,6 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/body-limit';
+import { rateLimit, sharedLimit } from '@/lib/rate-limit';
 import {
   canonicalHandle,
   handleShapeProblem,
@@ -13,6 +14,10 @@ import { recordSignup } from '@/lib/waitlist-store';
 export async function POST(request: Request): Promise<NextResponse | Response> {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
+  // And the limit that holds across instances: this writes a row for a stranger, and the in-memory
+  // budget is per instance. See QUOTAS.waitlist.
+  const shared = await sharedLimit(request, 'waitlist');
+  if (shared !== null) return shared;
 
   const configured = (process.env['PROJECTX_DATABASE_URL'] ?? '').trim() !== '';
   if (!configured) {
@@ -26,7 +31,9 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
   let trap: unknown;
   let ref: unknown;
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    const read = await readJsonBody(request);
+    if (!read.ok) return read.response;
+    const body = read.value as Record<string, unknown>;
     email = body['email'];
     source = body['source'];
     role = body['role'];
@@ -74,7 +81,8 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
     if (result === 'created') {
       return NextResponse.json({ ok: true, already: false, standing }, { status: 201 });
     }
-    return NextResponse.json({ ok: true, already: true, standing }, { status: 409 });
+    // No standing for an address that is already on the list. See recordSignup.
+    return NextResponse.json({ ok: true, already: true }, { status: 409 });
   } catch (error) {
     const pg = error as { code?: unknown; constraint?: unknown };
     if (pg.code === '23505' && pg.constraint === 'waitlist_signups_handle_idx') {

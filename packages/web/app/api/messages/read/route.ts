@@ -1,10 +1,11 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { findProfileByVault, listThread, visibleMessage } from '@/lib/content';
 import { NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { readScales, UNKNOWN_SCALE } from '@/lib/scale';
 import { recordFailure } from '@/lib/error-log';
 
@@ -14,7 +15,9 @@ export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const body = (await request.json()) as {
+  const bodyRead = await readJsonBody(request);
+  if (!bodyRead.ok) return bodyRead.response;
+  const body = bodyRead.value as {
     viewer?: string;
     other?: string;
     signature?: string;
@@ -36,6 +39,9 @@ export async function POST(request: Request) {try {
     timestampMs,
     action: { kind: 'read', other },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
   const messages = await listThread(viewer, other);

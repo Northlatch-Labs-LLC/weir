@@ -212,8 +212,27 @@ export async function reserveSeat(input: {
   const source = 'sponsored registration';
   const address = input.address.toLowerCase();
   const handle = input.handle.toLowerCase();
+  const lapsedBefore = input.nowMs - SEAT_HOLD_MS;
 
   try {
+    /*
+      A hold that has lapsed holds nothing — not a seat, not an address, not a handle.
+
+      The row used to stay and keep barring both until some other registration happened to take its
+      seat, so an agent that asked, did not submit within the hold, and asked again was told "this
+      address already holds a sponsored seat" while it held nothing. Nothing was spent on a lapsed
+      hold (no transaction was executed, or the chain would have confirmed it), so removing it costs
+      the offer nothing and frees the agent to try again. A claimed row is never touched.
+
+      The route confirms what the chain has already shown before it gets here, so a registration
+      that did execute has been marked claimed and is not swept with the abandoned ones.
+    */
+    await db().query(
+      `DELETE FROM agent_sponsorships
+        WHERE claimed_at_ms IS NULL AND reserved_at_ms <= $3 AND (address = $1 OR handle = $2)`,
+      [address, handle, lapsedBefore],
+    );
+
     const { rows } = await db().query<{ seat: number }>(
       `
       INSERT INTO agent_sponsorships (address, handle, seat, gas_budget_mist, reserved_at_ms)
@@ -225,13 +244,13 @@ export async function reserveSeat(input: {
                 AND (a.claimed_at_ms IS NOT NULL OR a.reserved_at_ms > $6)
        )
          /*
-           This address or handle already has a row anywhere in the table: select nothing.
+           This address or handle already has a row: select nothing. (After the sweep above, a row
+           here is a live hold or a claimed seat.)
 
            Without this the statement can reach the conflict clause on the PRIMARY KEY or on
            handle, neither of which the ON CONFLICT target covers, and Postgres raises instead of
            returning no rows — surfacing "one seat each" as a transport failure. Returning no rows
-           is correct here: the diagnostic queries below then say which of the three reasons it
-           was.
+           is correct here: the diagnostic queries below then say which reason it was.
          */
          AND NOT EXISTS (
              SELECT 1 FROM agent_sponsorships b
@@ -249,7 +268,7 @@ export async function reserveSeat(input: {
          AND agent_sponsorships.reserved_at_ms <= $6
       RETURNING seat
       `,
-      [address, handle, input.gasBudgetMist.toString(), input.nowMs, SPONSORSHIP_SEATS, input.nowMs - SEAT_HOLD_MS],
+      [address, handle, input.gasBudgetMist.toString(), input.nowMs, SPONSORSHIP_SEATS, lapsedBefore],
     );
 
     if (rows.length === 0) {
@@ -258,7 +277,7 @@ export async function reserveSeat(input: {
         db().query('SELECT 1 FROM agent_sponsorships WHERE handle = $1', [handle]),
         db().query<{ n: string }>(
           'SELECT count(*)::text AS n FROM agent_sponsorships WHERE claimed_at_ms IS NOT NULL OR reserved_at_ms > $1',
-          [input.nowMs - SEAT_HOLD_MS],
+          [lapsedBefore],
         ),
       ]);
       if (mine.rows.length > 0) {

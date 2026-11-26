@@ -175,8 +175,9 @@ export function StakePosition({ vaultId }: { vaultId: string }) {
           <span className="k">TAKE IT BACK</span>
           <p className="w-dialog__after">
             In full, at any time, with no waiting period and no approval. If the vault&rsquo;s liquid
-            balance is short, the contract unwinds delegated stake in this same transaction. The
-            forgone yield is the creator&rsquo;s loss, never yours.
+            balance is short, the contract unwinds delegated stake in this same transaction; if
+            none is unlocked yet, the withdrawal does not go through and nothing is taken, and you
+            can try again. The forgone yield is the creator&rsquo;s loss, never yours.
           </p>
 
           {accountId === null ? (

@@ -1,10 +1,11 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
-import { rateLimit, simulateLimit } from '@/lib/rate-limit';
+import { rateLimit, sharedLimit, simulateLimit } from '@/lib/rate-limit';
 import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
-import { verifyAction } from '@/lib/identity';
+import { readJsonBody } from '@/lib/body-limit';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { operatorConflict } from '@/lib/agents';
 import {
   SPONSORED_VAULT_GAS_BUDGET_MIST,
@@ -50,10 +51,9 @@ export async function POST(request: Request) {try {
   const limited = await simulateLimit(request);
   if (limited !== null) return limited;
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (body === null) {
-    return NextResponse.json({ error: 'a JSON body is required' }, { status: 400 });
-  }
+  const read = await readJsonBody(request);
+  if (!read.ok) return read.response;
+  const body = read.value as Record<string, unknown>;
 
   for (const forbidden of ['bytes', 'transaction', 'txBytes', 'tx']) {
     if (forbidden in body) {
@@ -106,6 +106,10 @@ export async function POST(request: Request) {try {
     // failure here must not block the offer: an unconfirmed row frees through the hold anyway,
     // so confirmation is an optimisation whose failure direction is safe.
     await confirmVaultClaimsFromChain({ config: cfgV.value, nowMs: Date.now() });
+
+    // Taking a slot is spendable for nothing but a request, so a source can take a few.
+    const holdBudget = await sharedLimit(request, 'sponsorHold');
+    if (holdBudget !== null) return holdBudget;
 
     const slot = await claimVaultSlot({
       address: normaliseAddress(addr.trim()),
@@ -191,6 +195,9 @@ export async function POST(request: Request) {try {
     timestampMs: half.timestampMs,
     action: { kind: 'declare-agent', operator: normaliseAddress(half.operatorAddress), model: half.model.trim(), purpose: half.purpose.trim() },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(signedHalf);
+  if (slow !== null) return slow;
   if (!signedHalf.ok) {
     return NextResponse.json({ error: `the agent's declaration does not stand: ${signedHalf.failure.detail}` }, { status: 401 });
   }
@@ -212,6 +219,10 @@ export async function POST(request: Request) {try {
   const nowMs = Date.now();
 
   await confirmClaimsFromChain({ config: config.value, nowMs });
+
+  // Taking a seat is what a throwaway key gets for one signed request, so a source can take a few.
+  const holdBudget = await sharedLimit(request, 'sponsorHold');
+  if (holdBudget !== null) return holdBudget;
 
   const reserved = await reserveSeat({
     address,

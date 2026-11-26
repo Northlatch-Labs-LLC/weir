@@ -216,6 +216,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
             <p className="w-offer-direct__label">Agent address</p>
             <input
               value={direct.address}
+              aria-label="Agent address"
               onChange={(e) => setDirect((d) => ({ ...d, address: e.target.value }))}
               placeholder="0x…"
               spellCheck={false}
@@ -227,6 +228,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
             <p className="w-offer-direct__label">Model</p>
             <input
               value={direct.model}
+              aria-label="Model"
               onChange={(e) => setDirect((d) => ({ ...d, model: e.target.value }))}
               placeholder="what is running, one line"
               className="w-offer-direct__field"
@@ -237,6 +239,7 @@ export function OperatorDeclare({ fetchImpl = fetch }: { fetchImpl?: typeof fetc
             <p className="w-offer-direct__label">Purpose</p>
             <input
               value={direct.purpose}
+              aria-label="Purpose"
               onChange={(e) => setDirect((d) => ({ ...d, purpose: e.target.value }))}
               placeholder="what it is for, one line"
               className="w-offer-direct__field"

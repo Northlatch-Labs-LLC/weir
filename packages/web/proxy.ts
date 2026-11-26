@@ -5,8 +5,9 @@ import { provenReaderFor } from '@/lib/read-session';
 import { isSiteAdmin } from '@/lib/site-admin';
 import { readSiteMode } from '@/lib/site-mode';
 import { passIsValid, passTokenFrom } from '@/lib/access-codes';
-import { isAlwaysOpen } from '@/lib/front-door';
+import { isAlwaysOpen, isSchedulerReached } from '@/lib/front-door';
 import { cspFor, CSP_NONCE_HEADER } from '@/lib/csp';
+import { edgeRequiredRefusal } from '@/lib/rate-limit';
 
 export const config = {
   matcher: [
@@ -34,6 +35,15 @@ function letThrough(request: NextRequest): NextResponse {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // The platform's scheduler reaches its route without passing through the edge.
+  if (isSchedulerReached(pathname)) return letThrough(request);
+
+  // Before anything is read from the database or answered: a deployment that is served through an
+  // edge serves nobody else. Does nothing until it is asked to (PROJECTX_SOCIAL_REQUIRE_EDGE), so
+  // that it can be switched on only after the edge is known to present its secret.
+  const unedged = edgeRequiredRefusal(request);
+  if (unedged !== null) return unedged;
 
   if (isAlwaysOpen(pathname)) return letThrough(request);
 

@@ -1,11 +1,12 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 import { NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { createClient, fold, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { coinTypeOf } from '@/lib/creator-setup';
 import { recordFailure } from '@/lib/error-log';
 
@@ -18,7 +19,9 @@ export async function POST(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
 
-  const b = (await request.json()) as {
+  const bodyRead = await readJsonBody(request);
+  if (!bodyRead.ok) return bodyRead.response;
+  const b = bodyRead.value as {
     owner?: string; vaultId?: string; coinType?: string; displayName?: string; bio?: string;
     signature?: string; timestampMs?: number;
   };
@@ -60,6 +63,9 @@ export async function POST(request: Request) {try {
       bio: b.bio ?? '',
     },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proof);
+  if (slow !== null) return slow;
   if (!proof.ok) {
     return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
   }

@@ -19,7 +19,7 @@ vi.mock('@/lib/creator-setup', async (importOriginal) => ({
 }));
 
 let proofOk = true;
-vi.mock('@/lib/identity', () => ({
+vi.mock('@/lib/identity', () => ({ throttleResponse: () => null,
   verifyAction: async () =>
     proofOk
       ? { ok: true, value: true }

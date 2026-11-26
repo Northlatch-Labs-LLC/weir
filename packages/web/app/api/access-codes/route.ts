@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { fold } from '@projectx-social/sdk';
 import { rateLimit } from '@/lib/rate-limit';
-import { provenReaderFor } from '@/lib/read-session';
+import { crossOriginRefusal, provenReaderFor } from '@/lib/read-session';
 import { isSiteAdmin } from '@/lib/site-admin';
 import { listAccessCodes, mintAccessCode, revokeAccessCode } from '@/lib/access-codes';
 
@@ -29,6 +29,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
+  // Before the cookie is consulted: a page on another origin of this site can attach it.
+  const elsewhere = crossOriginRefusal(request);
+  if (elsewhere !== null) return elsewhere;
   const by = await administrator(request);
   if (by === null) return REFUSED;
 
@@ -57,6 +60,8 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
+  const elsewhere = crossOriginRefusal(request);
+  if (elsewhere !== null) return elsewhere;
   if ((await administrator(request)) === null) return REFUSED;
 
   let body: { code?: unknown };

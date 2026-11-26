@@ -9,6 +9,29 @@ export interface Failure {
 }
 
 /*
+  The characters a row may not carry.
+
+  Two writers into this table answer to nobody — /api/csp-report and /api/telemetry/error — and
+  until 2026-11-25 whatever they were given was stored: carriage returns that forge a second line
+  in anything that prints the table, escape sequences that retint or clear the terminal reading it,
+  NUL bytes. A row here is read by a person, in the admin view and in the alarm's issue, and none of
+  those readers benefit from a control character. Tab and newline stay, because a server stack trace
+  is easier to read with them and a forged line is worth less than a legible one.
+
+  Applied here, at the one insert, rather than at each caller: a new writer cannot forget it.
+*/
+export function printable(value: string): string {
+  return value.replace(/[\u0000-\u0008\u000b-\u000d\u000e-\u001f\u007f-\u009f]/g, '');
+}
+
+/// For text that came from the internet: printable, and on one line. A crash message and a CSP
+/// report are sentences, not paragraphs, and a row that cannot contain a line break cannot forge
+/// the row after it.
+export function oneLine(value: string): string {
+  return printable(value).replace(/\s+/g, ' ').trim();
+}
+
+/*
   Record a failure and never let recording become the failure.
 
   Two rules, both learned from how this codebase already behaves: the caller keeps its console line
@@ -74,7 +97,7 @@ export async function recordFailure(failure: Failure): Promise<void> {
   try {
     await db().query(
       'INSERT INTO error_events (at_ms, source, detail, route) VALUES ($1, $2, $3, $4)',
-      [Date.now(), failure.source.slice(0, 200), failure.detail.slice(0, 4000), failure.route ?? null],
+      [Date.now(), printable(failure.source).slice(0, 200), printable(failure.detail).slice(0, 4000), failure.route === undefined ? null : printable(failure.route).slice(0, 300)],
     );
   } catch (error) {
     console.error(JSON.stringify({ errorLogFailed: String(error), source: failure.source }));

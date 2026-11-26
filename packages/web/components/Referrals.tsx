@@ -75,7 +75,7 @@ export function Referrals() {
       <div className="panel">
         <span className="k">YOUR LINK</span>
         <div style={{ display: 'flex', gap: 'var(--space-8)', marginTop: 'var(--space-10)', flexWrap: 'wrap' }}>
-          <input className="comment-input" readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
+          <input className="comment-input" readOnly aria-label="Your referral link" value={link} onFocus={(e) => e.currentTarget.select()} />
           <button
             className="btn"
             type="button"

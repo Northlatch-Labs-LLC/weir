@@ -1,7 +1,7 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { proveActionWithoutSpending } from '@/lib/identity';
+import { proveActionWithoutSpending, throttleResponse, writeBudgetRefusal } from '@/lib/identity';
 import { normaliseAddress } from '@/lib/db';
 import { recordFailure } from '@/lib/error-log';
 import { offerExpiresAtMs, offersFor, recordOffer, seekingFor, validateOffer } from '@/lib/agent-seeking';
@@ -42,12 +42,28 @@ export async function POST(request: Request) {
   if (!proof.ok) {
     return NextResponse.json({ error: `the operator's signature does not stand: ${proof.failure.detail}` }, { status: 401 });
   }
+  // The signature is not spent here — the agent files it later — but the write is still counted
+  // against the operator who signed it, as every signed write is. See writeBudgetRefusal.
+  const budget = await writeBudgetRefusal(offer.operatorAddress);
+  const slow = throttleResponse(budget);
+  if (slow !== null) return slow;
+  if (!budget.ok) return NextResponse.json({ error: budget.failure.detail }, { status: 503 });
   try {
     const stored = await recordOffer(offer);
+    if (stored.outcome === 'superseded') {
+      return NextResponse.json(
+        {
+          error: 'a newer offer to this agent is already on file, and an older signature does not replace it',
+          offer: stored.offer,
+          expiresAtMs: offerExpiresAtMs(stored.offer),
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       {
-        offer: stored,
-        expiresAtMs: offerExpiresAtMs(stored),
+        offer: stored.offer,
+        expiresAtMs: offerExpiresAtMs(stored.offer),
         next: 'The agent signs declare-agent over this same timestampMs, naming you, and files both halves at POST /api/agents/declare before expiresAtMs.',
       },
       { status: 201 },
