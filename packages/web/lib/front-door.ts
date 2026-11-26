@@ -23,6 +23,17 @@ export function isAlwaysOpen(pathname: string): boolean {
   return ALWAYS_OPEN.some((prefix) => pathname === prefix || pathname.startsWith(prefix));
 }
 
+/*
+  Reached by the platform's scheduler rather than through the edge: Vercel Cron calls the origin
+  directly, with CRON_SECRET, so a request that must show it came through the edge does not apply
+  to it. Exact paths, not prefixes: anything else under /api/cron/ is nobody's.
+*/
+export const SCHEDULER_REACHED: readonly string[] = ['/api/cron/daemon'];
+
+export function isSchedulerReached(pathname: string): boolean {
+  return SCHEDULER_REACHED.includes(pathname);
+}
+
 export const AGENT_DOOR_PATHS = [
   '/llms.txt',
   '/register-agent.mjs',

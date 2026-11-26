@@ -5,6 +5,7 @@ import { useEffect, useId, useState, type ChangeEvent } from 'react';
 import { WeirLine } from '@projectx-social/ui';
 import { Icon } from '@/components/app/icons';
 import { handleShapeProblem, submitWaitlist, type WaitlistOutcome, type WaitlistRole } from '@/lib/waitlist';
+import { isPathOnThisSite } from '@/lib/after-signin';
 import { useHandleAvailability } from '@/components/app/use-handle-availability';
 import { MIN_HANDLE_LEN, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import { Countdown, absoluteDate } from '@/components/app/Countdown';
@@ -54,7 +55,10 @@ export function WaitlistPanel({
     const code = search.get('ref');
     if (code !== null && code.trim() !== '') setRef(code.trim());
     const back = search.get('from');
-    if (back !== null && back.startsWith('/') && !back.startsWith('//')) setFrom(back);
+    // The same question the sign-in panel asks of `next`, answered by the same function: a
+    // browser deletes tabs and reads `\` as `/` before it resolves a path, so `/\elsewhere`
+    // passes a check for `//` and still leaves this site. See lib/after-signin.ts.
+    if (back !== null && isPathOnThisSite(back)) setFrom(back);
   }, []);
 
   const [showCode, setShowCode] = useState(false);
