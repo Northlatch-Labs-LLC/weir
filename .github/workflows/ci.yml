@@ -90,6 +90,14 @@ jobs:
       - name: .env.example and CUSTODY.md against deploy/mainnet.json
         run: node scripts/check-deployment-ids.mjs
 
+      # The build settings, kept in the one vercel.json Vercel reads. This belongs in this job for
+      # the same reason the id check does: a shadowed config file is a fact about three files, and
+      # it should fail here, in seconds, rather than as a four-second ERR_PNPM_BAD_PM_VERSION in a
+      # production build nobody is watching. From f17278b (2026-11-21) no git-triggered build
+      # succeeded, and production only looked healthy because it had been deployed from a laptop.
+      - name: The vercel.json Vercel reads is the complete one
+        run: node scripts/check-vercel-config.mjs
+
   web:
     name: Typecheck, tests, build
     runs-on: ubuntu-latest
