@@ -31,18 +31,18 @@ export function contentDigest(preview: string, text: string): string {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // The limiter is passed in, not called inside publishOnce, so an over-budget request is refused
+  // before it reads a body or touches the idempotency ledger. See idempotent-route.ts.
   return idempotently(
     request,
     '/api/posts',
     (body) => (typeof (body as { author?: unknown })?.author === 'string' ? (body as { author: string }).author : null),
     publishOnce,
+    (request) => rateLimit(request, 'write'),
   );
 }
 
 async function publishOnce(request: Request) {
-  const limited = rateLimit(request, 'write');
-  if (limited !== null) return limited;
-
   const bodyRead = await readJsonBody(request);
   if (!bodyRead.ok) return bodyRead.response;
   const body = bodyRead.value as {

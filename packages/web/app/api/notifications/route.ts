@@ -4,7 +4,7 @@ import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
 import { readNotifications, type NotificationFeed } from '@/lib/notifications';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { recordFailure } from '@/lib/error-log';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +35,9 @@ export async function POST(request: Request) {try {
     timestampMs,
     action: { kind: 'read', other: viewer },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
   const feed = await readNotifications(viewer);

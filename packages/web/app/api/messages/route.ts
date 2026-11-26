@@ -10,7 +10,7 @@ import {
   threadIdFor,
   type MessageEncryption,
 } from '@/lib/content';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { refuseWithdrawnDeclaration } from '@/lib/agent-standing';
 import { idempotently } from '@/lib/idempotent-route';
 import { ciphertextDigest } from '@/lib/e2e';
@@ -28,6 +28,8 @@ export async function POST(request: Request): Promise<Response> {try {
     '/api/messages',
     (body) => (typeof (body as { from?: unknown })?.from === 'string' ? (body as { from: string }).from : null),
     sendOnce,
+    // Admitted before the ledger, never inside sendOnce. See idempotent-route.ts.
+    (request) => rateLimit(request, 'write'),
   );
 } catch (error) {
   await recordFailure({
@@ -39,9 +41,6 @@ export async function POST(request: Request): Promise<Response> {try {
 }}
 
 async function sendOnce(request: Request) {
-  const limited = rateLimit(request, 'write');
-  if (limited !== null) return limited;
-
   const bodyRead = await readJsonBody(request);
   if (!bodyRead.ok) return bodyRead.response;
   const body = bodyRead.value as {
@@ -120,6 +119,9 @@ async function sendOnce(request: Request) {
     timestampMs,
     action: { kind: 'send', to, text: trimmed, preview, paid: paidStatement },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
   const overQuota = await quotaLimit(from, 'message');
@@ -247,6 +249,9 @@ async function sendEncrypted(input: {
     timestampMs,
     action: { kind: 'send-encrypted', to, ciphertextSha256: ciphertextDigest(ciphertext) },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
 
   const overQuota = await quotaLimit(from, 'message');

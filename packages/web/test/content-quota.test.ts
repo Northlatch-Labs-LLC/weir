@@ -19,7 +19,7 @@ const findProfile = vi.fn();
 const readContentPrice = vi.fn();
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: () => null,
+ spendQuota: async () => ({ allowed: true, remaining: 1 }), tripBreaker: async () => ({ tripped: false }),  rateLimit: () => null,
   simulateLimit: async () => null,
   quotaLimit: async (address: string, name: string) => {
     spent.push({ address, name });
@@ -31,7 +31,7 @@ vi.mock('@/lib/rate-limit', () => ({
 vi.mock('@/lib/agent-standing', () => ({
   refuseWithdrawnDeclaration: async () => null,
 }));
-vi.mock('@/lib/identity', () => ({
+vi.mock('@/lib/identity', () => ({ throttleResponse: () => null,
   verifyActionDeferringSpend: async () => proof,
   verifyAction: async () => proof,
   spendSignature: async () => ({ ok: true, value: undefined }),

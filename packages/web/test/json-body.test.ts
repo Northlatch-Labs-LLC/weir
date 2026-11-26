@@ -134,3 +134,16 @@ describe('tooLarge', () => {
     expect(tooLarge(post({ headers: { 'content-length': '2' }, body: '{}' }), 1)?.status).toBe(413);
   });
 });
+
+describe('the row an error may occupy', () => {
+  it('carries no control character but tab and newline', async () => {
+    const { oneLine, printable } = await import('../lib/error-log');
+    expect(printable('a\u0000b\u0007c\u000bd\u000be\u001b[31mf\u007fg\u009fh')).toBe('abcde[31mfgh');
+    expect(printable('tab\there\nnew\u000dline')).toBe('tab\there\nnewline');
+  });
+
+  it('is one line when it came from the internet', async () => {
+    const { oneLine } = await import('../lib/error-log');
+    expect(oneLine(' l1\r\nl2\u000b \t [FAKE]\u001b[0m ')).toBe('l1 l2 [FAKE][0m');
+  });
+});

@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/body-limit';
 import { fold } from '@projectx-social/sdk';
 import { rateLimit } from '@/lib/rate-limit';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { recordFailure } from '@/lib/error-log';
 import {
   clearedReadSessionCookie,
+  crossOriginRefusal,
   mintReadSession,
   provenReaderFor,
   readSessionCookie,
@@ -42,6 +43,9 @@ export async function POST(request: Request) {try {
     timestampMs,
     action: { kind: 'read-content' },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) {
     return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
   }
@@ -104,6 +108,9 @@ export async function GET(request: Request) {try {
 export async function DELETE(request: Request) {try {
   const limited = rateLimit(request, 'write');
   if (limited !== null) return limited;
+  // Before the cookie is consulted: a page on another origin of this site can attach it.
+  const elsewhere = crossOriginRefusal(request);
+  if (elsewhere !== null) return elsewhere;
 
   const reader = fold(
     await provenReaderFor(request),

@@ -67,13 +67,27 @@ describe('the list never becomes a membership oracle', () => {
   });
 });
 
-describe('the write is the only place standing is told', () => {
+describe('the write is where standing is told, and it is told once', () => {
   it('returns it on a fresh signup', () => {
     expect(ROUTE).toMatch(/already: false, standing \}, \{ status: 201 \}/);
   });
 
-  it('returns it on an address that is already there', () => {
-    expect(ROUTE).toMatch(/already: true, standing \}, \{ status: 409 \}/);
+  /*
+    It used to be returned for an address that was already on the list too, so that no lookup
+    endpoint would ever be needed. That made the write itself the lookup: anyone who typed an
+    address was handed that entry's position and referral code. An external scan of weir.social
+    (2026-11-25) did exactly that. A duplicate now says "already" and nothing else.
+  */
+  it('does not return it for an address that is already there', () => {
+    expect(ROUTE).toMatch(/already: true \}, \{ status: 409 \}/);
+    expect(ROUTE).not.toMatch(/already: true, standing/);
+    expect(STORE).toContain("return { result: 'already', standing: null };");
+    expect(STORE_CODE).not.toMatch(/result: 'already', standing: await/);
+  });
+
+  it('bounds how fast one address can fill the list, in a budget that holds across instances', () => {
+    expect(code(ROUTE)).toMatch(/await sharedLimit\(request, 'waitlist'\)/);
+    expect(code(ROUTE).indexOf("sharedLimit(request, 'waitlist')")).toBeLessThan(code(ROUTE).indexOf('recordSignup('));
   });
 
   it('does not refuse a signup over an unknown referral code', () => {

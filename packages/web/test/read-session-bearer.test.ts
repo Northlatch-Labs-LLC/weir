@@ -20,8 +20,8 @@ vi.mock('../lib/db', () => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  simulateLimit: async () => null, rateLimit: () => null }));
-vi.mock('@/lib/identity', () => ({
+ spendQuota: async () => ({ allowed: true, remaining: 1 }), tripBreaker: async () => ({ tripped: false }),  simulateLimit: async () => null, rateLimit: () => null }));
+vi.mock('@/lib/identity', () => ({ throttleResponse: () => null,
   verifyAction: async () => ({ ok: true, value: true, observedAtMs: Date.now() }),
 }));
 

@@ -23,7 +23,7 @@ const OPERATOR = new Ed25519Keypair().getPublicKey().toSuiAddress();
 const FRIEND = new Ed25519Keypair().getPublicKey().toSuiAddress();
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: () => null,
+ spendQuota: async () => ({ allowed: true, remaining: 1 }), tripBreaker: async () => ({ tripped: false }),  rateLimit: () => null,
   simulateLimit: async () => null,
   quotaLimit: async () => null,
 }));

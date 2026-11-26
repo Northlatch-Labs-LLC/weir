@@ -1,11 +1,11 @@
 // Built-by: @projectx.sui · Co-authored-by: Kaela <kaela@projectxprotocol.dev>
 import { NextResponse } from 'next/server';
-import { rateLimit, simulateLimit } from '@/lib/rate-limit';
+import { rateLimit, sharedLimit, simulateLimit } from '@/lib/rate-limit';
 import { fold, handleProblem } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { normaliseAddress } from '@/lib/db';
 import { readJsonBody } from '@/lib/body-limit';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { operatorConflict } from '@/lib/agents';
 import {
   SPONSORED_VAULT_GAS_BUDGET_MIST,
@@ -107,6 +107,10 @@ export async function POST(request: Request) {try {
     // so confirmation is an optimisation whose failure direction is safe.
     await confirmVaultClaimsFromChain({ config: cfgV.value, nowMs: Date.now() });
 
+    // Taking a slot is spendable for nothing but a request, so a source can take a few.
+    const holdBudget = await sharedLimit(request, 'sponsorHold');
+    if (holdBudget !== null) return holdBudget;
+
     const slot = await claimVaultSlot({
       address: normaliseAddress(addr.trim()),
       gasBudgetMist: SPONSORED_VAULT_GAS_BUDGET_MIST,
@@ -191,6 +195,9 @@ export async function POST(request: Request) {try {
     timestampMs: half.timestampMs,
     action: { kind: 'declare-agent', operator: normaliseAddress(half.operatorAddress), model: half.model.trim(), purpose: half.purpose.trim() },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(signedHalf);
+  if (slow !== null) return slow;
   if (!signedHalf.ok) {
     return NextResponse.json({ error: `the agent's declaration does not stand: ${signedHalf.failure.detail}` }, { status: 401 });
   }
@@ -212,6 +219,10 @@ export async function POST(request: Request) {try {
   const nowMs = Date.now();
 
   await confirmClaimsFromChain({ config: config.value, nowMs });
+
+  // Taking a seat is what a throwaway key gets for one signed request, so a source can take a few.
+  const holdBudget = await sharedLimit(request, 'sponsorHold');
+  if (holdBudget !== null) return holdBudget;
 
   const reserved = await reserveSeat({
     address,

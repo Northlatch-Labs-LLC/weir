@@ -6,7 +6,7 @@ import { createClient, fold, readCreatorVault } from '@projectx-social/sdk';
 import { siteConfig } from '@/lib/chain';
 import { findProfile, findProfileByVault, upsertProfile } from '@/lib/content';
 import { accountHandle } from '@/lib/accounts';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { coinTypeOf } from '@/lib/creator-setup';
 import { recordFailure } from '@/lib/error-log';
 
@@ -63,6 +63,9 @@ export async function POST(request: Request) {try {
       bio: b.bio ?? '',
     },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proof);
+  if (slow !== null) return slow;
   if (!proof.ok) {
     return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
   }

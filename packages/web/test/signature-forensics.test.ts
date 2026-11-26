@@ -79,4 +79,31 @@ describe('the forensics ledger', () => {
     expect(rows.rowCount).toBe(1);
     expect(rows.rows[0]).toEqual({ action: 'follow' });
   });
+  /*
+    Until 2026-11-26 this path handed the pool to spendSignature, and a pool runs each statement on
+    its own. If the ledger row could not be written, the caller was told "not accepted" and the
+    signature had been taken anyway: the replay row was already in, on its own.
+  */
+  it('a spend whose ledger row cannot be written is not a spend at all', async () => {
+    // A constraint that refuses every new row, without touching the ones already there.
+    await testDb().query('ALTER TABLE signature_spends ADD CONSTRAINT test_ledger_closed CHECK (false) NOT VALID');
+    try {
+      const input = await sign({ kind: 'follow', handle: 'dave', following: true }, Date.now());
+      const refused = await verifyAction(input);
+      expect(refused.ok).toBe(false);
+      if (!refused.ok) expect(refused.failure.detail).toContain('not accepted');
+
+      // Nothing in the replay table either: the whole spend was rolled back with the ledger.
+      const digest = createHash('sha256').update(input.signature).digest();
+      const replay = await testDb().query('SELECT 1 FROM used_signatures WHERE digest = $1', [digest]);
+      expect(replay.rowCount).toBe(0);
+
+      // So the same signature is still good, and is accepted exactly once when the ledger recovers.
+      await testDb().query('ALTER TABLE signature_spends DROP CONSTRAINT test_ledger_closed');
+      expect((await verifyAction(input)).ok).toBe(true);
+      expect((await verifyAction(input)).ok).toBe(false);
+    } finally {
+      await testDb().query('ALTER TABLE signature_spends DROP CONSTRAINT IF EXISTS test_ledger_closed');
+    }
+  });
 });

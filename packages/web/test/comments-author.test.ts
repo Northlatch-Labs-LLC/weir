@@ -17,7 +17,7 @@ const stranger = Ed25519Keypair.generate();
 const OWNER = owner.toSuiAddress();
 let reader: string | null = null;
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+vi.mock('@/lib/rate-limit', () => ({  spendQuota: async () => ({ allowed: true, remaining: 1 }), tripBreaker: async () => ({ tripped: false }),rateLimit: () => null, simulateLimit: async () => null }));
 vi.mock('@/lib/chain', () => ({ siteConfig: () => ({ ok: true, value: { network: 'mainnet', grpcUrl: 'https://fullnode.example.invalid:443', packageId: `0x${'e5'.repeat(32)}` }, observedAtMs: 0 }) }));
 vi.mock('@/lib/read-session', () => ({ provenReaderFor: async () => (reader === null ? { ok: false, failure: { kind: 'unconfigured', source: 'test', detail: 'no reader' } } : { ok: true, value: reader, observedAtMs: 0 }) }));
 vi.mock('@projectx-social/sdk', async (importOriginal) => ({

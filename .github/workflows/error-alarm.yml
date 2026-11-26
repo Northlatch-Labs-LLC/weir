@@ -120,8 +120,14 @@ jobs:
               > top-sources.txt
             # The three most recent details, truncated to 200 chars each: enough to
             # recognise the failure, not enough to paste a whole stack trace into an issue.
+            #
+            # Backticks become an acute accent on the way out. The body below puts these lines in a
+            # code fence so that whatever a failure's text contains renders as text — and this
+            # repository is public, while two of the writers into error_events answer to nobody.
+            # Three backticks inside the fence would have ended it, and everything after would have
+            # been Markdown on a public issue: links, images, mentions.
             "$PSQL" "$PGURL" -t -A -c \
-              "SELECT to_char(to_timestamp(at_ms/1000.0), 'YYYY-MM-DD HH24:MI') || ' ' || coalesce(route,'') || ' — ' || coalesce(left(detail, 200), '(no detail)') FROM error_events WHERE $WHERE ORDER BY at_ms DESC, id DESC LIMIT 3;" \
+              "SELECT to_char(to_timestamp(at_ms/1000.0), 'YYYY-MM-DD HH24:MI') || ' ' || translate(coalesce(route,''), chr(96), '´') || ' — ' || translate(coalesce(left(detail, 200), '(no detail)'), chr(96), '´') FROM error_events WHERE $WHERE ORDER BY at_ms DESC, id DESC LIMIT 3;" \
               > recent-details.txt
             exit 0
           fi

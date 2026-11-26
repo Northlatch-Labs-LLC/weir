@@ -90,6 +90,45 @@ export async function provenReaderFor(request: Request): Promise<Reading<string 
   return readerFromToken(bearerFromHeader(request.headers.get('authorization')));
 }
 
+/*
+  For a request that changes something on the strength of the session cookie: the refusal to
+  return when the request was made from another origin, or null when it may go on.
+
+  Why. The cookie is SameSite=Lax, which stops a request from another SITE and says nothing about
+  another ORIGIN on this one — and weir.social has several, each a different application: the
+  portal, the API, the MCP host. Until 2026-11-25 a page on any of them could POST to the routes
+  that change the site — close it, mint an access code, end a session — with the administrator's
+  cookie attached, and without a preflight: a "simple" content-type is enough, because a route
+  reads its body without asking what type it claimed to be. The response is not readable across
+  origins, but a change does not need to be read to be made.
+
+  A browser states where a request came from and cannot be made to lie about it: Sec-Fetch-Site on
+  every request it makes, and Origin on every write. Anything else — same-site, cross-site, an
+  opaque `null` — is refused. Two callers are left alone, because neither can be a page somewhere
+  else borrowing a cookie:
+
+    - one that presents neither header. It is not a browser making a cross-origin request; it is a
+      program holding the token itself, and has as much right to use it as it ever had.
+    - one that presents its session as a Bearer token rather than a cookie. No other page can put
+      that header on a request without this origin's say-so.
+
+  The Origin is compared with the origin the request itself names, the same one every signed
+  statement is bound to, so this holds wherever the site is deployed.
+*/
+export function crossOriginRefusal(request: Request): Response | null {
+  if (cookieFromHeader(request.headers.get('cookie'), READ_SESSION_COOKIE) === null) return null;
+
+  const site = request.headers.get('sec-fetch-site');
+  const origin = request.headers.get('origin');
+  const fromElsewhere =
+    site !== null
+      ? site !== 'same-origin' && site !== 'none'
+      : origin !== null && origin !== new URL(request.url).origin;
+
+  if (!fromElsewhere) return null;
+  return Response.json({ error: 'a change to the site has to be asked for from the site' }, { status: 403 });
+}
+
 export const provenReader = cache(async (): Promise<Reading<string | null>> => {
   const { cookies } = await import('next/headers');
   const store = await cookies();

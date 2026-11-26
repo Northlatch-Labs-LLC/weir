@@ -16,7 +16,7 @@ useTestDatabase();
 
 const ORIGIN = 'https://weir.social';
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+vi.mock('@/lib/rate-limit', () => ({  spendQuota: async () => ({ allowed: true, remaining: 1 }), tripBreaker: async () => ({ tripped: false }),rateLimit: () => null, simulateLimit: async () => null }));
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({
     ok: true,

@@ -7,7 +7,13 @@ import { closeDatabase, resetDatabase, useTestDatabase } from './helpers/databas
 useTestDatabase();
 
 let sponsorAsked = 0;
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+// The per-request limits are off; a signed write is still counted, against a budget that never
+// runs out here.
+vi.mock('@/lib/rate-limit', () => ({
+ tripBreaker: async () => ({ tripped: false }), sharedLimit: async () => null,  rateLimit: () => null,
+  simulateLimit: async () => null,
+  spendQuota: async () => ({ allowed: true, remaining: 1 }),
+}));
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({
     ok: true,

@@ -5,7 +5,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const query = vi.fn();
 
 vi.mock('@/lib/db', () => ({
-  db: () => ({ query: (...a: unknown[]) => query(...a) }),
+  // The spend runs on a pinned client, inside one transaction (2026-11-26). BEGIN, COMMIT and
+  // ROLLBACK are answered here; every statement this file scripts still reaches `query`, in order.
+  db: () => ({
+    query: (...a: unknown[]) => query(...a),
+    connect: async () => ({
+      query: (text: unknown, ...rest: unknown[]) =>
+        typeof text === 'string' && /^(BEGIN|COMMIT|ROLLBACK)$/i.test(text.trim())
+          ? Promise.resolve({ rows: [], rowCount: 0 })
+          : query(text, ...rest),
+      release: () => undefined,
+    }),
+  }),
   normaliseAddress: (a: string) => a.toLowerCase(),
 }));
 
@@ -27,6 +38,10 @@ const ADDRESS = `0x${'1'.repeat(64)}`;
        is a spend a dispute cannot resolve, so a failure here refuses the write
     3. the sweep's DELETE of expired rows — fire-and-forget: its failure must never
        reach the caller, which is what this file was written to pin.
+
+  Since 2026-11-26 the first two run in one transaction, so a failure at 2 takes 1 back out
+  again: the signature that was "not accepted" was not spent either. signature-forensics.test.ts
+  holds that half against a real database; this file keeps holding the third.
 */
 
 function calls(...outcomes: Array<'ok' | 'reject'>): void {

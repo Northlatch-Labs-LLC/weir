@@ -10,9 +10,9 @@ const setProfileImage = vi.fn();
 const grantUpload = vi.fn();
 const storeBlob = vi.fn();
 
-vi.mock('@/lib/rate-limit', () => ({ simulateLimit: async () => null, rateLimit: () => null }));
+vi.mock('@/lib/rate-limit', () => ({  spendQuota: async () => ({ allowed: true, remaining: 1 }), tripBreaker: async () => ({ tripped: false }),simulateLimit: async () => null, rateLimit: () => null }));
 vi.mock('@/lib/body-limit', () => ({ tooLarge: () => null }));
-vi.mock('@/lib/identity', () => ({ verifyAction: (...a: unknown[]) => verifyAction(...a) }));
+vi.mock('@/lib/identity', () => ({ throttleResponse: () => null, verifyAction: (...a: unknown[]) => verifyAction(...a) }));
 vi.mock('@/lib/accounts', () => ({ accountHandle: (...a: unknown[]) => accountHandle(...a) }));
 vi.mock('@/lib/content', () => ({
   findProfile: (...a: unknown[]) => findProfile(...a),

@@ -248,19 +248,44 @@ export async function markSeekingClaimed(address: string): Promise<boolean> {
   return (rowCount ?? 0) > 0;
 }
 
-export async function recordOffer(input: OfferInput): Promise<OperatorOffer> {
-  const { rows } = await db().query<OfferRow>(
+export type OfferOutcome = 'recorded' | 'already-on-file' | 'superseded';
+
+/*
+  Record an offer. One operator holds one live offer per agent, and it moves forward in time only.
+
+  An operator's signature for an offer is not spent when the offer is made — the agent files it
+  half a day later, by design — and both the signature and the instant it was made over are served
+  to anyone by GET. Until 2026-11-25 the row here was overwritten on every POST. So anyone could
+  take an operator's earlier offer, which the operator had since replaced, and put it back: the
+  live offer silently became the stale one, without the operator taking any part. The overwrite now
+  happens only when the offer arriving is newer than the one on file.
+
+    - newer        recorded, and replaces what was there
+    - the same     already-on-file, and nothing changes: the same request sent twice is one offer
+    - older        superseded, and nothing changes
+*/
+export async function recordOffer(input: OfferInput): Promise<{ offer: OperatorOffer; outcome: OfferOutcome }> {
+  const written = await db().query<OfferRow>(
     `INSERT INTO agent_operator_offers (agent_address, operator_address, model, purpose, issued_at_ms, operator_signature, created_at_ms, filed_at_ms)
      VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
      ON CONFLICT (agent_address, operator_address) DO UPDATE SET
        model = EXCLUDED.model, purpose = EXCLUDED.purpose, issued_at_ms = EXCLUDED.issued_at_ms,
        operator_signature = EXCLUDED.operator_signature, created_at_ms = EXCLUDED.created_at_ms, filed_at_ms = NULL
+     WHERE agent_operator_offers.issued_at_ms < EXCLUDED.issued_at_ms
      RETURNING *`,
     [input.agentAddress, input.operatorAddress, input.model, input.purpose, input.timestampMs, input.operatorSignature, Date.now()],
   );
-  const row = rows[0];
-  if (row === undefined) throw new Error('the offer was not recorded');
-  return toOffer(row);
+  const row = written.rows[0];
+  if (row !== undefined) return { offer: toOffer(row), outcome: 'recorded' };
+
+  // Nothing was written, so an offer is on file that is not older. Say which of the two it is.
+  const { rows } = await db().query<OfferRow>(
+    `SELECT * FROM agent_operator_offers WHERE agent_address = $1 AND operator_address = $2`,
+    [input.agentAddress, input.operatorAddress],
+  );
+  const onFile = rows[0];
+  if (onFile === undefined) throw new Error('the offer was not recorded');
+  return { offer: toOffer(onFile), outcome: Number(onFile.issued_at_ms) === input.timestampMs ? 'already-on-file' : 'superseded' };
 }
 
 export async function offersFor(agentAddress: string, nowMs: number = Date.now()): Promise<OperatorOffer[]> {

@@ -7,7 +7,7 @@ import { fold } from '@projectx-social/sdk';
 import { addComment, findPost, findProfile, listComments, MAX_COMMENT_LENGTH } from '@/lib/content';
 import { normaliseAddress } from '@/lib/db';
 import { canRead, NO_ENTITLEMENTS, readEntitlements } from '@/lib/entitlement';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { provenReaderFor } from '@/lib/read-session';
 import { recordFailure } from '@/lib/error-log';
 
@@ -105,6 +105,9 @@ export async function POST(request: Request) {try {
     timestampMs,
     action: { kind: 'comment', postId, text: trimmed },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proven);
+  if (slow !== null) return slow;
   if (!proven.ok) {
     return NextResponse.json({ error: proven.failure.detail }, { status: 401 });
   }

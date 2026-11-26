@@ -1,5 +1,6 @@
 // Built-by: @projectx.sui · Co-authored-by: Claude <noreply@anthropic.com>
 export const DATABASE_TEST_FILES: readonly string[] = [
+  'test/a-write-is-counted-against-the-address-that-signed-it.test.ts',
   'test/authorship-proof.test.ts',
   'test/bad-json-is-the-callers-mistake.test.ts',
   'test/idempotency-routes.test.ts',
@@ -24,6 +25,10 @@ export const DATABASE_TEST_FILES: readonly string[] = [
   'test/spend-with-the-write.test.ts',
   'test/sponsor-gate.test.ts',
   'test/sponsor.test.ts',
+  'test/the-error-sinks-take-only-their-own-shape.test.ts',
+  'test/the-list-does-not-describe-its-members.test.ts',
+  'test/the-sponsor-offer-cannot-be-held-shut.test.ts',
   'test/the-simulate-ceiling-is-shared.test.ts',
+  'test/the-limiter-admits-before-the-ledger.test.ts',
   'test/tiered-sealing.test.ts',
 ];

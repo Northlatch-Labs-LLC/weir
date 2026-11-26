@@ -12,7 +12,13 @@ import { closeDatabase, resetDatabase, testDb, useTestDatabase } from './helpers
 useTestDatabase();
 const ORIGIN = 'https://weir.social';
 
-vi.mock('@/lib/rate-limit', () => ({ rateLimit: () => null, simulateLimit: async () => null }));
+// The per-request limits are off; the per-address budget is real, because an offer is a signed
+// write and one of the tests below counts them.
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  rateLimit: () => null,
+  simulateLimit: async () => null,
+}));
 vi.mock('@/lib/chain', () => ({
   siteConfig: () => ({
     ok: true,
@@ -246,5 +252,77 @@ describe('offers and filing', () => {
     const at = Date.now();
     const r = await post(offers, '/api/agents/seeking/offers', { agentAddress: AGENT, operatorAddress: AGENT, model: LISTING.model, purpose: LISTING.purpose, timestampMs: at, operatorSignature: 'x' });
     expect(r.status).toBe(400);
+  });
+  /*
+    An operator's signature for an offer is not spent when the offer is made — the agent files it
+    later — and GET serves it to anyone. Until 2026-11-25 every POST overwrote the row, so anyone
+    could take an operator's earlier offer and put it back over the one they had replaced.
+  */
+  describe('an offer moves forward in time only', () => {
+    const path = '/api/agents/seeking/offers';
+
+    /** An offer signed by `who`, over exactly what it posts. */
+    async function signedOffer(who: { key: Ed25519Keypair; address: string }, agent: string, at: number, model: string) {
+      const text = statementFor({ kind: 'declare-operator', agent, model, purpose: LISTING.purpose }, who.address, at, ORIGIN);
+      const operatorSignature = (await who.key.signPersonalMessage(new TextEncoder().encode(text))).signature;
+      return { agentAddress: agent, operatorAddress: who.address, model, purpose: LISTING.purpose, timestampMs: at, operatorSignature };
+    }
+    const operator_ = { key: operator, address: OPERATOR };
+    const onFile = async () =>
+      (
+        (await (await get(offers, `${path}?agent=${AGENT}`)).json()) as {
+          offers: Array<{ model: string; issuedAtMs: number; createdAtMs: number }>;
+        }
+      ).offers;
+
+    it('the same offer sent twice is one offer, and the second request changes nothing', async () => {
+      const body = await signedOffer(operator_, AGENT, Date.now(), LISTING.model);
+      const first = (await (await post(offers, path, body)).json()) as { offer: { createdAtMs: number } };
+      const again = await post(offers, path, body);
+      expect(again.status).toBe(201);
+      const second = (await again.json()) as { offer: { createdAtMs: number } };
+      expect(second.offer.createdAtMs).toBe(first.offer.createdAtMs);
+      expect(await onFile()).toHaveLength(1);
+    });
+
+    it('a newer offer replaces the one on file', async () => {
+      expect((await post(offers, path, await signedOffer(operator_, AGENT, Date.now() - 5_000, 'first-model'))).status).toBe(201);
+      const later = Date.now();
+      expect((await post(offers, path, await signedOffer(operator_, AGENT, later, 'second-model'))).status).toBe(201);
+      const seen = await onFile();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.model).toBe('second-model');
+      expect(seen[0]?.issuedAtMs).toBe(later);
+    });
+
+    it('the earlier signature, replayed by anyone, does not put back what the operator replaced', async () => {
+      const earlier = Date.now() - 5_000;
+      const stale = await signedOffer(operator_, AGENT, earlier, 'first-model');
+      expect((await post(offers, path, stale)).status).toBe(201);
+      expect((await post(offers, path, await signedOffer(operator_, AGENT, Date.now(), 'second-model'))).status).toBe(201);
+
+      const replay = await post(offers, path, stale);
+      expect(replay.status).toBe(409);
+      expect(((await replay.json()) as { error: string }).error).toMatch(/does not replace/);
+
+      const seen = await onFile();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.model).toBe('second-model');
+      expect(seen[0]?.issuedAtMs).toBeGreaterThan(earlier);
+    });
+
+    it('an operator who offers too often is told to wait, on the address and not on the door', async () => {
+      const eagerKey = Ed25519Keypair.generate();
+      const eager = { key: eagerKey, address: eagerKey.toSuiAddress() };
+      const { QUOTAS } = await import('../lib/rate-limit');
+      for (let i = 0; i < QUOTAS.signedWrite.capacity; i += 1) {
+        // A different agent each time: the one-live-offer-per-pair rule is not what stops this.
+        const made = await post(offers, path, await signedOffer(eager, Ed25519Keypair.generate().toSuiAddress(), Date.now(), LISTING.model));
+        expect(made.status, `offer ${i + 1}`).toBe(201);
+      }
+      const over = await post(offers, path, await signedOffer(eager, Ed25519Keypair.generate().toSuiAddress(), Date.now(), LISTING.model));
+      expect(over.status).toBe(429);
+      expect(over.headers.get('retry-after')).not.toBeNull();
+    });
   });
 });

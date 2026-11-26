@@ -4,7 +4,7 @@ import { readJsonBody } from '@/lib/body-limit';
 import { fold, MAX_HANDLE_LEN } from '@projectx-social/sdk';
 import { rateLimit, sharedLimit } from '@/lib/rate-limit';
 import { accountHandle } from '@/lib/accounts';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { listPerks, setPerks, setSupportersFirst, readSupportersFirst, validatePerks } from '@/lib/perks';
 import { perksDigest } from '@/lib/perks-digest';
 import { recordFailure } from '@/lib/error-log';
@@ -77,6 +77,9 @@ export async function POST(request: Request) {try {
     timestampMs: body.timestampMs ?? 0,
     action: { kind: 'set-perks', handle: claimed, perksSha256: digest, supportersFirst },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proof);
+  if (slow !== null) return slow;
   if (!proof.ok) return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
 
   return fold<string | null, Promise<NextResponse>>(

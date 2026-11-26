@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/body-limit';
 import { rateLimit } from '@/lib/rate-limit';
 import { fold } from '@projectx-social/sdk';
-import { verifyAction } from '@/lib/identity';
+import { verifyAction, throttleResponse } from '@/lib/identity';
 import { accountHandle } from '@/lib/accounts';
 import { findProfile, upsertProfile } from '@/lib/content';
 import { recordFailure } from '@/lib/error-log';
@@ -37,6 +37,9 @@ export async function POST(request: Request) {try {
     timestampMs: body.timestampMs ?? 0,
     action: { kind: 'set-profile', handle: claimed, name: body.displayName ?? '' },
   });
+  // A spent write budget is answered as what it is — 429, signature kept.
+  const slow = throttleResponse(proof);
+  if (slow !== null) return slow;
   if (!proof.ok) {
     return NextResponse.json({ error: proof.failure.detail }, { status: 401 });
   }
